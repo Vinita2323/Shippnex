@@ -151,7 +151,7 @@ const DriverProfile = () => {
             <div className="flex justify-between items-center">
               <div>
                 <p className="font-bold text-xs text-primary">Auto-Accept High-Payout Offers</p>
-                <p className="text-[11px] text-on-surface-variant">Automatically lock jobs paying over $100</p>
+                <p className="text-[11px] text-on-surface-variant">Automatically lock jobs paying over ₹1,000</p>
               </div>
               <input
                 type="checkbox"

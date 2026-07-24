@@ -12,7 +12,7 @@ const DriverJobs = () => {
   const jobsList = [
     {
       id: 'JOB-9021',
-      payout: 125.00,
+      payout: 1250.00,
       distance: '14.2 km',
       time: '42 mins',
       cargoType: 'Cold Chain Pharma',
@@ -25,7 +25,7 @@ const DriverJobs = () => {
     },
     {
       id: 'JOB-8842',
-      payout: 85.50,
+      payout: 850.50,
       distance: '8.7 km',
       time: '28 mins',
       cargoType: 'Electronics Freight',
@@ -38,7 +38,7 @@ const DriverJobs = () => {
     },
     {
       id: 'JOB-7731',
-      payout: 64.00,
+      payout: 640.00,
       distance: '5.1 km',
       time: '18 mins',
       cargoType: 'Automotive Parts',
@@ -51,7 +51,7 @@ const DriverJobs = () => {
     },
     {
       id: 'JOB-6520',
-      payout: 145.00,
+      payout: 1450.00,
       distance: '22.0 km',
       time: '55 mins',
       cargoType: 'Heavy Industrial Machinery',
@@ -84,49 +84,49 @@ const DriverJobs = () => {
   });
 
   return (
-    <div className="bg-surface font-body-md text-on-surface min-h-screen pb-28">
-      {/* Top Header */}
-      <header className="fixed top-0 left-0 w-full z-40 bg-surface/80 backdrop-blur-md shadow-sm border-b border-outline-variant/10 px-4 py-3">
+    <div className="bg-surface font-body-md text-on-surface min-h-screen pb-24">
+      {/* Compact Top Header */}
+      <header className="fixed top-0 left-0 w-full z-40 bg-surface/90 backdrop-blur-md shadow-sm border-b border-outline-variant/10 px-3 py-2">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div>
-            <h1 className="font-headline-md text-xl font-bold text-primary">Job Queue</h1>
-            <p className="text-xs text-on-surface-variant">4 high-payout routes available near Chicago</p>
+            <h1 className="font-headline-md text-base font-bold text-primary leading-tight">Job Queue</h1>
+            <p className="text-[10px] text-on-surface-variant font-medium">4 routes available near Chicago</p>
           </div>
           <button
             onClick={() => alert('Refreshing live freight board...')}
-            className="p-2 text-primary hover:bg-surface-container-high rounded-xl transition-colors cursor-pointer"
+            className="p-1.5 text-primary hover:bg-surface-container-high rounded-lg transition-colors cursor-pointer"
           >
-            <span className="material-symbols-outlined">refresh</span>
+            <span className="material-symbols-outlined text-lg">refresh</span>
           </button>
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="pt-20 px-4 max-w-7xl mx-auto space-y-6">
+      {/* Main Container - Added comfortable top padding & margin */}
+      <main className="pt-16 md:pt-20 px-3.5 max-w-7xl mx-auto space-y-3.5 mt-2.5">
         {/* Search & Filter Bar */}
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div className="relative">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-xl">
+            <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-outline text-lg">
               search
             </span>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Job ID, Hub, or Destination..."
-              className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl py-3 pl-10 pr-4 text-sm font-body-md focus:ring-2 focus:ring-secondary focus:outline-none placeholder:text-outline-variant"
+              placeholder="Search Job ID, Hub, or Destination..."
+              className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl py-2 pl-9 pr-3 text-xs font-body-md focus:ring-1 focus:ring-secondary focus:outline-none placeholder:text-outline-variant"
             />
           </div>
 
           {/* Quick Filter Chips */}
-          <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+          <div className="flex gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
             {['All', 'High Payout', 'Short Distance', 'Cold Chain'].map((filter) => (
               <button
                 key={filter}
                 onClick={() => setSelectedFilter(filter)}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                className={`px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer ${
                   selectedFilter === filter
-                    ? 'bg-secondary text-white shadow-sm'
+                    ? 'bg-secondary text-white shadow-xs'
                     : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
                 }`}
               >
@@ -137,10 +137,10 @@ const DriverJobs = () => {
         </div>
 
         {/* Tab Filters */}
-        <div className="flex border-b border-outline-variant/30">
+        <div className="flex border-b border-outline-variant/20">
           <button
             onClick={() => setActiveTab('available')}
-            className={`flex-1 py-3 text-sm font-bold text-center border-b-2 transition-all cursor-pointer ${
+            className={`flex-1 py-2 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
               activeTab === 'available'
                 ? 'border-secondary text-secondary'
                 : 'border-transparent text-on-surface-variant hover:text-primary'
@@ -150,7 +150,7 @@ const DriverJobs = () => {
           </button>
           <button
             onClick={() => setActiveTab('assigned')}
-            className={`flex-1 py-3 text-sm font-bold text-center border-b-2 transition-all cursor-pointer ${
+            className={`flex-1 py-2 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
               activeTab === 'assigned'
                 ? 'border-secondary text-secondary'
                 : 'border-transparent text-on-surface-variant hover:text-primary'
@@ -160,7 +160,7 @@ const DriverJobs = () => {
           </button>
           <button
             onClick={() => setActiveTab('completed')}
-            className={`flex-1 py-3 text-sm font-bold text-center border-b-2 transition-all cursor-pointer ${
+            className={`flex-1 py-2 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
               activeTab === 'completed'
                 ? 'border-secondary text-secondary'
                 : 'border-transparent text-on-surface-variant hover:text-primary'
@@ -172,59 +172,59 @@ const DriverJobs = () => {
 
         {/* Jobs List */}
         {activeTab === 'available' && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {filteredJobs.map((job) => (
               <div
                 key={job.id}
-                className="glass-panel p-5 rounded-2xl border-white/60 hover:shadow-xl transition-all space-y-4 group"
+                className="glass-panel p-3.5 rounded-xl border-white/60 hover:shadow-md transition-all space-y-3 group"
               >
                 <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary-container text-primary-fixed-dim flex items-center justify-center shadow-sm">
-                      <span className="material-symbols-outlined">{job.cargoIcon}</span>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-primary-container text-primary-fixed-dim flex items-center justify-center shadow-xs shrink-0">
+                      <span className="material-symbols-outlined text-base">{job.cargoIcon}</span>
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <span className="font-mono text-xs font-bold text-primary">{job.id}</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${job.badgeColor}`}>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${job.badgeColor}`}>
                           {job.priority}
                         </span>
                       </div>
-                      <p className="text-xs font-semibold text-on-surface-variant mt-0.5">{job.cargoType} • {job.weight}</p>
+                      <p className="text-[11px] font-medium text-on-surface-variant mt-0.5">{job.cargoType} • {job.weight}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-headline-md text-2xl font-bold text-secondary">${job.payout.toFixed(2)}</p>
-                    <p className="text-xs text-on-surface-variant font-medium">{job.distance} • {job.time}</p>
+                    <p className="font-headline-md text-lg md:text-xl font-bold text-secondary">₹{job.payout.toFixed(2)}</p>
+                    <p className="text-[10px] text-on-surface-variant font-medium">{job.distance} • {job.time}</p>
                   </div>
                 </div>
 
                 {/* Pickup & Dropoff details */}
-                <div className="bg-surface-container-low/80 p-3.5 rounded-xl space-y-2 border border-outline-variant/20">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="material-symbols-outlined text-secondary text-base">warehouse</span>
-                    <span className="font-bold text-on-surface">Pickup:</span>
+                <div className="bg-surface-container-low/80 p-2.5 rounded-lg space-y-1.5 border border-outline-variant/20">
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <span className="material-symbols-outlined text-secondary text-sm shrink-0">warehouse</span>
+                    <span className="font-bold text-on-surface shrink-0">Pickup:</span>
                     <span className="text-on-surface-variant truncate">{job.pickup}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="material-symbols-outlined text-secondary text-base">location_on</span>
-                    <span className="font-bold text-on-surface">Dropoff:</span>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <span className="material-symbols-outlined text-secondary text-sm shrink-0">location_on</span>
+                    <span className="font-bold text-on-surface shrink-0">Dropoff:</span>
                     <span className="text-on-surface-variant truncate">{job.dropoff}</span>
                   </div>
                 </div>
 
                 {/* Card Actions */}
-                <div className="flex gap-3 pt-1">
+                <div className="flex gap-2 pt-0.5">
                   <button
                     onClick={() => handleAcceptJob(job)}
-                    className="flex-1 bg-secondary hover:bg-secondary/90 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="flex-1 bg-secondary hover:bg-secondary/90 text-white font-bold py-2 rounded-xl text-xs transition-all shadow-xs flex items-center justify-center gap-1 cursor-pointer"
                   >
                     Accept Delivery
-                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                    <span className="material-symbols-outlined text-xs">arrow_forward</span>
                   </button>
                   <button
                     onClick={() => alert(`Showing route preview map for ${job.id}`)}
-                    className="bg-surface-container-high hover:bg-surface-container-highest text-primary p-2.5 rounded-xl transition-colors cursor-pointer"
+                    className="bg-surface-container-high hover:bg-surface-container-highest text-primary p-2 rounded-xl transition-colors cursor-pointer"
                     title="View Route Details"
                   >
                     <span className="material-symbols-outlined text-base">map</span>
@@ -236,15 +236,15 @@ const DriverJobs = () => {
         )}
 
         {activeTab === 'assigned' && (
-          <div className="glass-panel p-8 rounded-2xl text-center space-y-4">
-            <span className="material-symbols-outlined text-5xl text-secondary">local_shipping</span>
-            <h3 className="font-bold text-primary text-lg">Active Assigned Deliveries</h3>
+          <div className="glass-panel p-6 rounded-xl text-center space-y-3">
+            <span className="material-symbols-outlined text-4xl text-secondary">local_shipping</span>
+            <h3 className="font-bold text-primary text-base">Active Assigned Deliveries</h3>
             <p className="text-xs text-on-surface-variant max-w-sm mx-auto">
               You have 2 assigned deliveries in queue. Order #SNX-1024 is currently in transit.
             </p>
             <button
               onClick={() => navigate('/driver/active-delivery')}
-              className="bg-primary text-white font-bold px-6 py-2.5 rounded-xl text-xs shadow-md hover:bg-primary-container transition-all cursor-pointer"
+              className="bg-primary text-white font-bold px-5 py-2 rounded-xl text-xs shadow-xs hover:bg-primary-container transition-all cursor-pointer"
             >
               Resume Active Delivery (#SNX-1024)
             </button>
@@ -252,18 +252,18 @@ const DriverJobs = () => {
         )}
 
         {activeTab === 'completed' && (
-          <div className="glass-panel p-6 rounded-2xl space-y-4">
-            <h3 className="font-bold text-primary text-base">Shift Completed History (14 Deliveries)</h3>
-            <div className="space-y-3">
+          <div className="glass-panel p-4 rounded-xl space-y-3">
+            <h3 className="font-bold text-primary text-sm">Shift Completed History (14 Deliveries)</h3>
+            <div className="space-y-2">
               {[
-                { id: 'JOB-5412', payout: '$84.00', time: '10:42 AM', hub: 'Warehouse Zone B' },
-                { id: 'JOB-5390', payout: '$110.50', time: '09:15 AM', hub: 'Central Port Terminal' },
-                { id: 'JOB-5210', payout: '$76.00', time: '08:00 AM', hub: 'Industrial Park North' },
+                { id: 'JOB-5412', payout: '₹840.00', time: '10:42 AM', hub: 'Warehouse Zone B' },
+                { id: 'JOB-5390', payout: '₹1,105.50', time: '09:15 AM', hub: 'Central Port Terminal' },
+                { id: 'JOB-5210', payout: '₹760.00', time: '08:00 AM', hub: 'Industrial Park North' },
               ].map((item) => (
-                <div key={item.id} className="flex justify-between items-center p-3 bg-surface-container-low rounded-xl">
+                <div key={item.id} className="flex justify-between items-center p-2.5 bg-surface-container-low rounded-lg">
                   <div>
                     <p className="font-bold text-xs text-primary">{item.id} • {item.hub}</p>
-                    <p className="text-[11px] text-on-surface-variant">Delivered at {item.time}</p>
+                    <p className="text-[10px] text-on-surface-variant">Delivered at {item.time}</p>
                   </div>
                   <span className="font-bold text-xs text-secondary">{item.payout}</span>
                 </div>
@@ -276,30 +276,30 @@ const DriverJobs = () => {
       {/* Confirmation Modal */}
       {acceptedJob && (
         <div className="fixed inset-0 z-50 bg-primary/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-panel p-6 rounded-3xl max-w-md w-full border-white shadow-2xl space-y-4 animate-float">
-            <div className="w-12 h-12 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center mx-auto">
-              <span className="material-symbols-outlined text-2xl">check_circle</span>
+          <div className="glass-panel p-5 rounded-2xl max-w-md w-full border-white shadow-2xl space-y-3 animate-float">
+            <div className="w-10 h-10 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center mx-auto">
+              <span className="material-symbols-outlined text-xl">check_circle</span>
             </div>
-            <div className="text-center space-y-1">
-              <h3 className="font-bold text-xl text-primary">Accept {acceptedJob.id}?</h3>
+            <div className="text-center space-y-0.5">
+              <h3 className="font-bold text-lg text-primary">Accept {acceptedJob.id}?</h3>
               <p className="text-xs text-on-surface-variant">
-                Payout: <span className="font-bold text-secondary">${acceptedJob.payout.toFixed(2)}</span> • {acceptedJob.distance}
+                Payout: <span className="font-bold text-secondary">₹{acceptedJob.payout.toFixed(2)}</span> • {acceptedJob.distance}
               </p>
             </div>
-            <div className="bg-surface-container p-3 rounded-xl text-xs space-y-1 border border-outline-variant/30">
+            <div className="bg-surface-container p-2.5 rounded-lg text-xs space-y-1 border border-outline-variant/30">
               <p className="font-semibold text-primary">{acceptedJob.pickup}</p>
               <p className="text-on-surface-variant">➔ {acceptedJob.dropoff}</p>
             </div>
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setAcceptedJob(null)}
-                className="flex-1 py-3 rounded-xl border border-outline-variant text-xs font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl border border-outline-variant text-xs font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
               >
                 Decline
               </button>
               <button
                 onClick={confirmJobAcceptance}
-                className="flex-1 py-3 rounded-xl bg-secondary hover:bg-secondary/90 text-white text-xs font-bold shadow-lg transition-all cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-secondary hover:bg-secondary/90 text-white text-xs font-bold shadow-md transition-all cursor-pointer"
               >
                 Confirm & Navigate
               </button>

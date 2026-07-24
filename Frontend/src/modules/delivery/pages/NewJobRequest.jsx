@@ -66,7 +66,7 @@ const NewJobRequest = () => {
             <div className="flex flex-col items-center justify-center py-4 bg-surface-container-low rounded-2xl border border-outline-variant/30">
               <span className="font-label-sm text-xs text-on-surface-variant mb-0.5 uppercase tracking-wider font-semibold">Estimated Earnings</span>
               <div className="text-4xl font-extrabold text-secondary font-mono flex items-baseline">
-                <span className="text-xl font-bold mr-1">$</span>142.50
+                <span className="text-xl font-bold mr-1">₹</span>1,425.00
               </div>
             </div>
 

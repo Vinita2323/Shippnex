@@ -17,10 +17,10 @@ const DriverWallet = () => {
   };
 
   const transactions = [
-    { id: 'TRX-9481', date: 'Today, 10:42 AM', amount: '+$84.00', type: 'Delivery Fare (#JOB-5412)', status: 'Completed' },
-    { id: 'TRX-9420', date: 'Today, 09:15 AM', amount: '+$110.50', type: 'Express Cargo Fare (#JOB-5390)', status: 'Completed' },
-    { id: 'TRX-9302', date: 'Yesterday', amount: '+$240.00', type: 'Weekly Performance Bonus', status: 'Completed' },
-    { id: 'TRX-8910', date: 'Jul 21, 2026', amount: '-$1,250.00', type: 'Direct Deposit Transfer (Chase ****4821)', status: 'Transferred' },
+    { id: 'TRX-9481', date: 'Today, 10:42 AM', amount: '+₹840.00', type: 'Delivery Fare (#JOB-5412)', status: 'Completed' },
+    { id: 'TRX-9420', date: 'Today, 09:15 AM', amount: '+₹1,105.50', type: 'Express Cargo Fare (#JOB-5390)', status: 'Completed' },
+    { id: 'TRX-9302', date: 'Yesterday', amount: '+₹2,400.00', type: 'Weekly Performance Bonus', status: 'Completed' },
+    { id: 'TRX-8910', date: 'Jul 21, 2026', amount: '-₹12,500.00', type: 'Direct Deposit Transfer (HDFC ****4821)', status: 'Transferred' },
   ];
 
   return (
@@ -53,7 +53,7 @@ const DriverWallet = () => {
           <div className="relative z-10 space-y-4">
             <div>
               <p className="text-xs font-label-sm text-primary-fixed uppercase tracking-widest">Available Balance</p>
-              <h2 className="text-4xl md:text-5xl font-extrabold text-white mt-1 tracking-tight">$1,482.50</h2>
+              <h2 className="text-4xl md:text-5xl font-extrabold text-white mt-1 tracking-tight">₹14,825.00</h2>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-primary-fixed-dim/20 pt-4">
@@ -77,19 +77,19 @@ const DriverWallet = () => {
         <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="glass-panel p-4 rounded-2xl">
             <p className="text-[11px] font-label-sm text-on-surface-variant uppercase tracking-wider">Base Fares</p>
-            <p className="text-xl font-bold text-primary mt-1">$940.00</p>
+            <p className="text-xl font-bold text-primary mt-1">₹9,400.00</p>
           </div>
           <div className="glass-panel p-4 rounded-2xl">
             <p className="text-[11px] font-label-sm text-on-surface-variant uppercase tracking-wider">Surge Bonuses</p>
-            <p className="text-xl font-bold text-secondary mt-1">$280.00</p>
+            <p className="text-xl font-bold text-secondary mt-1">₹2,800.00</p>
           </div>
           <div className="glass-panel p-4 rounded-2xl">
             <p className="text-[11px] font-label-sm text-on-surface-variant uppercase tracking-wider">Tips</p>
-            <p className="text-xl font-bold text-primary mt-1">$162.50</p>
+            <p className="text-xl font-bold text-primary mt-1">₹1,625.00</p>
           </div>
           <div className="glass-panel p-4 rounded-2xl">
             <p className="text-[11px] font-label-sm text-on-surface-variant uppercase tracking-wider">Incentives</p>
-            <p className="text-xl font-bold text-secondary mt-1">$100.00</p>
+            <p className="text-xl font-bold text-secondary mt-1">₹1,000.00</p>
           </div>
         </section>
 
@@ -105,7 +105,7 @@ const DriverWallet = () => {
                 <p className="text-xs text-on-surface-variant">Complete 20 deliveries by Sunday</p>
               </div>
             </div>
-            <span className="font-bold text-sm text-secondary">+$150.00 Bonus</span>
+            <span className="font-bold text-sm text-secondary">+₹1,500.00 Bonus</span>
           </div>
 
           <div className="space-y-1">
@@ -137,7 +137,7 @@ const DriverWallet = () => {
                 <span className="material-symbols-outlined">account_balance</span>
               </div>
               <div>
-                <p className="font-bold text-xs text-primary">JPMorgan Chase Bank</p>
+                <p className="font-bold text-xs text-primary">HDFC Bank</p>
                 <p className="text-[11px] text-on-surface-variant">Checking account •••• 4821</p>
               </div>
             </div>
@@ -188,21 +188,21 @@ const DriverWallet = () => {
             </div>
             <div className="text-center space-y-1">
               <h3 className="font-bold text-xl text-primary">Instant Cashout</h3>
-              <p className="text-xs text-on-surface-variant">Transfer $1,482.50 immediately to Chase ****4821</p>
+              <p className="text-xs text-on-surface-variant">Transfer ₹14,825.00 immediately to HDFC ****4821</p>
             </div>
 
             <div className="bg-surface-container p-3.5 rounded-xl space-y-2 text-xs border border-outline-variant/30">
               <div className="flex justify-between">
                 <span className="text-on-surface-variant">Transfer Amount</span>
-                <span className="font-bold text-primary">$1,482.50</span>
+                <span className="font-bold text-primary">₹14,825.00</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-on-surface-variant">Instant Fee (1.5%)</span>
-                <span className="font-bold text-primary">$0.00 (Waived)</span>
+                <span className="font-bold text-primary">₹0.00 (Waived)</span>
               </div>
               <div className="flex justify-between border-t border-outline-variant/20 pt-2 font-bold text-sm">
                 <span>Net Transfer</span>
-                <span className="text-secondary">$1,482.50</span>
+                <span className="text-secondary">₹14,825.00</span>
               </div>
             </div>
 

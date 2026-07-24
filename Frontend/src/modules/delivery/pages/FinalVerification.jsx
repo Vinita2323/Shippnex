@@ -296,7 +296,7 @@ const FinalVerification = () => {
             </div>
             <h2 className="font-headline-lg font-extrabold text-2xl text-primary">Excellent Work!</h2>
             <p className="text-on-surface-variant text-xs leading-relaxed">
-              Delivery verified and closed. Your payout of <span className="font-bold text-secondary">$142.50</span> has been credited to your wallet.
+              Delivery verified and closed. Your payout of <span className="font-bold text-secondary">₹1,425.00</span> has been credited to your wallet.
             </p>
             <button
               onClick={() => navigate('/driver/dashboard')}
