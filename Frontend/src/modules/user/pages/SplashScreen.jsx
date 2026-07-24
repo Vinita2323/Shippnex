@@ -10,8 +10,8 @@ const SplashScreen = ({ onGetStarted }) => {
   };
 
   return (
-    <div className="fixed top-0 left-0 w-[100vw] h-[100dvh] bg-[#f4f6f9] flex justify-center items-center p-1.5 font-sans box-border overflow-hidden z-[9999]">
-      <div className="bg-white w-full max-w-[360px] h-full max-h-[800px] rounded-[24px] shadow-[0_15px_35px_rgba(0,0,0,0.08)] pt-2 pb-3 px-3.5 flex flex-col items-center justify-between relative box-border overflow-y-auto hide-scrollbar">
+    <div className="fixed top-0 left-0 w-full h-[100dvh] bg-white md:bg-[#f4f6f9] flex justify-center items-center p-0 md:p-3 font-sans box-border overflow-hidden z-[9999]">
+      <div className="bg-white w-full max-w-none md:max-w-[380px] h-full max-h-none md:max-h-[850px] rounded-none md:rounded-[28px] shadow-none md:shadow-[0_15px_35px_rgba(0,0,0,0.08)] py-4 px-4 flex flex-col items-center justify-between relative box-border overflow-y-auto hide-scrollbar">
         {/* Header Branding */}
         <div className="flex flex-col items-center pt-0 mt-0">
           <img 
