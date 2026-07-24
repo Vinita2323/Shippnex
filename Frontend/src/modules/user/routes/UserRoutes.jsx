@@ -26,6 +26,7 @@ import VehicleSelection from '../pages/transport/VehicleSelection';
 import FareSummary from '../pages/transport/FareSummary';
 import BookingCompleted from '../pages/transport/BookingCompleted';
 import TransportBookingDetails from '../pages/transport/TransportBookingDetails';
+import TransportRegistration from '../pages/transport/TransportRegistration';
 
 const UserRoutes = () => {
   const location = useLocation();
@@ -41,7 +42,7 @@ const UserRoutes = () => {
   const isPlaceholder = ['/account-information', '/saved-addresses', '/security', '/terms', '/faqs', '/support'].includes(location.pathname);
   
   // Transport flow routes that should hide the bottom nav
-  const isTransportFlow = ['/transport/location', '/transport/goods', '/transport/vehicle', '/transport/summary', '/transport/success', '/transport/booking-details'].includes(location.pathname);
+  const isTransportFlow = ['/transport/register', '/transport/location', '/transport/goods', '/transport/vehicle', '/transport/summary', '/transport/success', '/transport/booking-details'].includes(location.pathname);
   
   // Do NOT hide bottom nav on /transport
   const hideBottomNav = isCart || isCheckout || isPayment || isTrackOrder || isProfile || isLogin || isProductDetails || isWishlist || isNotifications || isPlaceholder || isTransportFlow;
@@ -59,6 +60,7 @@ const UserRoutes = () => {
         
         {/* Transport Routes */}
         <Route path="/transport" element={<TransportHome />} />
+        <Route path="/transport/register" element={<TransportRegistration />} />
         <Route path="/transport/location" element={<LocationSelection />} />
         <Route path="/transport/goods" element={<GoodsDetails />} />
         <Route path="/transport/vehicle" element={<VehicleSelection />} />

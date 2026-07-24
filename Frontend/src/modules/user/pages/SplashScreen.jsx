@@ -1,85 +1,104 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const SplashScreen = ({ onGetStarted }) => {
+  const navigate = useNavigate();
+
+  const handleBookVehicle = () => {
+    if (onGetStarted) onGetStarted();
+    navigate('/transport/register');
+  };
+
   return (
-    <div className="fixed top-0 left-0 w-[100vw] h-[100dvh] bg-[#f4f6f9] flex justify-center items-center p-3 font-sans box-border overflow-hidden z-[9999]">
-      <div className="bg-white w-full max-w-[380px] h-full max-h-[850px] rounded-[28px] shadow-[0_15px_35px_rgba(0,0,0,0.08)] py-6 px-5 flex flex-col items-center justify-between relative box-border">
+    <div className="fixed top-0 left-0 w-[100vw] h-[100dvh] bg-[#f4f6f9] flex justify-center items-center p-1.5 font-sans box-border overflow-hidden z-[9999]">
+      <div className="bg-white w-full max-w-[360px] h-full max-h-[800px] rounded-[24px] shadow-[0_15px_35px_rgba(0,0,0,0.08)] pt-2 pb-3 px-3.5 flex flex-col items-center justify-between relative box-border overflow-y-auto hide-scrollbar">
         {/* Header Branding */}
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center pt-0 mt-0">
           <img 
             src="/splashscreenlogo.png" 
             alt="ShippNex Logo" 
-            className="max-w-[140px] h-auto object-contain"
+            className="max-w-[120px] h-auto object-contain"
           />
-          <div className="flex items-center gap-[6px] mt-[6px]">
-            <span className="w-4 h-[2px] bg-slate-500 rounded-sm"></span>
-            <span className="text-[11.5px] font-semibold text-[#1e2b4f] italic tracking-[-0.2px]">The Next Move in Logistics.</span>
-            <span className="w-4 h-[2px] bg-slate-500 rounded-sm"></span>
+          <div className="flex items-center gap-[5px] mt-[4px]">
+            <span className="w-3 h-[2px] bg-slate-400 rounded-sm"></span>
+            <span className="text-[11px] font-semibold text-[#1e2b4f] italic tracking-[-0.2px]">The Next Move in Logistics.</span>
+            <span className="w-3 h-[2px] bg-slate-400 rounded-sm"></span>
           </div>
         </div>
 
         {/* Hero 3D Shopping Cart Illustration */}
-        <div className="w-full flex justify-center items-center flex-1 min-h-0 py-2.5">
+        <div className="w-full flex justify-center items-center py-1.5 max-h-[160px]">
           <img 
             src="/shopping_cart_illustration.png" 
             alt="Wholesale Shopping Cart" 
-            className="w-full max-w-[220px] h-full object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,0.05)]"
+            className="w-full max-w-[180px] h-full max-h-[150px] object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.05)]"
           />
         </div>
 
-        {/* Headline */}
-        <h2 className="text-[16px] font-extrabold text-[#1e2b4f] text-center leading-[1.3] px-1">
-          Your Trusted<br />
-          Partner for Wholesale<br />
-          Shopping & Fast Delivery
-        </h2>
 
         {/* Feature Badges */}
-        <div className="flex justify-around items-start w-full my-4">
+        <div className="flex justify-around items-start w-full my-2.5">
           <div className="flex flex-col items-center flex-1 text-center relative after:content-[''] after:absolute after:right-0 after:top-[15%] after:h-[70%] after:w-px after:bg-slate-100">
-            <div className="w-[38px] h-[38px] rounded-full bg-white border border-slate-200 shadow-[0_3px_8px_rgba(0,0,0,0.04)] flex items-center justify-center mb-1.5">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff5500" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <div className="w-[34px] h-[34px] rounded-full bg-white border border-slate-200 shadow-[0_2px_6px_rgba(0,0,0,0.04)] flex items-center justify-center mb-1">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff5500" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                 <path d="M9 12l2 2 4-4"/>
               </svg>
             </div>
-            <span className="text-[11px] font-bold text-slate-700 leading-[1.15]">Quality<br />Products</span>
+            <span className="text-[10px] font-bold text-slate-700 leading-[1.1]">Quality<br />Products</span>
           </div>
 
           <div className="flex flex-col items-center flex-1 text-center relative after:content-[''] after:absolute after:right-0 after:top-[15%] after:h-[70%] after:w-px after:bg-slate-100">
-            <div className="w-[38px] h-[38px] rounded-full bg-white border border-slate-200 shadow-[0_3px_8px_rgba(0,0,0,0.04)] flex items-center justify-center mb-1.5">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff5500" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <div className="w-[34px] h-[34px] rounded-full bg-white border border-slate-200 shadow-[0_2px_6px_rgba(0,0,0,0.04)] flex items-center justify-center mb-1">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff5500" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
               </svg>
             </div>
-            <span className="text-[11px] font-bold text-slate-700 leading-[1.15]">Best<br />Prices</span>
+            <span className="text-[10px] font-bold text-slate-700 leading-[1.1]">Best<br />Prices</span>
           </div>
 
           <div className="flex flex-col items-center flex-1 text-center relative">
-            <div className="w-[38px] h-[38px] rounded-full bg-white border border-slate-200 shadow-[0_3px_8px_rgba(0,0,0,0.04)] flex items-center justify-center mb-1.5">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff5500" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <div className="w-[34px] h-[34px] rounded-full bg-white border border-slate-200 shadow-[0_2px_6px_rgba(0,0,0,0.04)] flex items-center justify-center mb-1">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff5500" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="9"/>
                 <polyline points="12 6 12 12 15.5 15.5"/>
               </svg>
             </div>
-            <span className="text-[11px] font-bold text-slate-700 leading-[1.15]">On Time<br />Delivery</span>
+            <span className="text-[10px] font-bold text-slate-700 leading-[1.1]">On Time<br />Delivery</span>
           </div>
         </div>
 
         {/* Pagination Dots */}
-        <div className="flex gap-1.5 items-center mb-4">
-          <span className="bg-[#1e2b4f] w-[7px] h-[7px] rounded-full"></span>
+        <div className="flex gap-1.5 items-center mb-2">
+          <span className="bg-[#1e2b4f] w-[6px] h-[6px] rounded-full"></span>
           <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
           <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
         </div>
 
-        {/* Primary CTA */}
-        <button 
-          className="w-full bg-gradient-to-b from-[#ff6000] to-[#ff4500] text-white px-5 py-3.5 rounded-[30px] text-[15px] font-bold shadow-[0_6px_16px_rgba(255,69,0,0.28)] hover:-translate-y-[1px] hover:shadow-[0_8px_20px_rgba(255,69,0,0.35)] active:translate-y-[1px] mt-auto transition-all cursor-pointer"
-          onClick={onGetStarted}
-        >
-          Get Started
-        </button>
+        {/* Action Buttons Section */}
+        <div className="w-full space-y-2 mt-auto">
+          {/* Primary CTA: Get Started */}
+          <button 
+            className="w-full bg-gradient-to-b from-[#ff6000] to-[#ff4500] text-white px-4 py-3 rounded-[24px] text-[14px] font-bold shadow-[0_5px_14px_rgba(255,69,0,0.28)] hover:shadow-[0_7px_18px_rgba(255,69,0,0.35)] active:scale-98 transition-all cursor-pointer"
+            onClick={onGetStarted}
+          >
+            Get Started
+          </button>
+
+          {/* Book Vehicle / Transport CTA */}
+          <button
+            className="w-full bg-[#1e2b4f] hover:bg-[#15203d] text-white px-4 py-3 rounded-[24px] text-[13.5px] font-bold shadow-[0_4px_12px_rgba(30,43,79,0.25)] active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-2"
+            onClick={handleBookVehicle}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#97fc43" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="1" y="3" width="15" height="13" rx="2"/>
+              <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+              <circle cx="5.5" cy="18.5" r="2.5"/>
+              <circle cx="18.5" cy="18.5" r="2.5"/>
+            </svg>
+            Book Vehicle / Transport
+          </button>
+        </div>
       </div>
     </div>
   );
