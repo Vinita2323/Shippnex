@@ -5,12 +5,11 @@ import DriverBottomNav from '../components/DriverBottomNav';
 const FinalVerification = () => {
   const navigate = useNavigate();
   const [otp, setOtp] = useState(['', '', '', '']);
-  const [hasSignature, setHasSignature] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [photoUploaded, setPhotoUploaded] = useState(true);
-
-  const canvasRef = useRef(null);
-  const isDrawing = useRef(false);
+  const [capturedPhoto, setCapturedPhoto] = useState(
+    'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=600&q=80'
+  );
+  const fileInputRef = useRef(null);
 
   // OTP input handler
   const handleOtpChange = (index, value) => {
@@ -33,52 +32,17 @@ const FinalVerification = () => {
     }
   };
 
-  // Canvas Drawing
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#002625';
-  }, []);
-
-  const startDrawing = (e) => {
-    isDrawing.current = true;
-    setHasSignature(true);
-    draw(e);
-  };
-
-  const stopDrawing = () => {
-    isDrawing.current = false;
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      ctx.beginPath();
+  const handlePhotoCapture = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      const imageUrl = URL.createObjectURL(file);
+      setCapturedPhoto(imageUrl);
     }
   };
 
-  const draw = (e) => {
-    if (!isDrawing.current) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
-    const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
-
-    ctx.lineTo(x, y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-  };
-
-  const clearCanvas = () => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      setHasSignature(false);
+  const triggerCamera = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
     }
   };
 
@@ -206,9 +170,21 @@ const FinalVerification = () => {
               <span className="material-symbols-outlined text-primary">photo_camera</span>
               Proof of Delivery
             </h4>
+            
+            {/* Hidden file/camera input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              capture="environment"
+              onChange={handlePhotoCapture}
+              className="hidden"
+            />
+
             <div className="grid grid-cols-2 gap-4">
               <button
-                onClick={() => setPhotoUploaded(true)}
+                type="button"
+                onClick={triggerCamera}
                 className="aspect-square rounded-xl bg-surface-container-high border-2 border-dashed border-outline-variant/50 flex flex-col items-center justify-center gap-2 hover:bg-surface-container transition-all group cursor-pointer"
               >
                 <span className="material-symbols-outlined text-3xl text-on-surface-variant group-hover:text-secondary">
@@ -217,18 +193,19 @@ const FinalVerification = () => {
                 <span className="font-label-sm text-xs text-on-surface-variant">Capture Photo</span>
               </button>
 
-              {photoUploaded && (
-                <div className="relative aspect-square rounded-xl overflow-hidden group shadow-md">
+              {capturedPhoto && (
+                <div className="relative aspect-square rounded-xl overflow-hidden group shadow-md bg-slate-100">
                   <img
                     className="w-full h-full object-cover"
-                    alt="Package at dock"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPggvgEkFU6yhfzZXQ7XiOMtVeXDiO5D66DyOY6eh9_JEik_xQcpjVnoVabL3hdS-uDqCK_aeRJs0OTeg4fYDY4FElRJQG6Xcul7ReEeCPkL_WIcvYvUtg_jxxTE41Wpzm86LGs5qt-VWFf2nWSBrHFjnef9WDiyUaxH8Fj5yTSrX6n-0gy8reIkmFTJegSWIUhsH6f07r7ENGf749eRlP3TAjstksnM6paE_OhczGMR86VpHttOwaMgebB4BWhSeXlmXcWyu3zLo"
+                    alt="Package proof"
+                    src={capturedPhoto}
                   />
                   <div
-                    onClick={() => alert('Retaking proof photo...')}
-                    className="absolute inset-0 bg-primary/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white font-bold text-xs gap-1"
+                    onClick={triggerCamera}
+                    className="absolute inset-0 bg-primary/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white font-bold text-xs gap-1"
                   >
-                    <span className="material-symbols-outlined">refresh</span> Retake
+                    <span className="material-symbols-outlined text-xl">refresh</span>
+                    <span>Retake Photo</span>
                   </div>
                 </div>
               )}
