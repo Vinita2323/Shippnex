@@ -232,8 +232,12 @@ const FinalVerification = () => {
       {showSuccessModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-primary/30 backdrop-blur-xl transition-all">
           <div className="glass-panel w-full max-w-sm p-8 rounded-3xl shadow-2xl text-center border-white/80 animate-float space-y-4">
-            <div className="w-20 h-20 bg-secondary-container text-secondary rounded-full flex items-center justify-center mx-auto shadow-md">
-              <span className="material-symbols-outlined text-5xl">celebration</span>
+            <div className="w-24 h-24 mx-auto flex items-center justify-center filter drop-shadow-md">
+              <img
+                src="/celebration_sticker.png"
+                alt="Celebration Sticker"
+                className="w-full h-full object-contain"
+              />
             </div>
             <h2 className="font-headline-lg font-extrabold text-2xl text-primary">Excellent Work!</h2>
             <p className="text-on-surface-variant text-xs leading-relaxed">
