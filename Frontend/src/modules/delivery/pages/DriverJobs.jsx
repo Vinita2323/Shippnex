@@ -103,8 +103,8 @@ const DriverJobs = () => {
 
       {/* Main Container - Added comfortable top padding & margin */}
       <main className="pt-16 md:pt-20 px-3.5 max-w-7xl mx-auto space-y-3.5 mt-2.5">
-        {/* Search & Filter Bar */}
-        <div className="space-y-2">
+        {/* Search Bar */}
+        <div>
           <div className="relative">
             <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-outline text-lg">
               search
@@ -116,23 +116,6 @@ const DriverJobs = () => {
               placeholder="Search Job ID, Hub, or Destination..."
               className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl py-2 pl-9 pr-3 text-xs font-body-md focus:ring-1 focus:ring-secondary focus:outline-none placeholder:text-outline-variant"
             />
-          </div>
-
-          {/* Quick Filter Chips */}
-          <div className="flex gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
-            {['All', 'High Payout', 'Short Distance', 'Cold Chain'].map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setSelectedFilter(filter)}
-                className={`px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                  selectedFilter === filter
-                    ? 'bg-secondary text-white shadow-xs'
-                    : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
-                }`}
-              >
-                {filter}
-              </button>
-            ))}
           </div>
         </div>
 

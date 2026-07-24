@@ -67,51 +67,36 @@ const DriverDashboard = () => {
           {/* Today's Earning */}
           <div className="glass-panel p-3 rounded-xl relative overflow-hidden group hover:shadow-md transition-all">
             <p className="text-xs font-black text-primary uppercase tracking-wider truncate">Today's Earning</p>
-            <div className="flex items-baseline gap-0.5 mt-1">
+            <div className="flex items-baseline gap-0.5 mt-1.5">
               <span className="text-secondary font-bold text-xs">₹</span>
               <span className="text-primary font-extrabold text-lg md:text-xl leading-none">4,825.00</span>
             </div>
-            <div className="mt-1.5 flex items-center text-secondary font-bold text-[10px] truncate">
-              <span className="material-symbols-outlined text-xs mr-0.5">trending_up</span>
-              +12.4%
-            </div>
           </div>
 
-          {/* Total Rides */}
+          {/* Total Bookings */}
           <div className="glass-panel p-3 rounded-xl relative overflow-hidden group hover:shadow-md transition-all">
-            <p className="text-xs font-black text-primary uppercase tracking-wider truncate">Total Rides</p>
-            <div className="flex items-baseline gap-1 mt-1">
+            <p className="text-xs font-black text-primary uppercase tracking-wider truncate">Total Bookings</p>
+            <div className="flex items-baseline gap-1 mt-1.5">
               <span className="text-primary font-extrabold text-lg md:text-xl leading-none">24</span>
-              <span className="text-on-surface-variant font-semibold text-[10px]">Rides</span>
-            </div>
-            <div className="mt-1.5 flex items-center text-secondary font-bold text-[10px] truncate">
-              <span className="material-symbols-outlined text-xs mr-0.5">alt_route</span>
-              +3 Today
+              <span className="text-on-surface-variant font-semibold text-[10px]">Bookings</span>
             </div>
           </div>
 
           {/* Deliveries */}
           <div className="glass-panel p-3 rounded-xl relative overflow-hidden group hover:shadow-md transition-all">
             <p className="text-xs font-black text-primary uppercase tracking-wider truncate">Deliveries</p>
-            <div className="flex items-baseline gap-1 mt-1">
+            <div className="flex items-baseline gap-1 mt-1.5">
               <span className="text-primary font-extrabold text-lg md:text-xl leading-none">14</span>
               <span className="text-on-surface-variant font-semibold text-[10px]">/18</span>
-            </div>
-            <div className="mt-2.5 w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden">
-              <div className="bg-secondary h-full rounded-full w-[78%] animate-pulse"></div>
             </div>
           </div>
 
           {/* Pending */}
           <div className="glass-panel p-3 rounded-xl relative overflow-hidden group hover:shadow-md transition-all">
             <p className="text-xs font-black text-primary uppercase tracking-wider truncate">Pending</p>
-            <div className="flex items-baseline gap-1 mt-1">
+            <div className="flex items-baseline gap-1 mt-1.5">
               <span className="text-primary font-extrabold text-lg md:text-xl leading-none">03</span>
               <span className="text-on-surface-variant font-semibold text-[10px]">Tasks</span>
-            </div>
-            <div className="mt-1.5 flex items-center text-on-surface-variant font-bold text-[10px] truncate">
-              <span className="material-symbols-outlined text-xs mr-0.5">schedule</span>
-              14:00 PM
             </div>
           </div>
         </section>

@@ -234,42 +234,6 @@ const FinalVerification = () => {
               )}
             </div>
           </div>
-
-          {/* Signature Pad */}
-          <div className="glass-panel p-5 rounded-2xl shadow-sm border-white/60">
-            <div className="flex justify-between items-center mb-3">
-              <h4 className="font-headline-md font-bold text-base text-primary flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">draw</span>
-                Digital Signature
-              </h4>
-              <button
-                onClick={clearCanvas}
-                className="text-secondary font-bold text-xs hover:underline cursor-pointer"
-              >
-                Clear
-              </button>
-            </div>
-            <div className="w-full h-44 border border-outline-variant/40 rounded-xl relative bg-white overflow-hidden cursor-crosshair">
-              <canvas
-                ref={canvasRef}
-                width={500}
-                height={176}
-                onMouseDown={startDrawing}
-                onMouseUp={stopDrawing}
-                onMouseLeave={stopDrawing}
-                onMouseMove={draw}
-                onTouchStart={startDrawing}
-                onTouchEnd={stopDrawing}
-                onTouchMove={draw}
-                className="w-full h-full"
-              />
-              {!hasSignature && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-outline-variant font-label-sm text-xs">
-                  Sign within the boundaries
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Completion Button */}
