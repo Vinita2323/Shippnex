@@ -44,27 +44,27 @@ const DriverWallet = () => {
 
       {/* Main Container */}
       <main className="pt-20 px-4 max-w-7xl mx-auto space-y-6">
-        {/* Main Wallet Balance Card */}
-        <div className="glass-panel p-6 rounded-3xl relative overflow-hidden bg-gradient-to-br from-primary-container/90 to-primary shadow-2xl text-white">
-          <div className="absolute top-4 right-4 opacity-10">
-            <span className="material-symbols-outlined text-[120px]">account_balance_wallet</span>
+        {/* Main Wallet Balance Card - High Contrast Visibility */}
+        <div className="p-6 rounded-3xl relative overflow-hidden bg-[#002625] shadow-xl border border-emerald-900/40 text-white">
+          <div className="absolute top-4 right-4 opacity-15">
+            <span className="material-symbols-outlined text-[120px] text-[#97fc43]">account_balance_wallet</span>
           </div>
 
           <div className="relative z-10 space-y-4">
             <div>
-              <p className="text-xs font-label-sm text-primary-fixed uppercase tracking-widest">Available Balance</p>
+              <p className="text-xs font-label-sm text-[#97fc43] uppercase tracking-widest font-black">Available Balance</p>
               <h2 className="text-4xl md:text-5xl font-extrabold text-white mt-1 tracking-tight">₹14,825.00</h2>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-primary-fixed-dim/20 pt-4">
-              <div className="flex items-center gap-2 text-xs text-primary-fixed">
-                <span className="material-symbols-outlined text-base text-secondary-fixed">check_circle</span>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+              <div className="flex items-center gap-2 text-xs text-slate-200 font-medium">
+                <span className="material-symbols-outlined text-base text-[#97fc43]">check_circle</span>
                 Next auto-payout: Tuesday, Jul 28
               </div>
 
               <button
                 onClick={() => setShowCashoutModal(true)}
-                className="bg-secondary-container hover:bg-secondary-fixed text-on-secondary-container font-bold px-5 py-2.5 rounded-xl text-xs shadow-lg transition-all transform active:scale-95 cursor-pointer flex items-center gap-1.5"
+                className="bg-[#97fc43] hover:bg-[#86e835] text-[#002625] font-black px-5 py-2.5 rounded-xl text-xs shadow-lg transition-all transform active:scale-95 cursor-pointer flex items-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-base">bolt</span>
                 Instant Cashout

@@ -4,213 +4,350 @@ import DriverBottomNav from '../components/DriverBottomNav';
 
 const DriverJobs = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('available');
-  const [selectedFilter, setSelectedFilter] = useState('All');
+  const [activeTab, setActiveTab] = useState('deliveries');
   const [searchQuery, setSearchQuery] = useState('');
   const [acceptedJob, setAcceptedJob] = useState(null);
+  const [selectedDetailJob, setSelectedDetailJob] = useState(null);
 
-  const jobsList = [
+  // Deliveries List matching reference design
+  const deliveryItems = [
     {
-      id: 'JOB-9021',
-      payout: 1250.00,
-      distance: '14.2 km',
-      time: '42 mins',
-      cargoType: 'Cold Chain Pharma',
-      cargoIcon: 'ac_unit',
-      badgeColor: 'bg-blue-100 text-blue-800',
-      pickup: 'BioLogix Central Hub, Bay 14',
-      dropoff: 'St. Jude Regional Medical Depot',
-      weight: '450 kg',
-      priority: 'HIGH PRIORITY',
-    },
-    {
-      id: 'JOB-8842',
-      payout: 850.50,
-      distance: '8.7 km',
-      time: '28 mins',
-      cargoType: 'Electronics Freight',
-      cargoIcon: 'memory',
-      badgeColor: 'bg-purple-100 text-purple-800',
-      pickup: 'TechPort Logistics Warehouses',
-      dropoff: 'Metro Distribution Hub B',
-      weight: '820 kg',
-      priority: 'STANDARD',
-    },
-    {
-      id: 'JOB-7731',
-      payout: 640.00,
-      distance: '5.1 km',
+      id: 'DEL-8102',
+      payout: 480.00,
+      distance: '4.2 km',
       time: '18 mins',
-      cargoType: 'Automotive Parts',
-      cargoIcon: 'settings',
-      badgeColor: 'bg-amber-100 text-amber-800',
-      pickup: 'Industrial Parts Plant 4',
-      dropoff: 'Apex Fleet Motors Workshop',
-      weight: '310 kg',
-      priority: 'STANDARD',
+      title: 'Grocery & Dairy Staples',
+      pickupHub: 'SuperMart Hub',
+      pickupAddress: 'Sector 45, Noida, UP 201301',
+      dropHub: 'Greenwood Heights',
+      dropAddress: 'Greenwood, Sector 50, Noida, UP 201301',
+      weight: '35 kg',
+      tag1: 'EXPRESS',
+      tag1Style: 'bg-[#0a3d16] text-[#86efac]',
+      tag2: 'HIGH PAYING',
+      tag2Style: 'bg-[#dcfce7] text-[#15803d]',
+      icon: 'local_grocery_store',
+      customerName: 'Aarav Sharma',
+      customerPhone: '+91 98765 43210',
+      itemsList: ['Basmati Rice (10kg)', 'Refined Cooking Oil (5L)', 'Sugar (5kg)', 'Dairy & Fresh Spices'],
     },
     {
-      id: 'JOB-6520',
-      payout: 1450.00,
-      distance: '22.0 km',
-      time: '55 mins',
-      cargoType: 'Heavy Industrial Machinery',
-      cargoIcon: 'precision_manufacturing',
-      badgeColor: 'bg-emerald-100 text-emerald-800',
-      pickup: 'Midwest Freight Terminal C',
-      dropoff: 'Vanguard Structural Yard',
-      weight: '1,800 kg',
-      priority: 'EXPRESS',
+      id: 'DEL-8109',
+      payout: 350.00,
+      distance: '3.1 km',
+      time: '14 mins',
+      title: 'Bakery & Organic Produce',
+      pickupHub: 'FreshFarm Depot',
+      pickupAddress: 'Sector 63, Noida, UP 201301',
+      dropHub: 'Sunrise Apartments',
+      dropAddress: 'Sector 62, Noida, UP 201301',
+      weight: '18 kg',
+      tag1: 'STANDARD',
+      tag1Style: 'bg-[#2563eb] text-white',
+      tag2: 'NEARBY',
+      tag2Style: 'bg-[#e0f2fe] text-[#0284c7]',
+      icon: 'shopping_basket',
+      customerName: 'Priya Verma',
+      customerPhone: '+91 98123 45678',
+      itemsList: ['Whole Wheat Bread (4 pkts)', 'Organic Apples (3kg)', 'Fresh Farm Milk (5L)', 'Artisanal Cheese'],
+    },
+    {
+      id: 'DEL-8115',
+      payout: 620.00,
+      distance: '7.8 km',
+      time: '26 mins',
+      title: 'Personal Care & Homecare Box',
+      pickupHub: 'Reliance Depot A',
+      pickupAddress: 'Phase 2, Noida Industrial Area, UP',
+      dropHub: 'Urban Superstore',
+      dropAddress: 'Sector 18 Market, Noida, UP 201301',
+      weight: '42 kg',
+      tag1: 'PRIORITY',
+      tag1Style: 'bg-[#7e22ce] text-white',
+      tag2: 'HIGH PAYING',
+      tag2Style: 'bg-[#dcfce7] text-[#15803d]',
+      icon: 'sanitizer',
+      customerName: 'Vikram Singh',
+      customerPhone: '+91 99555 12345',
+      itemsList: ['Detergent Liquids (10L)', 'Soaps & Shampoos Box', 'Surface Cleaners & Disinfectants'],
+    },
+    {
+      id: 'DEL-8122',
+      payout: 890.00,
+      distance: '11.5 km',
+      time: '35 mins',
+      title: 'Bulk FMCG & Beverage Pack',
+      pickupHub: 'Wholesale Central Yard',
+      pickupAddress: 'Greater Noida Logistics Park, UP',
+      dropHub: 'City Retail Mart',
+      dropAddress: 'Sector 14, Greater Noida, UP 201308',
+      weight: '95 kg',
+      tag1: 'BULK CARGO',
+      tag1Style: 'bg-[#b45309] text-white',
+      tag2: 'EXPRESS',
+      tag2Style: 'bg-[#dcfce7] text-[#15803d]',
+      icon: 'inventory_2',
+      customerName: 'Rajesh Gupta',
+      customerPhone: '+91 97111 88990',
+      itemsList: ['Atta Bags (20kg x2)', 'Pure Ghee Cans (15L)', 'Mineral Water Cases (5 Cases)', 'Snack Bundles'],
     },
   ];
 
-  const handleAcceptJob = (job) => {
-    setAcceptedJob(job);
+  // Bookings List matching reference design
+  const bookingItems = [
+    {
+      id: 'BKG-9940',
+      payout: 4500.00,
+      distance: '28.5 km',
+      time: '1 hr 10 mins',
+      title: 'Heavy Freight Transport',
+      vehicleRequired: 'Eicher Pro 3019 (10 Tonne)',
+      pickupHub: 'SteelCraft Industrial Plant 2',
+      pickupAddress: 'EcoTech 3, Greater Noida, UP',
+      dropHub: 'Metro Infra Site B',
+      dropAddress: 'Expressway Extension, Sector 142, Noida',
+      weight: '8.5 Tonne',
+      tag1: 'LOADING READY',
+      tag1Style: 'bg-[#c2410c] text-white',
+      tag2: 'HEAVY TRUCK',
+      tag2Style: 'bg-[#fef3c7] text-[#b45309]',
+      icon: 'local_shipping',
+      loadingDock: 'Gate 4, West Terminal',
+      laborInfo: '4 Loaders Included at Dock',
+      customerName: 'Vanguard Engineering Ltd',
+      customerPhone: '+91 98100 99887',
+    },
+    {
+      id: 'BKG-9945',
+      payout: 6800.00,
+      distance: '45.0 km',
+      time: '1 hr 45 mins',
+      title: 'Full Truckload Equipment',
+      vehicleRequired: 'Tata Prima 2830 (16 Tonne FTL)',
+      pickupHub: 'Vanguard PreCast Concrete Works',
+      pickupAddress: 'Surajpur Industrial Area, Noida, UP',
+      dropHub: 'Highway Flyover Site Yard 4',
+      dropAddress: 'NH-24 Expansion Site, Ghaziabad, UP',
+      weight: '14.2 Tonne',
+      tag1: 'SCHEDULED DOCK',
+      tag1Style: 'bg-[#4338ca] text-white',
+      tag2: 'HIGH PAYING',
+      tag2Style: 'bg-[#dcfce7] text-[#15803d]',
+      icon: 'precision_manufacturing',
+      loadingDock: 'Bay 12, Heavy Yard',
+      laborInfo: 'Overhead Crane Loading Required',
+      customerName: 'National Highway Infra Co',
+      customerPhone: '+91 99000 11223',
+    },
+  ];
+
+  const handleAcceptJob = (item) => {
+    setAcceptedJob(item);
   };
 
   const confirmJobAcceptance = () => {
     navigate('/driver/active-delivery');
   };
 
-  const filteredJobs = jobsList.filter((job) => {
-    const matchesSearch =
-      job.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.pickup.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.dropoff.toLowerCase().includes(searchQuery.toLowerCase());
-    if (selectedFilter === 'High Payout') return matchesSearch && job.payout >= 90;
-    if (selectedFilter === 'Short Distance') return matchesSearch && parseFloat(job.distance) <= 10;
-    if (selectedFilter === 'Cold Chain') return matchesSearch && job.cargoType.includes('Cold');
-    return matchesSearch;
-  });
+  const filteredDeliveries = deliveryItems.filter((item) =>
+    item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.pickupHub.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.dropHub.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredBookings = bookingItems.filter((item) =>
+    item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.vehicleRequired.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <div className="bg-surface font-body-md text-on-surface min-h-screen pb-24">
-      {/* Compact Top Header */}
-      <header className="fixed top-0 left-0 w-full z-40 bg-surface/90 backdrop-blur-md shadow-sm border-b border-outline-variant/10 px-3 py-2">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
+    <div className="bg-[#f8fafc] font-body-md text-slate-800 min-h-screen pb-24">
+      {/* Compact Top App Bar */}
+      <header className="fixed top-0 left-0 w-full z-40 bg-white/90 backdrop-blur-md shadow-xs border-b border-slate-200/80 px-4 py-3">
+        <div className="max-w-xl mx-auto flex justify-between items-center">
           <div>
-            <h1 className="font-headline-md text-base font-bold text-primary leading-tight">Job Queue</h1>
-            <p className="text-[10px] text-on-surface-variant font-medium">4 routes available near Chicago</p>
+            <h1 className="font-headline-md text-lg font-black text-slate-900 leading-tight">Job Queue</h1>
+            <p className="text-[11px] text-slate-500 font-medium">Deliveries & Freight Booking Board</p>
           </div>
           <button
-            onClick={() => alert('Refreshing live freight board...')}
-            className="p-1.5 text-primary hover:bg-surface-container-high rounded-lg transition-colors cursor-pointer"
+            onClick={() => alert('Refreshing live delivery board...')}
+            className="w-9 h-9 flex items-center justify-center text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
           >
-            <span className="material-symbols-outlined text-lg">refresh</span>
+            <span className="material-symbols-outlined text-xl">refresh</span>
           </button>
         </div>
       </header>
 
-      {/* Main Container - Added comfortable top padding & margin */}
-      <main className="pt-16 md:pt-20 px-3.5 max-w-7xl mx-auto space-y-3.5 mt-2.5">
-        {/* Search Bar */}
-        <div>
-          <div className="relative">
-            <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-outline text-lg">
+      {/* Main Container */}
+      <main className="pt-18 px-3.5 max-w-xl mx-auto space-y-3.5 mt-1">
+        {/* Search Bar & Filter Button Row */}
+        <div className="flex gap-2.5 items-center">
+          <div className="relative flex-1">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">
               search
             </span>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search Job ID, Hub, or Destination..."
-              className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl py-2 pl-9 pr-3 text-xs font-body-md focus:ring-1 focus:ring-secondary focus:outline-none placeholder:text-outline-variant"
+              placeholder="Search Delivery ID, Customer or Route..."
+              className="w-full bg-white border border-slate-200/90 rounded-2xl py-2.5 pl-10 pr-3 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-secondary/40 focus:outline-none placeholder:text-slate-400"
             />
           </div>
+          <button
+            onClick={() => alert('Filtering options: High Payout, Express, Short Distance')}
+            className="w-10 h-10 bg-white border border-slate-200/90 rounded-2xl shadow-2xs flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shrink-0"
+          >
+            <span className="material-symbols-outlined text-xl">filter_list</span>
+          </button>
         </div>
 
-        {/* Tab Filters */}
-        <div className="flex border-b border-outline-variant/20">
+        {/* Tab Pills Bar */}
+        <div className="flex gap-2 overflow-x-auto hide-scrollbar py-0.5">
           <button
-            onClick={() => setActiveTab('available')}
-            className={`flex-1 py-2 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
-              activeTab === 'available'
-                ? 'border-secondary text-secondary'
-                : 'border-transparent text-on-surface-variant hover:text-primary'
+            onClick={() => setActiveTab('deliveries')}
+            className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'deliveries'
+                ? 'bg-[#002625] text-white shadow-md'
+                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
             }`}
           >
-            Available Jobs ({jobsList.length})
+            <span className="material-symbols-outlined text-base">package_2</span>
+            Deliveries ({deliveryItems.length})
           </button>
+
           <button
-            onClick={() => setActiveTab('assigned')}
-            className={`flex-1 py-2 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
-              activeTab === 'assigned'
-                ? 'border-secondary text-secondary'
-                : 'border-transparent text-on-surface-variant hover:text-primary'
+            onClick={() => setActiveTab('bookings')}
+            className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'bookings'
+                ? 'bg-[#002625] text-white shadow-md'
+                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
             }`}
           >
-            Assigned (2)
+            <span className="material-symbols-outlined text-base">local_shipping</span>
+            Bookings ({bookingItems.length})
           </button>
+
           <button
             onClick={() => setActiveTab('completed')}
-            className={`flex-1 py-2 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
+            className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'completed'
-                ? 'border-secondary text-secondary'
-                : 'border-transparent text-on-surface-variant hover:text-primary'
+                ? 'bg-[#002625] text-white shadow-md'
+                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
             }`}
           >
+            <span className="material-symbols-outlined text-base">check_circle</span>
             Completed (14)
           </button>
         </div>
 
-        {/* Jobs List */}
-        {activeTab === 'available' && (
-          <div className="space-y-3">
-            {filteredJobs.map((job) => (
+        {/* Deliveries Tab: Cards matching exact mockup design */}
+        {activeTab === 'deliveries' && (
+          <div className="space-y-3.5">
+            {filteredDeliveries.map((item) => (
               <div
-                key={job.id}
-                className="glass-panel p-3.5 rounded-xl border-white/60 hover:shadow-md transition-all space-y-3 group"
+                key={item.id}
+                className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all space-y-3"
               >
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-primary-container text-primary-fixed-dim flex items-center justify-center shadow-xs shrink-0">
-                      <span className="material-symbols-outlined text-base">{job.cargoIcon}</span>
+                {/* Top Badge & Price Row */}
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 uppercase tracking-wider ${item.tag1Style}`}>
+                      <span className="material-symbols-outlined text-xs">bolt</span>
+                      {item.tag1}
+                    </span>
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 uppercase tracking-wider ${item.tag2Style}`}>
+                      <span className="material-symbols-outlined text-xs">star</span>
+                      {item.tag2}
+                    </span>
+                  </div>
+                  <p className="font-headline-md text-2xl font-black text-[#15803d]">₹{item.payout.toFixed(2)}</p>
+                </div>
+
+                {/* Title, Icon & Quick Stats Row */}
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-[#d9f99d] text-[#365314] flex items-center justify-center shadow-xs shrink-0">
+                      <span className="material-symbols-outlined text-2xl">{item.icon}</span>
                     </div>
                     <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs font-bold text-primary">{job.id}</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${job.badgeColor}`}>
-                          {job.priority}
-                        </span>
-                      </div>
-                      <p className="text-[11px] font-medium text-on-surface-variant mt-0.5">{job.cargoType} • {job.weight}</p>
+                      <h3 className="font-mono text-sm font-black text-slate-900">{item.id}</h3>
+                      <p className="font-bold text-xs text-slate-700 mt-0.5">{item.title}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-headline-md text-lg md:text-xl font-bold text-secondary">₹{job.payout.toFixed(2)}</p>
-                    <p className="text-[10px] text-on-surface-variant font-medium">{job.distance} • {job.time}</p>
+
+                  {/* Meta Stats Right */}
+                  <div className="bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-100 text-[11px] font-semibold text-slate-600 flex items-center gap-2 shrink-0">
+                    <span className="flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-xs text-slate-400">scale</span>
+                      {item.weight}
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-xs text-slate-400">near_me</span>
+                      {item.distance}
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-xs text-slate-400">schedule</span>
+                      {item.time}
+                    </span>
                   </div>
                 </div>
 
-                {/* Pickup & Dropoff details */}
-                <div className="bg-surface-container-low/80 p-2.5 rounded-lg space-y-1.5 border border-outline-variant/20">
-                  <div className="flex items-center gap-2 text-[11px]">
-                    <span className="material-symbols-outlined text-secondary text-sm shrink-0">warehouse</span>
-                    <span className="font-bold text-on-surface shrink-0">Pickup:</span>
-                    <span className="text-on-surface-variant truncate">{job.pickup}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[11px]">
-                    <span className="material-symbols-outlined text-secondary text-sm shrink-0">location_on</span>
-                    <span className="font-bold text-on-surface shrink-0">Dropoff:</span>
-                    <span className="text-on-surface-variant truncate">{job.dropoff}</span>
-                  </div>
-                </div>
+                {/* Vertical Dotted Route Box */}
+                <div className="bg-white p-3 rounded-2xl border border-slate-100 flex justify-between items-center relative">
+                  <div className="flex gap-3 items-start">
+                    {/* Dotted Line Graphic */}
+                    <div className="flex flex-col items-center pt-0.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#15803d] ring-2 ring-emerald-100 shrink-0"></div>
+                      <div className="w-0.5 h-6 border-l-2 border-dashed border-slate-300 my-0.5"></div>
+                      <span className="material-symbols-outlined text-sm text-[#002625] shrink-0">location_on</span>
+                    </div>
 
-                {/* Card Actions */}
-                <div className="flex gap-2 pt-0.5">
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <span className="font-black text-[9px] text-[#15803d] uppercase tracking-widest block">PICKUP</span>
+                        <p className="font-bold text-slate-900 text-xs leading-tight">{item.pickupHub}</p>
+                        <p className="text-[10px] text-slate-500 truncate max-w-[200px] md:max-w-xs">{item.pickupAddress}</p>
+                      </div>
+                      <div>
+                        <span className="font-black text-[9px] text-slate-500 uppercase tracking-widest block">DROP</span>
+                        <p className="font-bold text-slate-900 text-xs leading-tight">{item.dropHub}</p>
+                        <p className="text-[10px] text-slate-500 truncate max-w-[200px] md:max-w-xs">{item.dropAddress}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Best Route Badge Button */}
                   <button
-                    onClick={() => handleAcceptJob(job)}
-                    className="flex-1 bg-secondary hover:bg-secondary/90 text-white font-bold py-2 rounded-xl text-xs transition-all shadow-xs flex items-center justify-center gap-1 cursor-pointer"
+                    onClick={() => alert(`Opening optimized GPS route map for ${item.id}`)}
+                    className="bg-[#f0fdf4] hover:bg-emerald-100/60 text-[#15803d] px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 border border-emerald-200/60 transition-colors cursor-pointer shrink-0"
                   >
-                    Accept Delivery
-                    <span className="material-symbols-outlined text-xs">arrow_forward</span>
+                    <span className="material-symbols-outlined text-sm">add_road</span>
+                    <span>Best Route</span>
+                    <span className="material-symbols-outlined text-xs">chevron_right</span>
                   </button>
+                </div>
+
+                {/* Bottom Action Buttons */}
+                <div className="flex gap-2.5 pt-1">
                   <button
-                    onClick={() => alert(`Showing route preview map for ${job.id}`)}
-                    className="bg-surface-container-high hover:bg-surface-container-highest text-primary p-2 rounded-xl transition-colors cursor-pointer"
-                    title="View Route Details"
+                    onClick={() => setSelectedDetailJob(item)}
+                    className="w-1/2 bg-white border border-slate-200/90 py-2.5 rounded-2xl text-xs font-bold text-slate-800 flex items-center justify-center gap-1.5 hover:bg-slate-50 transition-colors cursor-pointer"
                   >
-                    <span className="material-symbols-outlined text-base">map</span>
+                    <span className="material-symbols-outlined text-base">description</span>
+                    View Details
+                  </button>
+
+                  <button
+                    onClick={() => handleAcceptJob(item)}
+                    className="w-1/2 bg-[#366b00] hover:bg-[#2d5800] py-2.5 rounded-2xl text-xs font-bold text-white flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+                  >
+                    Accept Job
+                    <span className="material-symbols-outlined text-base">arrow_forward</span>
                   </button>
                 </div>
               </div>
@@ -218,37 +355,104 @@ const DriverJobs = () => {
           </div>
         )}
 
-        {activeTab === 'assigned' && (
-          <div className="glass-panel p-6 rounded-xl text-center space-y-3">
-            <span className="material-symbols-outlined text-4xl text-secondary">local_shipping</span>
-            <h3 className="font-bold text-primary text-base">Active Assigned Deliveries</h3>
-            <p className="text-xs text-on-surface-variant max-w-sm mx-auto">
-              You have 2 assigned deliveries in queue. Order #SNX-1024 is currently in transit.
-            </p>
-            <button
-              onClick={() => navigate('/driver/active-delivery')}
-              className="bg-primary text-white font-bold px-5 py-2 rounded-xl text-xs shadow-xs hover:bg-primary-container transition-all cursor-pointer"
-            >
-              Resume Active Delivery (#SNX-1024)
-            </button>
+        {/* Bookings Tab: Heavy Freight Cards */}
+        {activeTab === 'bookings' && (
+          <div className="space-y-3.5">
+            {filteredBookings.map((item) => (
+              <div
+                key={item.id}
+                className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all space-y-3"
+              >
+                {/* Top Badge & Price Row */}
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 uppercase tracking-wider ${item.tag1Style}`}>
+                      <span className="material-symbols-outlined text-xs">front_loader</span>
+                      {item.tag1}
+                    </span>
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 uppercase tracking-wider ${item.tag2Style}`}>
+                      {item.tag2}
+                    </span>
+                  </div>
+                  <p className="font-headline-md text-2xl font-black text-[#15803d]">₹{item.payout.toFixed(2)}</p>
+                </div>
+
+                {/* Title, Icon & Quick Stats Row */}
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-[#002625] text-white flex items-center justify-center shadow-xs shrink-0">
+                      <span className="material-symbols-outlined text-2xl">{item.icon}</span>
+                    </div>
+                    <div>
+                      <h3 className="font-mono text-sm font-black text-slate-900">{item.id}</h3>
+                      <p className="font-bold text-xs text-slate-700 mt-0.5">{item.title}</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-100 text-[11px] font-semibold text-slate-600 flex items-center gap-2 shrink-0">
+                    <span className="flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-xs text-slate-400">weight</span>
+                      {item.weight}
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-xs text-slate-400">near_me</span>
+                      {item.distance}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Vehicle & Loading Dock Info */}
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1.5 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Vehicle Required:</span>
+                    <span className="font-bold text-slate-900">{item.vehicleRequired}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Loading Dock:</span>
+                    <span className="font-bold text-[#15803d]">{item.loadingDock}</span>
+                  </div>
+                </div>
+
+                {/* Bottom Action Buttons */}
+                <div className="flex gap-2.5 pt-1">
+                  <button
+                    onClick={() => setSelectedDetailJob(item)}
+                    className="w-1/2 bg-white border border-slate-200/90 py-2.5 rounded-2xl text-xs font-bold text-slate-800 flex items-center justify-center gap-1.5 hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-base">description</span>
+                    View Details
+                  </button>
+
+                  <button
+                    onClick={() => handleAcceptJob(item)}
+                    className="w-1/2 bg-[#002625] hover:bg-black py-2.5 rounded-2xl text-xs font-bold text-white flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+                  >
+                    Accept Booking
+                    <span className="material-symbols-outlined text-base">arrow_forward</span>
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
+        {/* Completed Tab */}
         {activeTab === 'completed' && (
-          <div className="glass-panel p-4 rounded-xl space-y-3">
-            <h3 className="font-bold text-primary text-sm">Shift Completed History (14 Deliveries)</h3>
+          <div className="bg-white p-4 rounded-3xl border border-slate-200/80 space-y-3">
+            <h3 className="font-bold text-slate-900 text-sm">Shift Completed History (14 Orders)</h3>
             <div className="space-y-2">
               {[
-                { id: 'JOB-5412', payout: '₹840.00', time: '10:42 AM', hub: 'Warehouse Zone B' },
-                { id: 'JOB-5390', payout: '₹1,105.50', time: '09:15 AM', hub: 'Central Port Terminal' },
-                { id: 'JOB-5210', payout: '₹760.00', time: '08:00 AM', hub: 'Industrial Park North' },
+                { id: 'DEL-7412', payout: '₹840.00', time: '10:42 AM', type: 'Grocery & Dairy Box', hub: 'Warehouse Zone B' },
+                { id: 'BKG-7390', payout: '₹4,105.50', time: '09:15 AM', type: 'Heavy Truck Loading', hub: 'Central Port Terminal' },
+                { id: 'DEL-7210', payout: '₹760.00', time: '08:00 AM', type: 'Personal Care Hamper', hub: 'SuperMart Hub North' },
               ].map((item) => (
-                <div key={item.id} className="flex justify-between items-center p-2.5 bg-surface-container-low rounded-lg">
+                <div key={item.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
                   <div>
-                    <p className="font-bold text-xs text-primary">{item.id} • {item.hub}</p>
-                    <p className="text-[10px] text-on-surface-variant">Delivered at {item.time}</p>
+                    <p className="font-bold text-xs text-slate-900">{item.id} • {item.type}</p>
+                    <p className="text-[10px] text-slate-500">Delivered at {item.time} ({item.hub})</p>
                   </div>
-                  <span className="font-bold text-xs text-secondary">{item.payout}</span>
+                  <span className="font-bold text-xs text-[#15803d]">{item.payout}</span>
                 </div>
               ))}
             </div>
@@ -256,33 +460,121 @@ const DriverJobs = () => {
         )}
       </main>
 
+      {/* Details Modal */}
+      {selectedDetailJob && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white p-5 rounded-3xl max-w-md w-full border border-slate-100 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <span className="font-mono text-xs font-black text-slate-400">{selectedDetailJob.id}</span>
+                <h3 className="font-bold text-base text-slate-900">{selectedDetailJob.title}</h3>
+              </div>
+              <button
+                onClick={() => setSelectedDetailJob(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {/* Payout & Route Overview */}
+            <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100 flex justify-between items-center">
+              <div>
+                <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest block">Estimated Payout</span>
+                <p className="text-2xl font-black text-[#15803d]">₹{selectedDetailJob.payout.toFixed(2)}</p>
+              </div>
+              <div className="text-right text-xs font-bold text-emerald-900">
+                <p>{selectedDetailJob.distance} • {selectedDetailJob.time}</p>
+                <p className="text-[10px] text-emerald-700">Weight: {selectedDetailJob.weight}</p>
+              </div>
+            </div>
+
+            {/* Address Breakdown */}
+            <div className="space-y-2 text-xs bg-slate-50 p-3 rounded-2xl border border-slate-100">
+              <div>
+                <span className="font-black text-[9px] text-[#15803d] uppercase tracking-widest block">Pickup Address</span>
+                <p className="font-bold text-slate-900">{selectedDetailJob.pickupHub}</p>
+                <p className="text-slate-500 text-[11px]">{selectedDetailJob.pickupAddress}</p>
+              </div>
+              <div className="border-t border-slate-200/60 pt-2">
+                <span className="font-black text-[9px] text-slate-500 uppercase tracking-widest block">Dropoff Address</span>
+                <p className="font-bold text-slate-900">{selectedDetailJob.dropHub}</p>
+                <p className="text-slate-500 text-[11px]">{selectedDetailJob.dropAddress}</p>
+              </div>
+            </div>
+
+            {/* Items Included if Delivery */}
+            {selectedDetailJob.itemsList && (
+              <div className="space-y-1.5">
+                <span className="font-bold text-xs text-slate-900 block">Items Included:</span>
+                <ul className="space-y-1">
+                  {selectedDetailJob.itemsList.map((itemStr, idx) => (
+                    <li key={idx} className="text-xs text-slate-600 flex items-center gap-1.5 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                      <span className="material-symbols-outlined text-sm text-[#15803d]">check_circle</span>
+                      {itemStr}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Customer Contact */}
+            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100 text-xs">
+              <div>
+                <p className="font-bold text-slate-900">{selectedDetailJob.customerName}</p>
+                <p className="text-slate-500 text-[11px]">{selectedDetailJob.customerPhone}</p>
+              </div>
+              <button
+                onClick={() => window.open(`tel:${selectedDetailJob.customerPhone}`, '_self')}
+                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-xl font-bold flex items-center gap-1 cursor-pointer hover:bg-slate-100"
+              >
+                <span className="material-symbols-outlined text-sm">call</span>
+                Call
+              </button>
+            </div>
+
+            {/* Accept Button */}
+            <button
+              onClick={() => {
+                setSelectedDetailJob(null);
+                handleAcceptJob(selectedDetailJob);
+              }}
+              className="w-full py-3 bg-[#366b00] hover:bg-[#2d5800] text-white font-bold text-xs rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              Accept Delivery Order
+              <span className="material-symbols-outlined text-base">arrow_forward</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation Modal */}
       {acceptedJob && (
-        <div className="fixed inset-0 z-50 bg-primary/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-panel p-5 rounded-2xl max-w-md w-full border-white shadow-2xl space-y-3 animate-float">
-            <div className="w-10 h-10 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center mx-auto">
-              <span className="material-symbols-outlined text-xl">check_circle</span>
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white p-5 rounded-3xl max-w-md w-full border border-slate-100 shadow-2xl space-y-3 animate-float">
+            <div className="w-10 h-10 bg-emerald-100 text-[#15803d] rounded-full flex items-center justify-center mx-auto">
+              <span className="material-symbols-outlined text-xl font-bold">check_circle</span>
             </div>
             <div className="text-center space-y-0.5">
-              <h3 className="font-bold text-lg text-primary">Accept {acceptedJob.id}?</h3>
-              <p className="text-xs text-on-surface-variant">
-                Payout: <span className="font-bold text-secondary">₹{acceptedJob.payout.toFixed(2)}</span> • {acceptedJob.distance}
+              <h3 className="font-bold text-lg text-slate-900">Accept {acceptedJob.id}?</h3>
+              <p className="text-xs text-slate-500">
+                Payout: <span className="font-bold text-[#15803d]">₹{acceptedJob.payout.toFixed(2)}</span> • {acceptedJob.distance}
               </p>
             </div>
-            <div className="bg-surface-container p-2.5 rounded-lg text-xs space-y-1 border border-outline-variant/30">
-              <p className="font-semibold text-primary">{acceptedJob.pickup}</p>
-              <p className="text-on-surface-variant">➔ {acceptedJob.dropoff}</p>
+            <div className="bg-slate-50 p-3 rounded-2xl text-xs space-y-1 border border-slate-100">
+              <p className="font-bold text-slate-900">{acceptedJob.title}</p>
+              <p className="text-slate-500">Pickup: {acceptedJob.pickupHub}</p>
             </div>
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setAcceptedJob(null)}
-                className="flex-1 py-2.5 rounded-xl border border-outline-variant text-xs font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
+                className="flex-1 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 Decline
               </button>
               <button
                 onClick={confirmJobAcceptance}
-                className="flex-1 py-2.5 rounded-xl bg-secondary hover:bg-secondary/90 text-white text-xs font-bold shadow-md transition-all cursor-pointer"
+                className="flex-1 py-2.5 rounded-2xl bg-[#366b00] hover:bg-[#2d5800] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
               >
                 Confirm & Navigate
               </button>
