@@ -32,11 +32,41 @@ import readyCookImg from '../../../assets/user/categories/readyfoot-removebg-pre
 import homeCareImg from '../../../assets/user/categories/homecare-removebg-preview.png';
 import personalCareImg from '../../../assets/user/categories/personalcare-removebg-preview.png';
 
+const allProducts = [
+  { id: 'p1', name: 'Basmati Rice', price: 75, originalPrice: 95, discount: '21% OFF', image: grainsImg, unit: '1kg' },
+  { id: 'p2', name: 'Sunflower Oil', price: 110, originalPrice: 140, discount: '21% OFF', image: oilGheeImg, unit: '1L' },
+  { id: 'p3', name: 'Toor Dal', price: 120, originalPrice: 150, discount: '20% OFF', image: masalaImg, unit: '1kg' },
+  { id: 'p4', name: 'Whole Wheat Atta', price: 250, originalPrice: 280, image: grainsImg, unit: '5kg' },
+  { id: 'p5', name: 'Iodized Salt', price: 24, originalPrice: 28, image: masalaImg, unit: '1kg' },
+  { id: 'p6', name: 'Refined Sugar', price: 45, originalPrice: 55, image: sugarImg, unit: '1kg' },
+  { id: 'p7', name: 'Premium Tea', price: 145, originalPrice: 160, image: groceryImg, unit: '500g' },
+];
+
 const Home = () => {
   const navigate = useNavigate();
   const { addToCart, cartCount } = useCart();
   const { wishlistCount } = useWishlist();
   const [toastMessage, setToastMessage] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleMicClick = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.onstart = () => setToastMessage('Listening...');
+      recognition.onresult = (e) => {
+        setSearchQuery(e.results[0][0].transcript);
+      };
+      recognition.start();
+    } else {
+      setToastMessage('Mic not supported in your browser.');
+      setTimeout(() => setToastMessage(''), 3000);
+    }
+  };
+
+  const searchResults = searchQuery 
+    ? allProducts.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : [];
 
   const handleAddToCart = (product) => {
     addToCart(product);
@@ -101,14 +131,46 @@ const Home = () => {
             <input 
               type="text" 
               placeholder="Search products..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 border-none outline-none text-[14px] bg-transparent text-slate-700 placeholder:text-slate-400 font-medium"
             />
-            <Mic size={18} className="text-slate-400 cursor-pointer ml-1" strokeWidth={2} />
+            <Mic size={18} className="text-slate-400 cursor-pointer ml-1" strokeWidth={2} onClick={handleMicClick} />
           </div>
         </div>
       </div>
 
       <div className="px-5">
+        {searchQuery ? (
+          <div className="pb-4">
+            <h3 className="text-[16px] font-bold mb-4 text-[#ff5500]">Search Results for "{searchQuery}"</h3>
+            {searchResults.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3">
+                {searchResults.map(product => (
+                  <div key={product.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
+                    <img onClick={() => navigate(`/product/${product.id}`)} src={product.image} alt={product.name} className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
+                    <div className="flex flex-col p-3 pt-2">
+                      <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{product.name}</h4>
+                      <p className="text-[11px] text-slate-400 m-0 mb-2">{product.unit}</p>
+                      <div className="flex justify-between items-end mt-1">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[14px] font-extrabold text-slate-900">₹{product.price.toFixed(2)}</span>
+                          <span className="text-[10px] text-slate-400 line-through">₹{product.originalPrice.toFixed(2)}</span>
+                          {product.discount && <span className="text-[10px] font-extrabold text-[#ff5500]">{product.discount}</span>}
+                        </div>
+                        <button onClick={() => handleAddToCart(product)} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer"><Plus size={16} color="white" /></button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-10 text-slate-500 font-medium">No products found matching "{searchQuery}".</div>
+            )}
+            <div className="h-[80px]"></div>
+          </div>
+        ) : (
+          <>
         {/* Promo Banner */}
         <div className="bg-gradient-to-br from-[#1e2b4f] to-[#151d38] rounded-2xl py-4 px-5 flex justify-between items-center relative overflow-hidden mb-5 text-white">
           <div className="relative z-10 max-w-[55%]">
@@ -177,7 +239,7 @@ const Home = () => {
         <div className="flex overflow-x-auto gap-4 pb-4 -mr-5 pr-5 [&::-webkit-scrollbar]:hidden">
           {/* Product Card 1 */}
           <div className="min-w-[140px] bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img src={grainsImg} alt="Basmati Rice" className="w-full h-[110px] object-cover bg-slate-50" />
+            <img onClick={() => navigate('/product/p1')} src={grainsImg} alt="Basmati Rice" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
             <div className="flex flex-col p-3 pt-2">
               <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Basmati Rice</h4>
               <p className="text-[11px] text-slate-400 m-0 mb-2">1kg</p>
@@ -194,7 +256,7 @@ const Home = () => {
 
           {/* Product Card 2 */}
           <div className="min-w-[140px] bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img src={oilGheeImg} alt="Sunflower Oil" className="w-full h-[110px] object-cover bg-slate-50" />
+            <img onClick={() => navigate('/product/p2')} src={oilGheeImg} alt="Sunflower Oil" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
             <div className="flex flex-col p-3 pt-2">
               <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Sunflower Oil</h4>
               <p className="text-[11px] text-slate-400 m-0 mb-2">1L</p>
@@ -211,7 +273,7 @@ const Home = () => {
 
           {/* Product Card 3 */}
           <div className="min-w-[140px] bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img src={masalaImg} alt="Toor Dal" className="w-full h-[110px] object-cover bg-slate-50" />
+            <img onClick={() => navigate('/product/p3')} src={masalaImg} alt="Toor Dal" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
             <div className="flex flex-col p-3 pt-2">
               <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Toor Dal</h4>
               <p className="text-[11px] text-slate-400 m-0 mb-2">1kg</p>
@@ -238,7 +300,7 @@ const Home = () => {
         <div className="grid grid-cols-2 gap-3 pb-4">
           {/* Product Card 1 */}
           <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img src={grainsImg} alt="Whole Wheat Atta" className="w-full h-[110px] object-cover bg-slate-50" />
+            <img onClick={() => navigate('/product/p4')} src={grainsImg} alt="Whole Wheat Atta" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
             <div className="flex flex-col p-3 pt-2">
               <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Whole Wheat Atta</h4>
               <p className="text-[11px] text-slate-400 m-0 mb-2">5kg</p>
@@ -254,7 +316,7 @@ const Home = () => {
 
           {/* Product Card 2 */}
           <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img src={masalaImg} alt="Iodized Salt" className="w-full h-[110px] object-cover bg-slate-50" />
+            <img onClick={() => navigate('/product/p5')} src={masalaImg} alt="Iodized Salt" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
             <div className="flex flex-col p-3 pt-2">
               <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Iodized Salt</h4>
               <p className="text-[11px] text-slate-400 m-0 mb-2">1kg</p>
@@ -270,7 +332,7 @@ const Home = () => {
           
           {/* Product Card 3 */}
           <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img src={sugarImg} alt="Refined Sugar" className="w-full h-[110px] object-cover bg-slate-50" />
+            <img onClick={() => navigate('/product/p6')} src={sugarImg} alt="Refined Sugar" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
             <div className="flex flex-col p-3 pt-2">
               <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Refined Sugar</h4>
               <p className="text-[11px] text-slate-400 m-0 mb-2">1kg</p>
@@ -286,7 +348,7 @@ const Home = () => {
 
           {/* Product Card 4 */}
           <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img src={groceryImg} alt="Premium Tea" className="w-full h-[110px] object-cover bg-slate-50" />
+            <img onClick={() => navigate('/product/p7')} src={groceryImg} alt="Premium Tea" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
             <div className="flex flex-col p-3 pt-2">
               <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Premium Tea</h4>
               <p className="text-[11px] text-slate-400 m-0 mb-2">500g</p>
@@ -302,6 +364,8 @@ const Home = () => {
         </div>
         
         <div className="h-[80px]"></div> {/* Spacing for bottom nav */}
+          </>
+        )}
         
         {/* Toast Notification */}
         {toastMessage && (

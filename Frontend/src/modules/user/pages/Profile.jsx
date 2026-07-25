@@ -9,7 +9,12 @@ import {
 const Profile = () => {
   const navigate = useNavigate();
   const [profileImage, setProfileImage] = useState(null);
+  const [userName, setUserName] = useState(() => localStorage.getItem('shippnex_user_name') || 'Sarah Jenkins');
   const fileInputRef = useRef(null);
+  
+  React.useEffect(() => {
+    setUserName(localStorage.getItem('shippnex_user_name') || 'Sarah Jenkins');
+  }, []);
 
   const handleImageUpload = (event) => {
     const file = event.target.files[0];
@@ -68,6 +73,11 @@ const Profile = () => {
           >
             <Camera size={14} className="text-[#ea580c]" />
           </button>
+        </div>
+        
+        {/* User Info */}
+        <div className="flex flex-col items-center mb-6">
+          <h2 className="text-[18px] font-extrabold text-white m-0 tracking-tight">{userName}</h2>
         </div>
 
         {/* 4 Grid Actions Card */}

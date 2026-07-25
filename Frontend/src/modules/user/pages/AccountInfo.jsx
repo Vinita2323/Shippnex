@@ -6,10 +6,10 @@ const AccountInfo = () => {
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: 'John Doe',
-    email: 'johndoe@example.com',
-    phone: '+91 98765 43210',
-    dob: '1995-08-15'
+    fullName: localStorage.getItem('shippnex_user_name') || 'Sarah Jenkins',
+    email: localStorage.getItem('shippnex_user_email') || 'sarah.j@example.com',
+    phone: localStorage.getItem('shippnex_user_phone') || '+91 98765 43210',
+    dob: localStorage.getItem('shippnex_user_dob') || '1995-08-15'
   });
 
   const handleChange = (e) => {
@@ -18,8 +18,11 @@ const AccountInfo = () => {
   };
 
   const handleSave = () => {
+    localStorage.setItem('shippnex_user_name', formData.fullName);
+    localStorage.setItem('shippnex_user_email', formData.email);
+    localStorage.setItem('shippnex_user_phone', formData.phone);
+    localStorage.setItem('shippnex_user_dob', formData.dob);
     setIsEditing(false);
-    // Add toast or API call here
   };
 
   return (
