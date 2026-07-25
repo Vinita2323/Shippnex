@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DriverBottomNav from '../components/DriverBottomNav';
 
@@ -8,11 +8,32 @@ const DriverProfile = () => {
   const [voiceNav, setVoiceNav] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [driverName, setDriverName] = useState('vini');
-  const [driverEmail, setDriverEmail] = useState('vini@shippnex.com');
-  const [driverPhone, setDriverPhone] = useState('+91 9302841832');
-  const [driverAvatar, setDriverAvatar] = useState('https://lh3.googleusercontent.com/aida-public/AB6AXuCWXL3Qu0JRKDr039sF-aSx5rQfnGlz0S99DOqkSfKyAgFhfUIw6hAHglW9IK7FrROv33gWnGtkkeVe68aWnWRPo_JlvATZfBAwj3J1cTKNvZ2mkDmumyw4cVA5K8nxu-TyA-YCKB_Te10l5t920ethYbEdBGNGETh4MD316jQl5JqOZ1J-KxaJv4EH7uz0OkhKAME-QMK4hcqD20kyxCmIHXk2cGjM4GlLzhbLWAUTyPQalJ1U5BYsmrA2EGL2nH15ow7kn24EAxA');
+  const [driverName, setDriverName] = useState(() => localStorage.getItem('shippnex_driver_name') || 'vini');
+  const [driverEmail, setDriverEmail] = useState(() => localStorage.getItem('shippnex_driver_email') || 'vini@shippnex.com');
+  const [driverPhone, setDriverPhone] = useState(() => localStorage.getItem('shippnex_driver_phone') || '+91 9302841832');
+  const [driverAvatar, setDriverAvatar] = useState(() => localStorage.getItem('shippnex_driver_avatar') || 'https://lh3.googleusercontent.com/aida-public/AB6AXuCWXL3Qu0JRKDr039sF-aSx5rQfnGlz0S99DOqkSfKyAgFhfUIw6hAHglW9IK7FrROv33gWnGtkkeVe68aWnWRPo_JlvATZfBAwj3J1cTKNvZ2mkDmumyw4cVA5K8nxu-TyA-YCKB_Te10l5t920ethYbEdBGNGETh4MD316jQl5JqOZ1J-KxaJv4EH7uz0OkhKAME-QMK4hcqD20kyxCmIHXk2cGjM4GlLzhbLWAUTyPQalJ1U5BYsmrA2EGL2nH15ow7kn24EAxA');
   const [previewDoc, setPreviewDoc] = useState(null);
+  
+  React.useEffect(() => {
+    localStorage.setItem('shippnex_driver_name', driverName);
+    localStorage.setItem('shippnex_driver_email', driverEmail);
+    localStorage.setItem('shippnex_driver_phone', driverPhone);
+  }, [driverName, driverEmail, driverPhone]);
+
+  const fileInputRef = useRef(null);
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result;
+        setDriverAvatar(base64String);
+        localStorage.setItem('shippnex_driver_avatar', base64String);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleLogout = () => {
     if (window.confirm('Are you sure you want to log out of ShippNex Dispatch?')) {
@@ -52,15 +73,19 @@ const DriverProfile = () => {
             {isEditing && (
               <div 
                 className="absolute inset-0 bg-black/60 rounded-full flex flex-col items-center justify-center text-white cursor-pointer transition-opacity"
-                onClick={() => {
-                  const url = prompt('Enter image URL for Avatar:', driverAvatar);
-                  if (url) setDriverAvatar(url);
-                }}
+                onClick={() => fileInputRef.current?.click()}
               >
                 <span className="material-symbols-outlined text-xl">photo_camera</span>
                 <span className="text-[9px] font-bold mt-1">UPDATE</span>
               </div>
             )}
+            <input 
+              type="file"
+              accept="image/*"
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleImageUpload}
+            />
             <div className="absolute bottom-0 right-0 bg-[#002625] text-[#97fc43] p-1 rounded-full border-2 border-white flex items-center justify-center">
               <span className="material-symbols-outlined text-sm font-bold">verified</span>
             </div>

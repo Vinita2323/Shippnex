@@ -22,7 +22,7 @@ const LogisticsNavigation = () => {
         <div
           className="w-full h-full grayscale-[0.2] contrast-[0.9] bg-cover bg-center"
           style={{
-            backgroundImage: `url('https://lh3.googleusercontent.com/aida-public/AB6AXuDBMY_u_VgnDQcYP9Ujq5FQV8jWvhDDWs5l8S3hLa1aS4-6-0CgPnl6C2VqY7hbSlqJY5sq2QnqmNe1UQXbP5T082lmhyI66mAizahgkEY1XtS78XQADAXCPQmWBRIypSG6cJmrQk0w2vTy4VUaC8PdqkJw4qxRqDR3tAK6UEP6KUEK2Dcab2X9H83PZAVp4i1-kwL_pcimy4rA0zFxZedA8Zar4751l0-niA08rGw4brevuod93iZVp22_MElsUjWy7BsAgj9BFUY')`,
+            backgroundImage: `url('${localStorage.getItem('shippnex_driver_avatar') || 'https://lh3.googleusercontent.com/aida-public/AB6AXuDBMY_u_VgnDQcYP9Ujq5FQV8jWvhDDWs5l8S3hLa1aS4-6-0CgPnl6C2VqY7hbSlqJY5sq2QnqmNe1UQXbP5T082lmhyI66mAizahgkEY1XtS78XQADAXCPQmWBRIypSG6cJmrQk0w2vTy4VUaC8PdqkJw4qxRqDR3tAK6UEP6KUEK2Dcab2X9H83PZAVp4i1-kwL_pcimy4rA0zFxZedA8Zar4751l0-niA08rGw4brevuod93iZVp22_MElsUjWy7BsAgj9BFUY'}')`,
           }}
         ></div>
         {/* Animated Route SVG Overlay */}
@@ -48,7 +48,7 @@ const LogisticsNavigation = () => {
             <img
               className="w-full h-full object-cover"
               alt="Driver Profile"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDAEyDGAdscDL39_nY8qtEE-EKlU5Yzk_5V2Bvr4oyNFSQ0-NKqS_mB8Ctb3CailKWrz62e_BqwhwUC5a7n6ME8bwodDsrgNk4u1PptFSTpqJw_gjaHtJVHg8aIo1ja01ccSyQdNnd9fPpR8Fu0wVk5cCXsQfHSD3wBx7p9NYmyy1g7EIElxHr5imZB2Cs0EQFmKMUxvRpnAteLivauhVxVdaROob09JTJvuPNNgJemX0X8bWDfK95iSBeRwaAskoAdLyA6jSco9m0"
+              src={localStorage.getItem('shippnex_driver_avatar') || "https://lh3.googleusercontent.com/aida-public/AB6AXuDAEyDGAdscDL39_nY8qtEE-EKlU5Yzk_5V2Bvr4oyNFSQ0-NKqS_mB8Ctb3CailKWrz62e_BqwhwUC5a7n6ME8bwodDsrgNk4u1PptFSTpqJw_gjaHtJVHg8aIo1ja01ccSyQdNnd9fPpR8Fu0wVk5cCXsQfHSD3wBx7p9NYmyy1g7EIElxHr5imZB2Cs0EQFmKMUxvRpnAteLivauhVxVdaROob09JTJvuPNNgJemX0X8bWDfK95iSBeRwaAskoAdLyA6jSco9m0"}
             />
           </div>
           <div className="flex flex-col">

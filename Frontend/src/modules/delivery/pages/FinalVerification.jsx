@@ -66,7 +66,7 @@ const FinalVerification = () => {
             <img
               className="w-full h-full object-cover"
               alt="Driver Profile"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBhzgud08TZO21OdBKeCjb2b91L6vn6dK8-uh427LX-yN_m6Xreq3I9xfuK-yJn41qZdY2a1jPcdTzf_uQ2yoR0Uj8F8yud4hZ-BIwQPY6KlIMPlqteRASdNab0C6zsNpkgJlVf-XwjWXgaXTb85uHMVbXzL5EBBdNPWwGqZfIJCiJDswCUfQwfNvhj03UlzNrp-ocZfvZaRUAMtWdkrL0KZM15YHxQALSEGTFShN9FDu1rB2HHeRVFHsOhU-sPU-Pmt12NmMXrkHk"
+              src={localStorage.getItem('shippnex_driver_avatar') || "https://lh3.googleusercontent.com/aida-public/AB6AXuBhzgud08TZO21OdBKeCjb2b91L6vn6dK8-uh427LX-yN_m6Xreq3I9xfuK-yJn41qZdY2a1jPcdTzf_uQ2yoR0Uj8F8yud4hZ-BIwQPY6KlIMPlqteRASdNab0C6zsNpkgJlVf-XwjWXgaXTb85uHMVbXzL5EBBdNPWwGqZfIJCiJDswCUfQwfNvhj03UlzNrp-ocZfvZaRUAMtWdkrL0KZM15YHxQALSEGTFShN9FDu1rB2HHeRVFHsOhU-sPU-Pmt12NmMXrkHk"}
             />
           </div>
           <div>
