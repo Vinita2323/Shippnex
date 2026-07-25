@@ -141,6 +141,12 @@ const DriverJobs = () => {
     },
   ];
 
+  const completedItems = [
+    { id: 'DEL-7412', payout: '₹840.00', time: '10:42 AM', type: 'Grocery & Dairy Box', hub: 'Warehouse Zone B' },
+    { id: 'BKG-7390', payout: '₹4,105.50', time: '09:15 AM', type: 'Heavy Truck Loading', hub: 'Central Port Terminal' },
+    { id: 'DEL-7210', payout: '₹760.00', time: '08:00 AM', type: 'Personal Care Hamper', hub: 'SuperMart Hub North' },
+  ];
+
   const handleAcceptJob = (item) => {
     setAcceptedJob(item);
   };
@@ -162,27 +168,33 @@ const DriverJobs = () => {
     item.vehicleRequired.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const filteredCompleted = completedItems.filter((item) =>
+    item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.hub.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="bg-[#f8fafc] font-body-md text-slate-800 min-h-screen pb-24">
       {/* Compact Top App Bar */}
-      <header className="fixed top-0 left-0 w-full z-40 bg-white/90 backdrop-blur-md shadow-xs border-b border-slate-200/80 px-4 py-3">
+      <header className="fixed top-0 left-0 w-full z-40 bg-gradient-to-r from-[#002625] to-[#0a3d16] shadow-lg rounded-b-3xl px-4 py-4 border-b border-white/10">
         <div className="max-w-xl mx-auto flex justify-between items-center">
           <div>
-            <h1 className="font-headline-md text-lg font-black text-slate-900 leading-tight">Job Queue</h1>
-            <p className="text-[11px] text-slate-500 font-medium">Deliveries & Freight Booking Board</p>
+            <h1 className="font-headline-md text-xl md:text-2xl font-black text-white tracking-tight leading-tight">Job Queue</h1>
+            <p className="text-[10px] md:text-xs text-[#97fc43] font-medium tracking-wide uppercase mt-0.5">Deliveries & Booking Board</p>
           </div>
           <button
             onClick={() => alert('Refreshing live delivery board...')}
-            className="w-9 h-9 flex items-center justify-center text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+            className="w-9 h-9 flex items-center justify-center bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white rounded-xl transition-colors cursor-pointer shadow-sm"
           >
-            <span className="material-symbols-outlined text-xl">refresh</span>
+            <span className="material-symbols-outlined text-[18px]">refresh</span>
           </button>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="pt-18 px-3.5 max-w-xl mx-auto space-y-3.5 mt-1">
-        {/* Search Bar & Filter Button Row */}
+      <main className="pt-24 px-3.5 max-w-xl mx-auto space-y-3.5 mt-1">
+        {/* Search Bar Row */}
         <div className="flex gap-2.5 items-center">
           <div className="relative flex-1">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">
@@ -196,12 +208,6 @@ const DriverJobs = () => {
               className="w-full bg-white border border-slate-200/90 rounded-2xl py-2.5 pl-10 pr-3 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-secondary/40 focus:outline-none placeholder:text-slate-400"
             />
           </div>
-          <button
-            onClick={() => alert('Filtering options: High Payout, Express, Short Distance')}
-            className="w-10 h-10 bg-white border border-slate-200/90 rounded-2xl shadow-2xs flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shrink-0"
-          >
-            <span className="material-symbols-outlined text-xl">filter_list</span>
-          </button>
         </div>
 
         {/* Tab Pills Bar */}
@@ -210,7 +216,7 @@ const DriverJobs = () => {
             onClick={() => setActiveTab('deliveries')}
             className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'deliveries'
-                ? 'bg-[#002625] text-white shadow-md'
+                ? 'bg-[#366b00] text-white shadow-md'
                 : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
             }`}
           >
@@ -222,7 +228,7 @@ const DriverJobs = () => {
             onClick={() => setActiveTab('bookings')}
             className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'bookings'
-                ? 'bg-[#002625] text-white shadow-md'
+                ? 'bg-[#366b00] text-white shadow-md'
                 : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
             }`}
           >
@@ -234,7 +240,7 @@ const DriverJobs = () => {
             onClick={() => setActiveTab('completed')}
             className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'completed'
-                ? 'bg-[#002625] text-white shadow-md'
+                ? 'bg-[#366b00] text-white shadow-md'
                 : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
             }`}
           >
@@ -243,100 +249,59 @@ const DriverJobs = () => {
           </button>
         </div>
 
-        {/* Deliveries Tab: Cards matching exact mockup design */}
+        {/* Deliveries Tab: Responsive Compact Cards */}
         {activeTab === 'deliveries' && (
-          <div className="space-y-3.5">
+          <div className="space-y-3">
             {filteredDeliveries.map((item) => (
               <div
                 key={item.id}
-                className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all space-y-3"
+                className="bg-white p-3.5 rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-2.5 overflow-hidden"
               >
-                {/* Top Badge & Price Row */}
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 uppercase tracking-wider ${item.tag1Style}`}>
-                      <span className="material-symbols-outlined text-xs">bolt</span>
-                      {item.tag1}
-                    </span>
-                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 uppercase tracking-wider ${item.tag2Style}`}>
-                      <span className="material-symbols-outlined text-xs">star</span>
-                      {item.tag2}
-                    </span>
-                  </div>
-                  <p className="font-headline-md text-2xl font-black text-[#15803d]">₹{item.payout.toFixed(2)}</p>
-                </div>
-
-                {/* Title, Icon & Quick Stats Row */}
+                {/* Title, Icon & Price Row */}
                 <div className="flex justify-between items-start gap-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-[#d9f99d] text-[#365314] flex items-center justify-center shadow-xs shrink-0">
-                      <span className="material-symbols-outlined text-2xl">{item.icon}</span>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-[#d9f99d] text-[#365314] flex items-center justify-center shadow-xs shrink-0">
+                      <span className="material-symbols-outlined text-xl">{item.icon}</span>
                     </div>
-                    <div>
-                      <h3 className="font-mono text-sm font-black text-slate-900">{item.id}</h3>
-                      <p className="font-bold text-xs text-slate-700 mt-0.5">{item.title}</p>
+                    <div className="min-w-0">
+                      <h3 className="font-mono text-xs font-black text-slate-900 leading-none">{item.id}</h3>
+                      <p className="font-bold text-xs text-slate-700 mt-0.5 truncate">{item.title}</p>
                     </div>
                   </div>
-
-                  {/* Meta Stats Right */}
-                  <div className="bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-100 text-[11px] font-semibold text-slate-600 flex items-center gap-2 shrink-0">
-                    <span className="flex items-center gap-0.5">
-                      <span className="material-symbols-outlined text-xs text-slate-400">scale</span>
-                      {item.weight}
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-0.5">
-                      <span className="material-symbols-outlined text-xs text-slate-400">near_me</span>
-                      {item.distance}
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-0.5">
-                      <span className="material-symbols-outlined text-xs text-slate-400">schedule</span>
-                      {item.time}
-                    </span>
-                  </div>
+                  <p className="font-headline-md text-xl font-black text-[#15803d] shrink-0">₹{item.payout.toFixed(2)}</p>
                 </div>
 
                 {/* Vertical Dotted Route Box */}
-                <div className="bg-white p-3 rounded-2xl border border-slate-100 flex justify-between items-center relative">
-                  <div className="flex gap-3 items-start">
+                <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <div className="flex gap-2.5 items-start min-w-0 w-full sm:w-auto">
                     {/* Dotted Line Graphic */}
-                    <div className="flex flex-col items-center pt-0.5">
-                      <div className="w-2.5 h-2.5 rounded-full bg-[#15803d] ring-2 ring-emerald-100 shrink-0"></div>
-                      <div className="w-0.5 h-6 border-l-2 border-dashed border-slate-300 my-0.5"></div>
-                      <span className="material-symbols-outlined text-sm text-[#002625] shrink-0">location_on</span>
+                    <div className="flex flex-col items-center pt-0.5 shrink-0">
+                      <div className="w-2 h-2 rounded-full bg-[#15803d] ring-2 ring-emerald-100"></div>
+                      <div className="w-0.5 h-5 border-l border-dashed border-slate-300 my-0.5"></div>
+                      <span className="material-symbols-outlined text-xs text-[#002625]">location_on</span>
                     </div>
 
-                    <div className="space-y-2 text-xs">
+                    <div className="space-y-1.5 text-xs min-w-0 flex-1">
                       <div>
-                        <span className="font-black text-[9px] text-[#15803d] uppercase tracking-widest block">PICKUP</span>
-                        <p className="font-bold text-slate-900 text-xs leading-tight">{item.pickupHub}</p>
-                        <p className="text-[10px] text-slate-500 truncate max-w-[200px] md:max-w-xs">{item.pickupAddress}</p>
+                        <span className="font-black text-[8px] text-[#15803d] uppercase tracking-widest block">PICKUP</span>
+                        <p className="font-bold text-slate-900 text-xs leading-tight truncate">{item.pickupHub}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{item.pickupAddress}</p>
                       </div>
                       <div>
-                        <span className="font-black text-[9px] text-slate-500 uppercase tracking-widest block">DROP</span>
-                        <p className="font-bold text-slate-900 text-xs leading-tight">{item.dropHub}</p>
-                        <p className="text-[10px] text-slate-500 truncate max-w-[200px] md:max-w-xs">{item.dropAddress}</p>
+                        <span className="font-black text-[8px] text-slate-500 uppercase tracking-widest block">DROP</span>
+                        <p className="font-bold text-slate-900 text-xs leading-tight truncate">{item.dropHub}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{item.dropAddress}</p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Best Route Badge Button */}
-                  <button
-                    onClick={() => alert(`Opening optimized GPS route map for ${item.id}`)}
-                    className="bg-[#f0fdf4] hover:bg-emerald-100/60 text-[#15803d] px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 border border-emerald-200/60 transition-colors cursor-pointer shrink-0"
-                  >
-                    <span className="material-symbols-outlined text-sm">add_road</span>
-                    <span>Best Route</span>
-                    <span className="material-symbols-outlined text-xs">chevron_right</span>
-                  </button>
                 </div>
 
                 {/* Bottom Action Buttons */}
-                <div className="flex gap-2.5 pt-1">
+                <div className="flex gap-2 pt-0.5">
                   <button
                     onClick={() => setSelectedDetailJob(item)}
-                    className="w-1/2 bg-white border border-slate-200/90 py-2.5 rounded-2xl text-xs font-bold text-slate-800 flex items-center justify-center gap-1.5 hover:bg-slate-50 transition-colors cursor-pointer"
+                    className="w-1/2 bg-white border border-slate-200/90 py-2.5 rounded-2xl text-xs font-bold text-slate-800 flex items-center justify-center gap-1 hover:bg-slate-50 transition-colors cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-base">description</span>
                     View Details
@@ -344,7 +309,7 @@ const DriverJobs = () => {
 
                   <button
                     onClick={() => handleAcceptJob(item)}
-                    className="w-1/2 bg-[#366b00] hover:bg-[#2d5800] py-2.5 rounded-2xl text-xs font-bold text-white flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+                    className="w-1/2 bg-[#366b00] hover:bg-[#2d5800] py-2.5 rounded-2xl text-xs font-bold text-white flex items-center justify-center gap-1 shadow-md transition-all cursor-pointer"
                   >
                     Accept Job
                     <span className="material-symbols-outlined text-base">arrow_forward</span>
@@ -357,68 +322,43 @@ const DriverJobs = () => {
 
         {/* Bookings Tab: Heavy Freight Cards */}
         {activeTab === 'bookings' && (
-          <div className="space-y-3.5">
+          <div className="space-y-3">
             {filteredBookings.map((item) => (
               <div
                 key={item.id}
-                className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all space-y-3"
+                className="bg-white p-3.5 rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-2.5 overflow-hidden"
               >
-                {/* Top Badge & Price Row */}
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 uppercase tracking-wider ${item.tag1Style}`}>
-                      <span className="material-symbols-outlined text-xs">front_loader</span>
-                      {item.tag1}
-                    </span>
-                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 uppercase tracking-wider ${item.tag2Style}`}>
-                      {item.tag2}
-                    </span>
-                  </div>
-                  <p className="font-headline-md text-2xl font-black text-[#15803d]">₹{item.payout.toFixed(2)}</p>
-                </div>
-
-                {/* Title, Icon & Quick Stats Row */}
+                {/* Title, Icon & Price Row */}
                 <div className="flex justify-between items-start gap-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-[#002625] text-white flex items-center justify-center shadow-xs shrink-0">
-                      <span className="material-symbols-outlined text-2xl">{item.icon}</span>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-[#366b00] text-white flex items-center justify-center shadow-xs shrink-0">
+                      <span className="material-symbols-outlined text-xl">{item.icon}</span>
                     </div>
-                    <div>
-                      <h3 className="font-mono text-sm font-black text-slate-900">{item.id}</h3>
-                      <p className="font-bold text-xs text-slate-700 mt-0.5">{item.title}</p>
+                    <div className="min-w-0">
+                      <h3 className="font-mono text-xs font-black text-slate-900 leading-none">{item.id}</h3>
+                      <p className="font-bold text-xs text-slate-700 mt-0.5 truncate">{item.title}</p>
                     </div>
                   </div>
-
-                  <div className="bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-100 text-[11px] font-semibold text-slate-600 flex items-center gap-2 shrink-0">
-                    <span className="flex items-center gap-0.5">
-                      <span className="material-symbols-outlined text-xs text-slate-400">weight</span>
-                      {item.weight}
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-0.5">
-                      <span className="material-symbols-outlined text-xs text-slate-400">near_me</span>
-                      {item.distance}
-                    </span>
-                  </div>
+                  <p className="font-headline-md text-xl font-black text-[#15803d] shrink-0">₹{item.payout.toFixed(2)}</p>
                 </div>
 
                 {/* Vehicle & Loading Dock Info */}
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1.5 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-medium">Vehicle Required:</span>
-                    <span className="font-bold text-slate-900">{item.vehicleRequired}</span>
+                <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-100 space-y-1 text-xs">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-slate-500 font-medium">Vehicle:</span>
+                    <span className="font-bold text-slate-900 truncate max-w-[200px]">{item.vehicleRequired}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-medium">Loading Dock:</span>
-                    <span className="font-bold text-[#15803d]">{item.loadingDock}</span>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-slate-500 font-medium">Dock:</span>
+                    <span className="font-bold text-[#15803d] truncate max-w-[200px]">{item.loadingDock}</span>
                   </div>
                 </div>
 
                 {/* Bottom Action Buttons */}
-                <div className="flex gap-2.5 pt-1">
+                <div className="flex gap-2 pt-0.5">
                   <button
                     onClick={() => setSelectedDetailJob(item)}
-                    className="w-1/2 bg-white border border-slate-200/90 py-2.5 rounded-2xl text-xs font-bold text-slate-800 flex items-center justify-center gap-1.5 hover:bg-slate-50 transition-colors cursor-pointer"
+                    className="w-1/2 bg-white border border-slate-200/90 py-2.5 rounded-2xl text-xs font-bold text-slate-800 flex items-center justify-center gap-1 hover:bg-slate-50 transition-colors cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-base">description</span>
                     View Details
@@ -426,7 +366,7 @@ const DriverJobs = () => {
 
                   <button
                     onClick={() => handleAcceptJob(item)}
-                    className="w-1/2 bg-[#002625] hover:bg-black py-2.5 rounded-2xl text-xs font-bold text-white flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+                    className="w-1/2 bg-[#366b00] hover:bg-[#2d5800] py-2.5 rounded-2xl text-xs font-bold text-white flex items-center justify-center gap-1 shadow-md transition-all cursor-pointer"
                   >
                     Accept Booking
                     <span className="material-symbols-outlined text-base">arrow_forward</span>
@@ -442,11 +382,7 @@ const DriverJobs = () => {
           <div className="bg-white p-4 rounded-3xl border border-slate-200/80 space-y-3">
             <h3 className="font-bold text-slate-900 text-sm">Shift Completed History (14 Orders)</h3>
             <div className="space-y-2">
-              {[
-                { id: 'DEL-7412', payout: '₹840.00', time: '10:42 AM', type: 'Grocery & Dairy Box', hub: 'Warehouse Zone B' },
-                { id: 'BKG-7390', payout: '₹4,105.50', time: '09:15 AM', type: 'Heavy Truck Loading', hub: 'Central Port Terminal' },
-                { id: 'DEL-7210', payout: '₹760.00', time: '08:00 AM', type: 'Personal Care Hamper', hub: 'SuperMart Hub North' },
-              ].map((item) => (
+              {filteredCompleted.map((item) => (
                 <div key={item.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
                   <div>
                     <p className="font-bold text-xs text-slate-900">{item.id} • {item.type}</p>
@@ -462,8 +398,8 @@ const DriverJobs = () => {
 
       {/* Details Modal */}
       {selectedDetailJob && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white p-5 rounded-3xl max-w-md w-full border border-slate-100 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[60] bg-white overflow-y-auto">
+          <div className="p-4 md:p-6 w-full max-w-xl mx-auto space-y-4 pb-24">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
                 <span className="font-mono text-xs font-black text-slate-400">{selectedDetailJob.id}</span>
@@ -584,7 +520,7 @@ const DriverJobs = () => {
       )}
 
       {/* Driver Bottom Navigation */}
-      <DriverBottomNav />
+      {!selectedDetailJob && !acceptedJob && <DriverBottomNav />}
     </div>
   );
 };

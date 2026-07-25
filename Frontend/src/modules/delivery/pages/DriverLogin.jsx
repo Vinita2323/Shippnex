@@ -3,8 +3,11 @@ import { useNavigate } from 'react-router-dom';
 
 const DriverLogin = () => {
   const navigate = useNavigate();
+  const [step, setStep] = useState('phone'); // 'phone' | 'otp'
   const [mobileNumber, setMobileNumber] = useState('');
+  const [otp, setOtp] = useState('');
   const [statusState, setStatusState] = useState('idle'); // 'idle' | 'processing' | 'success'
+  const [otpStatus, setOtpStatus] = useState('idle'); // 'idle' | 'processing' | 'success'
   const [hasError, setHasError] = useState(false);
 
   const handleInputChange = (e) => {
@@ -15,7 +18,7 @@ const DriverLogin = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handlePhoneSubmit = (e) => {
     e.preventDefault();
     if (mobileNumber.length < 10) {
       setHasError(true);
@@ -27,196 +30,233 @@ const DriverLogin = () => {
     setTimeout(() => {
       setStatusState('success');
       setTimeout(() => {
+        setStep('otp');
+        setStatusState('idle'); // reset for future
+      }, 1000);
+    }, 1500);
+  };
+
+  const handleOtpChange = (index, value) => {
+    const rawVal = value.replace(/\D/g, '');
+    if (!rawVal && value !== '') return;
+
+    let newOtp = otp.split('');
+    newOtp[index] = rawVal ? rawVal[rawVal.length - 1] : '';
+    setOtp(newOtp.join(''));
+
+    if (rawVal && index < 3) {
+      const nextInput = document.getElementById(`otp-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      const prevInput = document.getElementById(`otp-${index - 1}`);
+      if (prevInput) prevInput.focus();
+    }
+  };
+
+  const handleOtpSubmit = (e) => {
+    e.preventDefault();
+    if (otp.length < 4) return;
+
+    setOtpStatus('processing');
+    setTimeout(() => {
+      setOtpStatus('success');
+      setTimeout(() => {
         navigate('/driver/dashboard');
       }, 1000);
     }, 1500);
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4 md:p-container-padding relative overflow-hidden bg-surface">
+    <main className="min-h-screen flex items-center justify-center p-4 md:p-8 relative overflow-hidden bg-slate-50">
       {/* Background Atmospheric Element */}
       <div
-        className="absolute inset-0 opacity-[0.03] pointer-events-none"
+        className="absolute inset-0 opacity-20 pointer-events-none"
         style={{
-          backgroundImage: 'radial-gradient(#002625 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
+          backgroundImage: 'radial-gradient(#15803d 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
         }}
       ></div>
+      
+      {/* Glowing Orbs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-[#97fc43]/20 blur-[100px] pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-[#15803d]/10 blur-[100px] pointer-events-none"></div>
 
-      {/* Main Bento-style Container */}
-      <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-12 gap-gutter relative z-10">
-        {/* Illustration Column (Hidden on Mobile) */}
-        <div className="hidden md:flex md:col-span-7 flex-col justify-center space-y-section-gap pr-gutter">
-          <div className="space-y-4">
-            <h1 className="font-display-lg text-display-lg text-primary text-4xl md:text-5xl font-extrabold tracking-tight">
-              Industrial <br />
-              <span className="text-secondary">Intelligence.</span>
-            </h1>
-            <p className="font-body-lg text-body-lg text-on-surface-variant max-w-lg text-lg">
-              Accelerate your warehouse operations with cloud-native logistics management designed for the modern enterprise.
-            </p>
-          </div>
-
-          {/* Featured Illustration Card */}
-          <div className="relative group">
-            <div className="absolute -inset-4 bg-secondary-fixed/10 rounded-[32px] blur-2xl group-hover:bg-secondary-fixed/20 transition-all duration-700"></div>
-            <div className="relative h-[400px] rounded-xl overflow-hidden glass-panel border-none shadow-2xl animate-float">
-              <img
-                className="w-full h-full object-cover"
-                alt="3D isometric futuristic warehouse SaaS illustration"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDKlLxgEFYfql78D9rFab93lhosF_S8JVu8ZIUC5_LCjKCs5vL3jLO6T0EXlhpKEd4_ilo246pxGbmX6UAlkdFC_2s-Coh0MkV3K5udTmxuhMXfofxxPuw-Ae66Ri90yyszNis3eJ374LZDLIfBQRqV2Qh0ssITNTvUU6T4nITIxW1Jc-lBzGB1gU7RKUaFPrNkTD0_HVrenTAoZkUgSELJ78hfEO0Uoun1WCsk9B6HlUUB_qszyDsURaqkNd269YNT4USJwUXJ4_E"
-              />
-
-              {/* Floating Data Overlays */}
-              <div className="absolute top-6 left-6 glass-panel p-4 rounded-xl flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center">
-                  <span className="material-symbols-outlined text-on-secondary-container">speed</span>
-                </div>
-                <div>
-                  <p className="font-label-sm text-xs text-on-surface-variant uppercase tracking-wider">THROUGHPUT</p>
-                  <p className="font-headline-md text-xl font-bold text-primary">+24%</p>
-                </div>
-              </div>
-
-              <div className="absolute bottom-6 right-6 glass-panel p-4 rounded-xl flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                  <span className="material-symbols-outlined text-primary-fixed">local_shipping</span>
-                </div>
-                <div>
-                  <p className="font-label-sm text-xs text-on-surface-variant uppercase tracking-wider">ACTIVE FLEET</p>
-                  <p className="font-headline-md text-xl font-bold text-primary">1,248</p>
-                </div>
-              </div>
-            </div>
+      {/* Main Container */}
+      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 lg:gap-20 relative z-10 items-center">
+        
+        {/* Left Side Branding (Hidden on very small screens) */}
+        <div className="hidden md:flex flex-col justify-center space-y-6">
+          <img src="/DeliveryLogo.png" alt="ShippNex Logo" className="h-20 w-auto object-contain self-start" />
+          <h1 className="text-4xl lg:text-6xl font-extrabold text-[#002625] tracking-tight leading-tight">
+            Driver <br />
+            <span className="text-[#15803d]">Command Center.</span>
+          </h1>
+          <p className="text-slate-600 text-lg max-w-md">
+            Your premium gateway to real-time logistics, route intelligence, and instant payouts.
+          </p>
+          
+          {/* Quick Stats */}
+          <div className="flex gap-8 pt-6">
+             <div className="space-y-1">
+                <p className="text-[#15803d] font-bold text-2xl">24/7</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Dispatch Support</p>
+             </div>
+             <div className="space-y-1">
+                <p className="text-[#15803d] font-bold text-2xl">Live</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Route Sync</p>
+             </div>
           </div>
         </div>
 
         {/* Login Form Column */}
-        <div className="md:col-span-5 flex flex-col justify-center">
-          <div className="glass-panel p-8 md:p-12 rounded-[32px] w-full border-white/40 shadow-2xl">
-            {/* Brand Header */}
-            <div className="mb-10 text-center md:text-left">
-              <div className="flex items-center justify-center md:justify-start gap-2 mb-6">
-                <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center shadow-md">
-                  <span className="material-symbols-outlined text-secondary-fixed active-icon">package_2</span>
-                </div>
-                <span className="font-headline-lg text-2xl font-bold text-primary tracking-tight">ShippNex</span>
-              </div>
-              <h2 className="font-headline-lg text-2xl md:text-3xl font-bold text-primary mb-2">Welcome Back</h2>
-              <p className="font-body-md text-on-surface-variant text-sm md:text-base">
-                Enter your mobile number to securely access your logistics dashboard.
+        <div className="flex flex-col justify-center max-w-md mx-auto w-full md:max-w-none">
+          <div className="bg-white p-8 sm:p-10 rounded-[32px] w-full border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.08)]">
+            
+            {/* Mobile Logo (Visible only on mobile since left side is hidden) */}
+            <div className="md:hidden flex justify-center mb-8">
+               <img src="/DeliveryLogo.png" alt="ShippNex Logo" className="h-16 w-auto object-contain" />
+            </div>
+
+            <div className="mb-8 text-center md:text-left">
+              <h2 className="text-2xl md:text-3xl font-bold text-[#002625] mb-2">
+                {step === 'phone' ? 'Welcome Back' : 'Verify Identity'}
+              </h2>
+              <p className="text-slate-500 text-sm">
+                {step === 'phone' 
+                  ? 'Enter your mobile number to access your dashboard.' 
+                  : `Enter the 4-digit code sent to +91 ${mobileNumber}`}
               </p>
             </div>
 
             {/* Form Content */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <label className="font-label-sm text-xs text-on-surface-variant ml-1 uppercase font-semibold tracking-wider" htmlFor="mobile">
-                  Mobile Number
-                </label>
-                <div
-                  className={`relative flex items-center rounded-xl transition-all duration-200 ${
-                    hasError ? 'ring-2 ring-error bg-error-container/30' : 'input-focus-glow bg-surface-container-low'
+            {step === 'phone' ? (
+              <form onSubmit={handlePhoneSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[11px] text-[#15803d] uppercase font-black tracking-widest ml-1" htmlFor="mobile">
+                    Mobile Number
+                  </label>
+                  <div
+                    className={`relative flex items-center rounded-2xl transition-all duration-300 bg-slate-50 border ${
+                      hasError ? 'border-red-400 bg-red-50' : 'border-slate-200 focus-within:border-[#15803d] focus-within:bg-white'
+                    }`}
+                  >
+                    <div className="absolute left-4 flex items-center gap-2 pointer-events-none text-slate-400">
+                      <span className="material-symbols-outlined text-[20px]">call</span>
+                      <span className="font-bold border-r border-slate-200 pr-3">+91</span>
+                    </div>
+                    <input
+                      id="mobile"
+                      type="tel"
+                      maxLength={10}
+                      value={mobileNumber}
+                      onChange={handleInputChange}
+                      placeholder="98765 43210"
+                      className="w-full bg-transparent border-none rounded-2xl py-4 pl-[92px] pr-4 text-[#002625] font-bold focus:ring-0 placeholder:text-slate-300 outline-none"
+                    />
+                  </div>
+                  {hasError && (
+                    <p className="text-xs text-red-500 ml-1 font-medium">Please enter a valid 10-digit mobile number</p>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  className={`w-full py-4 rounded-2xl shadow-lg transition-all duration-300 transform active:scale-95 flex items-center justify-center gap-2 font-black tracking-wide cursor-pointer ${
+                    statusState === 'success'
+                      ? 'bg-[#15803d] text-white'
+                      : mobileNumber.length < 10
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                      : 'bg-[#97fc43] hover:bg-[#86e835] text-[#002625] hover:shadow-[0_0_20px_rgba(151,252,67,0.3)]'
                   }`}
                 >
-                  <div className="absolute left-4 flex items-center gap-2 pointer-events-none">
-                    <span className="material-symbols-outlined text-outline text-[20px]">call</span>
-                    <span className="text-on-surface-variant font-medium border-r border-outline-variant pr-2">+1</span>
+                  {statusState === 'processing' && (
+                    <>
+                      <span className="animate-spin material-symbols-outlined">sync</span> Processing...
+                    </>
+                  )}
+                  {statusState === 'success' && (
+                    <>
+                      OTP Sent! <span className="material-symbols-outlined">check_circle</span>
+                    </>
+                  )}
+                  {statusState === 'idle' && (
+                    <>
+                      Continue Securely
+                      <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleOtpSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[11px] text-[#15803d] uppercase font-black tracking-widest ml-1">
+                    Enter OTP
+                  </label>
+                  <div className="flex gap-3 sm:gap-4 justify-between">
+                    {[0, 1, 2, 3].map((index) => (
+                      <input
+                        key={index}
+                        id={`otp-${index}`}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={otp[index] || ''}
+                        onChange={(e) => handleOtpChange(index, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                        className="flex-1 w-full h-14 sm:h-16 max-w-[4rem] bg-slate-50 border border-slate-200 focus:border-[#15803d] focus:bg-white rounded-xl sm:rounded-2xl text-center text-[#002625] font-bold text-2xl focus:ring-0 outline-none transition-all shadow-sm"
+                      />
+                    ))}
                   </div>
-                  <input
-                    id="mobile"
-                    type="tel"
-                    maxLength={10}
-                    value={mobileNumber}
-                    onChange={handleInputChange}
-                    placeholder="555 012 3456"
-                    className="w-full bg-transparent border-none rounded-xl py-4 pl-24 pr-4 text-on-surface font-body-md focus:ring-0 placeholder:text-outline-variant outline-none"
-                  />
                 </div>
-                {hasError && (
-                  <p className="text-xs text-error ml-1">Please enter a valid 10-digit mobile number</p>
-                )}
-              </div>
 
-              <button
-                type="submit"
-                className={`w-full py-4 rounded-xl shadow-lg transition-all duration-300 transform active:scale-95 flex items-center justify-center gap-2 font-bold cursor-pointer ${
-                  statusState === 'success'
-                    ? 'bg-primary text-primary-fixed shadow-primary/20'
-                    : mobileNumber.length < 10
-                    ? 'bg-secondary-container/60 text-on-secondary-container/60 cursor-not-allowed'
-                    : 'bg-secondary-container hover:bg-secondary-fixed text-on-secondary-container shadow-secondary-container/20'
-                }`}
-              >
-                {statusState === 'processing' && (
-                  <>
-                    <span className="animate-spin material-symbols-outlined">sync</span> Processing...
-                  </>
-                )}
-                {statusState === 'success' && (
-                  <>
-                    OTP Sent! <span className="material-symbols-outlined">check_circle</span>
-                  </>
-                )}
-                {statusState === 'idle' && (
-                  <>
-                    Continue
-                    <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                  </>
-                )}
-              </button>
-
-              {/* Divider */}
-              <div className="relative py-2 flex items-center gap-4">
-                <div className="flex-grow h-px bg-outline-variant/30"></div>
-                <span className="font-label-sm text-xs text-outline tracking-wider">SECURE LOGIN</span>
-                <div className="flex-grow h-px bg-outline-variant/30"></div>
-              </div>
-
-              {/* Secondary Actions */}
-              <div className="grid grid-cols-2 gap-4">
                 <button
-                  type="button"
-                  onClick={() => alert('Redirecting to Enterprise SSO Portal...')}
-                  className="flex items-center justify-center gap-2 py-3 rounded-xl border border-outline-variant hover:bg-surface-container-high transition-colors font-label-sm text-xs text-on-surface-variant font-medium cursor-pointer"
+                  type="submit"
+                  className={`w-full py-4 rounded-2xl shadow-lg transition-all duration-300 transform active:scale-95 flex items-center justify-center gap-2 font-black tracking-wide cursor-pointer ${
+                    otpStatus === 'success'
+                      ? 'bg-[#15803d] text-white'
+                      : otp.length < 4
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                      : 'bg-[#97fc43] hover:bg-[#86e835] text-[#002625] hover:shadow-[0_0_20px_rgba(151,252,67,0.3)]'
+                  }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">key</span>
-                  SSO Login
+                  {otpStatus === 'processing' && (
+                    <>
+                      <span className="animate-spin material-symbols-outlined">sync</span> Verifying...
+                    </>
+                  )}
+                  {otpStatus === 'success' && (
+                    <>
+                      Verified! <span className="material-symbols-outlined">check_circle</span>
+                    </>
+                  )}
+                  {otpStatus === 'idle' && (
+                    <>
+                      Verify OTP
+                      <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                    </>
+                  )}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => alert('Contacting ShippNex Dispatch Support...')}
-                  className="flex items-center justify-center gap-2 py-3 rounded-xl border border-outline-variant hover:bg-surface-container-high transition-colors font-label-sm text-xs text-on-surface-variant font-medium cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[18px]">help</span>
-                  Support
-                </button>
-              </div>
-            </form>
+                
+                <div className="text-center pt-2">
+                  <button type="button" onClick={() => setStep('phone')} className="text-xs font-bold text-slate-500 hover:text-[#15803d] transition-colors cursor-pointer">
+                    Wrong number? Go back
+                  </button>
+                </div>
+              </form>
+            )}
 
             {/* Footer Info */}
-            <div className="mt-10 text-center">
-              <p className="font-label-sm text-xs text-outline-variant">
-                By continuing, you agree to ShippNex's <br />
-                <a href="#terms" className="text-secondary hover:underline font-semibold">Terms of Service</a> and{' '}
-                <a href="#privacy" className="text-secondary hover:underline font-semibold">Privacy Policy</a>
+            <div className="mt-8 text-center">
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                By continuing, you agree to our <br />
+                <a href="#terms" className="text-[#15803d] hover:underline font-bold">Terms of Service</a> &{' '}
+                <a href="#privacy" className="text-[#15803d] hover:underline font-bold">Privacy Policy</a>
               </p>
-            </div>
-          </div>
-
-          {/* Bottom Decorative Element */}
-          <div className="mt-8 flex items-center justify-center gap-6 opacity-60">
-            <div className="flex items-center gap-1 text-on-surface-variant">
-              <span className="material-symbols-outlined text-[14px]">verified_user</span>
-              <span className="font-label-sm text-[10px] tracking-wider font-medium">ISO 27001</span>
-            </div>
-            <div className="flex items-center gap-1 text-on-surface-variant">
-              <span className="material-symbols-outlined text-[14px]">lock</span>
-              <span className="font-label-sm text-[10px] tracking-wider font-medium">AES-256</span>
-            </div>
-            <div className="flex items-center gap-1 text-on-surface-variant">
-              <span className="material-symbols-outlined text-[14px]">cloud</span>
-              <span className="font-label-sm text-[10px] tracking-wider font-medium">CLOUD NATIVE</span>
             </div>
           </div>
         </div>

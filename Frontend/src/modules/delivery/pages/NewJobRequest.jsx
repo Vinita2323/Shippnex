@@ -38,7 +38,7 @@ const NewJobRequest = () => {
           <span className="font-headline-lg text-lg font-bold text-primary">ShippNex</span>
         </div>
         <button
-          onClick={() => alert('Notifications: Incoming urgent freight alert')}
+          onClick={() => navigate('/driver/notifications')}
           className="material-symbols-outlined text-primary hover:opacity-80 transition-opacity p-2 rounded-full hover:bg-surface-container cursor-pointer"
         >
           notifications

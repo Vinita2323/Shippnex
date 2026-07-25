@@ -39,37 +39,31 @@ const ActiveDelivery = () => {
   return (
     <div className="bg-surface font-body-md text-on-surface min-h-screen pb-24">
       {/* Compact Top AppBar */}
-      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-2.5 bg-surface/90 backdrop-blur-md shadow-sm border-b border-outline-variant/10">
+      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-3 bg-gradient-to-r from-[#002625] to-[#0a3d16] shadow-lg rounded-b-2xl md:rounded-b-3xl border-b border-white/10">
         <div className="flex items-center gap-2.5">
-          <button
-            onClick={() => navigate('/driver/dashboard')}
-            className="p-1.5 rounded-lg hover:bg-surface-container-high text-primary transition-colors cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-xl">arrow_back</span>
-          </button>
-          <div className="w-8 h-8 rounded-full overflow-hidden bg-primary-fixed border border-secondary-fixed shrink-0">
+          <div className="w-9 h-9 rounded-full overflow-hidden bg-white/20 border-2 border-[#97fc43] shrink-0">
             <img
               className="w-full h-full object-cover"
               alt="Driver Profile"
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuCsf0YqUfmzLmy9UGvpLZ3D1i_eeYyDLS8tW8R5-RRgLjawmbAhDUY4x8P1PZjth4SklRupUNZ5HGpqhp9QmHIVGM2KInMVWjSipTskHVcffILdPAGn-Fuk6n_WBjxr1jJU0WfzT_OqQsLti5OGPpFfogpL80PKIvA3beoEfjjDdS9P1k6rxlu2N7tKEFn1wPi_4AbHxfL19v6d4S4ii_nVkyTPZu1UbowNUhPTBqYqmFJ5aVyfDUZynjhyw5_5SrTs3rTW4Afj4NU"
             />
           </div>
-          <div className="leading-tight">
-            <h1 className="font-headline-md text-sm font-bold text-primary">ShippNex Navigation</h1>
-            <p className="text-[10px] text-on-surface-variant font-medium">Vehicle #SNX-1024 • Chicago</p>
+          <div className="leading-tight mt-0.5">
+            <h1 className="font-headline-md text-sm md:text-base font-bold text-white tracking-wide">ShippNex Nav</h1>
+            <p className="text-[9px] md:text-[10px] text-[#97fc43] uppercase font-bold tracking-widest mt-0.5">#SNX-1024 • Chicago</p>
           </div>
         </div>
         <button
-          onClick={() => alert('Notifications: Traffic delay detected on I-90 E (+6 mins)')}
-          className="p-1.5 text-primary hover:opacity-80 transition-opacity relative cursor-pointer"
+          onClick={() => navigate('/driver/notifications')}
+          className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors relative cursor-pointer shadow-sm"
         >
-          <span className="material-symbols-outlined text-xl">notifications</span>
-          <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-error rounded-full"></span>
+          <span className="material-symbols-outlined text-[18px]">notifications</span>
+          <span className="absolute top-0 right-0 w-2.5 h-2.5 border-2 border-[#002625] bg-[#97fc43] rounded-full"></span>
         </button>
       </header>
 
       {/* Main Content Container */}
-      <main className="pt-16 md:pt-20 px-3.5 max-w-3xl mx-auto space-y-3 mt-2.5">
+      <main className="pt-20 md:pt-24 px-3.5 max-w-3xl mx-auto space-y-3 mt-2.5">
         {/* Order Header Card */}
         <div className="glass-panel p-3.5 rounded-xl shadow-xs border-white/60 flex justify-between items-center gap-2">
           <div className="min-w-0">

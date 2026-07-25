@@ -9,6 +9,7 @@ import DriverProfile from '../pages/DriverProfile';
 import LogisticsNavigation from '../pages/LogisticsNavigation';
 import FinalVerification from '../pages/FinalVerification';
 import NewJobRequest from '../pages/NewJobRequest';
+import DriverNotifications from '../pages/DriverNotifications';
 
 const DeliveryRoutes = () => {
   return (
@@ -24,6 +25,7 @@ const DeliveryRoutes = () => {
       <Route path="/navigate" element={<LogisticsNavigation />} />
       <Route path="/wallet" element={<DriverWallet />} />
       <Route path="/profile" element={<DriverProfile />} />
+      <Route path="/notifications" element={<DriverNotifications />} />
     </Routes>
   );
 };

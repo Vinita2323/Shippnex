@@ -57,7 +57,7 @@ const LogisticsNavigation = () => {
           </div>
         </div>
         <button
-          onClick={() => alert('Notifications: Route recalculated (Saved 4 mins)')}
+          onClick={() => navigate('/driver/notifications')}
           className="w-10 h-10 flex items-center justify-center rounded-full text-primary hover:opacity-80 transition-opacity active:scale-95 cursor-pointer"
         >
           <span className="material-symbols-outlined">notifications</span>

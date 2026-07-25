@@ -8,7 +8,7 @@ const DriverBottomNav = () => {
   const navItems = [
     { path: '/driver/dashboard', icon: 'home', label: 'Home' },
     { path: '/driver/jobs', icon: 'local_shipping', label: 'Jobs' },
-    { path: '/driver/active-delivery', icon: 'explore', label: 'Navigate' },
+    { path: '/driver/active-delivery', icon: 'explore', label: 'Active' },
     { path: '/driver/wallet', icon: 'account_balance_wallet', label: 'Wallet' },
     { path: '/driver/profile', icon: 'person', label: 'Profile' },
   ];

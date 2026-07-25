@@ -22,18 +22,7 @@ const DriverDashboard = () => {
       {/* Compact TopAppBar */}
       <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-2.5 bg-surface/90 backdrop-blur-md shadow-sm border-b border-outline-variant/10">
         <div className="flex items-center gap-2">
-          <div className="relative shrink-0">
-            <img
-              className="w-8 h-8 rounded-full border border-secondary-container object-cover shadow-xs"
-              alt="Marcus Reed"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCWXL3Qu0JRKDr039sF-aSx5rQfnGlz0S99DOqkSfKyAgFhfUIw6hAHglW9IK7FrROv33gWnGtkkeVe68aWnWRPo_JlvATZfBAwj3J1cTKNvZ2mkDmumyw4cVA5K8nxu-TyA-YCKB_Te10l5t920ethYbEdBGNGETh4MD316jQl5JqOZ1J-KxaJv4EH7uz0OkhKAME-QMK4hcqD20kyxCmIHXk2cGjM4GlLzhbLWAUTyPQalJ1U5BYsmrA2EGL2nH15ow7kn24EAxA"
-            />
-            <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 border border-white rounded-full ${isOnline ? 'bg-secondary-fixed' : 'bg-outline'}`}></div>
-          </div>
-          <div className="leading-tight">
-            <span className="text-[10px] text-on-surface-variant block font-medium">Good Morning,</span>
-            <h1 className="font-headline-md text-sm font-bold text-primary truncate max-w-[130px]">Marcus Reed</h1>
-          </div>
+          <img src="/DeliveryLogo.png" alt="Delivery Logo" className="h-12 object-contain" />
         </div>
 
         <div className="flex items-center gap-2">
@@ -50,7 +39,7 @@ const DriverDashboard = () => {
             </span>
           </label>
           <button
-            onClick={() => alert('Notifications: 2 pending route updates')}
+            onClick={() => navigate('/driver/notifications')}
             className="relative p-1.5 text-on-surface-variant hover:opacity-80 transition-opacity cursor-pointer"
           >
             <span className="material-symbols-outlined text-xl">notifications</span>
@@ -68,8 +57,8 @@ const DriverDashboard = () => {
           <div className="glass-panel p-3 rounded-xl relative overflow-hidden group hover:shadow-md transition-all">
             <p className="text-xs font-black text-primary uppercase tracking-wider truncate">Today's Earning</p>
             <div className="flex items-baseline gap-0.5 mt-1.5">
-              <span className="text-secondary font-bold text-xs">₹</span>
-              <span className="text-primary font-extrabold text-lg md:text-xl leading-none">4,825.00</span>
+              <span className="text-secondary font-semibold text-xs">₹</span>
+              <span className="text-primary font-bold text-base md:text-lg leading-none">4,825.00</span>
             </div>
           </div>
 
@@ -77,8 +66,8 @@ const DriverDashboard = () => {
           <div className="glass-panel p-3 rounded-xl relative overflow-hidden group hover:shadow-md transition-all">
             <p className="text-xs font-black text-primary uppercase tracking-wider truncate">Total Bookings</p>
             <div className="flex items-baseline gap-1 mt-1.5">
-              <span className="text-primary font-extrabold text-lg md:text-xl leading-none">24</span>
-              <span className="text-on-surface-variant font-semibold text-[10px]">Bookings</span>
+              <span className="text-primary font-bold text-base md:text-lg leading-none">24</span>
+              <span className="text-on-surface-variant font-medium text-[10px]">Bookings</span>
             </div>
           </div>
 
@@ -86,8 +75,8 @@ const DriverDashboard = () => {
           <div className="glass-panel p-3 rounded-xl relative overflow-hidden group hover:shadow-md transition-all">
             <p className="text-xs font-black text-primary uppercase tracking-wider truncate">Deliveries</p>
             <div className="flex items-baseline gap-1 mt-1.5">
-              <span className="text-primary font-extrabold text-lg md:text-xl leading-none">14</span>
-              <span className="text-on-surface-variant font-semibold text-[10px]">/18</span>
+              <span className="text-primary font-bold text-base md:text-lg leading-none">14</span>
+              <span className="text-on-surface-variant font-medium text-[10px]">/18</span>
             </div>
           </div>
 
@@ -95,8 +84,8 @@ const DriverDashboard = () => {
           <div className="glass-panel p-3 rounded-xl relative overflow-hidden group hover:shadow-md transition-all">
             <p className="text-xs font-black text-primary uppercase tracking-wider truncate">Pending</p>
             <div className="flex items-baseline gap-1 mt-1.5">
-              <span className="text-primary font-extrabold text-lg md:text-xl leading-none">03</span>
-              <span className="text-on-surface-variant font-semibold text-[10px]">Tasks</span>
+              <span className="text-primary font-bold text-base md:text-lg leading-none">03</span>
+              <span className="text-on-surface-variant font-medium text-[10px]">Tasks</span>
             </div>
           </div>
         </section>

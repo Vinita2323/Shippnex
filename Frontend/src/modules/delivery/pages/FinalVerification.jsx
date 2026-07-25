@@ -75,7 +75,7 @@ const FinalVerification = () => {
           </div>
         </div>
         <button
-          onClick={() => alert('Notifications: All items clear for handoff')}
+          onClick={() => navigate('/driver/notifications')}
           className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-high hover:opacity-80 transition-opacity cursor-pointer"
         >
           <span className="material-symbols-outlined text-primary">notifications</span>
