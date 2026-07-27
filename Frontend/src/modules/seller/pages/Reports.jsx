@@ -1,42 +1,101 @@
 import React, { useState } from 'react';
-import { Download, FileText, Calendar, Filter, BarChart3, TrendingUp, DollarSign } from 'lucide-react';
+import { Download, FileText, Calendar, TrendingUp, FileSpreadsheet, Percent, CheckCircle2 } from 'lucide-react';
+
+const mockReportDetails = [
+  { id: 'REP-01', date: '27-07-2026', orderId: '#ORD-9021', grossSales: '₹48,200.00', gstAmount: '₹2,410.00', netPayout: '₹45,790.00', status: 'Settled' },
+  { id: 'REP-02', date: '27-07-2026', orderId: '#ORD-9020', grossSales: '₹84,500.00', gstAmount: '₹4,225.00', netPayout: '₹80,275.00', status: 'Settled' },
+  { id: 'REP-03', date: '26-07-2026', orderId: '#ORD-9019', grossSales: '₹18,900.00', gstAmount: '₹945.00', netPayout: '₹17,955.00', status: 'Settled' },
+  { id: 'REP-04', date: '26-07-2026', orderId: '#ORD-9018', grossSales: '₹1,24,000.00', gstAmount: '₹6,200.00', netPayout: '₹1,17,800.00', status: 'Settled' },
+  { id: 'REP-05', date: '25-07-2026', orderId: '#ORD-9015', grossSales: '₹35,600.00', gstAmount: '₹1,780.00', netPayout: '₹33,820.00', status: 'Settled' },
+];
 
 const Reports = () => {
   const [reportType, setReportType] = useState('sales');
+  const [fromDate, setFromDate] = useState('2026-07-01');
+  const [toDate, setToDate] = useState('2026-07-25');
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
+  const handleExport = (format = 'excel') => {
+    const headers = ['Report ID', 'Date', 'Order ID', 'Gross Sales', 'GST Amount', 'Net Payout', 'Status'];
+    const rows = mockReportDetails.map(r => [
+      `"${r.id}"`,
+      `"${r.date}"`,
+      `"${r.orderId}"`,
+      `"${r.grossSales}"`,
+      `"${r.gstAmount}"`,
+      `"${r.netPayout}"`,
+      `"${r.status}"`
+    ]);
+
+    const csvString = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Business_Sales_Report_${fromDate}_to_${toDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setShowExportMenu(false);
+  };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6 font-sans pb-12">
+      
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Business Reports & Analytics</h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">Export financial ledgers, GST reports, and warehouse turnover statement.</p>
+          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Business Reports & Analytics</h1>
+          <p className="text-sm font-normal text-slate-500 mt-1">Export financial ledgers, GST reports, and warehouse turnover statement.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-md shadow-sm transition-colors cursor-pointer border-none flex items-center gap-2 text-sm">
-            <Download size={16} />
+          <button 
+            onClick={() => handleExport('excel')}
+            className="bg-[#ff7526] hover:bg-[#e65507] text-white font-medium py-2.5 px-4 rounded-lg shadow-sm transition-colors cursor-pointer border-none flex items-center gap-2 text-sm"
+          >
+            <FileSpreadsheet size={16} />
             Export Excel (XLSX)
           </button>
-          <button className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-md shadow-sm transition-colors cursor-pointer border-none flex items-center gap-2 text-sm">
+          <button 
+            onClick={() => handleExport('pdf')}
+            className="bg-slate-900 hover:bg-slate-800 text-white font-medium py-2.5 px-4 rounded-lg shadow-sm transition-colors cursor-pointer border-none flex items-center gap-2 text-sm"
+          >
             <FileText size={16} />
             Download PDF Report
           </button>
         </div>
       </div>
 
-      {/* Date & Filters */}
-      <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.02)] flex flex-wrap gap-4 items-center justify-between">
-        <div className="flex items-center gap-4">
+      {/* Date & Filter Toolbar */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-4 items-center justify-between">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <Calendar size={18} className="text-slate-400" />
-            <span className="text-sm font-bold text-slate-700">Date Range:</span>
+            <Calendar size={18} className="text-[#ff7526]" />
+            <span className="text-sm font-normal text-slate-600">Date Range:</span>
           </div>
-          <input type="date" className="px-3 py-1.5 border border-slate-200 rounded-md text-sm outline-none font-medium" defaultValue="2026-07-01" />
-          <span className="text-slate-400 font-bold">to</span>
-          <input type="date" className="px-3 py-1.5 border border-slate-200 rounded-md text-sm outline-none font-medium" defaultValue="2026-07-25" />
+          <div className="flex items-center gap-1.5 bg-slate-50 p-1 border border-slate-200 rounded-lg">
+            <input 
+              type="date" 
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="bg-transparent border-none outline-none text-slate-700 text-sm font-normal cursor-pointer"
+            />
+            <span className="text-slate-400 font-normal">to</span>
+            <input 
+              type="date" 
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="bg-transparent border-none outline-none text-slate-700 text-sm font-normal cursor-pointer"
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-md text-sm font-bold text-slate-700 outline-none cursor-pointer">
+          <select 
+            value={reportType} 
+            onChange={(e) => setReportType(e.target.value)} 
+            className="px-3.5 py-2 border border-slate-200 rounded-lg text-sm font-normal text-slate-700 bg-white outline-none focus:border-[#ff7526] cursor-pointer"
+          >
             <option value="sales">Sales & Revenue Breakdown</option>
             <option value="gst">GST Tax Summary</option>
             <option value="inventory">Inventory Aging Report</option>
@@ -45,26 +104,79 @@ const Reports = () => {
         </div>
       </div>
 
-      {/* Report Cards Preview */}
+      {/* Overview Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
-          <span className="text-xs font-bold text-slate-400 uppercase">Gross Revenue (July)</span>
-          <h3 className="text-3xl font-extrabold text-slate-900 mt-2">₹14,85,200</h3>
-          <p className="text-xs font-bold text-emerald-600 mt-2 flex items-center gap-1"><TrendingUp size={14} /> +18.4% compared to June</p>
+        
+        {/* Card 1 */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-2">
+          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Gross Revenue (July)</span>
+          <h3 className="text-3xl font-semibold text-slate-900">₹14,85,200</h3>
+          <p className="text-xs font-normal text-emerald-600 flex items-center gap-1">
+            <TrendingUp size={14} /> +18.4% compared to June
+          </p>
         </div>
 
-        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
-          <span className="text-xs font-bold text-slate-400 uppercase">Total GST Collected (5% / 12%)</span>
-          <h3 className="text-3xl font-extrabold text-slate-900 mt-2">₹1,12,450</h3>
-          <p className="text-xs font-medium text-slate-500 mt-2">Ready for GSTR-1 Filing</p>
+        {/* Card 2 */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-2">
+          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total GST Collected (5% / 12%)</span>
+          <h3 className="text-3xl font-semibold text-slate-900">₹1,12,450</h3>
+          <p className="text-xs font-normal text-slate-500">Ready for GSTR-1 Filing</p>
         </div>
 
-        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
-          <span className="text-xs font-bold text-slate-400 uppercase">Total Units Dispatched</span>
-          <h3 className="text-3xl font-extrabold text-[#ff5500] mt-2">24,500 kg</h3>
-          <p className="text-xs font-medium text-slate-500 mt-2">Across 142 B2B Bulk Orders</p>
+        {/* Card 3 */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-2">
+          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Units Dispatched</span>
+          <h3 className="text-3xl font-semibold text-[#ff7526]">24,500 kg</h3>
+          <p className="text-xs font-normal text-slate-500">Across 142 B2B Bulk Orders</p>
+        </div>
+
+      </div>
+
+      {/* Main Card Table Container */}
+      <div className="rounded-xl overflow-hidden shadow-sm border border-slate-200 bg-white">
+        
+        {/* Light Orange Banner Header */}
+        <div className="bg-[#ff7526] px-5 py-3.5 flex justify-between items-center">
+          <h2 className="text-white font-semibold text-lg tracking-wide">Detailed Sales & Revenue Statement</h2>
+          <span className="text-white/90 text-xs font-medium">Total Entries: {mockReportDetails.length}</span>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-[13px] uppercase tracking-wider border-b border-slate-100">
+                <th className="px-6 py-4 font-semibold">Report ID</th>
+                <th className="px-6 py-4 font-semibold">Date</th>
+                <th className="px-6 py-4 font-semibold">Order ID</th>
+                <th className="px-6 py-4 font-semibold">Gross Sales</th>
+                <th className="px-6 py-4 font-semibold">GST Amount</th>
+                <th className="px-6 py-4 font-semibold">Net Payout</th>
+                <th className="px-6 py-4 font-semibold text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody className="text-[15px] font-normal text-slate-700 divide-y divide-slate-100">
+              {mockReportDetails.map((item) => (
+                <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{item.id}</td>
+                  <td className="px-6 py-4 font-normal text-slate-600 text-sm">{item.date}</td>
+                  <td className="px-6 py-4 font-semibold text-slate-900">{item.orderId}</td>
+                  <td className="px-6 py-4 font-semibold text-slate-900">{item.grossSales}</td>
+                  <td className="px-6 py-4 text-slate-600 font-normal">{item.gstAmount}</td>
+                  <td className="px-6 py-4 font-semibold text-[#ff7526]">{item.netPayout}</td>
+                  <td className="px-6 py-4 text-right">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <CheckCircle2 size={13} />
+                      {item.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
+
     </div>
   );
 };

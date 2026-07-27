@@ -20,7 +20,7 @@ const SellerLayout = () => {
       <SellerSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
       
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <SellerHeader toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+        <SellerHeader isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         
         <main ref={mainRef} className="flex-1 overflow-y-auto p-6">
           <Outlet key={location.pathname} />

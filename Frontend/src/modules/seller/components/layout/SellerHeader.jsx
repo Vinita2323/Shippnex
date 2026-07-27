@@ -1,48 +1,78 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Menu, Search, Bell, User } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { X, Menu, Settings, MapPin, LogOut } from 'lucide-react';
 
-const SellerHeader = ({ toggleSidebar }) => {
+const SellerHeader = ({ isSidebarOpen, toggleSidebar }) => {
+  const location = useLocation();
   const navigate = useNavigate();
+
+  const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
+
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 z-30 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
-      <div className="flex items-center gap-4">
+    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 z-30 shadow-sm font-sans">
+      {/* Left Section: Toggle Button */}
+      <div className="flex items-center gap-5">
         <button 
           onClick={toggleSidebar}
-          className="p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer"
+          className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer"
+          title="Toggle Sidebar"
         >
-          <Menu size={20} />
+          {isSidebarOpen ? <X size={22} className="text-slate-700" /> : <Menu size={22} className="text-slate-700" />}
         </button>
-        
-        <div className="hidden md:flex items-center bg-slate-100 rounded-full px-4 py-2 w-64 border border-transparent focus-within:border-[#ff5500] focus-within:bg-white transition-all">
-          <Search size={16} className="text-slate-400 mr-2" />
-          <input 
-            type="text" 
-            placeholder="Search orders, products..." 
-            className="bg-transparent border-none outline-none text-[16px] font-normal text-slate-700 w-full placeholder:text-slate-400"
-          />
-        </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <button className="relative p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer">
-          <Bell size={20} />
-          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
-        </button>
-        
-        <div className="h-8 w-px bg-slate-200 mx-1"></div>
-        
+      {/* Middle Section: Orders, Return Order, Wallet Links */}
+      <div className="hidden md:flex items-center gap-10">
+        <Link 
+          to="/seller/orders" 
+          className={`text-[15px] font-semibold transition-colors ${
+            isActive('/seller/orders') ? 'text-[#002625] font-bold' : 'text-slate-700 hover:text-slate-900'
+          }`}
+        >
+          Orders
+        </Link>
+        <Link 
+          to="/seller/return" 
+          className={`text-[15px] font-semibold transition-colors ${
+            isActive('/seller/return') || isActive('/seller/returns') ? 'text-[#002625] font-bold' : 'text-slate-700 hover:text-slate-900'
+          }`}
+        >
+          Return Order
+        </Link>
+        <Link 
+          to="/seller/wallet" 
+          className={`text-[15px] font-semibold transition-colors ${
+            isActive('/seller/wallet') ? 'text-[#002625] font-bold' : 'text-slate-700 hover:text-slate-900'
+          }`}
+        >
+          Wallet
+        </Link>
+      </div>
+
+      {/* Right Section: Settings, Location, Logout Icons */}
+      <div className="flex items-center gap-5 text-slate-700">
         <button 
           onClick={() => navigate('/seller/settings')}
-          className="flex items-center gap-3 border-none bg-transparent cursor-pointer hover:bg-slate-50 p-1.5 rounded-lg transition-colors text-left select-none"
+          className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer"
+          title="Settings"
         >
-          <div className="flex flex-col items-end hidden md:flex">
-            <span className="text-[16px] font-medium text-slate-800 leading-tight">FreshMart Warehouse</span>
-            <span className="text-[14px] font-normal text-slate-500">Seller Account</span>
-          </div>
-          <div className="w-9 h-9 bg-orange-100 rounded-full border border-orange-200 flex items-center justify-center text-[#ff5500]">
-            <User size={18} strokeWidth={2.5} />
-          </div>
+          <Settings size={22} />
+        </button>
+
+        <button 
+          onClick={() => alert('Warehouse Location: Main City Logistics Hub')}
+          className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer"
+          title="Location"
+        >
+          <MapPin size={22} />
+        </button>
+
+        <button 
+          onClick={() => navigate('/seller/login')}
+          className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer"
+          title="Logout"
+        >
+          <LogOut size={22} />
         </button>
       </div>
     </header>
