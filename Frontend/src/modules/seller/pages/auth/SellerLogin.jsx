@@ -1,113 +1,187 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Package, Mail, Lock, ArrowRight } from 'lucide-react';
+import { Phone, KeyRound, ArrowRight, CheckCircle2, RotateCcw, ShieldCheck } from 'lucide-react';
 
 const SellerLogin = () => {
   const navigate = useNavigate();
+  const [step, setStep] = useState('phone'); // 'phone' | 'otp'
+  const [mobileNumber, setMobileNumber] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '']);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleSendOtp = (e) => {
     e.preventDefault();
-    // Placeholder login logic
+    if (mobileNumber.length < 10) {
+      alert('Please enter a valid 10-digit mobile number');
+      return;
+    }
+    setIsSendingOtp(true);
+    setTimeout(() => {
+      setIsSendingOtp(false);
+      setStep('otp');
+    }, 600);
+  };
+
+  const handleOtpChange = (index, value) => {
+    if (value.length > 1) value = value.slice(-1);
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+
+    // Auto-focus next input box
+    if (value && index < 3) {
+      const nextInput = document.getElementById(`otp-input-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      const prevInput = document.getElementById(`otp-input-${index - 1}`);
+      if (prevInput) prevInput.focus();
+    }
+  };
+
+  const handleVerifyOtp = (e) => {
+    e.preventDefault();
+    const enteredOtp = otp.join('');
+    if (enteredOtp.length < 4) {
+      alert('Please enter the complete 4-digit OTP sent to your phone');
+      return;
+    }
+    // Success -> Navigate to seller dashboard
     navigate('/seller/dashboard');
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center mb-2">
-          <img src="/Logo.png" alt="ShippNex Logo" className="h-16 w-auto object-contain" />
+          <img src="/Logo.png" alt="ShippNex Logo" className="h-14 w-auto object-contain" />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900 tracking-tight">
+        <h2 className="mt-4 text-center text-2xl font-semibold text-slate-900 tracking-tight">
           Seller Portal
         </h2>
-        <p className="mt-2 text-center text-sm text-slate-600 font-medium">
-          Manage your warehouse and bulk orders
+        <p className="mt-1 text-center text-sm text-slate-500 font-normal">
+          Manage your warehouse, bulk orders, and stock
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:rounded-2xl sm:px-10 border border-slate-100">
-          <form className="space-y-6" onSubmit={handleLogin}>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700">Email Address</label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail size={18} className="text-slate-400" />
+        <div className="bg-white py-8 px-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:rounded-2xl sm:px-10 border border-slate-200">
+          
+          {/* STEP 1: MOBILE NUMBER ENTRY */}
+          {step === 'phone' && (
+            <form className="space-y-6" onSubmit={handleSendOtp}>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Mobile Number</label>
+                <div className="mt-1.5 relative flex rounded-xl border border-slate-200 shadow-2xs overflow-hidden focus-within:border-[#ff7526] transition-all">
+                  <div className="bg-slate-100 px-3.5 flex items-center border-r border-slate-200 text-slate-600 text-sm font-medium select-none">
+                    +91
+                  </div>
+                  <input
+                    type="tel"
+                    required
+                    maxLength={10}
+                    value={mobileNumber}
+                    onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
+                    className="block w-full px-3.5 py-2.5 bg-white placeholder-slate-400 text-slate-900 outline-none text-sm font-normal"
+                    placeholder="Enter 10-digit mobile number"
+                  />
                 </div>
-                <input
-                  type="email"
-                  required
-                  className="appearance-none block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff5500] focus:border-[#ff5500] sm:text-sm font-medium transition-colors"
-                  placeholder="admin@warehouse.com"
-                />
+                <p className="text-xs text-slate-400 mt-1 font-normal">An OTP will be sent to this number for login verification.</p>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-slate-700">Password</label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock size={18} className="text-slate-400" />
+              <div>
+                <button
+                  type="submit"
+                  disabled={isSendingOtp || mobileNumber.length < 10}
+                  className="w-full flex justify-center items-center gap-2 py-2.5 px-4 rounded-xl shadow-sm text-sm font-medium text-white bg-[#ff7526] hover:bg-[#e65507] focus:outline-none transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none"
+                >
+                  {isSendingOtp ? 'Sending OTP...' : 'Send OTP'}
+                  <ArrowRight size={17} />
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* STEP 2: OTP VERIFICATION */}
+          {step === 'otp' && (
+            <form className="space-y-6" onSubmit={handleVerifyOtp}>
+              <div className="text-center space-y-1">
+                <div className="w-12 h-12 bg-orange-50 text-[#ff7526] rounded-full mx-auto flex items-center justify-center border border-orange-200 mb-2">
+                  <ShieldCheck size={24} />
                 </div>
-                <input
-                  type="password"
-                  required
-                  className="appearance-none block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff5500] focus:border-[#ff5500] sm:text-sm font-medium transition-colors"
-                  placeholder="••••••••"
-                />
+                <h3 className="text-base font-semibold text-slate-900">Enter Verification Code</h3>
+                <p className="text-xs text-slate-500 font-normal">
+                  OTP sent to <strong className="font-semibold text-slate-800">+91 {mobileNumber}</strong>{' '}
+                  <button 
+                    type="button"
+                    onClick={() => setStep('phone')} 
+                    className="text-[#ff7526] font-medium underline bg-transparent border-none cursor-pointer ml-1"
+                  >
+                    Edit
+                  </button>
+                </p>
               </div>
+
+              {/* 4 Digit OTP Boxes */}
+              <div className="flex justify-center gap-3 py-2">
+                {otp.map((digit, index) => (
+                  <input
+                    key={index}
+                    id={`otp-input-${index}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleOtpChange(index, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                    className="w-12 h-12 text-center text-xl font-bold text-slate-900 border border-slate-200 rounded-xl outline-none focus:border-[#ff7526] focus:ring-2 focus:ring-orange-100 bg-slate-50 transition-all"
+                  />
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-slate-500 font-normal">
+                <span>Didn't receive OTP?</span>
+                <button
+                  type="button"
+                  onClick={() => alert('OTP Resent!')}
+                  className="text-[#ff7526] font-medium hover:underline flex items-center gap-1 bg-transparent border-none cursor-pointer"
+                >
+                  <RotateCcw size={12} />
+                  Resend OTP
+                </button>
+              </div>
+
+              <div>
+                <button
+                  type="submit"
+                  className="w-full flex justify-center items-center gap-2 py-2.5 px-4 rounded-xl shadow-sm text-sm font-medium text-white bg-[#ff7526] hover:bg-[#e65507] focus:outline-none transition-colors cursor-pointer border-none"
+                >
+                  Verify OTP & Login
+                  <CheckCircle2 size={17} />
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* New to ShippNex Register Callout */}
+          <div className="mt-8 pt-6 border-t border-slate-100">
+            <div className="relative flex justify-center text-xs">
+              <span className="px-2 bg-white text-slate-400 font-normal">New to ShippNex?</span>
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  className="h-4 w-4 text-[#ff5500] focus:ring-[#ff5500] border-slate-300 rounded cursor-pointer"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-600 font-medium cursor-pointer">
-                  Remember me
-                </label>
-              </div>
-
-              <div className="text-sm">
-                <a href="#" className="font-semibold text-[#ff5500] hover:text-[#e64d00]">
-                  Forgot password?
-                </a>
-              </div>
-            </div>
-
-            <div>
-              <button
-                type="submit"
-                className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-[#ff5500] hover:bg-[#e64d00] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ff5500] transition-colors cursor-pointer"
-              >
-                Sign in to Dashboard
-                <ArrowRight size={18} />
-              </button>
-            </div>
-          </form>
-
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-200" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-slate-500 font-medium">New to ShippNex?</span>
-              </div>
-            </div>
-
-            <div className="mt-6">
+            <div className="mt-4">
               <Link
                 to="/seller/register"
-                className="w-full flex justify-center py-2.5 px-4 border-2 border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors"
+                className="w-full flex justify-center py-2.5 px-4 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors text-center no-underline"
               >
                 Apply for Seller Account
               </Link>
             </div>
           </div>
+
         </div>
       </div>
     </div>
