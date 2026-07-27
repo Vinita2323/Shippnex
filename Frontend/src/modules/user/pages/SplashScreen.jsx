@@ -11,7 +11,7 @@ const SplashScreen = ({ onGetStarted }) => {
 
   return (
     <div className="fixed top-0 left-0 w-full h-[100dvh] bg-white md:bg-[#f4f6f9] flex justify-center items-center p-0 md:p-3 font-sans box-border overflow-hidden z-[9999]">
-      <div className="bg-white w-full max-w-none md:max-w-[380px] h-full max-h-none md:max-h-[850px] rounded-none md:rounded-[28px] shadow-none md:shadow-[0_15px_35px_rgba(0,0,0,0.08)] py-4 px-4 flex flex-col items-center justify-between relative box-border overflow-y-auto hide-scrollbar">
+      <div className="bg-white w-full max-w-none md:max-w-[380px] h-full max-h-none md:max-h-[850px] rounded-none md:rounded-[28px] shadow-none md:shadow-[0_15px_35px_rgba(0,0,0,0.08)] py-4 px-4 flex flex-col items-center justify-center gap-3 relative box-border overflow-y-auto hide-scrollbar">
         {/* Header Branding */}
         <div className="flex flex-col items-center pt-0 mt-0">
           <img 
@@ -27,7 +27,7 @@ const SplashScreen = ({ onGetStarted }) => {
         </div>
 
         {/* Hero 3D Shopping Cart Illustration */}
-        <div className="w-full flex justify-center items-center py-1.5 max-h-[160px]">
+        <div className="w-full flex justify-center items-center py-1 max-h-[160px]">
           <img 
             src="/shopping_cart_illustration.png" 
             alt="Wholesale Shopping Cart" 
@@ -37,7 +37,7 @@ const SplashScreen = ({ onGetStarted }) => {
 
 
         {/* Feature Badges */}
-        <div className="flex justify-around items-start w-full my-2.5">
+        <div className="flex justify-around items-start w-full my-1">
           <div className="flex flex-col items-center flex-1 text-center relative after:content-[''] after:absolute after:right-0 after:top-[15%] after:h-[70%] after:w-px after:bg-slate-100">
             <div className="w-[34px] h-[34px] rounded-full bg-white border border-slate-200 shadow-[0_2px_6px_rgba(0,0,0,0.04)] flex items-center justify-center mb-1">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff5500" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -69,14 +69,14 @@ const SplashScreen = ({ onGetStarted }) => {
         </div>
 
         {/* Pagination Dots */}
-        <div className="flex gap-1.5 items-center mb-2">
+        <div className="flex gap-1.5 items-center my-0.5">
           <span className="bg-[#1e2b4f] w-[6px] h-[6px] rounded-full"></span>
           <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
           <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
         </div>
 
         {/* Action Buttons Section */}
-        <div className="w-full space-y-2 mt-auto">
+        <div className="w-full space-y-2 mt-1">
           {/* Primary CTA: Get Started */}
           <button 
             className="w-full bg-gradient-to-b from-[#ff6000] to-[#ff4500] text-white px-4 py-3 rounded-[24px] text-[14px] font-bold shadow-[0_5px_14px_rgba(255,69,0,0.28)] hover:shadow-[0_7px_18px_rgba(255,69,0,0.35)] active:scale-98 transition-all cursor-pointer"
