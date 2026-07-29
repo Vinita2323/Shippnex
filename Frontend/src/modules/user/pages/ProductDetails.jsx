@@ -99,7 +99,7 @@ const ProductDetails = () => {
   };
 
   return (
-    <div className="h-[100dvh] bg-white font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-y-auto overflow-x-hidden pb-24">
+    <div className="h-[100dvh] bg-white font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-y-auto overflow-x-hidden hide-scrollbar [&::-webkit-scrollbar]:hidden pb-24">
       {/* Header */}
       <header className="flex justify-between items-center py-4 px-5 absolute top-0 w-full z-10">
         <div 

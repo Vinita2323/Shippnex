@@ -6,18 +6,27 @@ import { AdminDashboard } from '../pages/AdminDashboard';
 import { 
   UserManagement, 
   SellerManagement, 
+  SellersOverview,
   DriverManagement, 
   WarehouseManagement, 
   CategoryManagement, 
+  BrandManagement,
   ProductManagement, 
+  SkuAuditManagement,
   OrderManagement, 
   DeliveryManagement, 
   PaymentManagement, 
+  AdminWalletFinance,
+  AdminWithdrawals,
+  AdminSellerTransactions,
+  AdminCashCollection,
   CouponManagement, 
   ReportManagement, 
   NotificationManagement, 
   RoleManagement, 
-  SettingManagement 
+  SettingManagement,
+  TaxManagement,
+  AdminProfile
 } from '../pages/AdminSubPages';
 
 export const AdminLayout = () => {
@@ -27,34 +36,73 @@ export const AdminLayout = () => {
     switch (activeTab) {
       case 'dashboard':
         return <AdminDashboard onNavigate={(tab) => setActiveTab(tab)} />;
+      case 'profile':
+        return <AdminProfile />;
       case 'users':
         return <UserManagement />;
       case 'sellers':
+      case 'seller':
+        return <SellersOverview />;
+      case 'manage_sellers':
+      case 'seller_list':
         return <SellerManagement />;
       case 'drivers':
+      case 'delivery_boy':
         return <DriverManagement />;
       case 'warehouses':
+      case 'manage_location':
         return <WarehouseManagement />;
       case 'categories':
-        return <CategoryManagement />;
+        return <CategoryManagement initialSubcategoriesOnly={false} />;
+      case 'subcategories':
+        return <CategoryManagement initialSubcategoriesOnly={true} />;
+      case 'brands':
+        return <BrandManagement />;
       case 'products':
         return <ProductManagement />;
+      case 'sku_audit':
+        return <SkuAuditManagement />;
+      case 'taxes':
+        return <TaxManagement />;
       case 'orders':
         return <OrderManagement />;
       case 'deliveries':
         return <DeliveryManagement />;
-      case 'payments':
+      case 'fund_transfer':
         return <PaymentManagement />;
+      case 'wallet':
+        return <AdminWalletFinance />;
+      case 'withdrawals':
+        return <AdminWithdrawals />;
+      case 'seller_transaction':
+        return <AdminSellerTransactions />;
+      case 'cash_collection':
+        return <AdminCashCollection />;
       case 'coupons':
+      case 'promo_category_products':
+      case 'promo_home_section':
+      case 'promo_bestseller':
+      case 'promo_strip':
+      case 'promo_lowest_prices':
+      case 'promo_shop_by_store':
+      case 'promo_home_banners':
         return <CouponManagement />;
       case 'reports':
         return <ReportManagement />;
       case 'notifications':
+      case 'faqs':
         return <NotificationManagement />;
       case 'roles':
         return <RoleManagement />;
       case 'settings':
+      case 'payment_list':
+      case 'sms_gateway':
+      case 'customer_app_policy':
+      case 'delivery_app_policy':
+      case 'billing_charges':
         return <SettingManagement />;
+      case 'system_user':
+        return <UserManagement />;
       default:
         return <AdminDashboard onNavigate={(tab) => setActiveTab(tab)} />;
     }

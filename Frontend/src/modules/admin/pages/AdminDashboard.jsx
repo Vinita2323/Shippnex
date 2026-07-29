@@ -18,7 +18,14 @@ import {
   UserCheck, 
   ArrowUpRight,
   TrendingUp,
-  Plus
+  Plus,
+  List,
+  Layers,
+  Package,
+  ClipboardList,
+  CheckCircle2,
+  XCircle,
+  ShoppingBag
 } from 'lucide-react';
 
 export const AdminDashboard = ({ onNavigate }) => {
@@ -48,16 +55,171 @@ export const AdminDashboard = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* Grid of Key Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatWidget 
-          title="TOTAL USERS" 
-          value={mockStats.totalUsers.value} 
-          change={mockStats.totalUsers.change} 
-          isPositive={mockStats.totalUsers.isPositive} 
-          icon={Users}
+      {/* Primary 10 Metrics Cards Grid (Compact) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
+        {/* Total User */}
+        <div 
           onClick={() => onNavigate('users')}
-        />
+          className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs hover:shadow-sm transition-all duration-200 group cursor-pointer flex flex-col justify-between"
+        >
+          <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center mb-1.5 shrink-0">
+            <Users size={15} />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-slate-500 leading-tight">Total User</p>
+            <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
+              {mockStats.totalUsers.value}
+            </h3>
+          </div>
+        </div>
+
+        {/* Total Category */}
+        <div 
+          onClick={() => onNavigate('categories')}
+          className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs hover:shadow-sm transition-all duration-200 group cursor-pointer flex flex-col justify-between"
+        >
+          <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-500 flex items-center justify-center mb-1.5 shrink-0">
+            <List size={15} />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-slate-500 leading-tight">Total Category</p>
+            <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
+              {mockStats.totalCategories.value}
+            </h3>
+          </div>
+        </div>
+
+        {/* Total Subcategory */}
+        <div 
+          onClick={() => onNavigate('categories')}
+          className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs hover:shadow-sm transition-all duration-200 group cursor-pointer flex flex-col justify-between"
+        >
+          <div className="w-7 h-7 rounded-lg bg-pink-50 text-pink-500 flex items-center justify-center mb-1.5 shrink-0">
+            <Layers size={15} />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-slate-500 leading-tight">Total Subcategory</p>
+            <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
+              {mockStats.totalSubcategories.value}
+            </h3>
+          </div>
+        </div>
+
+        {/* Total Product */}
+        <div 
+          onClick={() => onNavigate('products')}
+          className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs hover:shadow-sm transition-all duration-200 group cursor-pointer flex flex-col justify-between"
+        >
+          <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center mb-1.5 shrink-0">
+            <ShoppingBag size={15} />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-slate-500 leading-tight">Total Product</p>
+            <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
+              {mockStats.totalProducts.value}
+            </h3>
+          </div>
+        </div>
+
+        {/* Total Orders */}
+        <div 
+          onClick={() => onNavigate('orders')}
+          className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs hover:shadow-sm transition-all duration-200 group cursor-pointer flex flex-col justify-between"
+        >
+          <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-500 flex items-center justify-center mb-1.5 shrink-0">
+            <ClipboardList size={15} />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-slate-500 leading-tight">Total Orders</p>
+            <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
+              {mockStats.totalOrders.value}
+            </h3>
+          </div>
+        </div>
+
+        {/* Completed Orders */}
+        <div 
+          onClick={() => onNavigate('orders')}
+          className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs hover:shadow-sm transition-all duration-200 group cursor-pointer flex flex-col justify-between"
+        >
+          <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1.5 shrink-0">
+            <CheckCircle2 size={15} />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-slate-500 leading-tight">Completed Orders</p>
+            <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
+              {mockStats.completedOrders.value}
+            </h3>
+          </div>
+        </div>
+
+        {/* Pending Orders */}
+        <div 
+          onClick={() => onNavigate('orders')}
+          className="bg-white p-3 rounded-xl border border-emerald-400/80 shadow-2xs hover:shadow-sm transition-all duration-200 group cursor-pointer flex flex-col justify-between"
+        >
+          <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-500 flex items-center justify-center mb-1.5 shrink-0">
+            <ClipboardList size={15} />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-slate-500 leading-tight">Pending Orders</p>
+            <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
+              {mockStats.pendingOrders.value}
+            </h3>
+          </div>
+        </div>
+
+        {/* Cancelled Orders */}
+        <div 
+          onClick={() => onNavigate('orders')}
+          className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs hover:shadow-sm transition-all duration-200 group cursor-pointer flex flex-col justify-between"
+        >
+          <div className="w-7 h-7 rounded-lg bg-red-50 text-red-500 flex items-center justify-center mb-1.5 shrink-0">
+            <XCircle size={15} />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-slate-500 leading-tight">Cancelled Orders</p>
+            <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
+              {mockStats.cancelledOrders.value}
+            </h3>
+          </div>
+        </div>
+
+        {/* Product Sold Out */}
+        <div 
+          onClick={() => onNavigate('products')}
+          className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs hover:shadow-sm transition-all duration-200 group cursor-pointer flex flex-col justify-between"
+        >
+          <div className="w-7 h-7 rounded-lg bg-pink-50 text-pink-500 flex items-center justify-center mb-1.5 shrink-0">
+            <ShoppingBag size={15} />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-slate-500 leading-tight">Product Sold Out</p>
+            <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
+              {mockStats.productSoldOut.value}
+            </h3>
+          </div>
+        </div>
+
+        {/* Product low on Stock */}
+        <div 
+          onClick={() => onNavigate('products')}
+          className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs hover:shadow-sm transition-all duration-200 group cursor-pointer flex flex-col justify-between"
+        >
+          <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-500 flex items-center justify-center mb-1.5 shrink-0">
+            <ShoppingBag size={15} />
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-slate-500 leading-tight">Product low on Stock</p>
+            <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
+              {mockStats.lowStockProducts.value}
+            </h3>
+          </div>
+        </div>
+      </div>
+
+      {/* Secondary Operations Grid (Compact) */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
         <StatWidget 
           title="TOTAL SELLERS" 
           value={mockStats.totalSellers.value} 
@@ -82,15 +244,6 @@ export const AdminDashboard = ({ onNavigate }) => {
           icon={Warehouse}
           onClick={() => onNavigate('warehouses')}
         />
-
-        <StatWidget 
-          title="ORDERS TODAY" 
-          value={mockStats.ordersToday.value} 
-          change={mockStats.ordersToday.change} 
-          isPositive={mockStats.ordersToday.isPositive} 
-          icon={ShoppingCart}
-          onClick={() => onNavigate('orders')}
-        />
         <StatWidget 
           title="REVENUE TODAY" 
           value={mockStats.revenueToday.value} 
@@ -98,22 +251,6 @@ export const AdminDashboard = ({ onNavigate }) => {
           isPositive={mockStats.revenueToday.isPositive} 
           icon={DollarSign}
           onClick={() => onNavigate('payments')}
-        />
-        <StatWidget 
-          title="PENDING ORDERS" 
-          value={mockStats.pendingOrders.value} 
-          change={mockStats.pendingOrders.change} 
-          isPositive={mockStats.pendingOrders.isPositive} 
-          icon={Clock}
-          onClick={() => onNavigate('orders')}
-        />
-        <StatWidget 
-          title="RUNNING DELIVERIES" 
-          value={mockStats.runningDeliveries.value} 
-          change={mockStats.runningDeliveries.change} 
-          isPositive={mockStats.runningDeliveries.isPositive} 
-          icon={Truck}
-          onClick={() => onNavigate('deliveries')}
         />
       </div>
 
@@ -141,7 +278,7 @@ export const AdminDashboard = ({ onNavigate }) => {
               const heightPercent = Math.round((item.revenue / maxRevenue) * 85); // scaled properly up to 85%
               return (
                 <div key={idx} className="flex-1 flex flex-col items-center gap-1 group relative h-full justify-end">
-                  <span className="text-[10px] font-mono font-semibold text-slate-600 mb-0.5">${(item.revenue / 1000).toFixed(0)}k</span>
+                  <span className="text-[10px] font-mono font-semibold text-slate-600 mb-0.5">₹{(item.revenue / 1000).toFixed(0)}k</span>
                   <div 
                     className="w-full bg-[#ff5500] hover:bg-[#e04a00] rounded-t-md transition-all duration-300 min-h-[16px]"
                     style={{ height: `${heightPercent}%` }}
@@ -156,7 +293,7 @@ export const AdminDashboard = ({ onNavigate }) => {
             <span className="flex items-center gap-1.5 font-medium">
               <span className="w-2.5 h-2.5 rounded bg-[#ff5500] inline-block" /> Gross Sales
             </span>
-            <span className="font-mono text-slate-800 font-bold">Total Platform Volume: $10.6M</span>
+            <span className="font-mono text-slate-800 font-bold">Total Platform Volume: ₹10.6M</span>
           </div>
         </div>
 
@@ -204,91 +341,186 @@ export const AdminDashboard = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* Tables & Approvals Queue */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Orders */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <ShoppingCart size={18} className="text-[#ff5500]" />
-              Live Platform Orders
-            </h3>
-            <button 
-              onClick={() => onNavigate('orders')}
-              className="text-xs text-[#ff5500] hover:underline flex items-center gap-1 font-bold"
-            >
-              View All Orders <ArrowUpRight size={14} />
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-500 uppercase font-mono text-[10px]">
-                  <th className="py-2.5 px-3">Order ID</th>
-                  <th className="py-2.5 px-3">Customer</th>
-                  <th className="py-2.5 px-3">Seller Store</th>
-                  <th className="py-2.5 px-3">Total</th>
-                  <th className="py-2.5 px-3">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {mockOrders.map((ord) => (
-                  <tr key={ord.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-3 px-3 font-mono font-bold text-[#ff5500]">{ord.id}</td>
-                    <td className="py-3 px-3 font-medium text-slate-900">{ord.customer}</td>
-                    <td className="py-3 px-3 text-slate-600">{ord.seller}</td>
-                    <td className="py-3 px-3 font-mono font-bold text-slate-900">{ord.total}</td>
-                    <td className="py-3 px-3">
-                      <StatusBadge status={ord.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Action Items */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+      {/* New Orders & Top Sellers Tables (Styled according to ShippNex Theme) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* View New Orders */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between">
           <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 mb-4">
-              <AlertTriangle size={18} className="text-amber-500" />
-              Requires Attention
-            </h3>
-            <div className="space-y-3">
-              <div className="p-3.5 bg-amber-50/50 rounded-xl border border-amber-200 flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">Seller Approvals</h4>
-                  <p className="text-[10px] text-slate-500 mt-0.5">9 stores waiting for KYC audit</p>
+            {/* Header Banner matching ShippNex Dark Teal Theme */}
+            <div className="bg-[#002625] text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
+                <ShoppingCart size={18} className="text-[#ff5500]" />
+                View New Orders
+              </h3>
+              <span className="text-[10px] uppercase font-bold tracking-wider bg-white/10 text-white/90 px-2.5 py-1 rounded-full">
+                Live Feed
+              </span>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Show Entries Control */}
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                  <span>Show</span>
+                  <select className="border border-slate-200 rounded-lg px-2.5 py-1 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:border-[#ff5500]">
+                    <option>10</option>
+                    <option>25</option>
+                    <option>50</option>
+                  </select>
+                  <span>entries</span>
                 </div>
-                <button 
-                  onClick={() => onNavigate('sellers')}
-                  className="px-2.5 py-1 bg-amber-500 text-white text-[11px] font-bold rounded-lg border-none cursor-pointer"
-                >
-                  Review
-                </button>
               </div>
 
-              <div className="p-3.5 bg-sky-50/50 rounded-xl border border-sky-200 flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">Driver Licenses</h4>
-                  <p className="text-[10px] text-slate-500 mt-0.5">15 drivers pending review</p>
-                </div>
-                <button 
-                  onClick={() => onNavigate('drivers')}
-                  className="px-2.5 py-1 bg-sky-600 text-white text-[11px] font-bold rounded-lg border-none cursor-pointer"
-                >
-                  Inspect
-                </button>
+              {/* Table */}
+              <div className="overflow-x-auto border border-slate-200/80 rounded-xl">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                      <th className="py-3 px-3.5">ID ↕</th>
+                      <th className="py-3 px-3.5">USER DETAILS</th>
+                      <th className="py-3 px-3.5">O. DATE ↕</th>
+                      <th className="py-3 px-3.5">STATUS ↕</th>
+                      <th className="py-3 px-3.5 text-right">AMOUNT</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    <tr className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">ORD1784732281209325</td>
+                      <td className="py-3 px-3.5 font-semibold text-slate-900">Sujay Gupta</td>
+                      <td className="py-3 px-3.5 text-slate-500 font-mono">22/7/2026</td>
+                      <td className="py-3 px-3.5"><StatusBadge status="Pending" /></td>
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹1,480.00</td>
+                    </tr>
+                    <tr className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">ORD1784085563185506</td>
+                      <td className="py-3 px-3.5 font-semibold text-slate-900">KUMKUM SRIVASTAVA</td>
+                      <td className="py-3 px-3.5 text-slate-500 font-mono">15/7/2026</td>
+                      <td className="py-3 px-3.5"><StatusBadge status="Cancelled" /></td>
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹1,200.00</td>
+                    </tr>
+                    <tr className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">ORD1784085540698717</td>
+                      <td className="py-3 px-3.5 font-semibold text-slate-900">KUMKUM SRIVASTAVA</td>
+                      <td className="py-3 px-3.5 text-slate-500 font-mono">15/7/2026</td>
+                      <td className="py-3 px-3.5"><StatusBadge status="Cancelled" /></td>
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹1,150.00</td>
+                    </tr>
+                    <tr className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">ORD1783784745338285</td>
+                      <td className="py-3 px-3.5 font-semibold text-slate-900">Deepak kumar</td>
+                      <td className="py-3 px-3.5 text-slate-500 font-mono">11/7/2026</td>
+                      <td className="py-3 px-3.5"><StatusBadge status="Completed" /></td>
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹2,450.00</td>
+                    </tr>
+                    <tr className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">ORD1783784503734275</td>
+                      <td className="py-3 px-3.5 font-semibold text-slate-900">Deepak kumar</td>
+                      <td className="py-3 px-3.5 text-slate-500 font-mono">11/7/2026</td>
+                      <td className="py-3 px-3.5"><StatusBadge status="Cancelled" /></td>
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹2,100.00</td>
+                    </tr>
+                    <tr className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">ORD1783781163578991</td>
+                      <td className="py-3 px-3.5 font-semibold text-slate-900">Ansh kumar</td>
+                      <td className="py-3 px-3.5 text-slate-500 font-mono">11/7/2026</td>
+                      <td className="py-3 px-3.5"><StatusBadge status="Cancelled" /></td>
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹2,800.00</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 text-center">
-            <p className="text-[11px] text-slate-500">
-              System Audit Status: <span className="text-emerald-600 font-bold">Operational</span>
-            </p>
+          {/* Footer Pagination Controls */}
+          <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50">
+            <span>Showing 1 to 6 of 14 entries</span>
+            <div className="flex items-center gap-1">
+              <button className="px-3 py-1 border border-slate-200 rounded-lg text-slate-400 cursor-not-allowed bg-white">&lt;</button>
+              <button className="px-3 py-1 border border-[#ff5500] bg-[#ff5500] text-white rounded-lg font-bold shadow-xs">1</button>
+              <button className="px-3 py-1 border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 bg-white font-medium">&gt;</button>
+            </div>
+          </div>
+        </div>
+
+        {/* View Top Seller */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between">
+          <div>
+            {/* Header Banner matching ShippNex Dark Teal Theme */}
+            <div className="bg-[#002625] text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
+                <Store size={18} className="text-[#ff5500]" />
+                View Top Seller
+              </h3>
+              <span className="text-[10px] uppercase font-bold tracking-wider bg-white/10 text-white/90 px-2.5 py-1 rounded-full">
+                Leaderboard
+              </span>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Show Entries Control */}
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                  <span>Show</span>
+                  <select className="border border-slate-200 rounded-lg px-2.5 py-1 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:border-[#ff5500]">
+                    <option>10</option>
+                    <option>25</option>
+                    <option>50</option>
+                  </select>
+                  <span>entries</span>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto border border-slate-200/80 rounded-xl">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                      <th className="py-3 px-3.5">ID ↕</th>
+                      <th className="py-3 px-3.5">SELLER NAME</th>
+                      <th className="py-3 px-3.5">STORE NAME</th>
+                      <th className="py-3 px-3.5 text-right">TOTAL REVENUE ↕</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    <tr className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3.5 font-mono text-slate-500 truncate max-w-[120px]">695cbdc15cd5cbace1782a0e</td>
+                      <td className="py-3 px-3.5 font-semibold text-slate-900">Harsh shop</td>
+                      <td className="py-3 px-3.5 text-[#ff5500] font-medium">Harshvardhan</td>
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹ 59,666.00</td>
+                    </tr>
+                    <tr className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3.5 font-mono text-slate-500 truncate max-w-[120px]">695b7d5ea0b51822cd33332b</td>
+                      <td className="py-3 px-3.5 font-semibold text-slate-900">appzeto</td>
+                      <td className="py-3 px-3.5 text-[#ff5500] font-medium">Appzeto E-commerce</td>
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹ 900.00</td>
+                    </tr>
+                    <tr className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3.5 font-mono text-slate-500 truncate max-w-[120px]">69d4efce71d41c6d982a2e0d</td>
+                      <td className="py-3 px-3.5 font-semibold text-slate-900">Deepak kumar</td>
+                      <td className="py-3 px-3.5 text-[#ff5500] font-medium">The Ranchi Store</td>
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹ 440.00</td>
+                    </tr>
+                    <tr className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3.5 font-mono text-slate-500 truncate max-w-[120px]">6a2125c5255c12dbcf2b3c97</td>
+                      <td className="py-3 px-3.5 font-semibold text-slate-900">durga turi</td>
+                      <td className="py-3 px-3.5 text-[#ff5500] font-medium">DURGA CHAAT STORE</td>
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹ 180.00</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer Pagination Controls */}
+          <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50">
+            <span>Showing 1 to 4 of 4 entries</span>
+            <div className="flex items-center gap-1">
+              <button className="px-3 py-1 border border-slate-200 rounded-lg text-slate-400 cursor-not-allowed bg-white">&lt;</button>
+              <button className="px-3 py-1 border border-[#ff5500] bg-[#ff5500] text-white rounded-lg font-bold shadow-xs">1</button>
+              <button className="px-3 py-1 border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 bg-white font-medium">&gt;</button>
+            </div>
           </div>
         </div>
       </div>

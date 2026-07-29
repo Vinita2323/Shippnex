@@ -1,65 +1,207 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAdmin } from '../context/AdminContext';
 import { 
   LayoutDashboard, 
-  Users, 
-  Store, 
-  Truck, 
-  Warehouse, 
   FolderTree, 
+  Tag, 
   Package, 
-  Boxes, 
-  ShoppingCart, 
-  Navigation, 
-  CreditCard, 
+  UserCheck, 
+  Store, 
+  MapPin, 
   Ticket, 
+  Truck, 
+  CreditCard, 
   BarChart3, 
+  Users, 
   Bell, 
   ShieldCheck, 
   Settings, 
   LogOut, 
   ChevronDown, 
-  ChevronRight
+  ChevronRight,
+  Search,
+  Boxes,
+  Wallet,
+  TrendingUp,
+  Banknote,
+  HelpCircle,
+  ShoppingCart,
+  LayoutGrid,
+  Home,
+  Star,
+  Layout,
+  Layers,
+  Image,
+  MessageSquare,
+  FileText,
+  FileCheck,
+  DollarSign
 } from 'lucide-react';
 
 export const AdminSidebar = () => {
+  const navigate = useNavigate();
   const { sidebarOpen, activeTab, setActiveTab } = useAdmin();
-  const [expandedMenus, setExpandedMenus] = useState({ catalog: true });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const confirmLogout = () => {
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUser');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    sessionStorage.clear();
+    setShowLogoutModal(false);
+    navigate('/admin/login');
+  };
+  const [expandedMenus, setExpandedMenus] = useState({ 
+    categories: false, 
+    products: false, 
+    manage_sellers: false, 
+    manage_location: false, 
+    delivery_boy: false 
+  });
+  const searchInputRef = useRef(null);
+
+  // Keyboard shortcut Ctrl + F to focus search input
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const toggleSubmenu = (menuKey) => {
     setExpandedMenus(prev => ({ ...prev, [menuKey]: !prev[menuKey] }));
   };
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'users', label: 'Users', icon: Users },
-    { id: 'sellers', label: 'Sellers', icon: Store, badge: '9' },
-    { id: 'drivers', label: 'Drivers', icon: Truck, badge: '15' },
-    { id: 'warehouses', label: 'Warehouses', icon: Warehouse },
+  const sections = [
     {
-      id: 'catalog',
-      label: 'Catalog & Products',
-      icon: Package,
-      submenu: [
-        { id: 'categories', label: 'Categories', icon: FolderTree },
-        { id: 'products', label: 'Products & Stock', icon: Boxes },
+      title: 'PRODUCT SECTION',
+      items: [
+        {
+          id: 'categories',
+          label: 'Category',
+          icon: FolderTree,
+          submenu: [
+            { id: 'categories', label: 'All Categories' },
+            { id: 'subcategories', label: 'Sub Categories' }
+          ]
+        },
+        { id: 'brands', label: 'Brand', icon: Tag },
+        {
+          id: 'products',
+          label: 'Product',
+          icon: Package,
+          submenu: [
+            { id: 'products', label: 'All Products & Stock' },
+            { id: 'taxes', label: 'Taxes' },
+            { id: 'sku_audit', label: 'SKU Audit' }
+          ]
+        },
+        {
+          id: 'manage_sellers',
+          label: 'Manage Seller',
+          icon: UserCheck,
+          submenu: [
+            { id: 'manage_sellers', label: 'Manage Seller List' }
+          ]
+        },
+        { id: 'sellers', label: 'Sellers', icon: Store, badge: '9' },
       ]
     },
-    { id: 'orders', label: 'Orders', icon: ShoppingCart },
-    { id: 'deliveries', label: 'Deliveries', icon: Navigation },
-    { id: 'payments', label: 'Payments', icon: CreditCard },
-    { id: 'coupons', label: 'Coupons', icon: Ticket },
-    { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'roles', label: 'Roles & Access', icon: ShieldCheck },
-    { id: 'settings', label: 'System Settings', icon: Settings },
+    {
+      title: 'DELIVERY SECTION',
+      items: [
+        {
+          id: 'manage_location',
+          label: 'Manage Location',
+          icon: MapPin,
+          submenu: [
+            { id: 'warehouses', label: 'Warehouses & Hubs' }
+          ]
+        },
+        {
+          id: 'delivery_boy',
+          label: 'Delivery Boy',
+          icon: Truck,
+          badge: '15',
+          submenu: [
+            { id: 'drivers', label: 'Manage Delivery Boy' },
+            { id: 'fund_transfer', label: 'Fund Transfer' }
+          ]
+        },
+      ]
+    },
+    {
+      title: 'FINANCE SECTION',
+      items: [
+        { id: 'wallet', label: 'Wallet', icon: Wallet },
+        { id: 'withdrawals', label: 'Withdrawals', icon: TrendingUp },
+        { id: 'seller_transaction', label: 'Seller Transaction', icon: Users },
+        { id: 'cash_collection', label: 'Cash Collection', icon: Banknote },
+      ]
+    },
+    {
+      title: 'MISCELLANEOUS',
+      items: [
+        { id: 'users', label: 'Users', icon: Users },
+        { id: 'notifications', label: 'Notification', icon: Bell },
+        { id: 'faqs', label: 'FAQ', icon: HelpCircle },
+      ]
+    },
+    {
+      title: 'ORDER SECTION',
+      items: [
+        { id: 'orders', label: 'Order List', icon: ShoppingCart },
+      ]
+    },
+    {
+      title: 'PROMOTION',
+      items: [
+        { id: 'promo_category_products', label: 'Category Products', icon: LayoutGrid },
+        { id: 'promo_home_section', label: 'Home Section', icon: Home },
+        { id: 'promo_bestseller', label: 'Bestseller Cards', icon: Star },
+        { id: 'promo_strip', label: 'Promo Strip', icon: Layout },
+        { id: 'promo_lowest_prices', label: 'Lowest Prices', icon: Layers },
+        { id: 'promo_shop_by_store', label: 'Shop by Store', icon: Store },
+        { id: 'promo_home_banners', label: 'Home Banners', icon: Image },
+      ]
+    },
+    {
+      title: 'SETTING',
+      items: [
+        { id: 'payment_list', label: 'Payment List', icon: FileText },
+        { id: 'sms_gateway', label: 'SMS Gateway', icon: MessageSquare },
+        { id: 'system_user', label: 'System User', icon: Users },
+        { id: 'customer_app_policy', label: 'Customer App Policy', icon: FileCheck },
+        { id: 'delivery_app_policy', label: 'Delivery App Policy', icon: FileCheck },
+        { id: 'billing_charges', label: 'Billing & Charges', icon: DollarSign },
+      ]
+    }
   ];
+
+  // Filter sections by searchQuery
+  const filteredSections = sections.map(section => ({
+    ...section,
+    items: section.items.filter(item => {
+      const matchLabel = item.label.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchSub = item.submenu && item.submenu.some(sub => sub.label.toLowerCase().includes(searchQuery.toLowerCase()));
+      return matchLabel || matchSub;
+    })
+  })).filter(section => section.items.length > 0);
 
   return (
     <aside 
-      className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-[#002625] text-slate-200 border-r border-[#0b3d3b] transition-all duration-300 flex flex-col h-screen sticky top-0 z-40 shrink-0 select-none shadow-2xl font-sans`}
+      className={`${sidebarOpen ? 'w-72' : 'w-20'} bg-[#002625] text-slate-200 border-r border-[#0b3d3b] transition-all duration-300 flex flex-col h-screen sticky top-0 z-40 shrink-0 select-none shadow-2xl font-sans`}
     >
-      {/* Brand Header with white background and /Logo.png matching Seller Sidebar */}
+      {/* Brand Header with white background */}
       <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-center px-3 shrink-0">
         <button 
           onClick={() => setActiveTab('dashboard')}
@@ -73,87 +215,142 @@ export const AdminSidebar = () => {
         </button>
       </div>
 
-      {/* Navigation Links with enhanced text size */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1.5 scrollbar-thin scrollbar-thumb-[#0b3d3b]">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isItemActive = activeTab === item.id || (item.submenu && item.submenu.some(sub => sub.id === activeTab));
+      {/* Main Sidebar Scroll Area */}
+      <div className="flex-1 overflow-y-auto py-3 px-3 space-y-3 scrollbar-thin scrollbar-thumb-[#0b3d3b]">
+        {/* Search Menu Input */}
+        {sidebarOpen ? (
+          <div className="relative mb-2">
+            <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-300/80 pointer-events-none" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search Menu Ctrl + F"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-[#001a19] border border-[#0d4a48] focus:border-[#ff5500] rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-teal-300/60 outline-none transition-all font-medium"
+            />
+          </div>
+        ) : (
+          <button
+            onClick={() => searchInputRef.current?.focus()}
+            className="w-full py-2.5 flex items-center justify-center bg-[#001a19] border border-[#0d4a48] rounded-xl text-teal-300 cursor-pointer mb-2"
+            title="Search Menu (Ctrl + F)"
+          >
+            <Search size={18} />
+          </button>
+        )}
 
-          if (item.submenu) {
-            const isExpanded = expandedMenus[item.id];
-            return (
-              <div key={item.id} className="space-y-1">
-                <button
-                  onClick={() => sidebarOpen ? toggleSubmenu(item.id) : setActiveTab('products')}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-semibold text-[15px] border-none cursor-pointer ${
-                    isItemActive 
-                      ? 'bg-[#0b3d3b] text-white shadow-sm border-l-4 border-[#ff5500]' 
-                      : 'text-slate-200 hover:bg-[#0b3d3b]/60'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon size={20} className={isItemActive ? 'text-[#ff5500]' : 'text-slate-300'} />
-                    {sidebarOpen && <span>{item.label}</span>}
-                  </div>
-                  {sidebarOpen && (
-                    isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />
-                  )}
-                </button>
+        {/* Top Dashboard Button */}
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all font-semibold text-sm border-none cursor-pointer ${
+            activeTab === 'dashboard' 
+              ? 'bg-[#004d49] text-white shadow-md border-l-4 border-[#ff5500]' 
+              : 'bg-[#003836] text-slate-200 hover:bg-[#004d49]'
+          }`}
+          title={!sidebarOpen ? 'Dashboard' : undefined}
+        >
+          <div className="flex items-center gap-3">
+            <LayoutDashboard size={19} className={activeTab === 'dashboard' ? 'text-[#ff5500]' : 'text-slate-300'} />
+            {sidebarOpen && <span>Dashboard</span>}
+          </div>
+        </button>
 
-                {/* Submenu Children */}
-                {sidebarOpen && isExpanded && (
-                  <div className="pl-8 space-y-1 border-l-2 border-[#0b3d3b] ml-4 my-1">
-                    {item.submenu.map((sub) => {
-                      const SubIcon = sub.icon;
-                      const isSubActive = activeTab === sub.id;
-                      return (
-                        <button
-                          key={sub.id}
-                          onClick={() => setActiveTab(sub.id)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all border-none cursor-pointer ${
-                            isSubActive 
-                              ? 'bg-[#ff5500] text-white font-bold shadow-md' 
-                              : 'text-slate-300 hover:text-white hover:bg-[#0b3d3b]/40'
-                          }`}
-                        >
-                          <SubIcon size={16} />
-                          <span>{sub.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          }
+        {/* Grouped Sections */}
+        {filteredSections.map((sec, secIdx) => (
+          <div key={secIdx} className="space-y-1 pt-2">
+            {sidebarOpen && (
+              <h4 className="text-[11.5px] font-bold text-[#ff9966] tracking-wider uppercase px-2 mb-1.5 font-mono">
+                {sec.title}
+              </h4>
+            )}
 
-          return (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-semibold text-[15px] border-none cursor-pointer ${
-                isItemActive 
-                  ? 'bg-[#0b3d3b] text-white font-bold border-l-4 border-[#ff5500] shadow-sm' 
-                  : 'text-slate-200 hover:bg-[#0b3d3b]/60'
-              }`}
-              title={!sidebarOpen ? item.label : undefined}
-            >
-              <div className="flex items-center gap-3">
-                <Icon size={20} className={isItemActive ? 'text-[#ff5500]' : 'text-slate-300'} />
-                {sidebarOpen && <span>{item.label}</span>}
-              </div>
-              {sidebarOpen && item.badge && (
-                <span className="bg-[#ff5500]/20 text-[#ff5500] text-[11px] font-bold px-2 py-0.5 rounded-full border border-[#ff5500]/30">
-                  {item.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
+            <div className="space-y-1">
+              {sec.items.map((item) => {
+                const Icon = item.icon;
+                const isItemActive = activeTab === item.id || (item.submenu && item.submenu.some(sub => sub.id === activeTab));
+
+                if (item.submenu) {
+                  const isExpanded = expandedMenus[item.id] || searchQuery.length > 0;
+                  return (
+                    <div key={item.id} className="space-y-1">
+                      <button
+                        onClick={() => {
+                          if (sidebarOpen) {
+                            toggleSubmenu(item.id);
+                          }
+                          setActiveTab(item.submenu[0].id);
+                        }}
+                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all font-medium text-sm border-none cursor-pointer ${
+                          isItemActive 
+                            ? 'bg-[#0b3d3b] text-white font-semibold shadow-sm border-l-4 border-[#ff5500]' 
+                            : 'text-slate-200 hover:bg-[#0b3d3b]/60'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon size={19} className={isItemActive ? 'text-[#ff5500]' : 'text-slate-300'} />
+                          {sidebarOpen && <span>{item.label}</span>}
+                        </div>
+                        {sidebarOpen && (
+                          isExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />
+                        )}
+                      </button>
+
+                      {/* Submenu Children */}
+                      {sidebarOpen && isExpanded && (
+                        <div className="pl-6 space-y-1 border-l-2 border-[#ff5500]/50 ml-4 my-1">
+                          {item.submenu.map((sub, sIdx) => {
+                            const isSubActive = activeTab === sub.id && (item.id !== 'products' || sIdx === 0 || sub.id !== 'products');
+                            return (
+                              <button
+                                key={sIdx}
+                                onClick={() => setActiveTab(sub.id)}
+                                className={`w-full flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs transition-all border-none cursor-pointer ${
+                                  isSubActive 
+                                    ? 'bg-[#004d49] text-white font-bold shadow-xs border-l-2 border-[#ff5500]' 
+                                    : 'text-slate-300 font-medium hover:text-white hover:bg-[#0b3d3b]/40'
+                                }`}
+                              >
+                                <span>{sub.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all font-medium text-sm border-none cursor-pointer ${
+                      isItemActive 
+                        ? 'bg-[#0b3d3b] text-white font-semibold border-l-4 border-[#ff5500] shadow-sm' 
+                        : 'text-slate-200 hover:bg-[#0b3d3b]/60'
+                    }`}
+                    title={!sidebarOpen ? item.label : undefined}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon size={19} className={isItemActive ? 'text-[#ff5500]' : 'text-slate-300'} />
+                      {sidebarOpen && <span>{item.label}</span>}
+                    </div>
+                    {sidebarOpen && item.badge && (
+                      <span className="bg-[#ff5500]/20 text-[#ff5500] text-xs font-semibold px-2.5 py-0.5 rounded-full border border-[#ff5500]/30">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
 
       {/* Admin User Footer Profile */}
-      <div className="p-3 border-t border-[#0b3d3b] bg-[#00201f]">
+      <div className="p-3 border-t border-[#0b3d3b] bg-[#00201f] shrink-0">
         <div className={`flex items-center ${sidebarOpen ? 'justify-between' : 'justify-center'} gap-2`}>
           {sidebarOpen ? (
             <div className="flex items-center gap-3 overflow-hidden">
@@ -163,8 +360,8 @@ export const AdminSidebar = () => {
                 className="w-9 h-9 rounded-xl border border-[#97fc43] object-cover shrink-0" 
               />
               <div className="truncate">
-                <p className="text-xs font-bold text-white truncate">Elena Vance</p>
-                <p className="text-[10px] text-[#97fc43] truncate font-mono font-semibold">Root Administrator</p>
+                <p className="text-sm font-semibold text-white truncate">Elena Vance</p>
+                <p className="text-xs text-[#ff9966] truncate font-mono font-medium">Root Administrator</p>
               </div>
             </div>
           ) : (
@@ -177,7 +374,7 @@ export const AdminSidebar = () => {
 
           {sidebarOpen && (
             <button 
-              onClick={() => alert('Admin session ended.')}
+              onClick={() => setShowLogoutModal(true)}
               className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors border-none bg-transparent cursor-pointer"
               title="Logout"
             >
@@ -186,6 +383,36 @@ export const AdminSidebar = () => {
           )}
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#001a19] border border-[#0d4a48] rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center space-y-4 animate-fadeIn">
+            <div className="w-12 h-12 bg-rose-500/10 text-rose-500 rounded-2xl flex items-center justify-center mx-auto border border-rose-500/20">
+              <LogOut size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white mb-1">Confirm Logout</h3>
+              <p className="text-xs text-slate-300">Are you sure you want to log out of the Admin Panel?</p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border-none cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-lg transition-colors"
+              >
+                Yes, Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 };
+
