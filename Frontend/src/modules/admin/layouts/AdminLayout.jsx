@@ -22,12 +22,22 @@ import {
   AdminCashCollection,
   CouponManagement, 
   ReportManagement, 
-  NotificationManagement, 
+  FaqManagement, 
   RoleManagement, 
   SettingManagement,
   TaxManagement,
   AdminProfile
 } from '../pages/AdminSubPages';
+import {
+  PromotionDashboard,
+  PromoHomeSection,
+  PromoCategoryProducts,
+  PromoBestseller,
+  PromoStrip,
+  PromoLowestPrices,
+  PromoShopByStore,
+  PromoHomeBanners
+} from '../pages/PromotionPages';
 
 export const AdminLayout = () => {
   const { activeTab, setActiveTab } = useAdmin();
@@ -65,6 +75,15 @@ export const AdminLayout = () => {
       case 'taxes':
         return <TaxManagement />;
       case 'orders':
+      case 'orders_all':
+      case 'orders_pending':
+      case 'orders_received':
+      case 'orders_processed':
+      case 'orders_shipped':
+      case 'orders_out_for_delivery':
+      case 'orders_delivered':
+      case 'orders_cancelled':
+      case 'orders_return':
         return <OrderManagement />;
       case 'deliveries':
         return <DeliveryManagement />;
@@ -79,19 +98,27 @@ export const AdminLayout = () => {
       case 'cash_collection':
         return <AdminCashCollection />;
       case 'coupons':
-      case 'promo_category_products':
-      case 'promo_home_section':
-      case 'promo_bestseller':
-      case 'promo_strip':
-      case 'promo_lowest_prices':
-      case 'promo_shop_by_store':
-      case 'promo_home_banners':
         return <CouponManagement />;
+      case 'promo_dashboard':
+        return <PromotionDashboard />;
+      case 'promo_home_section':
+        return <PromoHomeSection />;
+      case 'promo_category_products':
+        return <PromoCategoryProducts />;
+      case 'promo_bestseller':
+        return <PromoBestseller />;
+      case 'promo_strip':
+        return <PromoStrip />;
+      case 'promo_lowest_prices':
+        return <PromoLowestPrices />;
+      case 'promo_shop_by_store':
+        return <PromoShopByStore />;
+      case 'promo_home_banners':
+        return <PromoHomeBanners />;
       case 'reports':
         return <ReportManagement />;
-      case 'notifications':
       case 'faqs':
-        return <NotificationManagement />;
+        return <FaqManagement />;
       case 'roles':
         return <RoleManagement />;
       case 'settings':

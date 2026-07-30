@@ -175,3 +175,11 @@ export const mockRoles = [
   { id: 'ROLE-3', name: 'Finance & Compliance Officer', members: 5, permissions: 'Payments, Settlements, KYC, Refunds', badgeColor: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
   { id: 'ROLE-4', name: 'Customer Operations Manager', members: 18, permissions: 'Users, Drivers, Support, Reports', badgeColor: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
 ];
+
+export const mockFaqs = [
+  { id: 1, category: 'General (Visible to all)', question: 'How do I place an order on ShippNex?', answer: 'To place an order, browse products, add them to your cart, select your delivery address, and complete payment.' },
+  { id: 2, category: 'Customer', question: 'How can I track my shipment live?', answer: 'Go to your Orders section or enter your tracking ID on the Track Order page for real-time GPS tracking updates.' },
+  { id: 3, category: 'Seller', question: 'What is the settlement payout cycle for sellers?', answer: 'Payouts are automatically generated every Monday directly into your registered bank account.' },
+  { id: 4, category: 'Delivery Driver', question: 'How do I accept delivery requests?', answer: 'Toggle your status to Available in the Driver app to receive nearby instant delivery alerts.' },
+  { id: 5, category: 'General (Visible to all)', question: 'What payment options are supported?', answer: 'ShippNex supports credit/debit cards, UPI, net banking, wallet balances, and Cash on Delivery.' }
+];

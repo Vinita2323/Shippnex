@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { useAdmin } from '../context/AdminContext';
 import { StatusBadge, Drawer } from '../components/AdminUIComponents';
-import { mockUsers, mockSellers, mockDrivers, mockWarehouses, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles } from '../mock/adminMockData';
+import { mockUsers, mockSellers, mockDrivers, mockWarehouses, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
 import { 
   Search, 
   Download, 
@@ -30,11 +31,28 @@ export const UserManagement = () => {
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [entriesPerPage, setEntriesPerPage] = useState(10);
 
   const filteredUsers = users.filter(u => 
     u.name.toLowerCase().includes(search.toLowerCase()) || 
     u.email.toLowerCase().includes(search.toLowerCase())
   );
+
+  const totalPages = Math.ceil(filteredUsers.length / entriesPerPage) || 1;
+  const indexOfLastItem = currentPage * entriesPerPage;
+  const indexOfFirstItem = indexOfLastItem - entriesPerPage;
+  const currentUsers = filteredUsers.slice(indexOfFirstItem, indexOfLastItem);
+
+  const handleSearchChange = (e) => {
+    setSearch(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleEntriesChange = (e) => {
+    setEntriesPerPage(Number(e.target.value));
+    setCurrentPage(1);
+  };
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -52,16 +70,31 @@ export const UserManagement = () => {
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="relative flex-1 max-w-sm">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
               placeholder="Search user by name or email..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={handleSearchChange}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#ff5500]"
             />
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span>Show</span>
+            <select
+              value={entriesPerPage}
+              onChange={handleEntriesChange}
+              className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#ff5500]"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+            <span>entries</span>
           </div>
         </div>
 
@@ -79,38 +112,73 @@ export const UserManagement = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {filteredUsers.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-3">
-                      <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover border border-slate-200" />
-                      <div>
-                        <p className="font-bold text-slate-900 leading-none">{u.name}</p>
-                        <span className="text-[10px] text-slate-400 font-mono">{u.id}</span>
+              {currentUsers.length > 0 ? (
+                currentUsers.map((u) => (
+                  <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover border border-slate-200" />
+                        <div>
+                          <p className="font-bold text-slate-900 leading-none">{u.name}</p>
+                          <span className="text-[10px] text-slate-400 font-mono">{u.id}</span>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <p className="text-slate-900">{u.email}</p>
-                    <p className="text-[10px] text-slate-400">{u.phone}</p>
-                  </td>
-                  <td className="py-3 px-4 font-mono font-bold text-slate-900">{u.ordersCount}</td>
-                  <td className="py-3 px-4 font-mono font-bold text-[#ff5500]">{u.walletBalance}</td>
-                  <td className="py-3 px-4 text-slate-500 font-mono">{u.joinedDate}</td>
-                  <td className="py-3 px-4"><StatusBadge status={u.status} /></td>
-                  <td className="py-3 px-4 text-right space-x-2">
-                    <button 
-                      onClick={() => { setSelectedUser(u); setIsDrawerOpen(true); }}
-                      className="p-1.5 bg-slate-100 hover:bg-[#ff5500] hover:text-white text-slate-700 rounded-lg transition-colors border-none cursor-pointer"
-                      title="View Details"
-                    >
-                      <Eye size={14} />
-                    </button>
+                    </td>
+                    <td className="py-3 px-4">
+                      <p className="text-slate-900">{u.email}</p>
+                      <p className="text-[10px] text-slate-400">{u.phone}</p>
+                    </td>
+                    <td className="py-3 px-4 font-mono font-bold text-slate-900">{u.ordersCount}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-[#ff5500]">{u.walletBalance}</td>
+                    <td className="py-3 px-4 text-slate-500 font-mono">{u.joinedDate}</td>
+                    <td className="py-3 px-4"><StatusBadge status={u.status} /></td>
+                    <td className="py-3 px-4 text-right space-x-2">
+                      <button 
+                        onClick={() => { setSelectedUser(u); setIsDrawerOpen(true); }}
+                        className="p-1.5 bg-slate-100 hover:bg-[#ff5500] hover:text-white text-slate-700 rounded-lg transition-colors border-none cursor-pointer"
+                        title="View Details"
+                      >
+                        <Eye size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="7" className="py-8 text-center text-slate-400 italic text-xs">
+                    No users found matching search criteria
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
+        </div>
+
+        {/* Table Footer & Pagination */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs text-slate-500">
+          <span>
+            Showing {filteredUsers.length > 0 ? indexOfFirstItem + 1 : 0} to {Math.min(indexOfLastItem, filteredUsers.length)} of {filteredUsers.length} entries
+          </span>
+          
+          <div className="inline-flex rounded-xl border border-slate-200 p-0.5 bg-slate-50 items-center">
+            <button 
+              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
+            >
+              ‹
+            </button>
+            <span className="px-3 py-1 bg-[#ff5500] text-white text-xs font-bold rounded-lg shadow-2xs">
+              {currentPage} of {totalPages}
+            </span>
+            <button 
+              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
+            >
+              ›
+            </button>
+          </div>
         </div>
       </div>
 
@@ -3039,38 +3107,171 @@ export const ProductManagement = () => {
    7. ORDERS PAGE
    ========================================================================= */
 export const OrderManagement = () => {
+  const { activeTab } = useAdmin();
+  const [search, setSearch] = useState('');
+  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Map activeTab sub-item to status filter
+  const getTabTitleAndFilter = () => {
+    switch (activeTab) {
+      case 'orders_pending':
+        return { title: 'Pending Orders', filter: 'Pending' };
+      case 'orders_received':
+        return { title: 'Received Orders', filter: 'Processing' };
+      case 'orders_processed':
+        return { title: 'Processed Orders', filter: 'Processed' };
+      case 'orders_shipped':
+        return { title: 'Shipped Orders', filter: 'Dispatched' };
+      case 'orders_out_for_delivery':
+        return { title: 'Out for Delivery Orders', filter: 'In Transit' };
+      case 'orders_delivered':
+        return { title: 'Delivered Orders', filter: 'Delivered' };
+      case 'orders_cancelled':
+        return { title: 'Cancelled Orders', filter: 'Cancelled' };
+      case 'orders_return':
+        return { title: 'Returned Orders', filter: 'Return' };
+      case 'orders_all':
+      default:
+        return { title: 'All Orders List', filter: 'All' };
+    }
+  };
+
+  const { title: pageTitle, filter: statusFilter } = getTabTitleAndFilter();
+
+  const filteredOrders = mockOrders.filter(o => {
+    const matchesStatus = statusFilter === 'All' || o.status.toLowerCase() === statusFilter.toLowerCase();
+    const matchesSearch = 
+      o.id.toLowerCase().includes(search.toLowerCase()) ||
+      o.customer.toLowerCase().includes(search.toLowerCase()) ||
+      o.seller.toLowerCase().includes(search.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
+
+  const totalPages = Math.ceil(filteredOrders.length / entriesPerPage) || 1;
+  const indexOfLastItem = currentPage * entriesPerPage;
+  const indexOfFirstItem = indexOfLastItem - entriesPerPage;
+  const currentOrders = filteredOrders.slice(indexOfFirstItem, indexOfLastItem);
+
+  const handleExport = () => {
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + ["Order ID,Customer,Seller,Warehouse,Total,Status,Date"].concat(
+        filteredOrders.map(o => `"${o.id}","${o.customer}","${o.seller}","${o.warehouse}","${o.total}","${o.status}","${o.date}"`)
+      ).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `orders_export_${statusFilter.toLowerCase()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="space-y-6 animate-fadeIn">
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <h2 className="text-xl font-bold text-slate-900">Order Management</h2>
-        <p className="text-xs text-slate-500">Monitor order lifecycle, seller fulfillment, and dispatch states</p>
+    <div className="space-y-6 animate-fadeIn pb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">{pageTitle}</h2>
+          <p className="text-xs text-slate-500">Monitor order lifecycle, seller fulfillment, and dispatch states</p>
+        </div>
+        <button 
+          onClick={handleExport}
+          className="px-3.5 py-2 bg-[#ff661a] hover:bg-[#e65200] text-white text-xs font-bold rounded-xl transition-all border-none cursor-pointer flex items-center gap-1.5 shadow-sm"
+        >
+          <Download size={14} /> Export Orders
+        </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-slate-200 text-slate-500 font-mono text-[10px] uppercase">
-              <th className="py-3 px-4">Order ID</th>
-              <th className="py-3 px-4">Customer</th>
-              <th className="py-3 px-4">Seller Store</th>
-              <th className="py-3 px-4">Warehouse</th>
-              <th className="py-3 px-4">Total</th>
-              <th className="py-3 px-4">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-slate-700">
-            {mockOrders.map((o) => (
-              <tr key={o.id} className="hover:bg-slate-50">
-                <td className="py-3 px-4 font-mono font-bold text-[#ff5500]">{o.id}</td>
-                <td className="py-3 px-4 text-slate-900 font-bold">{o.customer}</td>
-                <td className="py-3 px-4 text-slate-600">{o.seller}</td>
-                <td className="py-3 px-4 text-slate-500">{o.warehouse}</td>
-                <td className="py-3 px-4 font-mono font-bold text-slate-900">{o.total}</td>
-                <td className="py-3 px-4"><StatusBadge status={o.status} /></td>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+          <div className="flex items-center gap-2">
+            <span>Show</span>
+            <select
+              value={entriesPerPage}
+              onChange={(e) => { setEntriesPerPage(Number(e.target.value)); setCurrentPage(1); }}
+              className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#ff661a]"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+            <span>entries</span>
+          </div>
+
+          <div className="relative flex-1 max-w-xs">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search by Order ID, Customer..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#ff661a]"
+            />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto border border-slate-100 rounded-xl">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
+                <th className="py-3 px-4">Order ID</th>
+                <th className="py-3 px-4">Customer</th>
+                <th className="py-3 px-4">Seller Store</th>
+                <th className="py-3 px-4">Warehouse</th>
+                <th className="py-3 px-4">Total Amount</th>
+                <th className="py-3 px-4">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-700">
+              {currentOrders.length > 0 ? (
+                currentOrders.map((o) => (
+                  <tr key={o.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-3 px-4 font-mono font-bold text-[#ff661a]">{o.id}</td>
+                    <td className="py-3 px-4 text-slate-900 font-bold">{o.customer}</td>
+                    <td className="py-3 px-4 text-slate-600">{o.seller}</td>
+                    <td className="py-3 px-4 text-slate-500">{o.warehouse}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-slate-900">{o.total}</td>
+                    <td className="py-3 px-4"><StatusBadge status={o.status} /></td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="py-8 text-center text-slate-400 italic text-xs">
+                    No orders found matching criteria
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Footer */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-slate-500">
+          <span>
+            Showing {filteredOrders.length > 0 ? indexOfFirstItem + 1 : 0} to {Math.min(indexOfLastItem, filteredOrders.length)} of {filteredOrders.length} entries
+          </span>
+
+          <div className="inline-flex rounded-xl border border-slate-200 p-0.5 bg-slate-50 items-center">
+            <button 
+              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
+            >
+              ‹
+            </button>
+            <span className="px-3 py-1 bg-[#ff661a] text-white text-xs font-bold rounded-lg">
+              {currentPage} of {totalPages}
+            </span>
+            <button 
+              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
+            >
+              ›
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -5020,7 +5221,429 @@ export const ReportManagement = () => {
 };
 
 /* =========================================================================
-   12. NOTIFICATIONS PAGE
+   12. FAQ MANAGEMENT PAGE
+   ========================================================================= */
+export const FaqManagement = () => {
+  const [faqs, setFaqs] = useState(mockFaqs);
+
+  // Form State for Add / Edit FAQ
+  const [editingFaqId, setEditingFaqId] = useState(null);
+  const [faqQuestion, setFaqQuestion] = useState('');
+  const [faqCategory, setFaqCategory] = useState('General (Visible to all)');
+  const [faqAnswer, setFaqAnswer] = useState('');
+
+  // Table controls (search, filter, pagination)
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All Categories');
+  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Contact details form state
+  const [companyName, setCompanyName] = useState('ShippNex Logistics');
+  const [companyPhone, setCompanyPhone] = useState('90312 75861');
+  const [companyEmail, setCompanyEmail] = useState('contact@shippnex.com');
+  const [companyWebsite, setCompanyWebsite] = useState('https://shippnex.com');
+  const [supportEmail, setSupportEmail] = useState('support@shippnex.com');
+  const [supportPhone, setSupportPhone] = useState('90312 75861');
+
+  // Handle Add/Update FAQ
+  const handleSaveFaq = (e) => {
+    e.preventDefault();
+    if (!faqQuestion.trim() || !faqAnswer.trim()) {
+      alert('Please fill in both question and answer.');
+      return;
+    }
+
+    if (editingFaqId) {
+      const updatedList = faqs.map(f => f.id === editingFaqId ? { ...f, question: faqQuestion, category: faqCategory, answer: faqAnswer } : f);
+      setFaqs(updatedList);
+      // Sync with global mock data array
+      const index = mockFaqs.findIndex(f => f.id === editingFaqId);
+      if (index !== -1) {
+        mockFaqs[index] = { id: editingFaqId, category: faqCategory, question: faqQuestion, answer: faqAnswer };
+      }
+      setEditingFaqId(null);
+      alert('FAQ updated successfully!');
+    } else {
+      const newFaq = {
+        id: mockFaqs.length > 0 ? Math.max(...mockFaqs.map(f => f.id)) + 1 : 1,
+        category: faqCategory,
+        question: faqQuestion,
+        answer: faqAnswer
+      };
+      setFaqs([...faqs, newFaq]);
+      mockFaqs.push(newFaq); // Add directly into shared mock array so user side picks it up
+      alert('FAQ added successfully!');
+    }
+    setFaqQuestion('');
+    setFaqAnswer('');
+    setFaqCategory('General (Visible to all)');
+  };
+
+  const handleEditClick = (faq) => {
+    setEditingFaqId(faq.id);
+    setFaqQuestion(faq.question);
+    setFaqCategory(faq.category);
+    setFaqAnswer(faq.answer);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingFaqId(null);
+    setFaqQuestion('');
+    setFaqCategory('General (Visible to all)');
+    setFaqAnswer('');
+  };
+
+  const handleDeleteClick = (id) => {
+    if (window.confirm('Are you sure you want to delete this FAQ?')) {
+      const updatedList = faqs.filter(f => f.id !== id);
+      setFaqs(updatedList);
+      const index = mockFaqs.findIndex(f => f.id === id);
+      if (index !== -1) mockFaqs.splice(index, 1);
+      if (editingFaqId === id) {
+        handleCancelEdit();
+      }
+    }
+  };
+
+  const handleExport = () => {
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + ["ID,Category,FAQ Question,FAQ Answer"].concat(
+        filteredFaqs.map(f => `"${f.id}","${f.category}","${f.question.replace(/"/g, '""')}","${f.answer.replace(/"/g, '""')}"`)
+      ).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "faqs_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleUpdateContact = (e) => {
+    e.preventDefault();
+    alert('Company & Contact Details updated successfully!');
+  };
+
+  // Filtered & Paginated List
+  const filteredFaqs = faqs.filter(f => {
+    const matchesCategory = categoryFilter === 'All Categories' || f.category === categoryFilter;
+    const matchesSearch = f.question.toLowerCase().includes(search.toLowerCase()) || f.answer.toLowerCase().includes(search.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
+
+  const totalPages = Math.ceil(filteredFaqs.length / entriesPerPage) || 1;
+  const indexOfLastItem = currentPage * entriesPerPage;
+  const indexOfFirstItem = indexOfLastItem - entriesPerPage;
+  const currentFaqs = filteredFaqs.slice(indexOfFirstItem, indexOfLastItem);
+
+  return (
+    <div className="space-y-6 animate-fadeIn pb-8">
+      {/* Header Breadcrumb Banner */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+        <h2 className="text-2xl font-bold text-slate-900">FAQ</h2>
+        <div className="text-xs text-slate-400 font-medium">
+          <span className="text-[#ff661a] hover:underline cursor-pointer">Home</span> / Dashboard
+        </div>
+      </div>
+
+      {/* Main Grid: Add FAQ (Left) & View FAQ (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* Left Section: Add / Edit FAQ */}
+        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-[#ff661a] px-5 py-3.5 flex justify-between items-center text-white">
+            <h3 className="text-sm font-bold tracking-wide">{editingFaqId ? 'Edit FAQ' : 'Add FAQ'}</h3>
+            {editingFaqId && (
+              <button 
+                type="button" 
+                onClick={handleCancelEdit} 
+                className="text-xs bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg border-none cursor-pointer"
+              >
+                Cancel Edit
+              </button>
+            )}
+          </div>
+
+          <form onSubmit={handleSaveFaq} className="p-5 space-y-4 text-xs text-slate-700">
+            <div>
+              <label className="block font-bold text-slate-800 mb-1.5">FAQ Question</label>
+              <input 
+                type="text" 
+                placeholder="Enter FAQ Question"
+                value={faqQuestion}
+                onChange={(e) => setFaqQuestion(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#ff661a] transition-colors"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-800 mb-1.5">FAQ Category (For User Type)</label>
+              <select 
+                value={faqCategory}
+                onChange={(e) => setFaqCategory(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
+              >
+                <option value="General (Visible to all)">General (Visible to all)</option>
+                <option value="Customer">Customer</option>
+                <option value="Seller">Seller</option>
+                <option value="Delivery Driver">Delivery Driver</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-800 mb-1.5">FAQ Answer</label>
+              <textarea 
+                rows={5}
+                placeholder="Enter FAQ Answer"
+                value={faqAnswer}
+                onChange={(e) => setFaqAnswer(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#ff661a] transition-colors resize-y"
+                required
+              />
+            </div>
+
+            <button 
+              type="submit" 
+              className="w-full py-2.5 bg-[#ff661a] hover:bg-[#e65200] text-white text-xs font-bold rounded-xl transition-colors border-none cursor-pointer shadow-sm mt-2"
+            >
+              {editingFaqId ? 'Update FAQ' : 'Add FAQ'}
+            </button>
+          </form>
+        </div>
+
+        {/* Right Section: View FAQ Table */}
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-[#ff661a] px-5 py-3.5 text-white">
+            <h3 className="text-sm font-bold tracking-wide">View FAQ</h3>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {/* Control Bar: Show count, Filter category, Export, Search */}
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span>Show</span>
+                  <select 
+                    value={entriesPerPage}
+                    onChange={(e) => { setEntriesPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#ff661a]"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span>Filter:</span>
+                  <select 
+                    value={categoryFilter}
+                    onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#ff661a]"
+                  >
+                    <option value="All Categories">All Categories</option>
+                    <option value="General (Visible to all)">General (Visible to all)</option>
+                    <option value="Customer">Customer</option>
+                    <option value="Seller">Seller</option>
+                    <option value="Delivery Driver">Delivery Driver</option>
+                  </select>
+                </div>
+
+                <button 
+                  type="button" 
+                  onClick={handleExport}
+                  className="px-3 py-1 bg-[#ff661a] hover:bg-[#e65200] text-white text-xs font-bold rounded-lg border-none cursor-pointer flex items-center gap-1 transition-colors"
+                >
+                  <Download size={13} /> Export
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span>Search:</span>
+                <input 
+                  type="text" 
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                  placeholder="Search..."
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] w-32 sm:w-40"
+                />
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto border border-slate-100 rounded-xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                    <th className="py-3 px-3 w-12 text-center">ID</th>
+                    <th className="py-3 px-3">Category</th>
+                    <th className="py-3 px-3">FAQ Question</th>
+                    <th className="py-3 px-3">FAQ Answer</th>
+                    <th className="py-3 px-3 text-center w-20">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {currentFaqs.length > 0 ? (
+                    currentFaqs.map((faq) => (
+                      <tr key={faq.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-3 px-3 text-center font-mono font-bold text-slate-500">{faq.id}</td>
+                        <td className="py-3 px-3 font-medium text-slate-800">{faq.category}</td>
+                        <td className="py-3 px-3 font-semibold text-slate-900">{faq.question}</td>
+                        <td className="py-3 px-3 text-slate-600 max-w-xs truncate">{faq.answer}</td>
+                        <td className="py-3 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button 
+                              onClick={() => handleEditClick(faq)}
+                              className="p-1.5 bg-slate-100 hover:bg-[#ff661a] hover:text-white text-slate-600 rounded-lg transition-colors border-none cursor-pointer"
+                              title="Edit FAQ"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteClick(faq.id)}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 rounded-lg transition-colors border-none cursor-pointer"
+                              title="Delete FAQ"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="5" className="py-8 text-center text-slate-400 italic">
+                        No FAQs found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-slate-500">
+              <span>
+                Showing {filteredFaqs.length > 0 ? indexOfFirstItem + 1 : 0} to {Math.min(indexOfLastItem, filteredFaqs.length)} of {filteredFaqs.length} entries
+              </span>
+
+              <div className="inline-flex rounded-xl border border-slate-200 p-0.5 bg-slate-50 items-center">
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
+                >
+                  ‹
+                </button>
+                <span className="px-3 py-1 bg-[#ff661a] text-white text-xs font-bold rounded-lg">
+                  {currentPage}
+                </span>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      {/* Bottom Section: FAQ & Company Contact Details */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden max-w-4xl">
+        <div className="bg-[#ff661a] px-5 py-3.5 text-white">
+          <h3 className="text-sm font-bold tracking-wide">FAQ & Company Contact Details</h3>
+        </div>
+
+        <form onSubmit={handleUpdateContact} className="p-6 space-y-4 text-xs text-slate-700">
+          <div>
+            <label className="block font-bold text-slate-800 mb-1.5">Company Name (Invoice From)</label>
+            <input 
+              type="text" 
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-bold text-slate-800 mb-1.5">Company Phone (Invoice)</label>
+              <input 
+                type="text" 
+                value={companyPhone}
+                onChange={(e) => setCompanyPhone(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-800 mb-1.5">Company Email (Invoice)</label>
+              <input 
+                type="email" 
+                value={companyEmail}
+                onChange={(e) => setCompanyEmail(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-800 mb-1.5">Company Website (Invoice)</label>
+            <input 
+              type="text" 
+              value={companyWebsite}
+              onChange={(e) => setCompanyWebsite(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
+              required
+            />
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-bold text-slate-800 mb-1.5">Support Email (FAQ Page)</label>
+              <input 
+                type="email" 
+                value={supportEmail}
+                onChange={(e) => setSupportEmail(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-800 mb-1.5">Support Phone (FAQ Page)</label>
+              <input 
+                type="text" 
+                value={supportPhone}
+                onChange={(e) => setSupportPhone(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
+                required
+              />
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            className="w-full py-2.5 bg-[#ff661a] hover:bg-[#e65200] text-white text-xs font-bold rounded-xl transition-colors border-none cursor-pointer shadow-sm mt-4"
+          >
+            Update Contact Details
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+/* =========================================================================
+   13. NOTIFICATIONS PAGE
    ========================================================================= */
 export const NotificationManagement = () => {
   return (

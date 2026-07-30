@@ -36,7 +36,12 @@ import {
   MessageSquare,
   FileText,
   FileCheck,
-  DollarSign
+  DollarSign,
+  CheckCircle,
+  Flag,
+  XCircle,
+  RefreshCw,
+  Clock
 } from 'lucide-react';
 
 export const AdminSidebar = () => {
@@ -152,33 +157,43 @@ export const AdminSidebar = () => {
       title: 'MISCELLANEOUS',
       items: [
         { id: 'users', label: 'Users', icon: Users },
-        { id: 'notifications', label: 'Notification', icon: Bell },
         { id: 'faqs', label: 'FAQ', icon: HelpCircle },
       ]
     },
     {
       title: 'ORDER SECTION',
       items: [
-        { id: 'orders', label: 'Order List', icon: ShoppingCart },
+        {
+          id: 'orders',
+          label: 'Order List',
+          icon: ShoppingCart,
+          submenu: [
+            { id: 'orders_all', label: 'All Order', icon: ShoppingCart },
+            { id: 'orders_pending', label: 'Pending Order', icon: Clock },
+            { id: 'orders_received', label: 'Received Order', icon: CheckCircle },
+            { id: 'orders_processed', label: 'Processed Order', icon: FileText },
+            { id: 'orders_shipped', label: 'Shippped Order', icon: Flag },
+            { id: 'orders_out_for_delivery', label: 'Out for Delivery', icon: Truck },
+            { id: 'orders_delivered', label: 'Delivered Order', icon: CheckCircle },
+            { id: 'orders_cancelled', label: 'Cancelled Order', icon: XCircle },
+            { id: 'orders_return', label: 'Return', icon: RefreshCw },
+          ]
+        },
       ]
     },
     {
       title: 'PROMOTION',
       items: [
+        { id: 'promo_dashboard', label: 'Promotion Dashboard', icon: LayoutDashboard },
         { id: 'promo_category_products', label: 'Category Products', icon: LayoutGrid },
         { id: 'promo_home_section', label: 'Home Section', icon: Home },
         { id: 'promo_bestseller', label: 'Bestseller Cards', icon: Star },
-        { id: 'promo_strip', label: 'Promo Strip', icon: Layout },
-        { id: 'promo_lowest_prices', label: 'Lowest Prices', icon: Layers },
-        { id: 'promo_shop_by_store', label: 'Shop by Store', icon: Store },
         { id: 'promo_home_banners', label: 'Home Banners', icon: Image },
       ]
     },
     {
       title: 'SETTING',
       items: [
-        { id: 'payment_list', label: 'Payment List', icon: FileText },
-        { id: 'sms_gateway', label: 'SMS Gateway', icon: MessageSquare },
         { id: 'system_user', label: 'System User', icon: Users },
         { id: 'customer_app_policy', label: 'Customer App Policy', icon: FileCheck },
         { id: 'delivery_app_policy', label: 'Delivery App Policy', icon: FileCheck },

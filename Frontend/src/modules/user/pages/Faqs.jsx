@@ -1,33 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, ChevronDown } from 'lucide-react';
+import { mockFaqs } from '../../admin/mock/adminMockData';
 
 const Faqs = () => {
   const navigate = useNavigate();
   const [openIndex, setOpenIndex] = useState(0); // first item open by default
-
-  const faqs = [
-    {
-      question: "How long does delivery take?",
-      answer: "Standard delivery usually takes 2-3 business days. For express delivery, you will receive your order within 24 hours depending on your location."
-    },
-    {
-      question: "How can I track my order?",
-      answer: "Once your order is dispatched, you can track it via the 'My Orders' section in your profile. You will also receive an SMS with the tracking link."
-    },
-    {
-      question: "What is your return policy?",
-      answer: "We offer a 7-day hassle-free return policy for unused and sealed grocery items. Perishable items cannot be returned unless delivered damaged."
-    },
-    {
-      question: "Are there any delivery charges?",
-      answer: "Delivery is free for orders above ₹500. For orders below this amount, a standard delivery fee of ₹40 applies."
-    },
-    {
-      question: "How do I cancel my order?",
-      answer: "Orders can only be cancelled before they are dispatched. Go to 'My Orders', select the order, and tap the Cancel button if it's available."
-    }
-  ];
+  const faqs = mockFaqs;
 
   return (
     <div className="h-[100dvh] bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">

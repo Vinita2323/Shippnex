@@ -52,19 +52,8 @@ export const AdminHeader = () => {
         ))}
       </div>
 
-      {/* Right Section: Notifications, User, Logout Icons */}
+      {/* Right Section: User, Logout Icons */}
       <div className="flex items-center gap-6 text-slate-700">
-        <button 
-          onClick={() => setActiveTab('notifications')}
-          className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer relative"
-          title="Notifications"
-        >
-          <Bell size={20} className="text-slate-700" />
-          {notificationsCount > 0 && (
-            <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full" />
-          )}
-        </button>
-
         <button 
           onClick={() => setActiveTab('profile')}
           className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer"
