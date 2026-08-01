@@ -42,7 +42,7 @@ export const TransportProvider = ({ children }) => {
       status: 'Pending',
       timeline: [
         { status: 'Pending', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), completed: true },
-        { status: 'Driver Assigned', time: null, completed: false },
+        { status: 'Captain Assigned', time: null, completed: false },
         { status: 'In Transit', time: null, completed: false },
         { status: 'Delivered', time: null, completed: false }
       ]

@@ -10,12 +10,14 @@ import { WishlistProvider } from './modules/user/context/WishlistContext';
 import { OrderProvider } from './modules/user/context/OrderContext';
 import { TransportProvider } from './modules/user/context/TransportContext';
 
+import { LocationProvider } from './context/LocationContext';
+
 function App() {
   const location = useLocation();
-  const isDriverRoute = location.pathname.startsWith('/driver');
+  const isCaptainRoute = location.pathname.startsWith('/captain');
   const isSellerRoute = location.pathname.startsWith('/seller');
   const isAdminRoute = location.pathname.startsWith('/admin');
-  const bypassSplash = isDriverRoute || isSellerRoute || isAdminRoute;
+  const bypassSplash = isCaptainRoute || isSellerRoute || isAdminRoute;
   const [showSplash, setShowSplash] = useState(!bypassSplash);
 
   if (showSplash && !bypassSplash) {
@@ -24,20 +26,22 @@ function App() {
 
   return (
     <div className="App">
-      <WishlistProvider>
-        <CartProvider>
-          <OrderProvider>
-            <TransportProvider>
-              <Routes>
-                <Route path="/driver/*" element={<DeliveryRoutes />} />
-                <Route path="/seller/*" element={<SellerRoutes />} />
-                <Route path="/admin/*" element={<AdminRoutes />} />
-                <Route path="/*" element={<UserRoutes />} />
-              </Routes>
-            </TransportProvider>
-          </OrderProvider>
-        </CartProvider>
-      </WishlistProvider>
+      <LocationProvider>
+        <WishlistProvider>
+          <CartProvider>
+            <OrderProvider>
+              <TransportProvider>
+                <Routes>
+                  <Route path="/captain/*" element={<DeliveryRoutes />} />
+                  <Route path="/seller/*" element={<SellerRoutes />} />
+                  <Route path="/admin/*" element={<AdminRoutes />} />
+                  <Route path="/*" element={<UserRoutes />} />
+                </Routes>
+              </TransportProvider>
+            </OrderProvider>
+          </CartProvider>
+        </WishlistProvider>
+      </LocationProvider>
     </div>
   );
 }

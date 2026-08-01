@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DriverBottomNav from '../components/DriverBottomNav';
+import CaptainBottomNav from '../components/CaptainBottomNav';
 
 const FinalVerification = () => {
   const navigate = useNavigate();
@@ -57,7 +57,7 @@ const FinalVerification = () => {
       <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-3 bg-surface/80 backdrop-blur-md shadow-sm border-b border-outline-variant/10">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate('/driver/navigation-active')}
+            onClick={() => navigate('/captain/navigation-active')}
             className="p-1 rounded-lg hover:bg-surface-container-high text-primary transition-colors cursor-pointer"
           >
             <span className="material-symbols-outlined">arrow_back</span>
@@ -65,8 +65,8 @@ const FinalVerification = () => {
           <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/10">
             <img
               className="w-full h-full object-cover"
-              alt="Driver Profile"
-              src={localStorage.getItem('shippnex_driver_avatar') || "https://lh3.googleusercontent.com/aida-public/AB6AXuBhzgud08TZO21OdBKeCjb2b91L6vn6dK8-uh427LX-yN_m6Xreq3I9xfuK-yJn41qZdY2a1jPcdTzf_uQ2yoR0Uj8F8yud4hZ-BIwQPY6KlIMPlqteRASdNab0C6zsNpkgJlVf-XwjWXgaXTb85uHMVbXzL5EBBdNPWwGqZfIJCiJDswCUfQwfNvhj03UlzNrp-ocZfvZaRUAMtWdkrL0KZM15YHxQALSEGTFShN9FDu1rB2HHeRVFHsOhU-sPU-Pmt12NmMXrkHk"}
+              alt="Captain Profile"
+              src={localStorage.getItem('shippnex_captain_avatar') || "https://lh3.googleusercontent.com/aida-public/AB6AXuBhzgud08TZO21OdBKeCjb2b91L6vn6dK8-uh427LX-yN_m6Xreq3I9xfuK-yJn41qZdY2a1jPcdTzf_uQ2yoR0Uj8F8yud4hZ-BIwQPY6KlIMPlqteRASdNab0C6zsNpkgJlVf-XwjWXgaXTb85uHMVbXzL5EBBdNPWwGqZfIJCiJDswCUfQwfNvhj03UlzNrp-ocZfvZaRUAMtWdkrL0KZM15YHxQALSEGTFShN9FDu1rB2HHeRVFHsOhU-sPU-Pmt12NmMXrkHk"}
             />
           </div>
           <div>
@@ -75,7 +75,7 @@ const FinalVerification = () => {
           </div>
         </div>
         <button
-          onClick={() => navigate('/driver/notifications')}
+          onClick={() => navigate('/captain/notifications')}
           className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-high hover:opacity-80 transition-opacity cursor-pointer"
         >
           <span className="material-symbols-outlined text-primary">notifications</span>
@@ -244,7 +244,7 @@ const FinalVerification = () => {
               Delivery verified and closed. Your payout of <span className="font-bold text-secondary">₹1,425.00</span> has been credited to your wallet.
             </p>
             <button
-              onClick={() => navigate('/driver/dashboard')}
+              onClick={() => navigate('/captain/dashboard')}
               className="w-full py-3.5 bg-primary text-white font-bold rounded-xl hover:opacity-90 transition-opacity cursor-pointer"
             >
               Back to Dashboard
@@ -253,8 +253,8 @@ const FinalVerification = () => {
         </div>
       )}
 
-      {/* Driver Bottom Navigation */}
-      <DriverBottomNav />
+      {/* Captain Bottom Navigation */}
+      <CaptainBottomNav />
     </div>
   );
 };

@@ -229,12 +229,12 @@ export const AdminDashboard = ({ onNavigate }) => {
           onClick={() => onNavigate('sellers')}
         />
         <StatWidget 
-          title="TOTAL DRIVERS" 
-          value={mockStats.totalDrivers.value} 
-          change={mockStats.totalDrivers.change} 
-          isPositive={mockStats.totalDrivers.isPositive} 
+          title="TOTAL CAPTAINS" 
+          value={mockStats.totalCaptains.value} 
+          change={mockStats.totalCaptains.change} 
+          isPositive={mockStats.totalCaptains.isPositive} 
           icon={Truck}
-          onClick={() => onNavigate('drivers')}
+          onClick={() => onNavigate('captains')}
         />
         <StatWidget 
           title="ACTIVE WAREHOUSES" 

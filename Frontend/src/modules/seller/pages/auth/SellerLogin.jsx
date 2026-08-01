@@ -1,25 +1,33 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, CheckCircle2, RotateCcw, ShieldCheck } from 'lucide-react';
+import { ArrowRight, CheckCircle2, RotateCcw, ShieldCheck, Loader2 } from 'lucide-react';
+import { authService } from '../../../../services/authService';
 
 const SellerLogin = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState('phone'); // 'phone' | 'otp'
   const [mobileNumber, setMobileNumber] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '']);
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleSendOtp = (e) => {
+  const handleSendOtp = async (e) => {
     e.preventDefault();
+    setErrorMsg('');
     if (mobileNumber.length < 10) {
-      alert('Please enter a valid 10-digit mobile number');
+      setErrorMsg('Please enter a valid 10-digit mobile number');
       return;
     }
-    setIsSendingOtp(true);
-    setTimeout(() => {
-      setIsSendingOtp(false);
+    
+    try {
+      setLoading(true);
+      await authService.sendSellerOtp(mobileNumber);
       setStep('otp');
-    }, 600);
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Failed to send OTP. Try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOtpChange = (index, value) => {
@@ -29,7 +37,7 @@ const SellerLogin = () => {
     setOtp(newOtp);
 
     // Auto-focus next input box
-    if (value && index < 3) {
+    if (value && index < 5) {
       const nextInput = document.getElementById(`otp-input-${index + 1}`);
       if (nextInput) nextInput.focus();
     }
@@ -42,15 +50,39 @@ const SellerLogin = () => {
     }
   };
 
-  const handleVerifyOtp = (e) => {
+  const handleVerifyOtp = async (e) => {
     e.preventDefault();
+    setErrorMsg('');
     const enteredOtp = otp.join('');
-    if (enteredOtp.length < 4) {
-      alert('Please enter the complete 4-digit OTP sent to your phone');
+    if (enteredOtp.length < 6) {
+      setErrorMsg('Please enter the complete 6-digit OTP');
       return;
     }
-    // Success -> Navigate to seller dashboard
-    navigate('/seller/dashboard');
+
+    try {
+      setLoading(true);
+      const res = await authService.verifySellerOtp(mobileNumber, enteredOtp);
+
+      if (res.status === 'pending') {
+        navigate('/seller/under-review');
+        return;
+      }
+
+      if (res.status === 'rejected') {
+        setErrorMsg('Your seller account application has been rejected.');
+        return;
+      }
+
+      if (res.success && res.token) {
+        navigate('/seller/dashboard');
+      } else {
+        setErrorMsg(res.message || 'Verification failed');
+      }
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Invalid OTP code.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -71,6 +103,12 @@ const SellerLogin = () => {
             Manage your warehouse, bulk orders, and stock
           </p>
         </div>
+
+        {errorMsg && (
+          <div className="bg-red-50 border border-red-200 text-red-600 text-xs font-semibold p-3 rounded-xl text-center">
+            {errorMsg}
+          </div>
+        )}
 
         {/* STEP 1: MOBILE NUMBER ENTRY */}
         {step === 'phone' && (
@@ -96,11 +134,19 @@ const SellerLogin = () => {
 
             <button
               type="submit"
-              disabled={isSendingOtp || mobileNumber.length < 10}
+              disabled={loading || mobileNumber.length < 10}
               className="w-full flex justify-center items-center gap-2 py-2.5 px-4 rounded-xl shadow-sm text-sm font-medium text-white bg-[#ff7526] hover:bg-[#e65507] focus:outline-none transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none"
             >
-              {isSendingOtp ? 'Sending OTP...' : 'Send OTP'}
-              <ArrowRight size={17} />
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Sending OTP...
+                </>
+              ) : (
+                <>
+                  Send OTP
+                  <ArrowRight size={17} />
+                </>
+              )}
             </button>
           </form>
         )}
@@ -125,8 +171,8 @@ const SellerLogin = () => {
               </p>
             </div>
 
-            {/* 4 Digit OTP Boxes */}
-            <div className="flex justify-center gap-3 py-1">
+            {/* 6 Digit OTP Boxes */}
+            <div className="flex justify-between gap-2 py-1">
               {otp.map((digit, index) => (
                 <input
                   key={index}
@@ -137,7 +183,7 @@ const SellerLogin = () => {
                   value={digit}
                   onChange={(e) => handleOtpChange(index, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                  className="w-12 h-12 text-center text-xl font-bold text-slate-900 border border-slate-200 rounded-xl outline-none focus:border-[#ff7526] focus:ring-2 focus:ring-orange-100 bg-slate-50 transition-all"
+                  className="flex-1 min-w-0 aspect-square max-h-[50px] text-center text-lg font-bold text-slate-900 border border-slate-200 rounded-xl outline-none focus:border-[#ff7526] focus:ring-2 focus:ring-orange-100 bg-slate-50 transition-all"
                 />
               ))}
             </div>
@@ -146,7 +192,7 @@ const SellerLogin = () => {
               <span>Didn't receive OTP?</span>
               <button
                 type="button"
-                onClick={() => alert('OTP Resent!')}
+                onClick={handleSendOtp}
                 className="text-[#ff7526] font-medium hover:underline flex items-center gap-1 bg-transparent border-none cursor-pointer"
               >
                 <RotateCcw size={12} />
@@ -156,10 +202,19 @@ const SellerLogin = () => {
 
             <button
               type="submit"
-              className="w-full flex justify-center items-center gap-2 py-2.5 px-4 rounded-xl shadow-sm text-sm font-medium text-white bg-[#ff7526] hover:bg-[#e65507] focus:outline-none transition-colors cursor-pointer border-none"
+              disabled={loading || otp.join('').length < 6}
+              className="w-full flex justify-center items-center gap-2 py-2.5 px-4 rounded-xl shadow-sm text-sm font-medium text-white bg-[#ff7526] hover:bg-[#e65507] focus:outline-none transition-colors cursor-pointer border-none disabled:opacity-50"
             >
-              Verify OTP & Login
-              <CheckCircle2 size={17} />
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Verifying...
+                </>
+              ) : (
+                <>
+                  Verify OTP & Login
+                  <CheckCircle2 size={17} />
+                </>
+              )}
             </button>
           </form>
         )}

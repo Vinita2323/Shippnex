@@ -1,16 +1,16 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const DriverBottomNav = () => {
+const CaptainBottomNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
   const navItems = [
-    { path: '/driver/dashboard', icon: 'home', label: 'Home' },
-    { path: '/driver/jobs', icon: 'local_shipping', label: 'Jobs' },
-    { path: '/driver/active-delivery', icon: 'explore', label: 'Active' },
-    { path: '/driver/wallet', icon: 'account_balance_wallet', label: 'Wallet' },
-    { path: '/driver/profile', icon: 'person', label: 'Profile' },
+    { path: '/captain/dashboard', icon: 'home', label: 'Home' },
+    { path: '/captain/jobs', icon: 'local_shipping', label: 'Jobs' },
+    { path: '/captain/active-delivery', icon: 'explore', label: 'Active' },
+    { path: '/captain/wallet', icon: 'account_balance_wallet', label: 'Wallet' },
+    { path: '/captain/profile', icon: 'person', label: 'Profile' },
   ];
 
   return (
@@ -41,4 +41,4 @@ const DriverBottomNav = () => {
   );
 };
 
-export default DriverBottomNav;
+export default CaptainBottomNav;

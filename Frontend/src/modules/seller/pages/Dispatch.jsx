@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { Truck, UserCheck, MapPin, CheckCircle, Package, Clock, ShieldAlert } from 'lucide-react';
 
 const mockDispatches = [
-  { id: 'DISP-801', orderId: '#ORD-9020', driver: 'Rajesh Kumar', vehicle: 'Mahindra Bolero Pickup (DL-01-AB-1234)', destination: 'Karol Bagh, Delhi', status: 'Ready for Pickup', eta: '45 mins' },
-  { id: 'DISP-802', orderId: '#ORD-9019', driver: 'Vikram Singh', vehicle: 'Tata Ace Gold (UP-14-XY-9876)', destination: 'Noida Sector 62', status: 'In Transit', eta: '15 mins' },
-  { id: 'DISP-803', orderId: '#ORD-9018', driver: 'Suresh Verma', vehicle: 'Eicher Pro 2049 (DL-10-CD-4567)', destination: 'Connaught Place, Delhi', status: 'Completed', eta: 'Delivered' },
+  { id: 'DISP-801', orderId: '#ORD-9020', captain: 'Rajesh Kumar', vehicle: 'Mahindra Bolero Pickup (DL-01-AB-1234)', destination: 'Karol Bagh, Delhi', status: 'Ready for Pickup', eta: '45 mins' },
+  { id: 'DISP-802', orderId: '#ORD-9019', captain: 'Vikram Singh', vehicle: 'Tata Ace Gold (UP-14-XY-9876)', destination: 'Noida Sector 62', status: 'In Transit', eta: '15 mins' },
+  { id: 'DISP-803', orderId: '#ORD-9018', captain: 'Suresh Verma', vehicle: 'Eicher Pro 2049 (DL-10-CD-4567)', destination: 'Connaught Place, Delhi', status: 'Completed', eta: 'Delivered' },
 ];
 
 const Dispatch = () => {
@@ -15,7 +15,7 @@ const Dispatch = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Logistics & Dispatch Control</h1>
-          <p className="text-sm font-medium text-slate-500 mt-1">Assign drivers, track warehouse pickups, and print gate pass labels.</p>
+          <p className="text-sm font-medium text-slate-500 mt-1">Assign captains, track warehouse pickups, and print gate pass labels.</p>
         </div>
         <button className="bg-[#ff5500] hover:bg-[#e64d00] text-white font-bold py-2.5 px-4 rounded-md shadow-sm transition-colors cursor-pointer border-none flex items-center gap-2 text-sm">
           <Truck size={18} strokeWidth={2.5} />
@@ -43,7 +43,7 @@ const Dispatch = () => {
               <div className="flex items-start gap-2 text-xs text-slate-600 font-semibold">
                 <UserCheck size={16} className="text-[#ff5500] shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-slate-900 font-bold text-xs">{item.driver}</p>
+                  <p className="text-slate-900 font-bold text-xs">{item.captain}</p>
                   <p className="text-slate-400 font-normal">{item.vehicle}</p>
                 </div>
               </div>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
+import ProtectedRoute from '../../../components/ProtectedRoute';
 import Home from '../pages/Home';
 import Categories from '../pages/Categories';
 import Cart from '../pages/Cart';
@@ -9,8 +10,10 @@ import TrackOrder from '../pages/TrackOrder';
 import Orders from '../pages/Orders';
 import Profile from '../pages/Profile';
 import Login from '../pages/Login';
+import VerifyOtp from '../pages/VerifyOtp';
 import ProductDetails from '../pages/ProductDetails';
 import Wishlist from '../pages/Wishlist';
+import LocationSelectionPage from '../pages/LocationSelectionPage';
 import Notifications from '../pages/Notifications';
 import BottomNav from '../components/BottomNav';
 import AccountInfo from '../pages/AccountInfo';
@@ -36,6 +39,7 @@ const UserRoutes = () => {
   const isTrackOrder = location.pathname === '/track-order';
   const isProfile = location.pathname === '/profile';
   const isLogin = location.pathname === '/login';
+  const isVerifyOtp = location.pathname === '/verify-otp';
   const isProductDetails = location.pathname.startsWith('/product');
   const isWishlist = location.pathname === '/wishlist';
   const isNotifications = location.pathname === '/notifications';
@@ -45,43 +49,50 @@ const UserRoutes = () => {
   const isTransportFlow = ['/transport/register', '/transport/location', '/transport/goods', '/transport/vehicle', '/transport/summary', '/transport/success', '/transport/booking-details'].includes(location.pathname);
   
   // Do NOT hide bottom nav on /transport
-  const hideBottomNav = isCart || isCheckout || isPayment || isTrackOrder || isProfile || isLogin || isProductDetails || isWishlist || isNotifications || isPlaceholder || isTransportFlow;
+  const hideBottomNav = isCart || isCheckout || isPayment || isTrackOrder || isProfile || isLogin || isVerifyOtp || isProductDetails || isWishlist || isNotifications || isPlaceholder || isTransportFlow;
 
   return (
     <>
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/categories" element={<Categories />} />
-        <Route path="/cart" element={<Cart />} />
-        <Route path="/checkout" element={<Checkout />} />
-        <Route path="/payment" element={<Payment />} />
-        <Route path="/track-order" element={<TrackOrder />} />
-        <Route path="/orders" element={<Orders />} />
-        
-        {/* Transport Routes */}
-        <Route path="/transport" element={<TransportHome />} />
-        <Route path="/transport/register" element={<TransportRegistration />} />
-        <Route path="/transport/location" element={<LocationSelection />} />
-        <Route path="/transport/goods" element={<GoodsDetails />} />
-        <Route path="/transport/vehicle" element={<VehicleSelection />} />
-        <Route path="/transport/summary" element={<FareSummary />} />
-        <Route path="/transport/success" element={<BookingCompleted />} />
-        <Route path="/transport/booking-details" element={<TransportBookingDetails />} />
-
-        <Route path="/profile" element={<Profile />} />
+        {/* Public Routes */}
         <Route path="/login" element={<Login />} />
-        <Route path="/product/:id" element={<ProductDetails />} />
-        <Route path="/wishlist" element={<Wishlist />} />
-        <Route path="/notifications" element={<Notifications />} />
-        <Route path="/account-information" element={<AccountInfo />} />
-        <Route path="/saved-addresses" element={<SavedAddresses />} />
-        <Route path="/security" element={<Security />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/faqs" element={<Faqs />} />
-        <Route path="/support" element={<HelpSupport />} />
+        <Route path="/verify-otp" element={<VerifyOtp />} />
+        <Route path="/location" element={<LocationSelectionPage />} />
+
+        {/* Protected User Routes */}
+        <Route element={<ProtectedRoute role="user" />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/categories" element={<Categories />} />
+          <Route path="/cart" element={<Cart />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/payment" element={<Payment />} />
+          <Route path="/track-order" element={<TrackOrder />} />
+          <Route path="/orders" element={<Orders />} />
+          
+          {/* Transport Routes */}
+          <Route path="/transport" element={<TransportHome />} />
+          <Route path="/transport/register" element={<TransportRegistration />} />
+          <Route path="/transport/location" element={<LocationSelection />} />
+          <Route path="/transport/goods" element={<GoodsDetails />} />
+          <Route path="/transport/vehicle" element={<VehicleSelection />} />
+          <Route path="/transport/summary" element={<FareSummary />} />
+          <Route path="/transport/success" element={<BookingCompleted />} />
+          <Route path="/transport/booking-details" element={<TransportBookingDetails />} />
+
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/product/:id" element={<ProductDetails />} />
+          <Route path="/wishlist" element={<Wishlist />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/account-information" element={<AccountInfo />} />
+          <Route path="/saved-addresses" element={<SavedAddresses />} />
+          <Route path="/security" element={<Security />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/faqs" element={<Faqs />} />
+          <Route path="/support" element={<HelpSupport />} />
+        </Route>
       </Routes>
       
-      {/* Shared Navigation - Hidden during checkout/payment flow */}
+      {/* Shared Navigation */}
       {!hideBottomNav && <BottomNav />}
     </>
   );

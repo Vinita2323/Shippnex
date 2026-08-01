@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useLocationContext } from '../../../context/LocationContext';
+import { bannerService, categoryService } from '../../../services/authService';
 import { 
   Bell, 
   ShoppingCart, 
@@ -46,8 +48,53 @@ const Home = () => {
   const navigate = useNavigate();
   const { addToCart, cartCount } = useCart();
   const { wishlistCount } = useWishlist();
+  const locationContext = useLocationContext();
   const [toastMessage, setToastMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [banners, setBanners] = useState([]);
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [bannerVisible, setBannerVisible] = useState(true);
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    const fetchBanners = async () => {
+      try {
+        const res = await bannerService.getBanners();
+        if (res.success && res.banners.length > 0) {
+          const active = res.banners.filter(b => b.status === 'Active');
+          setBanners(active);
+        }
+      } catch (err) {
+        console.error('Failed to load banners:', err);
+      }
+    };
+    const fetchCategories = async () => {
+      try {
+        const res = await categoryService.getCategories();
+        if (res.success && res.categories.length > 0) {
+          const active = res.categories.filter(c => c.status === 'Active');
+          setCategories(active);
+        }
+      } catch (err) {
+        console.error('Failed to load categories:', err);
+      }
+    };
+    fetchBanners();
+    fetchCategories();
+  }, []);
+
+  // Auto-scroll banners every 3.5 seconds with fade transition
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const interval = setInterval(() => {
+      setBannerVisible(false);
+      setTimeout(() => {
+        setCurrentBannerIndex(prev => (prev + 1) % banners.length);
+        setBannerVisible(true);
+      }, 300);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [banners]);
 
   const handleMicClick = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -82,10 +129,22 @@ const Home = () => {
       <div className="bg-gradient-to-r from-[#ea580c] to-[#f97316] rounded-b-[20px] pb-3 mb-4 shadow-sm relative z-10 pt-1">
         {/* Header Section */}
         <header className="flex justify-between items-center px-4 pt-1.5 pb-2.5">
-          <div className="bg-white rounded-xl p-1 shadow-sm flex items-center justify-center w-11 h-11">
-            <img src="/Logo.png" alt="ShippNex Logo" className="w-full h-full object-contain" />
+          <div className="flex items-center flex-1">
+            <div className="bg-white rounded-xl p-1 shadow-sm flex items-center justify-center w-11 h-11 shrink-0">
+              <img src="/Logo.png" alt="ShippNex Logo" className="w-full h-full object-contain" />
+            </div>
+            
+            <div className="flex flex-col ml-3 text-white cursor-pointer overflow-hidden" onClick={() => navigate('/location')}>
+               <div className="text-[10px] font-semibold opacity-90 flex items-center">
+                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mr-1"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                   Deliver to
+               </div>
+               <div className="text-[13px] font-bold leading-tight truncate max-w-[140px]">
+                   {locationContext?.currentLocation?.area || locationContext?.currentLocation?.city || "Select Location"}
+               </div>
+            </div>
           </div>
-          <div className="flex gap-4 items-center pr-1">
+          <div className="flex gap-4 items-center pr-1 shrink-0">
             <div className="relative cursor-pointer" onClick={() => navigate('/notifications')}>
               <Bell size={22} color="white" strokeWidth={1.8} />
               <span className="absolute top-[2px] right-[2px] bg-white w-2 h-2 rounded-full border border-[#ea580c]"></span>
@@ -171,56 +230,111 @@ const Home = () => {
           </div>
         ) : (
           <>
-        {/* Promo Banner */}
-        <div className="bg-gradient-to-br from-[#1e2b4f] to-[#151d38] rounded-2xl py-4 px-5 flex justify-between items-center relative overflow-hidden mb-5 text-white">
-          <div className="relative z-10 max-w-[55%]">
-            <h3 className="text-[15px] font-extrabold m-0 uppercase tracking-wide">BIG SAVINGS</h3>
-            <p className="text-[12px] font-medium mt-0.5 mb-2">on Bulk Orders</p>
-            <div className="bg-[#ff5500] text-white text-[11px] font-bold px-2 py-0.5 rounded-md inline-block mb-2.5">Up to 25% OFF</div>
-            <button className="bg-white text-[#1e2b4f] border-none rounded-md px-3.5 py-1.5 text-[11px] font-bold cursor-pointer block">Shop Now</button>
+        {/* Dynamic Promo Banner */}
+        {banners.length > 0 ? (
+          <div className="mb-5">
+            <div
+              className="bg-gradient-to-br from-[#1e2b4f] to-[#151d38] rounded-2xl py-4 px-5 flex justify-between items-center relative overflow-hidden text-white shadow-md"
+              style={{ transition: 'opacity 0.3s ease, transform 0.3s ease', opacity: bannerVisible ? 1 : 0, transform: bannerVisible ? 'translateY(0)' : 'translateY(6px)' }}
+            >
+              <div className="relative z-10 max-w-[55%]">
+                <h3 className="text-[15px] font-extrabold m-0 uppercase tracking-wide">{banners[currentBannerIndex].title}</h3>
+                <p className="text-[12px] font-medium mt-0.5 mb-2">{banners[currentBannerIndex].subtitle}</p>
+                {banners[currentBannerIndex].discountBadge && (
+                  <div className="bg-[#ff5500] text-white text-[11px] font-bold px-2 py-0.5 rounded-md inline-block mb-2.5">
+                    {banners[currentBannerIndex].discountBadge}
+                  </div>
+                )}
+                <button
+                  onClick={() => navigate(banners[currentBannerIndex].redirectUrl || '/categories')}
+                  className="bg-white text-[#1e2b4f] border-none rounded-md px-3.5 py-1.5 text-[11px] font-bold cursor-pointer block hover:bg-slate-100 transition-colors"
+                >
+                  {banners[currentBannerIndex].ctaText || 'Shop Now'}
+                </button>
+              </div>
+              <div className="absolute -right-5 -bottom-2 w-[160px] h-full z-0">
+                <img
+                  src={banners[currentBannerIndex].imageUrl || "/promo_banner_bg.png"}
+                  alt={banners[currentBannerIndex].title}
+                  className="w-full h-[150%] object-cover absolute bottom-0 right-0"
+                />
+                <div className="absolute top-[20%] right-[35px] bg-white rounded-lg p-1 w-9 flex items-center justify-center shadow-sm">
+                  <img src="/splashscreenlogo.png" alt="ShippNex" className="w-full h-auto" />
+                </div>
+              </div>
+            </div>
+            {/* Dot Indicators */}
+            {banners.length > 1 && (
+              <div className="flex justify-center gap-1.5 mt-2">
+                {banners.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setBannerVisible(false); setTimeout(() => { setCurrentBannerIndex(i); setBannerVisible(true); }, 300); }}
+                    className="border-none cursor-pointer p-0 rounded-full transition-all duration-300"
+                    style={{ width: i === currentBannerIndex ? '20px' : '6px', height: '6px', background: i === currentBannerIndex ? '#ff5500' : '#cbd5e1' }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-          <div className="absolute -right-5 -bottom-2 w-[160px] h-full z-0">
-            <img src="/promo_banner_bg.png" alt="Promo Boxes" className="w-full h-[150%] object-cover absolute bottom-0 right-0" />
-            <div className="absolute top-[20%] right-[35px] bg-white rounded-lg p-1 w-9 flex items-center justify-center shadow-sm">
-              <img src="/splashscreenlogo.png" alt="ShippNex" className="w-full h-auto" />
+        ) : (
+          <div className="bg-gradient-to-br from-[#1e2b4f] to-[#151d38] rounded-2xl py-4 px-5 flex justify-between items-center relative overflow-hidden mb-5 text-white">
+            <div className="relative z-10 max-w-[55%]">
+              <h3 className="text-[15px] font-extrabold m-0 uppercase tracking-wide">BIG SAVINGS</h3>
+              <p className="text-[12px] font-medium mt-0.5 mb-2">on Bulk Orders</p>
+              <div className="bg-[#ff5500] text-white text-[11px] font-bold px-2 py-0.5 rounded-md inline-block mb-2.5">Up to 25% OFF</div>
+              <button onClick={() => navigate('/categories')} className="bg-white text-[#1e2b4f] border-none rounded-md px-3.5 py-1.5 text-[11px] font-bold cursor-pointer block">Shop Now</button>
+            </div>
+            <div className="absolute -right-5 -bottom-2 w-[160px] h-full z-0">
+              <img src="/promo_banner_bg.png" alt="Promo Boxes" className="w-full h-[150%] object-cover absolute bottom-0 right-0" />
+              <div className="absolute top-[20%] right-[35px] bg-white rounded-lg p-1 w-9 flex items-center justify-center shadow-sm">
+                <img src="/splashscreenlogo.png" alt="ShippNex" className="w-full h-auto" />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Categories Grid */}
+        {/* Dynamic Categories Grid */}
         <div className="grid grid-cols-4 gap-y-4 gap-x-3 mb-8">
-          <div className="flex flex-col items-center cursor-pointer group">
-            <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={grainsImg} alt="Grains & Flours" className="w-10 h-10 object-contain" /></div>
-            <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Grains &<br/>Flours</span>
-          </div>
-          <div className="flex flex-col items-center cursor-pointer group">
-            <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={oilGheeImg} alt="Oil & Ghee" className="w-10 h-10 object-contain" /></div>
-            <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Oil & Ghee</span>
-          </div>
-          <div className="flex flex-col items-center cursor-pointer group">
-            <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={masalaImg} alt="Spices & Masala" className="w-10 h-10 object-contain" /></div>
-            <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Spices &<br/>Masala</span>
-          </div>
-          <div className="flex flex-col items-center cursor-pointer group">
-            <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={sugarImg} alt="Sugar & Sweeteners" className="w-10 h-10 object-contain" /></div>
-            <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Sugar &<br/>Sweeteners</span>
-          </div>
-          <div className="flex flex-col items-center cursor-pointer group">
-            <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={groceryImg} alt="Grocery Essentials" className="w-10 h-10 object-contain" /></div>
-            <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Grocery<br/>Essentials</span>
-          </div>
-          <div className="flex flex-col items-center cursor-pointer group">
-            <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={readyCookImg} alt="Ready-to-Cook" className="w-10 h-10 object-contain" /></div>
-            <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Ready-to-<br/>Cook</span>
-          </div>
-          <div className="flex flex-col items-center cursor-pointer group">
-            <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={homeCareImg} alt="Home Care" className="w-10 h-10 object-contain" /></div>
-            <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Home<br/>Care</span>
-          </div>
-          <div className="flex flex-col items-center cursor-pointer group">
-            <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={personalCareImg} alt="Personal Care" className="w-10 h-10 object-contain" /></div>
-            <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Personal<br/>Care</span>
-          </div>
+          {categories.length > 0 ? (
+            categories.map((cat) => (
+              <div 
+                key={cat._id || cat.name} 
+                onClick={() => navigate('/categories')}
+                className="flex flex-col items-center cursor-pointer group"
+              >
+                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)] overflow-hidden p-1.5">
+                  <img 
+                    src={cat.image || grainsImg} 
+                    alt={cat.name} 
+                    className="w-10 h-10 object-contain" 
+                  />
+                </div>
+                <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">
+                  {cat.name}
+                </span>
+              </div>
+            ))
+          ) : (
+            <>
+              <div className="flex flex-col items-center cursor-pointer group">
+                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={grainsImg} alt="Grains & Flours" className="w-10 h-10 object-contain" /></div>
+                <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Grains &<br/>Flours</span>
+              </div>
+              <div className="flex flex-col items-center cursor-pointer group">
+                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={oilGheeImg} alt="Oil & Ghee" className="w-10 h-10 object-contain" /></div>
+                <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Oil & Ghee</span>
+              </div>
+              <div className="flex flex-col items-center cursor-pointer group">
+                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={masalaImg} alt="Spices & Masala" className="w-10 h-10 object-contain" /></div>
+                <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Spices &<br/>Masala</span>
+              </div>
+              <div className="flex flex-col items-center cursor-pointer group">
+                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={sugarImg} alt="Sugar & Sweeteners" className="w-10 h-10 object-contain" /></div>
+                <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Sugar &<br/>Sweeteners</span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Flash Deals */}

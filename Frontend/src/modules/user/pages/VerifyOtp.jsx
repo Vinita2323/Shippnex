@@ -1,0 +1,166 @@
+import React, { useState, useRef } from 'react';
+import { ArrowLeft, ArrowRight, ShieldCheck, Edit2, Loader2 } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { authService } from '../../../services/authService';
+
+const VerifyOtp = () => {
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const inputRefs = useRef([]);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const phone = location.state?.phone || '+91 9876543210';
+
+  const handleVerify = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    const enteredOtp = otp.join('');
+    if (enteredOtp.length !== 6) return;
+
+    try {
+      setLoading(true);
+      await authService.verifyUserOtp(phone, enteredOtp);
+      navigate('/');
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Invalid OTP code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    try {
+      setErrorMsg('');
+      await authService.sendUserOtp(phone);
+      alert('OTP has been resent to your phone.');
+    } catch (err) {
+      setErrorMsg('Failed to resend OTP.');
+    }
+  };
+
+  const handleChange = (index, value) => {
+    if (isNaN(value)) return;
+    
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+
+    // Move to next input if digit entered
+    if (value !== '' && index < 5) {
+      inputRefs.current[index + 1].focus();
+    }
+  };
+
+  const handleKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && index > 0 && otp[index] === '') {
+      inputRefs.current[index - 1].focus();
+    }
+  };
+
+  return (
+    <div className="h-[100dvh] bg-[#fdf2ec] bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-[#ffedd5] via-[#ffedd5] to-[#f97316]/20 font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col p-4 overflow-hidden">
+      
+      {/* Background Blurs */}
+      <div className="absolute -left-[100px] top-[20%] w-[300px] h-[300px] bg-[#f97316] rounded-full mix-blend-multiply filter blur-[60px] opacity-[0.15]"></div>
+      <div className="absolute -right-[100px] bottom-[10%] w-[300px] h-[300px] bg-[#ea580c] rounded-full mix-blend-multiply filter blur-[60px] opacity-[0.15]"></div>
+
+      {/* Main Card */}
+      <div className="flex-1 bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] border border-slate-100 relative z-10 p-5 flex flex-col justify-between overflow-y-auto [&::-webkit-scrollbar]:hidden">
+        
+        <div>
+          {/* Header Navigation */}
+          <div className="flex items-center justify-between mb-6">
+            <button 
+              onClick={() => navigate('/login')}
+              className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer text-slate-700"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <img src="/Logo.png" alt="Shippnex" className="h-7 object-contain" />
+            <div className="w-10"></div> {/* Spacer */}
+          </div>
+
+          {/* Title & Sent-to Phone Banner */}
+          <div className="text-center my-4">
+            <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3 text-[#ea580c]">
+              <ShieldCheck size={28} />
+            </div>
+            <h1 className="text-[22px] font-extrabold text-[#0f172a] mb-1 tracking-tight">Verify Code</h1>
+            <p className="text-[13px] text-slate-500 font-medium">We sent a 6-digit OTP code to</p>
+            <div className="inline-flex items-center gap-1.5 bg-orange-50 text-[#ea580c] font-bold text-[13px] px-3 py-1 rounded-full mt-1 border border-orange-100">
+              <span>{phone}</span>
+              <button 
+                onClick={() => navigate('/login')} 
+                className="text-[#ea580c] hover:opacity-80 cursor-pointer"
+                title="Edit Phone Number"
+              >
+                <Edit2 size={12} />
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleVerify} className="mt-6 flex flex-col gap-5">
+            {/* OTP Input Fields */}
+            <div className="flex flex-col gap-2">
+              <label className="text-[12px] font-extrabold text-[#0f172a] text-center">Enter 6-Digit OTP</label>
+              <div className="flex justify-between gap-2 w-full">
+                {otp.map((digit, index) => (
+                  <input 
+                    key={index}
+                    ref={el => inputRefs.current[index] = el}
+                    type="text" 
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleChange(index, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(index, e)}
+                    className="flex-1 min-w-0 aspect-square max-h-[54px] rounded-[10px] border border-slate-200 text-center text-[#0f172a] text-[20px] font-semibold outline-none focus:border-[#ea580c] focus:ring-2 focus:ring-orange-100 transition-all bg-white shadow-sm"
+                  />
+                ))}
+              </div>
+              {errorMsg && <p className="text-xs text-red-500 font-semibold text-center mt-1">{errorMsg}</p>}
+            </div>
+
+            {/* Resend OTP */}
+            <div className="flex justify-center text-[13px] text-slate-500 font-medium">
+              Didn't receive the code?{' '}
+              <button 
+                type="button"
+                onClick={handleResendOtp}
+                className="bg-transparent border-none text-[#ea580c] font-bold ml-1 cursor-pointer hover:underline"
+              >
+                Resend OTP
+              </button>
+            </div>
+
+            {/* Submit Button */}
+            <button 
+              type="submit"
+              disabled={otp.join('').length < 6 || loading}
+              className="w-full bg-gradient-to-r from-[#f97316] to-[#ea580c] disabled:opacity-50 disabled:cursor-not-allowed text-white border-none rounded-[12px] py-3.5 px-5 text-[14px] font-bold tracking-wide cursor-pointer shadow-[0_6px_16px_rgba(234,88,12,0.25)] transition-transform duration-200 active:scale-[0.98] flex items-center justify-center gap-2 mt-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Verifying...
+                </>
+              ) : (
+                <>
+                  Verify & Log In
+                  <ArrowRight size={16} strokeWidth={2.5} />
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+
+        <p className="text-[11px] text-center text-slate-400 font-normal mt-6">
+          Having trouble? Contact Shippnex Support.
+        </p>
+
+      </div>
+    </div>
+  );
+};
+
+export default VerifyOtp;

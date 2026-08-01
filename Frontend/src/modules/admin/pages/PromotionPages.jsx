@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   Home, 
@@ -30,6 +30,7 @@ import {
   Zap,
   Tag
 } from 'lucide-react';
+import { bannerService } from '../../../services/authService';
 import { 
   initialPromotionStats, 
   initialHomeSections, 
@@ -1011,35 +1012,306 @@ export const PromoShopByStore = () => {
    8. HOME BANNERS COMPONENT
    ========================================================================= */
 export const PromoHomeBanners = () => {
-  const [banners, setBanners] = useState(initialBanners);
+  const [banners, setBanners] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+
+  // Form states
+  const [title, setTitle] = useState('');
+  const [subtitle, setSubtitle] = useState('');
+  const [discountBadge, setDiscountBadge] = useState('');
+  const [ctaText, setCtaText] = useState('Shop Now');
+  const [redirectUrl, setRedirectUrl] = useState('/categories');
+  const [imageUrl, setImageUrl] = useState('/promo_banner_bg.png');
+  const [position, setPosition] = useState('Hero Banner');
+  const [status, setStatus] = useState('Active');
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      setUploading(true);
+      const data = await bannerService.uploadImage(formData);
+      if (data.success && data.imageUrl) {
+        setImageUrl(data.imageUrl);
+      }
+    } catch (err) {
+      alert('Failed to upload image: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const fetchBanners = async () => {
+    try {
+      setLoading(true);
+      const res = await bannerService.getBanners();
+      if (res.success) {
+        setBanners(res.banners);
+      }
+    } catch (err) {
+      console.error('Failed to fetch banners:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBanners();
+  }, []);
+
+  const handleOpenAddModal = () => {
+    setEditingId(null);
+    setTitle('');
+    setSubtitle('');
+    setDiscountBadge('');
+    setCtaText('Shop Now');
+    setRedirectUrl('/categories');
+    setImageUrl('/promo_banner_bg.png');
+    setPosition('Hero Banner');
+    setStatus('Active');
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (b) => {
+    setEditingId(b._id || b.id);
+    setTitle(b.title || '');
+    setSubtitle(b.subtitle || '');
+    setDiscountBadge(b.discountBadge || '');
+    setCtaText(b.ctaText || 'Shop Now');
+    setRedirectUrl(b.redirectUrl || '/categories');
+    setImageUrl(b.imageUrl || '/promo_banner_bg.png');
+    setPosition(b.position || 'Hero Banner');
+    setStatus(b.status || 'Active');
+    setIsModalOpen(true);
+  };
+
+  const handleSaveBanner = async (e) => {
+    e.preventDefault();
+    try {
+      const bannerData = {
+        title,
+        subtitle,
+        discountBadge,
+        ctaText,
+        redirectUrl,
+        imageUrl,
+        position,
+        status,
+      };
+
+      if (editingId) {
+        await bannerService.updateBanner(editingId, bannerData);
+      } else {
+        await bannerService.createBanner(bannerData);
+      }
+      setIsModalOpen(false);
+      fetchBanners();
+    } catch (err) {
+      alert('Failed to save banner: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleDeleteBanner = async (id) => {
+    if (window.confirm('Are you sure you want to delete this banner?')) {
+      try {
+        await bannerService.deleteBanner(id);
+        fetchBanners();
+      } catch (err) {
+        alert('Failed to delete banner');
+      }
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fadeIn pb-8">
       <div className="flex justify-between items-center bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Home Banners CMS</h2>
-          <p className="text-xs text-slate-500">Manage hero carousel, mid-page promotional banners, and bottom campaign images</p>
+          <p className="text-xs text-slate-500">Manage hero promotional banners dynamically visible on the User App Homepage</p>
         </div>
-        <button onClick={() => alert('Upload New Banner')} className="px-3.5 py-2 bg-[#ff661a] hover:bg-[#e65200] text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-sm">
+        <button onClick={handleOpenAddModal} className="px-3.5 py-2 bg-[#ff661a] hover:bg-[#e65200] text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-sm">
           <Plus size={15} /> Upload Banner
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {banners.map(b => (
-          <div key={b.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-3 p-4">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-slate-900">{b.position}</span>
-              <span className="text-[10px] font-mono text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded">{b.status}</span>
+      {loading ? (
+        <div className="text-center py-12 text-slate-400 font-medium">Loading live banners...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {banners.map(b => (
+            <div key={b._id || b.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-3 p-4">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-900">{b.position || 'Hero Banner'}</span>
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                  b.status === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
+                }`}>{b.status}</span>
+              </div>
+
+              {/* Live Preview Card */}
+              <div className="bg-gradient-to-br from-[#1e2b4f] to-[#151d38] rounded-xl p-4 text-white relative overflow-hidden">
+                <div className="relative z-10 max-w-[60%]">
+                  <h4 className="text-sm font-extrabold uppercase">{b.title}</h4>
+                  <p className="text-xs text-slate-200 mt-0.5">{b.subtitle}</p>
+                  {b.discountBadge && (
+                    <span className="bg-[#ff5500] text-white text-[10px] font-bold px-2 py-0.5 rounded mt-1 inline-block">
+                      {b.discountBadge}
+                    </span>
+                  )}
+                  <div className="mt-2">
+                    <span className="bg-white text-[#1e2b4f] px-3 py-1 rounded text-[10px] font-bold inline-block">
+                      {b.ctaText || 'Shop Now'}
+                    </span>
+                  </div>
+                </div>
+                <img src={b.imageUrl || '/promo_banner_bg.png'} alt={b.title} className="absolute right-0 bottom-0 w-32 h-full object-cover opacity-80" />
+              </div>
+
+              <div className="flex justify-between items-center text-xs text-slate-500 pt-1">
+                <span>Route: <strong className="text-slate-800 font-mono">{b.redirectUrl || '/categories'}</strong></span>
+                <div className="flex gap-2">
+                  <button onClick={() => handleOpenEditModal(b)} className="px-2.5 py-1 bg-slate-100 hover:bg-[#ff661a] hover:text-white rounded-lg border-none cursor-pointer font-bold text-xs transition-colors">Edit</button>
+                  <button onClick={() => handleDeleteBanner(b._id || b.id)} className="px-2.5 py-1 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 rounded-lg border-none cursor-pointer font-bold text-xs transition-colors">Delete</button>
+                </div>
+              </div>
             </div>
-            <img src={b.desktopImg} alt={b.title} className="w-full h-36 object-cover rounded-xl border border-slate-200" />
-            <div>
-              <h4 className="text-sm font-bold text-slate-900">{b.title}</h4>
-              <p className="text-xs text-slate-500">CTA: "{b.cta}" • Route: {b.redirect}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Add / Edit Banner Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full overflow-hidden animate-fadeIn">
+            <div className="bg-[#ff661a] px-5 py-3.5 flex justify-between items-center text-white">
+              <h3 className="text-sm font-bold tracking-wide">{editingId ? 'Edit Home Banner' : 'Create New Home Banner'}</h3>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="text-white hover:bg-white/20 p-1 rounded-lg border-none bg-transparent cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
+
+            <form onSubmit={handleSaveBanner} className="p-5 space-y-3.5 text-xs text-slate-700">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Banner Main Title</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. BIG SAVINGS"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Subtitle / Subtext</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. on Bulk Orders"
+                  value={subtitle}
+                  onChange={(e) => setSubtitle(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Offer Tag / Badge</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Up to 25% OFF"
+                    value={discountBadge}
+                    onChange={(e) => setDiscountBadge(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Button CTA Text</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Shop Now"
+                    value={ctaText}
+                    onChange={(e) => setCtaText(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Banner Image (Upload Device File)</label>
+                <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                  {imageUrl && (
+                    <img 
+                      src={imageUrl} 
+                      alt="Banner Preview" 
+                      className="w-12 h-12 object-cover rounded-lg border border-slate-300 shrink-0" 
+                    />
+                  )}
+                  <div className="flex-1 overflow-hidden">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="text-xs text-slate-600 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#ff661a] file:text-white hover:file:bg-[#e65200] file:cursor-pointer cursor-pointer"
+                    />
+                    {uploading && <p className="text-[10px] text-[#ff661a] font-bold mt-1">Uploading image...</p>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Redirect Route</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. /categories"
+                    value={redirectUrl}
+                    onChange={(e) => setRedirectUrl(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Status</label>
+                  <select 
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a]"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border-none cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-1 py-2.5 bg-[#ff661a] hover:bg-[#e65200] text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-sm"
+                >
+                  {editingId ? 'Update Banner' : 'Publish Banner'}
+                </button>
+              </div>
+            </form>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
+

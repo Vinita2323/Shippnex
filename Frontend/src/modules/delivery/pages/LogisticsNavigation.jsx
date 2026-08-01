@@ -22,7 +22,7 @@ const LogisticsNavigation = () => {
         <div
           className="w-full h-full grayscale-[0.2] contrast-[0.9] bg-cover bg-center"
           style={{
-            backgroundImage: `url('${localStorage.getItem('shippnex_driver_avatar') || 'https://lh3.googleusercontent.com/aida-public/AB6AXuDBMY_u_VgnDQcYP9Ujq5FQV8jWvhDDWs5l8S3hLa1aS4-6-0CgPnl6C2VqY7hbSlqJY5sq2QnqmNe1UQXbP5T082lmhyI66mAizahgkEY1XtS78XQADAXCPQmWBRIypSG6cJmrQk0w2vTy4VUaC8PdqkJw4qxRqDR3tAK6UEP6KUEK2Dcab2X9H83PZAVp4i1-kwL_pcimy4rA0zFxZedA8Zar4751l0-niA08rGw4brevuod93iZVp22_MElsUjWy7BsAgj9BFUY'}')`,
+            backgroundImage: `url('${localStorage.getItem('shippnex_captain_avatar') || 'https://lh3.googleusercontent.com/aida-public/AB6AXuDBMY_u_VgnDQcYP9Ujq5FQV8jWvhDDWs5l8S3hLa1aS4-6-0CgPnl6C2VqY7hbSlqJY5sq2QnqmNe1UQXbP5T082lmhyI66mAizahgkEY1XtS78XQADAXCPQmWBRIypSG6cJmrQk0w2vTy4VUaC8PdqkJw4qxRqDR3tAK6UEP6KUEK2Dcab2X9H83PZAVp4i1-kwL_pcimy4rA0zFxZedA8Zar4751l0-niA08rGw4brevuod93iZVp22_MElsUjWy7BsAgj9BFUY'}')`,
           }}
         ></div>
         {/* Animated Route SVG Overlay */}
@@ -47,8 +47,8 @@ const LogisticsNavigation = () => {
           <div className="w-10 h-10 rounded-full bg-primary-container overflow-hidden border border-secondary-fixed">
             <img
               className="w-full h-full object-cover"
-              alt="Driver Profile"
-              src={localStorage.getItem('shippnex_driver_avatar') || "https://lh3.googleusercontent.com/aida-public/AB6AXuDAEyDGAdscDL39_nY8qtEE-EKlU5Yzk_5V2Bvr4oyNFSQ0-NKqS_mB8Ctb3CailKWrz62e_BqwhwUC5a7n6ME8bwodDsrgNk4u1PptFSTpqJw_gjaHtJVHg8aIo1ja01ccSyQdNnd9fPpR8Fu0wVk5cCXsQfHSD3wBx7p9NYmyy1g7EIElxHr5imZB2Cs0EQFmKMUxvRpnAteLivauhVxVdaROob09JTJvuPNNgJemX0X8bWDfK95iSBeRwaAskoAdLyA6jSco9m0"}
+              alt="Captain Profile"
+              src={localStorage.getItem('shippnex_captain_avatar') || "https://lh3.googleusercontent.com/aida-public/AB6AXuDAEyDGAdscDL39_nY8qtEE-EKlU5Yzk_5V2Bvr4oyNFSQ0-NKqS_mB8Ctb3CailKWrz62e_BqwhwUC5a7n6ME8bwodDsrgNk4u1PptFSTpqJw_gjaHtJVHg8aIo1ja01ccSyQdNnd9fPpR8Fu0wVk5cCXsQfHSD3wBx7p9NYmyy1g7EIElxHr5imZB2Cs0EQFmKMUxvRpnAteLivauhVxVdaROob09JTJvuPNNgJemX0X8bWDfK95iSBeRwaAskoAdLyA6jSco9m0"}
             />
           </div>
           <div className="flex flex-col">
@@ -57,7 +57,7 @@ const LogisticsNavigation = () => {
           </div>
         </div>
         <button
-          onClick={() => navigate('/driver/notifications')}
+          onClick={() => navigate('/captain/notifications')}
           className="w-10 h-10 flex items-center justify-center rounded-full text-primary hover:opacity-80 transition-opacity active:scale-95 cursor-pointer"
         >
           <span className="material-symbols-outlined">notifications</span>
@@ -175,7 +175,7 @@ const LogisticsNavigation = () => {
 
           <div className="flex gap-3">
             <button
-              onClick={() => navigate('/driver/delivery-verification')}
+              onClick={() => navigate('/captain/delivery-verification')}
               className="bg-secondary text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-lg hover:opacity-90 active:scale-95 transition-all cursor-pointer flex items-center gap-2"
             >
               <span className="material-symbols-outlined text-sm">assignment_turned_in</span>
@@ -183,7 +183,7 @@ const LogisticsNavigation = () => {
             </button>
 
             <button
-              onClick={() => navigate('/driver/dashboard')}
+              onClick={() => navigate('/captain/dashboard')}
               className="bg-error text-on-error px-6 py-3 rounded-2xl font-bold text-sm shadow-lg shadow-error/20 flex items-center gap-2 hover:opacity-90 active:scale-95 transition-all cursor-pointer"
             >
               <span className="material-symbols-outlined text-sm">close</span>

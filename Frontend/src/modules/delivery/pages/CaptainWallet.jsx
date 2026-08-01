@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import DriverBottomNav from '../components/DriverBottomNav';
+import { useNavigate } from 'react-router-dom';
+import CaptainBottomNav from '../components/CaptainBottomNav';
 
-const DriverWallet = () => {
+const CaptainWallet = () => {
+  const navigate = useNavigate();
   const [showCashoutModal, setShowCashoutModal] = useState(false);
   const [cashoutStatus, setCashoutStatus] = useState('idle'); // 'idle' | 'transferring' | 'done'
   const [filterType, setFilterType] = useState('All');
@@ -61,24 +63,33 @@ const DriverWallet = () => {
   return (
     <div className="bg-surface font-body-md text-on-surface min-h-screen pb-28">
       {/* Top Header */}
-      <header className="fixed top-0 left-0 w-full z-40 bg-gradient-to-r from-[#002625] to-[#0a3d16] shadow-lg rounded-b-3xl px-4 py-4 border-b border-white/10">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div>
-            <h1 className="font-headline-md text-xl md:text-2xl font-black text-white tracking-tight">Earnings & Wallet</h1>
-            <p className="text-[10px] md:text-xs text-[#97fc43] font-medium tracking-wide uppercase mt-0.5">Real-time payout dashboard</p>
+      <header className="fixed top-0 left-0 w-full z-40 bg-gradient-to-r from-[#002625] to-[#0a3d16] shadow-md rounded-b-2xl px-3.5 py-2.5 border-b border-white/10">
+        <div className="max-w-7xl mx-auto flex justify-between items-center gap-2">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => navigate(-1)}
+              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-xs"
+              title="Go Back"
+            >
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
+            </button>
+            <div>
+              <h1 className="font-headline-md text-base md:text-lg font-bold text-white tracking-tight leading-none">Earnings & Wallet</h1>
+              <p className="text-[9.5px] text-[#97fc43] font-medium uppercase tracking-wider mt-0.5">Real-time Payouts</p>
+            </div>
           </div>
           <button
             onClick={handleExport}
-            className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white rounded-xl px-3 py-1.5 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold shadow-sm"
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white rounded-lg px-2.5 py-1 transition-colors cursor-pointer flex items-center gap-1 text-xs font-semibold shadow-xs shrink-0"
           >
-            <span className="material-symbols-outlined text-[16px]">download</span>
+            <span className="material-symbols-outlined text-[14px]">download</span>
             Export
           </button>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="pt-24 px-4 max-w-7xl mx-auto space-y-6">
+      <main className="pt-16 px-4 max-w-7xl mx-auto space-y-4">
         {/* Main Wallet Balance Card - High Contrast Visibility */}
         <div className="p-5 rounded-3xl relative overflow-hidden bg-[#002625] shadow-xl border border-emerald-900/40 text-white max-w-sm mx-auto w-full">
           <div className="absolute top-2 right-2 opacity-15">
@@ -255,10 +266,10 @@ const DriverWallet = () => {
         </div>
       )}
 
-      {/* Driver Bottom Navigation */}
-      <DriverBottomNav />
+      {/* Captain Bottom Navigation */}
+      <CaptainBottomNav />
     </div>
   );
 };
 
-export default DriverWallet;
+export default CaptainWallet;

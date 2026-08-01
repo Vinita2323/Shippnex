@@ -5,11 +5,11 @@ const NewJobRequest = () => {
   const navigate = useNavigate();
 
   const handleAccept = () => {
-    navigate('/driver/navigation-active');
+    navigate('/captain/navigation-active');
   };
 
   const handleReject = () => {
-    navigate('/driver/dashboard');
+    navigate('/captain/dashboard');
   };
 
   return (
@@ -20,7 +20,7 @@ const NewJobRequest = () => {
         <div
           className="w-full h-full bg-cover bg-center"
           style={{
-            backgroundImage: `url('${localStorage.getItem('shippnex_driver_avatar') || 'https://lh3.googleusercontent.com/aida-public/AB6AXuDBMY_u_VgnDQcYP9Ujq5FQV8jWvhDDWs5l8S3hLa1aS4-6-0CgPnl6C2VqY7hbSlqJY5sq2QnqmNe1UQXbP5T082lmhyI66mAizahgkEY1XtS78XQADAXCPQmWBRIypSG6cJmrQk0w2vTy4VUaC8PdqkJw4qxRqDR3tAK6UEP6KUEK2Dcab2X9H83PZAVp4i1-kwL_pcimy4rA0zFxZedA8Zar4751l0-niA08rGw4brevuod93iZVp22_MElsUjWy7BsAgj9BFUY'}')`,
+            backgroundImage: `url('${localStorage.getItem('shippnex_captain_avatar') || 'https://lh3.googleusercontent.com/aida-public/AB6AXuDBMY_u_VgnDQcYP9Ujq5FQV8jWvhDDWs5l8S3hLa1aS4-6-0CgPnl6C2VqY7hbSlqJY5sq2QnqmNe1UQXbP5T082lmhyI66mAizahgkEY1XtS78XQADAXCPQmWBRIypSG6cJmrQk0w2vTy4VUaC8PdqkJw4qxRqDR3tAK6UEP6KUEK2Dcab2X9H83PZAVp4i1-kwL_pcimy4rA0zFxZedA8Zar4751l0-niA08rGw4brevuod93iZVp22_MElsUjWy7BsAgj9BFUY'}')`,
           }}
         ></div>
       </div>
@@ -31,14 +31,14 @@ const NewJobRequest = () => {
           <div className="w-10 h-10 rounded-full border-2 border-primary-fixed overflow-hidden">
             <img
               className="w-full h-full object-cover"
-              alt="Driver Profile"
-              src={localStorage.getItem('shippnex_driver_avatar') || "https://lh3.googleusercontent.com/aida-public/AB6AXuARG_eSgZxZRXTZozeU8IDAvgnKwHGCtRM-_7g-xuGfNVxBuwIGpRgljmCao3X3UgfNEc1sn9CAiMpEGYLndhaVk0E_3JK6DFfEedDoP2UgCA5XWM_n8YjIC2yaY8m7-qsiEspkIuKKWUlzPA6abDsebmzkH0znqPhlpY0aQhdM3mcosRN__CcZCDVcKMT89UXDWkam12leLjHXiduzru1i1CZIzK2JraSc3fC5YHxLN0bVZaYmPUHJpNEkt-dCoWnMg8urJ5GXBuY"}
+              alt="Captain Profile"
+              src={localStorage.getItem('shippnex_captain_avatar') || "https://lh3.googleusercontent.com/aida-public/AB6AXuARG_eSgZxZRXTZozeU8IDAvgnKwHGCtRM-_7g-xuGfNVxBuwIGpRgljmCao3X3UgfNEc1sn9CAiMpEGYLndhaVk0E_3JK6DFfEedDoP2UgCA5XWM_n8YjIC2yaY8m7-qsiEspkIuKKWUlzPA6abDsebmzkH0znqPhlpY0aQhdM3mcosRN__CcZCDVcKMT89UXDWkam12leLjHXiduzru1i1CZIzK2JraSc3fC5YHxLN0bVZaYmPUHJpNEkt-dCoWnMg8urJ5GXBuY"}
             />
           </div>
           <span className="font-headline-lg text-lg font-bold text-primary">ShippNex</span>
         </div>
         <button
-          onClick={() => navigate('/driver/notifications')}
+          onClick={() => navigate('/captain/notifications')}
           className="material-symbols-outlined text-primary hover:opacity-80 transition-opacity p-2 rounded-full hover:bg-surface-container cursor-pointer"
         >
           notifications

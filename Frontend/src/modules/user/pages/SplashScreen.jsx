@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import transportPorterImg from '../../../assets/transportation_porter.png';
 
 const SplashScreen = ({ onGetStarted }) => {
   const navigate = useNavigate();
@@ -26,12 +27,17 @@ const SplashScreen = ({ onGetStarted }) => {
           </div>
         </div>
 
-        {/* Hero 3D Shopping Cart Illustration */}
-        <div className="w-full flex justify-center items-center py-1 max-h-[160px]">
+        {/* Hero Illustrations */}
+        <div className="w-full flex justify-center items-center py-1 max-h-[160px] gap-4">
           <img 
             src="/shopping_cart_illustration.png" 
             alt="Wholesale Shopping Cart" 
-            className="w-full max-w-[180px] h-full max-h-[150px] object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.05)]"
+            className="w-full max-w-[140px] h-full max-h-[150px] object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.05)]"
+          />
+          <img 
+            src={transportPorterImg} 
+            alt="Transportation and Porter" 
+            className="w-full max-w-[140px] h-full max-h-[150px] object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.05)]"
           />
         </div>
 

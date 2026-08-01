@@ -1,22 +1,27 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Lock, Mail, ArrowRight } from 'lucide-react';
+import { authService } from '../../../services/authService';
 
 export const AdminLogin = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrorMsg('');
     setLoading(true);
-    setTimeout(() => {
-      localStorage.setItem('adminToken', 'mock_admin_token_123');
-      localStorage.setItem('adminUser', JSON.stringify({ name: 'Elena Vance', role: 'Root Administrator' }));
+    try {
+      await authService.adminLogin(email, password);
       setLoading(false);
       navigate('/admin');
-    }, 600);
+    } catch (err) {
+      setLoading(false);
+      setErrorMsg(err.response?.data?.message || 'Invalid email or password');
+    }
   };
 
   return (
@@ -39,6 +44,12 @@ export const AdminLogin = () => {
         </div>
 
         {/* Login Form */}
+        {errorMsg && (
+          <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold p-3 rounded-xl text-center">
+            {errorMsg}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div>
             <label className="text-xs font-semibold text-slate-300 block mb-1.5">Admin Email</label>

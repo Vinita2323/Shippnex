@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const DriverNotifications = () => {
+const CaptainNotifications = () => {
   const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState([
@@ -131,4 +131,4 @@ const DriverNotifications = () => {
   );
 };
 
-export default DriverNotifications;
+export default CaptainNotifications;

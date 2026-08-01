@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../context/AdminContext';
 import { StatusBadge, Drawer } from '../components/AdminUIComponents';
-import { mockUsers, mockSellers, mockDrivers, mockWarehouses, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
+import { categoryService, bannerService } from '../../../services/authService';
+import { mockUsers, mockSellers, mockCaptains, mockWarehouses, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
 import { 
   Search, 
   Download, 
@@ -19,6 +20,7 @@ import {
   Clock,
   Navigation,
   Edit3,
+  Pencil,
   Trash2,
   Upload
 } from 'lucide-react';
@@ -971,13 +973,13 @@ export const SellerManagement = () => {
 };
 
 /* =========================================================================
-   3. DRIVER MANAGEMENT PAGE
+   3. CAPTAIN MANAGEMENT PAGE
    ========================================================================= */
-export const DriverManagement = () => {
-  const [drivers, setDrivers] = React.useState([
+export const CaptainManagement = () => {
+  const [captains, setCaptains] = React.useState([
     { id: '03c6a1', name: 'Vishal Patel', mobile: '9302841836', address: 'Main Road Sector 2', city: 'Ranchi', commission: 'Fixed', balance: '₹824.10', cashCollected: '₹2976.00', status: 'Active', available: 'Available', email: 'vishal@patel.com', vehicle: 'Express Bike' },
     { id: '41f1b9', name: 'Deepak kumar', mobile: '9031275861', address: 'Lohardaga - Chandwa Rd', city: 'Kundgara', commission: 'Fixed', balance: '₹0.00', cashCollected: '₹0.00', status: 'Active', available: 'Available', email: 'deepak@gmail.com', vehicle: 'Hero Splendor' },
-    { id: '43945c', name: 'Test', mobile: '6264715409', address: 'Indore Central', city: 'Indore', commission: 'Fixed', balance: '₹0.00', cashCollected: '₹0.00', status: 'Active', available: 'Available', email: 'test@driver.com', vehicle: 'Cargo Van' },
+    { id: '43945c', name: 'Test', mobile: '6264715409', address: 'Indore Central', city: 'Indore', commission: 'Fixed', balance: '₹0.00', cashCollected: '₹0.00', status: 'Active', available: 'Available', email: 'test@captain.com', vehicle: 'Cargo Van' },
     { id: '3e6bcf', name: 'Ram', mobile: '9109599487', address: 'Zjjs Main Street', city: 'Indore', commission: 'Fixed', balance: '₹0.00', cashCollected: '₹0.00', status: 'Active', available: 'Available', email: 'ram@indore.com', vehicle: 'Auto Rickshaw' },
     { id: '3e6be9', name: 'Rahul', mobile: '7348419775', address: 'Gs Sector 5', city: 'Indore', commission: 'Fixed', balance: '₹0.00', cashCollected: '₹0.00', status: 'Active', available: 'Available', email: 'rahul@gmail.com', vehicle: 'Honda Activa' },
     { id: '3cf776', name: 'Rahul sahu', mobile: '9241673736', address: 'Carcutta khelan dhoura', city: 'Khalari', commission: 'Fixed', balance: '₹0.00', cashCollected: '₹0.00', status: 'Inactive', available: 'Not Available', email: 'rahulsahu@gmail.com', vehicle: 'TVS XL 100' },
@@ -995,8 +997,8 @@ export const DriverManagement = () => {
   const [sortOrder, setSortOrder] = React.useState('asc');
 
   // Modals & Drawer State
-  const [selectedDriver, setSelectedDriver] = React.useState(null);
-  const [editingDriver, setEditingDriver] = React.useState(null);
+  const [selectedCaptain, setSelectedCaptain] = React.useState(null);
+  const [editingCaptain, setEditingCaptain] = React.useState(null);
 
   // Sorting Handler
   const handleSort = (field) => {
@@ -1008,8 +1010,8 @@ export const DriverManagement = () => {
     }
   };
 
-  // Filtered & Sorted Drivers
-  const filteredDrivers = drivers.filter(d => {
+  // Filtered & Sorted Captains
+  const filteredCaptains = captains.filter(d => {
     const matchesStatus = statusFilter === 'All' || d.status === statusFilter;
     const matchesAvailability = availabilityFilter === 'All' || d.available === availabilityFilter;
     const matchesSearch = 
@@ -1021,7 +1023,7 @@ export const DriverManagement = () => {
     return matchesStatus && matchesAvailability && matchesSearch;
   });
 
-  const sortedDrivers = [...filteredDrivers].sort((a, b) => {
+  const sortedCaptains = [...filteredCaptains].sort((a, b) => {
     if (!sortField) return 0;
     let valA = a[sortField] || '';
     let valB = b[sortField] || '';
@@ -1035,28 +1037,28 @@ export const DriverManagement = () => {
   });
 
   // Pagination Math
-  const totalPages = Math.ceil(sortedDrivers.length / entriesPerPage) || 1;
+  const totalPages = Math.ceil(sortedCaptains.length / entriesPerPage) || 1;
   const startIndex = (currentPage - 1) * entriesPerPage;
-  const paginatedDrivers = sortedDrivers.slice(startIndex, startIndex + entriesPerPage);
+  const paginatedCaptains = sortedCaptains.slice(startIndex, startIndex + entriesPerPage);
 
   // Actions
   const toggleStatus = (id) => {
-    setDrivers(prev => prev.map(d => d.id === id ? { ...d, status: d.status === 'Active' ? 'Inactive' : 'Active' } : d));
+    setCaptains(prev => prev.map(d => d.id === id ? { ...d, status: d.status === 'Active' ? 'Inactive' : 'Active' } : d));
   };
 
   const toggleAvailability = (id) => {
-    setDrivers(prev => prev.map(d => d.id === id ? { ...d, available: d.available === 'Available' ? 'Not Available' : 'Available' } : d));
+    setCaptains(prev => prev.map(d => d.id === id ? { ...d, available: d.available === 'Available' ? 'Not Available' : 'Available' } : d));
   };
 
   const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this delivery boy?')) {
-      setDrivers(prev => prev.filter(d => d.id !== id));
+    if (window.confirm('Are you sure you want to delete this captain?')) {
+      setCaptains(prev => prev.filter(d => d.id !== id));
     }
   };
 
   const handleExportCSV = () => {
     const headers = ['Id', 'Name', 'Mobile', 'Address', 'City', 'Commission', 'Balance', 'Cash Collected', 'Status', 'Available'];
-    const rows = sortedDrivers.map(d => [d.id, `"${d.name}"`, d.mobile, `"${d.address}"`, `"${d.city}"`, d.commission, d.balance, d.cashCollected, d.status, d.available]);
+    const rows = sortedCaptains.map(d => [d.id, `"${d.name}"`, d.mobile, `"${d.address}"`, `"${d.city}"`, d.commission, d.balance, d.cashCollected, d.status, d.available]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
@@ -1071,9 +1073,9 @@ export const DriverManagement = () => {
     <div className="space-y-6 animate-fadeIn">
       {/* Page Title & Breadcrumb */}
       <div className="flex justify-between items-center">
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Delivery Boys</h1>
+        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Captains</h1>
         <div className="text-xs text-slate-500 font-medium">
-          Dashboard / <span className="text-[#ff5500] font-semibold">View Delivery Boy List</span>
+          Dashboard / <span className="text-[#ff5500] font-semibold">View Captain List</span>
         </div>
       </div>
 
@@ -1084,7 +1086,7 @@ export const DriverManagement = () => {
         <div className="bg-[#fff4ed] border-b border-orange-200/70 text-[#002625] px-6 py-4 flex items-center justify-between">
           <h2 className="text-base font-bold tracking-tight text-[#002625] flex items-center gap-2 m-0">
             <ChevronRight size={18} className="text-[#ff5500]" />
-            View Delivery Boy List
+            View Captain List
           </h2>
         </div>
 
@@ -1181,37 +1183,37 @@ export const DriverManagement = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
-                {paginatedDrivers.length > 0 ? (
-                  paginatedDrivers.map((driver) => (
-                    <tr key={driver.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3 font-mono text-slate-500">{driver.id}</td>
-                      <td className="py-3 px-3 font-bold text-slate-900">{driver.name}</td>
-                      <td className="py-3 px-3 font-mono">{driver.mobile}</td>
-                      <td className="py-3 px-3 text-slate-600 max-w-[140px] truncate" title={driver.address}>{driver.address}</td>
-                      <td className="py-3 px-3 font-medium">{driver.city}</td>
-                      <td className="py-3 px-3 font-semibold text-slate-600">{driver.commission}</td>
-                      <td className="py-3 px-3 font-mono font-bold text-slate-800">{driver.balance}</td>
-                      <td className="py-3 px-3 font-mono font-bold text-slate-800">{driver.cashCollected}</td>
+                {paginatedCaptains.length > 0 ? (
+                  paginatedCaptains.map((captain) => (
+                    <tr key={captain.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3 font-mono text-slate-500">{captain.id}</td>
+                      <td className="py-3 px-3 font-bold text-slate-900">{captain.name}</td>
+                      <td className="py-3 px-3 font-mono">{captain.mobile}</td>
+                      <td className="py-3 px-3 text-slate-600 max-w-[140px] truncate" title={captain.address}>{captain.address}</td>
+                      <td className="py-3 px-3 font-medium">{captain.city}</td>
+                      <td className="py-3 px-3 font-semibold text-slate-600">{captain.commission}</td>
+                      <td className="py-3 px-3 font-mono font-bold text-slate-800">{captain.balance}</td>
+                      <td className="py-3 px-3 font-mono font-bold text-slate-800">{captain.cashCollected}</td>
                       
                       {/* Status Badge */}
                       <td className="py-3 px-3">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          driver.status === 'Active' 
+                          captain.status === 'Active' 
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
                             : 'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}>
-                          {driver.status}
+                          {captain.status}
                         </span>
                       </td>
 
                       {/* Availability Badge */}
                       <td className="py-3 px-3">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          driver.available === 'Available' 
+                          captain.available === 'Available' 
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
                             : 'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}>
-                          {driver.available}
+                          {captain.available}
                         </span>
                       </td>
 
@@ -1220,7 +1222,7 @@ export const DriverManagement = () => {
                         <div className="flex items-center justify-center gap-1.5">
                           {/* View Icon */}
                           <button 
-                            onClick={() => setSelectedDriver(driver)}
+                            onClick={() => setSelectedCaptain(captain)}
                             className="p-1 rounded-md text-sky-600 hover:bg-sky-50 border-none bg-transparent cursor-pointer transition-colors"
                             title="View Details"
                           >
@@ -1229,22 +1231,22 @@ export const DriverManagement = () => {
 
                           {/* Edit Icon */}
                           <button 
-                            onClick={() => setEditingDriver({ ...driver })}
+                            onClick={() => setEditingCaptain({ ...captain })}
                             className="p-1 rounded-md text-teal-600 hover:bg-teal-50 border-none bg-transparent cursor-pointer transition-colors"
-                            title="Edit Delivery Boy"
+                            title="Edit Captain"
                           >
                             <Edit3 size={15} />
                           </button>
 
                           {/* Toggle Active/Inactive Status */}
                           <button 
-                            onClick={() => toggleStatus(driver.id)}
+                            onClick={() => toggleStatus(captain.id)}
                             className={`p-1 rounded-md border-none bg-transparent cursor-pointer transition-colors ${
-                              driver.status === 'Active' ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'
+                              captain.status === 'Active' ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'
                             }`}
-                            title={driver.status === 'Active' ? 'Deactivate' : 'Activate'}
+                            title={captain.status === 'Active' ? 'Deactivate' : 'Activate'}
                           >
-                            {driver.status === 'Active' ? (
+                            {captain.status === 'Active' ? (
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
                             ) : (
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1253,7 +1255,7 @@ export const DriverManagement = () => {
 
                           {/* Toggle Availability */}
                           <button 
-                            onClick={() => toggleAvailability(driver.id)}
+                            onClick={() => toggleAvailability(captain.id)}
                             className="p-1 rounded-md text-amber-500 hover:bg-amber-50 border-none bg-transparent cursor-pointer transition-colors"
                             title="Toggle Availability"
                           >
@@ -1262,9 +1264,9 @@ export const DriverManagement = () => {
 
                           {/* Delete Icon */}
                           <button 
-                            onClick={() => handleDelete(driver.id)}
+                            onClick={() => handleDelete(captain.id)}
                             className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border-none bg-transparent cursor-pointer transition-colors"
-                            title="Delete Delivery Boy"
+                            title="Delete Captain"
                           >
                             <Trash2 size={15} />
                           </button>
@@ -1275,7 +1277,7 @@ export const DriverManagement = () => {
                 ) : (
                   <tr>
                     <td colSpan="11" className="py-8 text-center text-slate-400 font-medium">
-                      No delivery boys found matching your criteria.
+                      No captains found matching your criteria.
                     </td>
                   </tr>
                 )}
@@ -1286,7 +1288,7 @@ export const DriverManagement = () => {
           {/* Pagination Controls */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 pt-2">
             <div>
-              Showing {startIndex + 1} to {Math.min(startIndex + entriesPerPage, sortedDrivers.length)} of {sortedDrivers.length} entries
+              Showing {startIndex + 1} to {Math.min(startIndex + entriesPerPage, sortedCaptains.length)} of {sortedCaptains.length} entries
             </div>
 
             <div className="flex items-center gap-1">
@@ -1327,16 +1329,16 @@ export const DriverManagement = () => {
       </div>
 
       {/* VIEW DETAILS DRAWER */}
-      {selectedDriver && (
+      {selectedCaptain && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex justify-end">
           <div className="bg-white w-full max-w-md h-full shadow-2xl overflow-y-auto animate-slideInRight flex flex-col">
             <div className="bg-[#fff4ed] border-b border-orange-200/70 p-5 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-[#002625] m-0">{selectedDriver.name}</h3>
-                <p className="text-xs text-slate-500 font-mono mt-0.5 m-0">ID: {selectedDriver.id}</p>
+                <h3 className="text-base font-bold text-[#002625] m-0">{selectedCaptain.name}</h3>
+                <p className="text-xs text-slate-500 font-mono mt-0.5 m-0">ID: {selectedCaptain.id}</p>
               </div>
               <button 
-                onClick={() => setSelectedDriver(null)}
+                onClick={() => setSelectedCaptain(null)}
                 className="text-slate-400 hover:text-slate-900 border-none bg-transparent cursor-pointer text-xl font-bold"
               >
                 ×
@@ -1345,25 +1347,25 @@ export const DriverManagement = () => {
             
             <div className="p-6 space-y-4 text-xs flex-1">
               <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-100">
-                <div className="flex justify-between"><span className="text-slate-500 font-semibold">Mobile:</span> <span className="font-bold text-slate-900">{selectedDriver.mobile}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500 font-semibold">Email:</span> <span className="font-bold text-slate-900">{selectedDriver.email}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500 font-semibold">Vehicle:</span> <span className="font-bold text-[#ff5500]">{selectedDriver.vehicle}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500 font-semibold">City:</span> <span className="font-bold text-slate-900">{selectedDriver.city}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500 font-semibold">Address:</span> <span className="font-medium text-slate-700">{selectedDriver.address}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500 font-semibold">Mobile:</span> <span className="font-bold text-slate-900">{selectedCaptain.mobile}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500 font-semibold">Email:</span> <span className="font-bold text-slate-900">{selectedCaptain.email}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500 font-semibold">Vehicle:</span> <span className="font-bold text-[#ff5500]">{selectedCaptain.vehicle}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500 font-semibold">City:</span> <span className="font-bold text-slate-900">{selectedCaptain.city}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500 font-semibold">Address:</span> <span className="font-medium text-slate-700">{selectedCaptain.address}</span></div>
               </div>
 
               <div className="bg-orange-50/40 p-4 rounded-xl space-y-2 border border-orange-100">
-                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Commission:</span> <span className="font-bold text-slate-900">{selectedDriver.commission}</span></div>
-                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Wallet Balance:</span> <span className="font-bold text-emerald-600">{selectedDriver.balance}</span></div>
-                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Cash Collected:</span> <span className="font-bold text-[#ff5500]">{selectedDriver.cashCollected}</span></div>
-                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Account Status:</span> <span className="font-bold text-emerald-700">{selectedDriver.status}</span></div>
-                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Duty Availability:</span> <span className="font-bold text-emerald-700">{selectedDriver.available}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Commission:</span> <span className="font-bold text-slate-900">{selectedCaptain.commission}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Wallet Balance:</span> <span className="font-bold text-emerald-600">{selectedCaptain.balance}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Cash Collected:</span> <span className="font-bold text-[#ff5500]">{selectedCaptain.cashCollected}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Account Status:</span> <span className="font-bold text-emerald-700">{selectedCaptain.status}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Duty Availability:</span> <span className="font-bold text-emerald-700">{selectedCaptain.available}</span></div>
               </div>
             </div>
 
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
               <button 
-                onClick={() => setSelectedDriver(null)}
+                onClick={() => setSelectedCaptain(null)}
                 className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl border-none cursor-pointer"
               >
                 Close Drawer
@@ -1373,14 +1375,14 @@ export const DriverManagement = () => {
         </div>
       )}
 
-      {/* EDIT DELIVERY BOY MODAL */}
-      {editingDriver && (
+      {/* EDIT captain MODAL */}
+      {editingCaptain && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden animate-fadeIn">
             <div className="bg-[#fff4ed] border-b border-orange-200/70 p-4 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#002625] m-0">Edit Delivery Boy - {editingDriver.name}</h3>
+              <h3 className="text-sm font-bold text-[#002625] m-0">Edit Captain - {editingCaptain.name}</h3>
               <button 
-                onClick={() => setEditingDriver(null)}
+                onClick={() => setEditingCaptain(null)}
                 className="text-slate-400 hover:text-slate-900 border-none bg-transparent cursor-pointer text-lg font-bold"
               >
                 ×
@@ -1392,8 +1394,8 @@ export const DriverManagement = () => {
                 <label className="text-slate-700 font-bold block mb-1">Name</label>
                 <input 
                   type="text" 
-                  value={editingDriver.name}
-                  onChange={(e) => setEditingDriver({ ...editingDriver, name: e.target.value })}
+                  value={editingCaptain.name}
+                  onChange={(e) => setEditingCaptain({ ...editingCaptain, name: e.target.value })}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-[#ff5500]"
                 />
               </div>
@@ -1403,8 +1405,8 @@ export const DriverManagement = () => {
                   <label className="text-slate-700 font-bold block mb-1">Mobile</label>
                   <input 
                     type="text" 
-                    value={editingDriver.mobile}
-                    onChange={(e) => setEditingDriver({ ...editingDriver, mobile: e.target.value })}
+                    value={editingCaptain.mobile}
+                    onChange={(e) => setEditingCaptain({ ...editingCaptain, mobile: e.target.value })}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-[#ff5500]"
                   />
                 </div>
@@ -1412,8 +1414,8 @@ export const DriverManagement = () => {
                   <label className="text-slate-700 font-bold block mb-1">City</label>
                   <input 
                     type="text" 
-                    value={editingDriver.city}
-                    onChange={(e) => setEditingDriver({ ...editingDriver, city: e.target.value })}
+                    value={editingCaptain.city}
+                    onChange={(e) => setEditingCaptain({ ...editingCaptain, city: e.target.value })}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-[#ff5500]"
                   />
                 </div>
@@ -1423,8 +1425,8 @@ export const DriverManagement = () => {
                 <label className="text-slate-700 font-bold block mb-1">Address</label>
                 <input 
                   type="text" 
-                  value={editingDriver.address}
-                  onChange={(e) => setEditingDriver({ ...editingDriver, address: e.target.value })}
+                  value={editingCaptain.address}
+                  onChange={(e) => setEditingCaptain({ ...editingCaptain, address: e.target.value })}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-[#ff5500]"
                 />
               </div>
@@ -1434,8 +1436,8 @@ export const DriverManagement = () => {
                   <label className="text-slate-700 font-bold block mb-1">Balance (₹)</label>
                   <input 
                     type="text" 
-                    value={editingDriver.balance}
-                    onChange={(e) => setEditingDriver({ ...editingDriver, balance: e.target.value })}
+                    value={editingCaptain.balance}
+                    onChange={(e) => setEditingCaptain({ ...editingCaptain, balance: e.target.value })}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-[#ff5500]"
                   />
                 </div>
@@ -1443,8 +1445,8 @@ export const DriverManagement = () => {
                   <label className="text-slate-700 font-bold block mb-1">Cash Collected (₹)</label>
                   <input 
                     type="text" 
-                    value={editingDriver.cashCollected}
-                    onChange={(e) => setEditingDriver({ ...editingDriver, cashCollected: e.target.value })}
+                    value={editingCaptain.cashCollected}
+                    onChange={(e) => setEditingCaptain({ ...editingCaptain, cashCollected: e.target.value })}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-[#ff5500]"
                   />
                 </div>
@@ -1453,15 +1455,15 @@ export const DriverManagement = () => {
 
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
               <button 
-                onClick={() => setEditingDriver(null)}
+                onClick={() => setEditingCaptain(null)}
                 className="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border-none cursor-pointer"
               >
                 Cancel
               </button>
               <button 
                 onClick={() => {
-                  setDrivers(prev => prev.map(d => d.id === editingDriver.id ? editingDriver : d));
-                  setEditingDriver(null);
+                  setCaptains(prev => prev.map(d => d.id === editingCaptain.id ? editingCaptain : d));
+                  setEditingCaptain(null);
                 }}
                 className="px-5 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-2xs"
               >
@@ -1936,69 +1938,39 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
     setActiveCategoryTab(initialSubcategoriesOnly ? 'subcategories' : 'all');
   }, [initialSubcategoriesOnly]);
 
-  // Live State Data for Categories Tree
-  const [treeData, setTreeData] = React.useState([
-    {
-      id: 'cat-1',
-      name: 'Mobile & Accessories',
-      status: 'Active',
-      header: 'Electronics',
-      subcategoriesCount: 2,
-      order: 0,
-      image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=100&auto=format&fit=crop&q=80',
-      subcategories: [
-        {
-          id: 'sub-1',
-          name: 'Smartphones',
-          status: 'Active',
-          header: 'Electronics',
-          subcategoriesCount: 1,
-          order: 0,
-          image: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=100&auto=format&fit=crop&q=80',
-          children: [
-            {
-              id: 'child-1',
-              name: 'phone charger',
-              status: 'Active',
-              header: 'Electronics',
-              order: 1,
-              image: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=100&auto=format&fit=crop&q=80'
-            }
-          ]
-        },
-        {
-          id: 'sub-2',
-          name: 'Mobile Cases & Covers',
-          status: 'Active',
-          header: 'Electronics',
-          order: 1,
-          image: 'https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?w=100&auto=format&fit=crop&q=80',
-          children: []
-        }
-      ]
-    },
-    {
-      id: 'cat-2',
-      name: 'Fresh Produce & Fruits',
-      status: 'Active',
-      header: 'Groceries',
-      subcategoriesCount: 1,
-      order: 1,
-      image: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=100&auto=format&fit=crop&q=80',
-      subcategories: [
-        {
-          id: 'sub-3',
-          name: 'Organic Vegetables',
-          status: 'Active',
-          header: 'Groceries',
+  // Live State Data for Categories Tree (Fetched from DB)
+  const [treeData, setTreeData] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [uploadingImage, setUploadingImage] = React.useState(false);
+
+  const fetchCategories = async () => {
+    try {
+      setLoading(true);
+      const res = await categoryService.getCategories();
+      if (res.success && res.categories) {
+        // Map backend category format into tree structure
+        const formatted = res.categories.map((c, index) => ({
+          id: c._id,
+          name: c.name,
+          status: c.status || 'Active',
+          header: 'General',
           subcategoriesCount: 0,
-          order: 0,
-          image: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=100&auto=format&fit=crop&q=80',
-          children: []
-        }
-      ]
+          order: c.priority || index + 1,
+          image: c.image || '/uploads/categories/default.png',
+          subcategories: []
+        }));
+        setTreeData(formatted);
+      }
+    } catch (err) {
+      console.error('Failed to fetch categories:', err);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  React.useEffect(() => {
+    fetchCategories();
+  }, []);
 
   // Modal Control States
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
@@ -2009,11 +1981,32 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
   // Form Input States
   const [formData, setFormData] = React.useState({
     name: '',
-    header: 'Electronics',
+    header: 'General',
     status: 'Active',
-    order: '0',
-    imageUrl: ''
+    order: '1',
+    imageUrl: '/uploads/categories/default.png'
   });
+
+  // Handle Category Image Device Upload
+  const handleCategoryImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fd = new FormData();
+    fd.append('image', file);
+
+    try {
+      setUploadingImage(true);
+      const res = await bannerService.uploadImage(fd, 'categories');
+      if (res.success && res.imageUrl) {
+        setFormData(prev => ({ ...prev, imageUrl: res.imageUrl }));
+      }
+    } catch (err) {
+      alert('Image upload failed: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   // Edit Modal State
   const [editingItem, setEditingItem] = React.useState(null);
@@ -2046,10 +2039,10 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
     setSelectedParentName('');
     setFormData({
       name: '',
-      header: 'Electronics',
+      header: 'General',
       status: 'Active',
-      order: '0',
-      imageUrl: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=100&auto=format&fit=crop&q=80'
+      order: (treeData.length + 1).toString(),
+      imageUrl: '/uploads/categories/default.png'
     });
     setIsAddModalOpen(true);
   };
@@ -2060,10 +2053,25 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
     setSelectedParentName(cat.name);
     setFormData({
       name: '',
-      header: 'Electronics',
+      header: 'General',
       status: 'Active',
-      order: '0',
-      imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100&auto=format&fit=crop&q=80'
+      order: '1',
+      imageUrl: '/uploads/categories/default.png'
+    });
+    setIsAddModalOpen(true);
+  };
+
+  const openEditCategoryModal = (cat) => {
+    setAddModalType('category');
+    setSelectedParentId(null);
+    setSelectedParentName('');
+    setEditingItem(cat);
+    setFormData({
+      name: cat.name,
+      header: cat.header || 'General',
+      status: cat.status,
+      order: String(cat.order || '1'),
+      imageUrl: cat.image || '/uploads/categories/default.png'
     });
     setIsAddModalOpen(true);
   };
@@ -2074,138 +2082,66 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
     setSelectedParentName(sub.name);
     setFormData({
       name: '',
-      header: 'Electronics',
+      header: 'General',
       status: 'Active',
-      order: '0',
-      imageUrl: 'https://images.unsplash.com/photo-1590779033100-9f60a05a013d?w=100&auto=format&fit=crop&q=80'
+      order: '1',
+      imageUrl: '/uploads/categories/default.png'
     });
     setIsAddModalOpen(true);
   };
 
-  // Create Category / Subcategory / Nested Subcategory Action
-  const handleSaveItem = (e) => {
+  // Create Category / Subcategory Action
+  const handleSaveItem = async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      alert('Please enter a name');
+      alert('Please enter a category name');
       return;
     }
 
-    if (addModalType === 'category') {
-      const newCat = {
-        id: `cat-${Date.now()}`,
-        name: formData.name,
-        status: formData.status,
-        header: formData.header,
-        subcategoriesCount: 0,
-        order: Number(formData.order) || 0,
-        image: formData.imageUrl || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=100&auto=format&fit=crop&q=80',
-        subcategories: []
-      };
-      setTreeData(prev => [newCat, ...prev]);
-      setExpanded(prev => ({ ...prev, [newCat.id]: true }));
-    } else if (addModalType === 'subcategory') {
-      const newSub = {
-        id: `sub-${Date.now()}`,
-        name: formData.name,
-        status: formData.status,
-        header: formData.header,
-        subcategoriesCount: 0,
-        order: Number(formData.order) || 0,
-        image: formData.imageUrl || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100&auto=format&fit=crop&q=80',
-        children: []
-      };
-
-      setTreeData(prev => prev.map(cat => {
-        if (cat.id === selectedParentId) {
-          return {
-            ...cat,
-            subcategoriesCount: (cat.subcategories ? cat.subcategories.length : 0) + 1,
-            subcategories: [...(cat.subcategories || []), newSub]
-          };
-        }
-        return cat;
-      }));
-      setExpanded(prev => ({ ...prev, [selectedParentId]: true }));
-    } else if (addModalType === 'nested_subcategory') {
-      const newNestedChild = {
-        id: `child-${Date.now()}`,
-        name: formData.name,
-        status: formData.status,
-        header: formData.header,
-        order: Number(formData.order) || 0,
-        image: formData.imageUrl || 'https://images.unsplash.com/photo-1590779033100-9f60a05a013d?w=100&auto=format&fit=crop&q=80'
-      };
-
-      setTreeData(prev => prev.map(cat => {
-        if (cat.subcategories) {
-          const updatedSubs = cat.subcategories.map(sub => {
-            if (sub.id === selectedParentId) {
-              return {
-                ...sub,
-                subcategoriesCount: (sub.children ? sub.children.length : 0) + 1,
-                children: [...(sub.children || []), newNestedChild]
-              };
-            }
-            return sub;
-          });
-          return { ...cat, subcategories: updatedSubs };
-        }
-        return cat;
-      }));
-      setExpanded(prev => ({ ...prev, [selectedParentId]: true }));
+    try {
+      if (editingItem) {
+        await categoryService.updateCategory(editingItem.id, {
+          name: formData.name.trim(),
+          status: formData.status,
+          priority: Number(formData.order) || 1,
+          image: formData.imageUrl
+        });
+      } else {
+        await categoryService.createCategory({
+          name: formData.name.trim(),
+          status: formData.status,
+          priority: Number(formData.order) || treeData.length + 1,
+          image: formData.imageUrl
+        });
+      }
+      setIsAddModalOpen(false);
+      setEditingItem(null);
+      fetchCategories();
+    } catch (err) {
+      alert('Failed to save category: ' + (err.response?.data?.message || err.message));
     }
-
-    setIsAddModalOpen(false);
   };
 
   // Toggle Active / Deactivate Status
-  const handleToggleStatus = (id) => {
-    setTreeData(prev => prev.map(cat => {
-      if (cat.id === id) {
-        return { ...cat, status: cat.status === 'Active' ? 'Inactive' : 'Active' };
-      }
-      if (cat.subcategories) {
-        const updatedSubs = cat.subcategories.map(sub => {
-          if (sub.id === id) {
-            return { ...sub, status: sub.status === 'Active' ? 'Inactive' : 'Active' };
-          }
-          if (sub.children) {
-            const updatedChildren = sub.children.map(child => {
-              if (child.id === id) {
-                return { ...child, status: child.status === 'Active' ? 'Inactive' : 'Active' };
-              }
-              return child;
-            });
-            return { ...sub, children: updatedChildren };
-          }
-          return sub;
-        });
-        return { ...cat, subcategories: updatedSubs };
-      }
-      return cat;
-    }));
+  const handleToggleStatus = async (id, currentStatus) => {
+    try {
+      const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+      await categoryService.updateCategory(id, { status: newStatus });
+      fetchCategories();
+    } catch (err) {
+      alert('Failed to update category status');
+    }
   };
 
   // Delete Item Action
-  const handleDeleteItem = (id) => {
+  const handleDeleteItem = async (id) => {
     if (!window.confirm('Are you sure you want to delete this category item?')) return;
-
-    setTreeData(prev => prev.filter(cat => cat.id !== id).map(cat => {
-      if (cat.subcategories) {
-        const filteredSubs = cat.subcategories.filter(sub => sub.id !== id).map(sub => {
-          if (sub.children) {
-            return { ...sub, children: sub.children.filter(child => child.id !== id) };
-          }
-          return sub;
-        });
-        return {
-          ...cat,
-          subcategoriesCount: filteredSubs.length,
-          subcategories: filteredSubs
-        };
-      }
-      return cat;
-    }));
+    try {
+      await categoryService.deleteCategory(id);
+      fetchCategories();
+    } catch (err) {
+      alert('Failed to delete category');
+    }
   };
 
   // Export Categories to Real CSV File Download
@@ -2543,7 +2479,10 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                         <button onClick={() => openAddSubcategoryModal(cat)} className="px-3.5 py-1.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-lg flex items-center gap-1 border-none cursor-pointer shadow-2xs transition-transform active:scale-95">
                           <Plus size={13} /> Add Subcategory
                         </button>
-                        <button onClick={() => handleToggleStatus(cat.id)} className={`px-3 py-1.5 text-xs font-bold rounded-lg border-none cursor-pointer transition-colors ${cat.status === 'Active' ? 'bg-amber-100 hover:bg-amber-200 text-amber-800' : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'}`}>
+                        <button onClick={() => openEditCategoryModal(cat)} className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg flex items-center gap-1 border border-blue-200 cursor-pointer transition-colors" title="Edit Category">
+                          <Pencil size={13} /> Edit
+                        </button>
+                        <button onClick={() => handleToggleStatus(cat.id, cat.status)} className={`px-3 py-1.5 text-xs font-bold rounded-lg border-none cursor-pointer transition-colors ${cat.status === 'Active' ? 'bg-amber-100 hover:bg-amber-200 text-amber-800' : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'}`}>
                           {cat.status === 'Active' ? 'Deactivate' : 'Activate'}
                         </button>
                         <button onClick={() => handleDeleteItem(cat.id)} className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border-none cursor-pointer transition-colors"><Trash2 size={14} /></button>
@@ -2576,7 +2515,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <button onClick={() => openAddNestedSubcategoryModal(sub)} className="p-1.5 bg-[#ff5500] hover:bg-[#e04a00] text-white rounded-md border-none cursor-pointer"><Plus size={13} /></button>
-                                <button onClick={() => handleToggleStatus(sub.id)} className="p-1.5 bg-amber-500/20 text-amber-700 hover:bg-amber-500/30 rounded-md border-none cursor-pointer text-xs font-bold px-2">×</button>
+                                <button onClick={() => handleToggleStatus(sub.id, sub.status)} className="p-1.5 bg-amber-500/20 text-amber-700 hover:bg-amber-500/30 rounded-md border-none cursor-pointer text-xs font-bold px-2">×</button>
                                 <button onClick={() => handleDeleteItem(sub.id)} className="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-600 rounded-md border-none cursor-pointer"><Trash2 size={13} /></button>
                               </div>
                             </div>
@@ -2641,9 +2580,14 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <button onClick={() => handleDeleteItem(c.id)} className="text-xs text-rose-600 font-semibold hover:underline border-none bg-transparent cursor-pointer">
-                          Delete
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => openEditCategoryModal(c)} className="text-xs text-blue-600 font-semibold hover:underline border-none bg-transparent cursor-pointer flex items-center gap-1">
+                            <Pencil size={12} /> Edit
+                          </button>
+                          <button onClick={() => handleDeleteItem(c.id)} className="text-xs text-rose-600 font-semibold hover:underline border-none bg-transparent cursor-pointer">
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -2661,15 +2605,17 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
             {/* Modal Header */}
             <div className="bg-[#002625] text-white px-6 py-4 flex items-center justify-between">
               <h3 className="text-sm font-bold flex items-center gap-2">
-                <Plus size={16} className="text-[#ff5500]" />
-                {addModalType === 'category' 
-                  ? 'Create New Root Category' 
-                  : addModalType === 'subcategory' 
-                  ? 'Create New Subcategory' 
+                {editingItem ? <Pencil size={16} className="text-[#ff5500]" /> : <Plus size={16} className="text-[#ff5500]" />}
+                {editingItem
+                  ? 'Edit Root Category'
+                  : addModalType === 'category'
+                  ? 'Create New Root Category'
+                  : addModalType === 'subcategory'
+                  ? 'Create New Subcategory'
                   : 'Create New Sub-subcategory'}
               </h3>
               <button 
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => { setIsAddModalOpen(false); setEditingItem(null); }}
                 className="text-slate-400 hover:text-white border-none bg-transparent cursor-pointer text-lg font-bold"
               >
                 ×
@@ -2703,7 +2649,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                     addModalType === 'category' 
                       ? 'e.g., Fruits & Vegetables' 
                       : addModalType === 'subcategory' 
-                      ? 'e.g., Banana' 
+                      ? 'e.g., Banana'
                       : 'e.g., Cavendish Banana / Robusta Banana'
                   }
                   value={formData.name}
@@ -2712,10 +2658,10 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                 />
               </div>
 
-              {/* Category Image Upload Field */}
+              {/* Category Image Device Upload Field */}
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Category Image *</label>
-                <div className="flex items-center gap-3">
+                <label className="text-xs font-bold text-slate-700 block mb-1">Category Image (Upload Device File) *</label>
+                <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-2">
                   {formData.imageUrl ? (
                     <img 
                       src={formData.imageUrl} 
@@ -2728,27 +2674,14 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                     </div>
                   )}
 
-                  <div className="flex-1 space-y-1">
-                    <label className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 cursor-pointer inline-flex items-center gap-1.5 transition-colors">
-                      <Upload size={13} className="text-[#ff5500]" />
-                      <span>Choose Image File</span>
-                      <input 
-                        type="file" 
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              setFormData(prev => ({ ...prev, imageUrl: reader.result }));
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                      />
-                    </label>
-                    <p className="text-[10px] text-slate-400">Supported: JPG, PNG, WEBP (Max 2MB)</p>
+                  <div className="flex-1 overflow-hidden">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={handleCategoryImageUpload}
+                      className="text-xs text-slate-600 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#ff5500] file:text-white hover:file:bg-[#e04a00] file:cursor-pointer cursor-pointer"
+                    />
+                    {uploadingImage && <p className="text-[10px] text-[#ff5500] font-bold mt-1">Uploading image...</p>}
                   </div>
                 </div>
               </div>
@@ -2778,7 +2711,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button 
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => { setIsAddModalOpen(false); setEditingItem(null); }}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border-none cursor-pointer"
                 >
                   Cancel
@@ -2787,7 +2720,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                   type="submit"
                   className="px-5 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-sm transition-all"
                 >
-                  Save Category
+                  {editingItem ? 'Update Category' : 'Save Category'}
                 </button>
               </div>
             </form>
@@ -3285,7 +3218,7 @@ export const DeliveryManagement = () => {
     <div className="space-y-6 animate-fadeIn">
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <h2 className="text-xl font-bold text-slate-900">Live Delivery Tracking</h2>
-        <p className="text-xs text-slate-500">Driver transit timeline, OTP security status, and vehicle progress</p>
+        <p className="text-xs text-slate-500">Captain transit timeline, OTP security status, and vehicle progress</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -3295,7 +3228,7 @@ export const DeliveryManagement = () => {
               <div>
                 <span className="text-[10px] font-mono text-[#ff5500] font-bold">{d.id}</span>
                 <h3 className="text-base font-bold text-slate-900">Order: {d.orderId}</h3>
-                <p className="text-xs text-slate-600">Driver: {d.driver}</p>
+                <p className="text-xs text-slate-600">Captain: {d.captain}</p>
               </div>
               <StatusBadge status={d.status} />
             </div>
@@ -3325,7 +3258,7 @@ export const PaymentManagement = () => {
   // Filters State
   const [fromDate, setFromDate] = React.useState('2025-09-12');
   const [toDate, setToDate] = React.useState('2025-09-12');
-  const [deliveryBoyFilter, setDeliveryBoyFilter] = React.useState('All Delivery Boy');
+  const [deliveryBoyFilter, setDeliveryBoyFilter] = React.useState('All Captain');
   const [methodFilter, setMethodFilter] = React.useState('All');
   const [search, setSearch] = React.useState('');
   const [perPage, setPerPage] = React.useState(10);
@@ -3346,7 +3279,7 @@ export const PaymentManagement = () => {
   const handleClearFilters = () => {
     setFromDate('');
     setToDate('');
-    setDeliveryBoyFilter('All Delivery Boy');
+    setDeliveryBoyFilter('All Captain');
     setMethodFilter('All');
     setSearch('');
   };
@@ -3363,7 +3296,7 @@ export const PaymentManagement = () => {
 
   // Filter & Sort Logic
   const filteredTransfers = transfers.filter(t => {
-    const matchesBoy = deliveryBoyFilter === 'All Delivery Boy' || t.name === deliveryBoyFilter;
+    const matchesBoy = deliveryBoyFilter === 'All Captain' || t.name === deliveryBoyFilter;
     const matchesMethod = methodFilter === 'All' || t.type === methodFilter;
     const matchesSearch = 
       t.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -3463,7 +3396,7 @@ export const PaymentManagement = () => {
         <div className="p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4 text-xs">
             
-            {/* Left Filters: From - To Date, Clear, Delivery Boy Filter, Method Filter */}
+            {/* Left Filters: From - To Date, Clear, Captain Filter, Method Filter */}
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
                 <span className="text-slate-500 font-medium">From - To Date:</span>
@@ -3490,13 +3423,13 @@ export const PaymentManagement = () => {
               </button>
 
               <div className="flex items-center gap-2">
-                <span className="text-slate-600 font-medium">Filter by Delivery Boy:</span>
+                <span className="text-slate-600 font-medium">Filter by Captain:</span>
                 <select 
                   value={deliveryBoyFilter}
                   onChange={(e) => setDeliveryBoyFilter(e.target.value)}
                   className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-[#ff5500] cursor-pointer"
                 >
-                  <option value="All Delivery Boy">All Delivery Boy</option>
+                  <option value="All Captain">All Captain</option>
                   <option value="Vishal Patel">Vishal Patel</option>
                   <option value="Deepak kumar">Deepak kumar</option>
                   <option value="Rahul sahu">Rahul sahu</option>
@@ -3672,7 +3605,7 @@ export const PaymentManagement = () => {
 
             <form onSubmit={handleAddFundTransfer} className="p-6 space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Select Delivery Boy *</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Select Captain *</label>
                 <select 
                   value={newTransfer.deliveryBoy}
                   onChange={(e) => setNewTransfer({ ...newTransfer, deliveryBoy: e.target.value })}
@@ -3755,10 +3688,10 @@ export const AdminWalletFinance = () => {
   // Transactions State
   const [transactions, setTransactions] = React.useState([
     { id: 'TXN-901', dateTime: '22/7/2026, 8:28:44 pm', user: 'Cakes n bakes', userRole: 'Seller', type: 'Credit', description: 'Sale proceeds from Order #ORD1784732281209325', amount: '+₹108.00' },
-    { id: 'TXN-902', dateTime: '11/7/2026, 12:40:38 pm', user: 'Deepak kumar', userRole: 'Delivery Boy', type: 'Credit', description: 'Delivery earning for COD order ORD1783753725052987', amount: '+₹7.50' },
+    { id: 'TXN-902', dateTime: '11/7/2026, 12:40:38 pm', user: 'Deepak kumar', userRole: 'Captain', type: 'Credit', description: 'Delivery earning for COD order ORD1783753725052987', amount: '+₹7.50' },
     { id: 'TXN-903', dateTime: '6/7/2026, 4:12:19 pm', user: 'Harshvardhan', userRole: 'Seller', type: 'Credit', description: 'Sale proceeds from Order #ORD1783334491042306', amount: '+₹90.00' },
     { id: 'TXN-904', dateTime: '6/7/2026, 4:10:10 pm', user: 'Harshvardhan', userRole: 'Seller', type: 'Credit', description: 'Sale proceeds from Order #ORD1783334383313326', amount: '+₹90.00' },
-    { id: 'TXN-905', dateTime: '5/7/2026, 2:15:20 pm', user: 'Vishal Patel', userRole: 'Delivery Boy', type: 'Debit', description: 'Cash collected payout settlement', amount: '-₹450.00' },
+    { id: 'TXN-905', dateTime: '5/7/2026, 2:15:20 pm', user: 'Vishal Patel', userRole: 'Captain', type: 'Debit', description: 'Cash collected payout settlement', amount: '-₹450.00' },
   ]);
 
   // Withdrawal Requests State
@@ -3853,7 +3786,7 @@ export const AdminWalletFinance = () => {
           <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Available for business</p>
         </div>
 
-        {/* Card 4: Pending from Delivery Boys */}
+        {/* Card 4: Pending from Captains */}
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:shadow-xs transition-all space-y-1.5 relative">
           <div className="flex justify-between items-center">
             <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
@@ -3864,7 +3797,7 @@ export const AdminWalletFinance = () => {
             </div>
           </div>
           <div>
-            <span className="text-[11px] font-medium text-slate-500 block leading-none">Pending from Delivery Boys</span>
+            <span className="text-[11px] font-medium text-slate-500 block leading-none">Pending from Captains</span>
             <h2 className="text-lg font-extrabold text-slate-900 tracking-tight m-0 mt-1">₹3,190</h2>
           </div>
           <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">COD cash to be collected</p>
@@ -3887,7 +3820,7 @@ export const AdminWalletFinance = () => {
           <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Owed to sellers</p>
         </div>
 
-        {/* Card 6: Delivery Boy Pending Payouts */}
+        {/* Card 6: Captain Pending Payouts */}
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:shadow-xs transition-all space-y-1.5 relative">
           <div className="flex justify-between items-center">
             <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
@@ -3898,7 +3831,7 @@ export const AdminWalletFinance = () => {
             </div>
           </div>
           <div>
-            <span className="text-[11px] font-medium text-slate-500 block leading-none">Delivery Boy Pending Payouts</span>
+            <span className="text-[11px] font-medium text-slate-500 block leading-none">Captain Pending Payouts</span>
             <h2 className="text-lg font-extrabold text-slate-900 tracking-tight m-0 mt-1">₹1,793.2</h2>
           </div>
           <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Owed to delivery partners</p>
@@ -3964,7 +3897,7 @@ export const AdminWalletFinance = () => {
               >
                 <option value="All Users">All Users</option>
                 <option value="Seller">Sellers Only</option>
-                <option value="Delivery Boy">Delivery Boys Only</option>
+                <option value="Captain">Captains Only</option>
               </select>
 
               <select 
@@ -4074,7 +4007,7 @@ export const AdminWalletFinance = () => {
               <div className="space-y-4">
                 {[
                   { id: 'WD-501', title: 'Seller Withdrawal', role: 'SELLER', user: 'appzeto', date: 'Requested: 27/1/2026, 10:38:58 pm', amount: '₹510.00', status: 'Completed', method: 'Bank Transfer', bankDetails: 'IDFC - 54684651684651 (undefined)', reference: 'hjhbjh' },
-                  { id: 'WD-502', title: 'Delivery Boy Withdrawal', role: 'DELIVERY BOY', user: 'N/A', date: 'Requested: 7/1/2026, 3:22:40 pm', amount: '₹40.00', status: 'Pending', method: 'UPI', bankDetails: 'UPI ID: slovevanshi666@gmail.com', reference: null },
+                  { id: 'WD-502', title: 'Captain Withdrawal', role: 'captain', user: 'N/A', date: 'Requested: 7/1/2026, 3:22:40 pm', amount: '₹40.00', status: 'Pending', method: 'UPI', bankDetails: 'UPI ID: slovevanshi666@gmail.com', reference: null },
                   { id: 'WD-503', title: 'Seller Withdrawal', role: 'SELLER', user: 'Deepak Kumar', date: 'Requested: 28/5/2026, 2:52:17 pm', amount: '₹500.00', status: 'Completed', method: 'UPI', bankDetails: 'Airtel payment bank - 9031275861 (AIRP0000001)', reference: '9031275861' },
                   { id: 'WD-504', title: 'Seller Withdrawal', role: 'SELLER', user: 'Harsh shop', date: 'Requested: 30/4/2026, 12:19:51 pm', amount: '₹100.00', status: 'Completed', method: 'Bank Transfer', bankDetails: 'HDFC - 9877898789898998888898 (undefined)', reference: 'cydf' },
                 ]
@@ -4179,8 +4112,8 @@ export const AdminWithdrawals = () => {
     },
     {
       id: 'WD-002',
-      title: 'Delivery Boy Withdrawal',
-      role: 'DELIVERY BOY',
+      title: 'Captain Withdrawal',
+      role: 'captain',
       user: 'N/A',
       date: 'Requested: 7/1/2026, 3:22:40 pm',
       amount: '₹40.00',
@@ -4745,7 +4678,7 @@ export const AdminSellerTransactions = () => {
 };
 
 /* =========================================================================
-   9.8. DELIVERY BOY CASH COLLECTION LIST PAGE
+   9.8. captain CASH COLLECTION LIST PAGE
    ========================================================================= */
 export const AdminCashCollection = () => {
   const [collections, setCollections] = React.useState([
@@ -4757,7 +4690,7 @@ export const AdminCashCollection = () => {
   // Filters State
   const [fromDate, setFromDate] = React.useState('');
   const [toDate, setToDate] = React.useState('');
-  const [deliveryBoyFilter, setDeliveryBoyFilter] = React.useState('All Delivery Boys');
+  const [deliveryBoyFilter, setDeliveryBoyFilter] = React.useState('All Captains');
   const [methodFilter, setMethodFilter] = React.useState('All');
   const [search, setSearch] = React.useState('');
   const [perPage, setPerPage] = React.useState(10);
@@ -4778,7 +4711,7 @@ export const AdminCashCollection = () => {
   const handleClearFilters = () => {
     setFromDate('');
     setToDate('');
-    setDeliveryBoyFilter('All Delivery Boys');
+    setDeliveryBoyFilter('All Captains');
     setMethodFilter('All');
     setSearch('');
   };
@@ -4793,7 +4726,7 @@ export const AdminCashCollection = () => {
   };
 
   const filteredCollections = collections.filter(c => {
-    const matchesBoy = deliveryBoyFilter === 'All Delivery Boys' || c.name === deliveryBoyFilter;
+    const matchesBoy = deliveryBoyFilter === 'All Captains' || c.name === deliveryBoyFilter;
     const matchesMethod = methodFilter === 'All' || c.method === methodFilter;
     const matchesSearch = 
       c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -4860,7 +4793,7 @@ export const AdminCashCollection = () => {
       <div className="flex justify-between items-center">
         <h1 className="text-xl font-bold text-slate-900 tracking-tight">Cash Collection</h1>
         <div className="text-xs text-slate-500 font-medium">
-          Dashboard / <span className="text-[#ff5500] font-semibold">Delivery Boy Cash Collection List</span>
+          Dashboard / <span className="text-[#ff5500] font-semibold">Captain Cash Collection List</span>
         </div>
       </div>
 
@@ -4871,7 +4804,7 @@ export const AdminCashCollection = () => {
         <div className="bg-[#fff4ed] border-b border-orange-200/70 text-[#002625] px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <h2 className="text-base font-bold tracking-tight text-[#002625] flex items-center gap-2 m-0">
             <ChevronRight size={18} className="text-[#ff5500]" />
-            Delivery Boy Cash Collection List
+            Captain Cash Collection List
           </h2>
 
           <button 
@@ -4886,7 +4819,7 @@ export const AdminCashCollection = () => {
         <div className="p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4 text-xs">
             
-            {/* Left Filters: From - To Date, Clear, Filter by Delivery Boy, Filter by Method */}
+            {/* Left Filters: From - To Date, Clear, Filter by Captain, Filter by Method */}
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
                 <span className="text-slate-500 font-medium">From - To Date:</span>
@@ -4913,13 +4846,13 @@ export const AdminCashCollection = () => {
               </button>
 
               <div className="flex items-center gap-2">
-                <span className="text-slate-600 font-medium">Filter by Delivery Boy:</span>
+                <span className="text-slate-600 font-medium">Filter by Captain:</span>
                 <select 
                   value={deliveryBoyFilter}
                   onChange={(e) => setDeliveryBoyFilter(e.target.value)}
                   className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-[#ff5500] cursor-pointer"
                 >
-                  <option value="All Delivery Boys">All Delivery Boys</option>
+                  <option value="All Captains">All Captains</option>
                   <option value="Deepak kumar">Deepak kumar</option>
                   <option value="Wazahat Qureshi">Wazahat Qureshi</option>
                   <option value="Vishal Patel">Vishal Patel</option>
@@ -5088,7 +5021,7 @@ export const AdminCashCollection = () => {
 
             <form onSubmit={handleAddCashCollection} className="p-6 space-y-4 text-xs">
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Select Delivery Boy *</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Select Captain *</label>
                 <select 
                   value={newCollection.name}
                   onChange={(e) => setNewCollection({ ...newCollection, name: e.target.value })}
@@ -5388,7 +5321,7 @@ export const FaqManagement = () => {
                 <option value="General (Visible to all)">General (Visible to all)</option>
                 <option value="Customer">Customer</option>
                 <option value="Seller">Seller</option>
-                <option value="Delivery Driver">Delivery Driver</option>
+                <option value="Delivery Captain">Delivery Captain</option>
               </select>
             </div>
 
@@ -5447,7 +5380,7 @@ export const FaqManagement = () => {
                     <option value="General (Visible to all)">General (Visible to all)</option>
                     <option value="Customer">Customer</option>
                     <option value="Seller">Seller</option>
-                    <option value="Delivery Driver">Delivery Driver</option>
+                    <option value="Delivery Captain">Delivery Captain</option>
                   </select>
                 </div>
 

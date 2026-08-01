@@ -82,6 +82,15 @@ const SellerRegister = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-5">
                   <div className="col-span-2">
+                    <button 
+                      type="button" 
+                      className="w-full bg-blue-50 text-blue-600 border border-blue-200 rounded-xl py-2.5 text-sm font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-colors"
+                      onClick={() => alert('GPS location captured!')} // Placeholder for actual useLocation hook implementation
+                    >
+                      <MapPin size={18} /> Get Current GPS Location
+                    </button>
+                  </div>
+                  <div className="col-span-2">
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">Complete Address</label>
                     <textarea required rows="3" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-[#ff5500] focus:ring-1 focus:ring-[#ff5500] font-medium text-sm transition-all resize-none" placeholder="Street address, locality..."></textarea>
                   </div>

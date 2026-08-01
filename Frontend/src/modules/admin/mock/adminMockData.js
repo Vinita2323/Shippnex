@@ -12,7 +12,7 @@ export const mockStats = {
   productSoldOut: { value: '52', change: '+3.1%', isPositive: false },
   lowStockProducts: { value: '40', change: '+2.0%', isPositive: false },
   totalSellers: { value: '1,240', change: '+8.2%', isPositive: true },
-  totalDrivers: { value: '3,850', change: '+15.4%', isPositive: true },
+  totalCaptains: { value: '3,850', change: '+15.4%', isPositive: true },
   totalWarehouses: { value: '42', change: '+4.0%', isPositive: true },
   ordersToday: { value: '1,894', change: '+22.1%', isPositive: true },
   revenueToday: { value: '₹148,920', change: '+18.6%', isPositive: true },
@@ -20,7 +20,7 @@ export const mockStats = {
   runningDeliveries: { value: '310', change: '+6.5%', isPositive: true },
   supportTickets: { value: '14', change: '-35.0%', isPositive: true },
   pendingSellerApprovals: { value: '9', change: 'Action Required', isAlert: true },
-  pendingDriverApprovals: { value: '15', change: 'Action Required', isAlert: true },
+  pendingCaptainApprovals: { value: '15', change: 'Action Required', isAlert: true },
 };
 
 export const mockRevenueChartData = [
@@ -48,7 +48,7 @@ export const mockSellers = [
   { id: 'SLR-804', storeName: 'BioFresh Organics', ownerName: 'Sarah Jenkins', email: 'sarah@biofresh.org', phone: '+1 555-9044', status: 'Suspended', rating: 3.8, productsCount: 65, totalRevenue: '₹18,400', warehouse: 'South Distribution Hub', kycStatus: 'Flagged' },
 ];
 
-export const mockDrivers = [
+export const mockCaptains = [
   { id: 'DRV-401', name: 'Carlos Rodriguez', phone: '+1 555-4011', vehicle: 'Heavy Cargo Van - Ford Transit', license: 'DL-994821', status: 'On Delivery', currentOrder: 'ORD-99201', rating: 4.95, location: 'Downtown Hub Sector 4', kyc: 'Verified' },
   { id: 'DRV-402', name: 'James Wilson', phone: '+1 555-4022', vehicle: 'Refrigerated Truck 3T', license: 'DL-883109', status: 'Available', currentOrder: 'None', rating: 4.88, location: 'North Cargo Terminal', kyc: 'Verified' },
   { id: 'DRV-403', name: 'Amira Patel', phone: '+1 555-4033', vehicle: 'Electric Express Van', license: 'DL-772940', status: 'Pending Approval', currentOrder: 'None', rating: 5.0, location: 'Offline', kyc: 'Pending Review' },
@@ -138,17 +138,17 @@ export const mockProducts = [
 ];
 
 export const mockOrders = [
-  { id: 'ORD-99201', customer: 'Alexander Wright', seller: 'Apex Wholesale Grocery', driver: 'Carlos Rodriguez', itemsCount: 14, total: '₹1,480.00', status: 'In Transit', warehouse: 'Central East Coast Hub', date: '2026-07-27 14:30', paymentStatus: 'Paid (Escrow)' },
-  { id: 'ORD-99202', customer: 'Sophia Chen', seller: 'FreshHarvest Farms & Co.', driver: 'James Wilson', itemsCount: 8, total: '₹640.50', status: 'Dispatched', warehouse: 'West Coast Logistics Terminal', date: '2026-07-27 15:10', paymentStatus: 'Paid' },
-  { id: 'ORD-99203', customer: 'Metro Cafe Group', seller: 'Global ColdChain Logistics', driver: 'Unassigned', itemsCount: 45, total: '₹4,890.00', status: 'Processing', warehouse: 'Midwest Metro Fulfillment', date: '2026-07-27 16:05', paymentStatus: 'Pending Settlement' },
-  { id: 'ORD-99204', customer: 'Emily Watson', seller: 'BioFresh Organics', driver: 'Dmitri Volkov', itemsCount: 6, total: '₹310.00', status: 'Delivered', warehouse: 'Southern Cold Storage', date: '2026-07-27 11:20', paymentStatus: 'Completed' },
-  { id: 'ORD-99205', customer: 'Grand Bistro NYC', seller: 'Apex Wholesale Grocery', driver: 'Unassigned', itemsCount: 22, total: '₹2,150.00', status: 'Cancelled', warehouse: 'Central East Coast Hub', date: '2026-07-27 09:15', paymentStatus: 'Refunded' },
+  { id: 'ORD-99201', customer: 'Alexander Wright', seller: 'Apex Wholesale Grocery', captain: 'Carlos Rodriguez', itemsCount: 14, total: '₹1,480.00', status: 'In Transit', warehouse: 'Central East Coast Hub', date: '2026-07-27 14:30', paymentStatus: 'Paid (Escrow)' },
+  { id: 'ORD-99202', customer: 'Sophia Chen', seller: 'FreshHarvest Farms & Co.', captain: 'James Wilson', itemsCount: 8, total: '₹640.50', status: 'Dispatched', warehouse: 'West Coast Logistics Terminal', date: '2026-07-27 15:10', paymentStatus: 'Paid' },
+  { id: 'ORD-99203', customer: 'Metro Cafe Group', seller: 'Global ColdChain Logistics', captain: 'Unassigned', itemsCount: 45, total: '₹4,890.00', status: 'Processing', warehouse: 'Midwest Metro Fulfillment', date: '2026-07-27 16:05', paymentStatus: 'Pending Settlement' },
+  { id: 'ORD-99204', customer: 'Emily Watson', seller: 'BioFresh Organics', captain: 'Dmitri Volkov', itemsCount: 6, total: '₹310.00', status: 'Delivered', warehouse: 'Southern Cold Storage', date: '2026-07-27 11:20', paymentStatus: 'Completed' },
+  { id: 'ORD-99205', customer: 'Grand Bistro NYC', seller: 'Apex Wholesale Grocery', captain: 'Unassigned', itemsCount: 22, total: '₹2,150.00', status: 'Cancelled', warehouse: 'Central East Coast Hub', date: '2026-07-27 09:15', paymentStatus: 'Refunded' },
 ];
 
 export const mockDeliveries = [
-  { id: 'DEL-8801', orderId: 'ORD-99201', driver: 'Carlos Rodriguez', vehicle: 'Ford Transit Van', pickup: 'Central East Coast Hub', dropoff: 'Midtown Commercial Kitchen #4', status: 'On The Way', eta: '18 mins', otpVerified: true, progressPercent: 70 },
-  { id: 'DEL-8802', orderId: 'ORD-99202', driver: 'James Wilson', vehicle: 'Refrigerated 3T Truck', pickup: 'West Coast Logistics', dropoff: 'Sunset Blvd Organic Market', status: 'Assigned', eta: '45 mins', otpVerified: false, progressPercent: 20 },
-  { id: 'DEL-8803', orderId: 'ORD-99204', driver: 'Dmitri Volkov', vehicle: 'Flatbed Carrier', pickup: 'Southern Cold Storage', dropoff: 'Dallas Fresh Foods Outlet', status: 'Completed', eta: 'Delivered at 11:20 AM', otpVerified: true, progressPercent: 100 },
+  { id: 'DEL-8801', orderId: 'ORD-99201', captain: 'Carlos Rodriguez', vehicle: 'Ford Transit Van', pickup: 'Central East Coast Hub', dropoff: 'Midtown Commercial Kitchen #4', status: 'On The Way', eta: '18 mins', otpVerified: true, progressPercent: 70 },
+  { id: 'DEL-8802', orderId: 'ORD-99202', captain: 'James Wilson', vehicle: 'Refrigerated 3T Truck', pickup: 'West Coast Logistics', dropoff: 'Sunset Blvd Organic Market', status: 'Assigned', eta: '45 mins', otpVerified: false, progressPercent: 20 },
+  { id: 'DEL-8803', orderId: 'ORD-99204', captain: 'Dmitri Volkov', vehicle: 'Flatbed Carrier', pickup: 'Southern Cold Storage', dropoff: 'Dallas Fresh Foods Outlet', status: 'Completed', eta: 'Delivered at 11:20 AM', otpVerified: true, progressPercent: 100 },
 ];
 
 export const mockPayments = [
@@ -173,13 +173,13 @@ export const mockRoles = [
   { id: 'ROLE-1', name: 'Super Administrator', members: 3, permissions: 'All Access (System Level)', badgeColor: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
   { id: 'ROLE-2', name: 'Warehouse Supervisor', members: 12, permissions: 'Inventory, Orders, Deliveries, Stock', badgeColor: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
   { id: 'ROLE-3', name: 'Finance & Compliance Officer', members: 5, permissions: 'Payments, Settlements, KYC, Refunds', badgeColor: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
-  { id: 'ROLE-4', name: 'Customer Operations Manager', members: 18, permissions: 'Users, Drivers, Support, Reports', badgeColor: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
+  { id: 'ROLE-4', name: 'Customer Operations Manager', members: 18, permissions: 'Users, Captains, Support, Reports', badgeColor: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
 ];
 
 export const mockFaqs = [
   { id: 1, category: 'General (Visible to all)', question: 'How do I place an order on ShippNex?', answer: 'To place an order, browse products, add them to your cart, select your delivery address, and complete payment.' },
   { id: 2, category: 'Customer', question: 'How can I track my shipment live?', answer: 'Go to your Orders section or enter your tracking ID on the Track Order page for real-time GPS tracking updates.' },
   { id: 3, category: 'Seller', question: 'What is the settlement payout cycle for sellers?', answer: 'Payouts are automatically generated every Monday directly into your registered bank account.' },
-  { id: 4, category: 'Delivery Driver', question: 'How do I accept delivery requests?', answer: 'Toggle your status to Available in the Driver app to receive nearby instant delivery alerts.' },
+  { id: 4, category: 'Delivery Captain', question: 'How do I accept delivery requests?', answer: 'Toggle your status to Available in the Captain app to receive nearby instant delivery alerts.' },
   { id: 5, category: 'General (Visible to all)', question: 'What payment options are supported?', answer: 'ShippNex supports credit/debit cards, UPI, net banking, wallet balances, and Cash on Delivery.' }
 ];

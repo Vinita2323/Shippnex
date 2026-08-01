@@ -49,12 +49,12 @@ const SellerSidebar = ({ isOpen, setIsOpen }) => {
   return (
     <aside className={`${isOpen ? 'w-64' : 'w-20'} bg-[#002625] text-white transition-all duration-300 flex flex-col h-full shadow-xl z-40 shrink-0 font-sans`}>
       {/* Brand Header - White Background Logo Section */}
-      <div className="h-16 bg-white flex items-center justify-center px-3 border-b border-slate-200 shrink-0">
-        <Link to="/seller/dashboard" className="flex items-center justify-center w-full py-1">
+      <div className="h-20 bg-white flex items-center justify-center px-3 border-b border-slate-200 shrink-0">
+        <Link to="/seller/dashboard" className="flex items-center justify-center w-full">
           <img 
             src="/Logo.png" 
             alt="Logo" 
-            className={`${isOpen ? 'h-11' : 'h-8'} max-w-full object-contain transition-all`} 
+            className={`${isOpen ? 'h-16' : 'h-10'} max-w-full object-contain transition-all`} 
           />
         </Link>
       </div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DriverBottomNav from '../components/DriverBottomNav';
+import CaptainBottomNav from '../components/CaptainBottomNav';
 
 const ActiveDelivery = () => {
   const navigate = useNavigate();
@@ -9,7 +9,7 @@ const ActiveDelivery = () => {
   const [showChatModal, setShowChatModal] = useState(false);
   const [chatMessages, setChatMessages] = useState([
     { sender: 'dispatch', text: 'Order #SNX-1024 assigned. Priority Cold Chain cargo.', time: '09:00 AM' },
-    { sender: 'driver', text: 'Arrived at Global Logistics Hub A1 Gate 4.', time: '09:12 AM' },
+    { sender: 'captain', text: 'Arrived at Global Logistics Hub A1 Gate 4.', time: '09:12 AM' },
     { sender: 'dispatch', text: 'Verified! Please proceed to Bay 14 for loading.', time: '09:14 AM' },
   ]);
   const [newMessage, setNewMessage] = useState('');
@@ -24,7 +24,7 @@ const ActiveDelivery = () => {
     const msg = textToSend || newMessage;
     if (!msg.trim()) return;
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setChatMessages((prev) => [...prev, { sender: 'driver', text: msg, time: now }]);
+    setChatMessages((prev) => [...prev, { sender: 'captain', text: msg, time: now }]);
     setNewMessage('');
 
     // Simulated dispatch reply after 1 sec
@@ -44,8 +44,8 @@ const ActiveDelivery = () => {
           <div className="w-9 h-9 rounded-full overflow-hidden bg-white/20 border-2 border-[#97fc43] shrink-0">
             <img
               className="w-full h-full object-cover"
-              alt="Driver Profile"
-              src={localStorage.getItem('shippnex_driver_avatar') || "https://lh3.googleusercontent.com/aida-public/AB6AXuCsf0YqUfmzLmy9UGvpLZ3D1i_eeYyDLS8tW8R5-RRgLjawmbAhDUY4x8P1PZjth4SklRupUNZ5HGpqhp9QmHIVGM2KInMVWjSipTskHVcffILdPAGn-Fuk6n_WBjxr1jJU0WfzT_OqQsLti5OGPpFfogpL80PKIvA3beoEfjjDdS9P1k6rxlu2N7tKEFn1wPi_4AbHxfL19v6d4S4ii_nVkyTPZu1UbowNUhPTBqYqmFJ5aVyfDUZynjhyw5_5SrTs3rTW4Afj4NU"}
+              alt="Captain Profile"
+              src={localStorage.getItem('shippnex_captain_avatar') || "https://lh3.googleusercontent.com/aida-public/AB6AXuCsf0YqUfmzLmy9UGvpLZ3D1i_eeYyDLS8tW8R5-RRgLjawmbAhDUY4x8P1PZjth4SklRupUNZ5HGpqhp9QmHIVGM2KInMVWjSipTskHVcffILdPAGn-Fuk6n_WBjxr1jJU0WfzT_OqQsLti5OGPpFfogpL80PKIvA3beoEfjjDdS9P1k6rxlu2N7tKEFn1wPi_4AbHxfL19v6d4S4ii_nVkyTPZu1UbowNUhPTBqYqmFJ5aVyfDUZynjhyw5_5SrTs3rTW4Afj4NU"}
             />
           </div>
           <div className="leading-tight mt-0.5">
@@ -54,7 +54,7 @@ const ActiveDelivery = () => {
           </div>
         </div>
         <button
-          onClick={() => navigate('/driver/notifications')}
+          onClick={() => navigate('/captain/notifications')}
           className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors relative cursor-pointer shadow-sm"
         >
           <span className="material-symbols-outlined text-[18px]">notifications</span>
@@ -163,7 +163,7 @@ const ActiveDelivery = () => {
 
           {currentStep < 4 ? (
             <button
-              onClick={() => navigate('/driver/delivery-verification')}
+              onClick={() => navigate('/captain/delivery-verification')}
               className="w-full mt-3 py-3 bg-secondary hover:bg-secondary/90 text-white rounded-lg font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
             >
               <span className="material-symbols-outlined text-base">check_circle</span>
@@ -171,7 +171,7 @@ const ActiveDelivery = () => {
             </button>
           ) : (
             <button
-              onClick={() => navigate('/driver/dashboard')}
+              onClick={() => navigate('/captain/dashboard')}
               className="w-full mt-3 py-3 bg-primary hover:bg-primary/90 text-white rounded-lg font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
             >
               Return to Dashboard
@@ -235,11 +235,11 @@ const ActiveDelivery = () => {
             {chatMessages.map((msg, index) => (
               <div
                 key={index}
-                className={`flex flex-col ${msg.sender === 'driver' ? 'items-end' : 'items-start'}`}
+                className={`flex flex-col ${msg.sender === 'captain' ? 'items-end' : 'items-start'}`}
               >
                 <div
                   className={`max-w-[82%] p-3 rounded-2xl text-xs md:text-sm leading-relaxed ${
-                    msg.sender === 'driver'
+                    msg.sender === 'captain'
                       ? 'bg-secondary text-white rounded-br-none shadow-xs'
                       : 'bg-surface-container-high text-primary rounded-bl-none border border-outline-variant/30 shadow-xs'
                   }`}
@@ -284,8 +284,8 @@ const ActiveDelivery = () => {
         </div>
       )}
 
-      {/* Driver Bottom Navigation (Hidden when chat modal is open) */}
-      {!showChatModal && <DriverBottomNav />}
+      {/* Captain Bottom Navigation (Hidden when chat modal is open) */}
+      {!showChatModal && <CaptainBottomNav />}
     </div>
   );
 };

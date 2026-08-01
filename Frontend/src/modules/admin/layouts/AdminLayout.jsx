@@ -7,7 +7,7 @@ import {
   UserManagement, 
   SellerManagement, 
   SellersOverview,
-  DriverManagement, 
+  CaptainManagement, 
   WarehouseManagement, 
   CategoryManagement, 
   BrandManagement,
@@ -39,11 +39,15 @@ import {
   PromoHomeBanners
 } from '../pages/PromotionPages';
 
+import { AdminLocationDashboard } from '../pages/AdminLocationDashboard';
+
 export const AdminLayout = () => {
   const { activeTab, setActiveTab } = useAdmin();
 
   const renderActiveTabContent = () => {
     switch (activeTab) {
+      case 'location':
+        return <AdminLocationDashboard />;
       case 'dashboard':
         return <AdminDashboard onNavigate={(tab) => setActiveTab(tab)} />;
       case 'profile':
@@ -56,9 +60,9 @@ export const AdminLayout = () => {
       case 'manage_sellers':
       case 'seller_list':
         return <SellerManagement />;
-      case 'drivers':
+      case 'captains':
       case 'delivery_boy':
-        return <DriverManagement />;
+        return <CaptainManagement />;
       case 'warehouses':
       case 'manage_location':
         return <WarehouseManagement />;

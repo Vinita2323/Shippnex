@@ -9,7 +9,7 @@ const SellerHeader = ({ isSidebarOpen, toggleSidebar }) => {
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 z-30 shadow-sm font-sans">
+    <header className="h-20 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 z-30 shadow-sm font-sans">
       {/* Left Section: Toggle Button */}
       <div className="flex items-center gap-5">
         <button 

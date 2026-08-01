@@ -20,7 +20,7 @@ const BookingCompleted = () => {
         </div>
         
         <h1 className="text-[28px] font-extrabold mb-2">Booking Confirmed!</h1>
-        <p className="text-[15px] text-emerald-100 mb-8 max-w-[80%]">Your vehicle is being assigned. The driver will reach the pickup location shortly.</p>
+        <p className="text-[15px] text-emerald-100 mb-8 max-w-[80%]">Your vehicle is being assigned. The captain will reach the pickup location shortly.</p>
         
         <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 w-full mb-8">
            <div className="flex flex-col mb-4 pb-4 border-b border-white/20">
@@ -31,7 +31,7 @@ const BookingCompleted = () => {
            <div className="flex justify-between items-center">
              <div className="flex flex-col items-start">
                <span className="text-[12px] text-emerald-200">Status</span>
-               <span className="text-[15px] font-bold text-white flex items-center gap-1.5"><Clock size={14}/> Searching Driver</span>
+               <span className="text-[15px] font-bold text-white flex items-center gap-1.5"><Clock size={14}/> Searching Captain</span>
              </div>
              <div className="flex flex-col items-end">
                <span className="text-[12px] text-emerald-200">Est. Arrival</span>

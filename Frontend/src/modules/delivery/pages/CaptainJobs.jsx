@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DriverBottomNav from '../components/DriverBottomNav';
+import CaptainBottomNav from '../components/CaptainBottomNav';
 
-const DriverJobs = () => {
+const CaptainJobs = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('deliveries');
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,7 +152,7 @@ const DriverJobs = () => {
   };
 
   const confirmJobAcceptance = () => {
-    navigate('/driver/active-delivery');
+    navigate('/captain/active-delivery');
   };
 
   const filteredDeliveries = deliveryItems.filter((item) =>
@@ -519,10 +519,10 @@ const DriverJobs = () => {
         </div>
       )}
 
-      {/* Driver Bottom Navigation */}
-      {!selectedDetailJob && !acceptedJob && <DriverBottomNav />}
+      {/* Captain Bottom Navigation */}
+      {!selectedDetailJob && !acceptedJob && <CaptainBottomNav />}
     </div>
   );
 };
 
-export default DriverJobs;
+export default CaptainJobs;

@@ -16,6 +16,7 @@ import {
   Users, 
   Bell, 
   ShieldCheck, 
+  ShieldAlert,
   Settings, 
   LogOut, 
   ChevronDown, 
@@ -134,14 +135,24 @@ export const AdminSidebar = () => {
         },
         {
           id: 'delivery_boy',
-          label: 'Delivery Boy',
+          label: 'Captain',
           icon: Truck,
           badge: '15',
           submenu: [
-            { id: 'drivers', label: 'Manage Delivery Boy' },
+            { id: 'captains', label: 'Manage Captain' },
             { id: 'fund_transfer', label: 'Fund Transfer' }
           ]
         },
+      ]
+    },
+    { 
+      title: 'Users & Staff',
+      items: [
+        { id: 'customers', label: 'Customers', icon: Users },
+        { id: 'captains', label: 'Delivery Captains', icon: Truck },
+        { id: 'sellers', label: 'Sellers', icon: Store },
+        { id: 'staff', label: 'Staff Roles', icon: ShieldAlert },
+        { id: 'location', label: 'Live Location Map', icon: MapPin }
       ]
     },
     {
@@ -217,15 +228,15 @@ export const AdminSidebar = () => {
       className={`${sidebarOpen ? 'w-72' : 'w-20'} bg-[#002625] text-slate-200 border-r border-[#0b3d3b] transition-all duration-300 flex flex-col h-screen sticky top-0 z-40 shrink-0 select-none shadow-2xl font-sans`}
     >
       {/* Brand Header with white background */}
-      <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-center px-3 shrink-0">
+      <div className="h-20 bg-white border-b border-slate-200 flex items-center justify-center px-3 shrink-0">
         <button 
           onClick={() => setActiveTab('dashboard')}
-          className="flex items-center justify-center w-full py-1 bg-transparent border-none cursor-pointer"
+          className="flex items-center justify-center w-full bg-transparent border-none cursor-pointer"
         >
           <img 
             src="/Logo.png" 
             alt="ShippNex Logo" 
-            className={`${sidebarOpen ? 'h-11' : 'h-8'} max-w-full object-contain transition-all`} 
+            className={`${sidebarOpen ? 'h-16' : 'h-10'} max-w-full object-contain transition-all`} 
           />
         </button>
       </div>

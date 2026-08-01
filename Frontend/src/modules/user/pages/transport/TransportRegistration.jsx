@@ -108,7 +108,7 @@ const TransportRegistration = () => {
               <path d="M9 12l2 2 4-4"/>
             </svg>
             <span className="font-semibold text-[11px] text-[#397200]">
-              Instant Driver Dispatch & ISO 27001 Verified Transport
+              Instant Captain Dispatch & ISO 27001 Verified Transport
             </span>
           </div>
 
