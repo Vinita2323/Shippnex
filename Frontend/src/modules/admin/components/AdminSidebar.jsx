@@ -42,7 +42,8 @@ import {
   Flag,
   XCircle,
   RefreshCw,
-  Clock
+  Clock,
+  Zap
 } from 'lucide-react';
 
 export const AdminSidebar = () => {
@@ -107,6 +108,7 @@ export const AdminSidebar = () => {
           icon: Package,
           submenu: [
             { id: 'products', label: 'All Products & Stock' },
+            { id: 'add_product', label: '+ Add Product' },
             { id: 'taxes', label: 'Taxes' },
             { id: 'sku_audit', label: 'SKU Audit' }
           ]
@@ -200,6 +202,7 @@ export const AdminSidebar = () => {
         { id: 'promo_home_section', label: 'Home Section', icon: Home },
         { id: 'promo_bestseller', label: 'Bestseller Cards', icon: Star },
         { id: 'promo_home_banners', label: 'Home Banners', icon: Image },
+        { id: 'promo_flash_sale', label: 'Flash Sale Section', icon: Zap },
       ]
     },
     {

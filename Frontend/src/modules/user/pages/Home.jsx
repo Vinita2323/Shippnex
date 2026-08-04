@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useLocationContext } from '../../../context/LocationContext';
-import { bannerService, categoryService } from '../../../services/authService';
+import { bannerService, categoryService, productService } from '../../../services/authService';
 import { 
   Bell, 
   ShoppingCart, 
@@ -55,6 +55,8 @@ const Home = () => {
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [bannerVisible, setBannerVisible] = useState(true);
   const [categories, setCategories] = useState([]);
+  const [flashDeals, setFlashDeals] = useState(allProducts.slice(0, 3));
+  const [bestsellerProducts, setBestsellerProducts] = useState(allProducts.slice(3));
 
   useEffect(() => {
     const fetchBanners = async () => {
@@ -79,8 +81,71 @@ const Home = () => {
         console.error('Failed to load categories:', err);
       }
     };
+
+    const fetchHomeProducts = async () => {
+      const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+
+      const formatItem = (p) => {
+        const salePrice = Number(p.salePrice || p.price || 0);
+        const mrp = Number(p.mrp || p.originalPrice || salePrice);
+        let discountStr = p.discount;
+        if (!discountStr && mrp > salePrice) {
+          const pct = Math.round(((mrp - salePrice) / mrp) * 100);
+          discountStr = `${pct}% OFF`;
+        }
+        return {
+          id: p.id || p.sku || p._id || `p_${Math.random()}`,
+          name: p.name,
+          price: salePrice,
+          originalPrice: mrp,
+          discount: discountStr || '',
+          image: p.image || p.mainImage || grainsImg,
+          unit: p.unit || `${p.unitValue || 1} ${p.unitType || 'kg'}`
+        };
+      };
+
+      // Flash sale products
+      let flashApi = [];
+      try {
+        const res = await productService.getProducts({ section: 'flash_sale' });
+        if (res && res.products && Array.isArray(res.products)) flashApi = res.products;
+      } catch (err) {}
+
+      const localFlash = localSaved.filter(p => !p.homeSections || p.homeSections.includes('flash_sale'));
+      const combinedFlash = [];
+      localFlash.forEach(p => combinedFlash.push(formatItem(p)));
+      flashApi.forEach(p => {
+        const item = formatItem(p);
+        if (!combinedFlash.some(c => c.id === item.id || c.name === item.name)) combinedFlash.push(item);
+      });
+      allProducts.slice(0, 3).forEach(p => {
+        if (!combinedFlash.some(c => c.id === p.id || c.name === p.name)) combinedFlash.push(p);
+      });
+      setFlashDeals(combinedFlash);
+
+      // Bestseller products
+      let bestApi = [];
+      try {
+        const res = await productService.getProducts({ section: 'bestseller' });
+        if (res && res.products && Array.isArray(res.products)) bestApi = res.products;
+      } catch (err) {}
+
+      const localBest = localSaved.filter(p => !p.homeSections || p.homeSections.includes('bestseller'));
+      const combinedBest = [];
+      localBest.forEach(p => combinedBest.push(formatItem(p)));
+      bestApi.forEach(p => {
+        const item = formatItem(p);
+        if (!combinedBest.some(c => c.id === item.id || c.name === item.name)) combinedBest.push(item);
+      });
+      allProducts.slice(3).forEach(p => {
+        if (!combinedBest.some(c => c.id === p.id || c.name === p.name)) combinedBest.push(p);
+      });
+      setBestsellerProducts(combinedBest);
+    };
+
     fetchBanners();
     fetchCategories();
+    fetchHomeProducts();
   }, []);
 
   // Auto-scroll banners every 3.5 seconds with fade transition
@@ -347,60 +412,33 @@ const Home = () => {
               <span className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-[12px]">30</span>
             </div>
           </div>
-          <button onClick={() => navigate('/categories')} className="bg-transparent border-none text-blue-600 text-[12px] font-semibold cursor-pointer">See All</button>
+          <button onClick={() => navigate('/flash-sale')} className="bg-transparent border-none text-blue-600 text-[12px] font-semibold cursor-pointer">See All</button>
         </div>
 
         <div className="flex overflow-x-auto gap-4 pb-4 -mr-5 pr-5 [&::-webkit-scrollbar]:hidden">
-          {/* Product Card 1 */}
-          <div className="min-w-[140px] bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img onClick={() => navigate('/product/p1')} src={grainsImg} alt="Basmati Rice" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
-            <div className="flex flex-col p-3 pt-2">
-              <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Basmati Rice</h4>
-              <p className="text-[11px] text-slate-400 m-0 mb-2">1kg</p>
-              <div className="flex justify-between items-end mt-1">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[14px] font-extrabold text-slate-900">₹75.00</span>
-                  <span className="text-[10px] text-slate-400 line-through">₹95.00</span>
-                  <span className="text-[10px] font-extrabold text-[#ff5500]">21% OFF</span>
+          {flashDeals.map((prod) => (
+            <div key={prod.id} className="min-w-[140px] max-w-[140px] bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+              <img onClick={() => navigate(`/product/${prod.id}`)} src={prod.image} alt={prod.name} className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
+              <div className="flex flex-col p-3 pt-2 flex-1 justify-between">
+                <div>
+                  <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{prod.name}</h4>
+                  <p className="text-[11px] text-slate-400 m-0 mb-2">{prod.unit}</p>
                 </div>
-                <button onClick={() => handleAddToCart({ id: 'p1', name: 'Basmati Rice', price: 75, originalPrice: 95, image: grainsImg, unit: '1kg' })} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer"><Plus size={16} color="white" /></button>
+                <div className="flex justify-between items-end mt-1">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[14px] font-extrabold text-slate-900">₹{prod.price.toFixed(2)}</span>
+                    {prod.originalPrice > prod.price && (
+                      <span className="text-[10px] text-slate-400 line-through">₹{prod.originalPrice.toFixed(2)}</span>
+                    )}
+                    {prod.discount && (
+                      <span className="text-[10px] font-extrabold text-[#ff5500]">{prod.discount}</span>
+                    )}
+                  </div>
+                  <button onClick={() => handleAddToCart(prod)} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer transition-transform active:scale-95"><Plus size={16} color="white" /></button>
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Product Card 2 */}
-          <div className="min-w-[140px] bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img onClick={() => navigate('/product/p2')} src={oilGheeImg} alt="Sunflower Oil" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
-            <div className="flex flex-col p-3 pt-2">
-              <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Sunflower Oil</h4>
-              <p className="text-[11px] text-slate-400 m-0 mb-2">1L</p>
-              <div className="flex justify-between items-end mt-1">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[14px] font-extrabold text-slate-900">₹110.00</span>
-                  <span className="text-[10px] text-slate-400 line-through">₹140.00</span>
-                  <span className="text-[10px] font-extrabold text-[#ff5500]">21% OFF</span>
-                </div>
-                <button onClick={() => handleAddToCart({ id: 'p2', name: 'Sunflower Oil', price: 110, originalPrice: 140, image: oilGheeImg, unit: '1L' })} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer"><Plus size={16} color="white" /></button>
-              </div>
-            </div>
-          </div>
-
-          {/* Product Card 3 */}
-          <div className="min-w-[140px] bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img onClick={() => navigate('/product/p3')} src={masalaImg} alt="Toor Dal" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
-            <div className="flex flex-col p-3 pt-2">
-              <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Toor Dal</h4>
-              <p className="text-[11px] text-slate-400 m-0 mb-2">1kg</p>
-              <div className="flex justify-between items-end mt-1">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[14px] font-extrabold text-slate-900">₹120.00</span>
-                  <span className="text-[10px] text-slate-400 line-through">₹150.00</span>
-                  <span className="text-[10px] font-extrabold text-[#ff5500]">20% OFF</span>
-                </div>
-                <button onClick={() => handleAddToCart({ id: 'p3', name: 'Toor Dal', price: 120, originalPrice: 150, image: masalaImg, unit: '1kg' })} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer"><Plus size={16} color="white" /></button>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
         
         {/* Best Selling Products */}
@@ -412,69 +450,26 @@ const Home = () => {
         </div>
 
         <div className="grid grid-cols-2 gap-3 pb-4">
-          {/* Product Card 1 */}
-          <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img onClick={() => navigate('/product/p4')} src={grainsImg} alt="Whole Wheat Atta" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
-            <div className="flex flex-col p-3 pt-2">
-              <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Whole Wheat Atta</h4>
-              <p className="text-[11px] text-slate-400 m-0 mb-2">5kg</p>
-              <div className="flex justify-between items-end mt-1">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[14px] font-extrabold text-slate-900">₹250.00</span>
-                  <span className="text-[10px] text-slate-400 line-through">₹280.00</span>
+          {bestsellerProducts.map((prod) => (
+            <div key={prod.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+              <img onClick={() => navigate(`/product/${prod.id}`)} src={prod.image} alt={prod.name} className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
+              <div className="flex flex-col p-3 pt-2 flex-1 justify-between">
+                <div>
+                  <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{prod.name}</h4>
+                  <p className="text-[11px] text-slate-400 m-0 mb-2">{prod.unit}</p>
                 </div>
-                <button onClick={() => handleAddToCart({ id: 'p4', name: 'Whole Wheat Atta', price: 250, originalPrice: 280, image: grainsImg, unit: '5kg' })} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer"><Plus size={16} color="white" /></button>
+                <div className="flex justify-between items-end mt-1">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[14px] font-extrabold text-slate-900">₹{prod.price.toFixed(2)}</span>
+                    {prod.originalPrice > prod.price && (
+                      <span className="text-[10px] text-slate-400 line-through">₹{prod.originalPrice.toFixed(2)}</span>
+                    )}
+                  </div>
+                  <button onClick={() => handleAddToCart(prod)} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer transition-transform active:scale-95"><Plus size={16} color="white" /></button>
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Product Card 2 */}
-          <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img onClick={() => navigate('/product/p5')} src={masalaImg} alt="Iodized Salt" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
-            <div className="flex flex-col p-3 pt-2">
-              <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Iodized Salt</h4>
-              <p className="text-[11px] text-slate-400 m-0 mb-2">1kg</p>
-              <div className="flex justify-between items-end mt-1">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[14px] font-extrabold text-slate-900">₹24.00</span>
-                  <span className="text-[10px] text-slate-400 line-through">₹28.00</span>
-                </div>
-                <button onClick={() => handleAddToCart({ id: 'p5', name: 'Iodized Salt', price: 24, originalPrice: 28, image: masalaImg, unit: '1kg' })} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer"><Plus size={16} color="white" /></button>
-              </div>
-            </div>
-          </div>
-          
-          {/* Product Card 3 */}
-          <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img onClick={() => navigate('/product/p6')} src={sugarImg} alt="Refined Sugar" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
-            <div className="flex flex-col p-3 pt-2">
-              <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Refined Sugar</h4>
-              <p className="text-[11px] text-slate-400 m-0 mb-2">1kg</p>
-              <div className="flex justify-between items-end mt-1">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[14px] font-extrabold text-slate-900">₹45.00</span>
-                  <span className="text-[10px] text-slate-400 line-through">₹55.00</span>
-                </div>
-                <button onClick={() => handleAddToCart({ id: 'p6', name: 'Refined Sugar', price: 45, originalPrice: 55, image: sugarImg, unit: '1kg' })} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer"><Plus size={16} color="white" /></button>
-              </div>
-            </div>
-          </div>
-
-          {/* Product Card 4 */}
-          <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-            <img onClick={() => navigate('/product/p7')} src={groceryImg} alt="Premium Tea" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
-            <div className="flex flex-col p-3 pt-2">
-              <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">Premium Tea</h4>
-              <p className="text-[11px] text-slate-400 m-0 mb-2">500g</p>
-              <div className="flex justify-between items-end mt-1">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[14px] font-extrabold text-slate-900">₹145.00</span>
-                  <span className="text-[10px] text-slate-400 line-through">₹160.00</span>
-                </div>
-                <button onClick={() => handleAddToCart({ id: 'p7', name: 'Premium Tea', price: 145, originalPrice: 160, image: groceryImg, unit: '500g' })} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer"><Plus size={16} color="white" /></button>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
         
         <div className="h-[80px]"></div> {/* Spacing for bottom nav */}

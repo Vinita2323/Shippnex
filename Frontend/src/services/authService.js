@@ -126,3 +126,26 @@ export const categoryService = {
     return response.data;
   },
 };
+
+export const productService = {
+  getProducts: async (params = {}) => {
+    const response = await API.get('/products', { params });
+    return response.data;
+  },
+  getProductById: async (id) => {
+    const response = await API.get(`/products/${id}`);
+    return response.data;
+  },
+  createProduct: async (data) => {
+    const response = await API.post('/products', data);
+    return response.data;
+  },
+  updateProduct: async (id, data) => {
+    const response = await API.put(`/products/${id}`, data);
+    return response.data;
+  },
+  deleteProduct: async (id) => {
+    const response = await API.delete(`/products/${id}`);
+    return response.data;
+  },
+};

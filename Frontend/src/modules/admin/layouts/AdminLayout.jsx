@@ -11,7 +11,8 @@ import {
   WarehouseManagement, 
   CategoryManagement, 
   BrandManagement,
-  ProductManagement, 
+  ProductManagement,
+  AddProductPage, 
   SkuAuditManagement,
   OrderManagement, 
   DeliveryManagement, 
@@ -36,7 +37,8 @@ import {
   PromoStrip,
   PromoLowestPrices,
   PromoShopByStore,
-  PromoHomeBanners
+  PromoHomeBanners,
+  PromoFlashSale
 } from '../pages/PromotionPages';
 
 import { AdminLocationDashboard } from '../pages/AdminLocationDashboard';
@@ -74,6 +76,8 @@ export const AdminLayout = () => {
         return <BrandManagement />;
       case 'products':
         return <ProductManagement />;
+      case 'add_product':
+        return <AddProductPage />;
       case 'sku_audit':
         return <SkuAuditManagement />;
       case 'taxes':
@@ -119,6 +123,8 @@ export const AdminLayout = () => {
         return <PromoShopByStore />;
       case 'promo_home_banners':
         return <PromoHomeBanners />;
+      case 'promo_flash_sale':
+        return <PromoFlashSale />;
       case 'reports':
         return <ReportManagement />;
       case 'faqs':

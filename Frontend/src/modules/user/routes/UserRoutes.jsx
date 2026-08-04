@@ -13,6 +13,7 @@ import Login from '../pages/Login';
 import VerifyOtp from '../pages/VerifyOtp';
 import ProductDetails from '../pages/ProductDetails';
 import Wishlist from '../pages/Wishlist';
+import FlashSale from '../pages/FlashSale';
 import LocationSelectionPage from '../pages/LocationSelectionPage';
 import Notifications from '../pages/Notifications';
 import BottomNav from '../components/BottomNav';
@@ -42,6 +43,7 @@ const UserRoutes = () => {
   const isVerifyOtp = location.pathname === '/verify-otp';
   const isProductDetails = location.pathname.startsWith('/product');
   const isWishlist = location.pathname === '/wishlist';
+  const isFlashSale = location.pathname === '/flash-sale';
   const isNotifications = location.pathname === '/notifications';
   const isPlaceholder = ['/account-information', '/saved-addresses', '/security', '/terms', '/faqs', '/support'].includes(location.pathname);
   
@@ -49,7 +51,7 @@ const UserRoutes = () => {
   const isTransportFlow = ['/transport/register', '/transport/location', '/transport/goods', '/transport/vehicle', '/transport/summary', '/transport/success', '/transport/booking-details'].includes(location.pathname);
   
   // Do NOT hide bottom nav on /transport
-  const hideBottomNav = isCart || isCheckout || isPayment || isTrackOrder || isProfile || isLogin || isVerifyOtp || isProductDetails || isWishlist || isNotifications || isPlaceholder || isTransportFlow;
+  const hideBottomNav = isCart || isCheckout || isPayment || isTrackOrder || isProfile || isLogin || isVerifyOtp || isProductDetails || isWishlist || isFlashSale || isNotifications || isPlaceholder || isTransportFlow;
 
   return (
     <>
@@ -82,6 +84,7 @@ const UserRoutes = () => {
           <Route path="/profile" element={<Profile />} />
           <Route path="/product/:id" element={<ProductDetails />} />
           <Route path="/wishlist" element={<Wishlist />} />
+          <Route path="/flash-sale" element={<FlashSale />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/account-information" element={<AccountInfo />} />
           <Route path="/saved-addresses" element={<SavedAddresses />} />

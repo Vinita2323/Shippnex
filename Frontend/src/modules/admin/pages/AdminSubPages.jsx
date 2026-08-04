@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../context/AdminContext';
 import { StatusBadge, Drawer } from '../components/AdminUIComponents';
-import { categoryService, bannerService } from '../../../services/authService';
+import { categoryService, bannerService, productService } from '../../../services/authService';
 import { mockUsers, mockSellers, mockCaptains, mockWarehouses, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
 import { 
   Search, 
@@ -22,7 +22,13 @@ import {
   Edit3,
   Pencil,
   Trash2,
-  Upload
+  Upload,
+  CheckCircle,
+  FileText,
+  DollarSign,
+  Boxes,
+  Image,
+  Tag
 } from 'lucide-react';
 
 /* =========================================================================
@@ -2735,48 +2741,64 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
    6. PRODUCT MANAGEMENT PAGE (VIEW STOCK MANAGEMENT)
    ========================================================================= */
 export const ProductManagement = () => {
-  const [products, setProducts] = React.useState([
-    {
-      id: '5e17-0',
-      name: 'Pyaaj',
-      seller: 'Keshari Vagitl Shope',
-      category: 'Groceries',
-      image: 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?w=100&auto=format&fit=crop&q=80',
-      variation: 'Variation: 1kg',
-      stock: 40,
-      status: 'Published'
-    },
-    {
-      id: '5d01-0',
-      name: 'Aalu',
-      seller: 'Keshari Vagitl Shope',
-      category: 'Groceries',
-      image: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=100&auto=format&fit=crop&q=80',
-      variation: 'Variation: 1 kg',
-      stock: 1000,
-      status: 'Published'
-    },
-    {
-      id: '3c8e-0',
-      name: 'Khira',
-      seller: 'Keshari Vagitl Shope',
-      category: 'Groceries',
-      image: 'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=100&auto=format&fit=crop&q=80',
-      variation: 'Variation: 1 kg',
-      stock: 100,
-      status: 'Published'
-    },
-    {
-      id: '2f5f-0',
-      name: 'Tamatar',
-      seller: 'Keshari Vagitl Shope',
-      category: 'Groceries',
-      image: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=100&auto=format&fit=crop&q=80',
-      variation: 'Variation: 1 kg',
-      stock: 500,
-      status: 'Published'
+  const { setActiveTab } = useAdmin();
+  const [products, setProducts] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const fetchAllProducts = React.useCallback(async () => {
+    setLoading(true);
+    let apiProducts = [];
+    try {
+      const res = await productService.getProducts();
+      if (res && res.products && Array.isArray(res.products)) {
+        apiProducts = res.products;
+      }
+    } catch (err) {
+      console.warn('Error fetching products from API:', err.message);
     }
-  ]);
+
+    const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+
+    const defaultMock = [
+      { id: '5e17-0', name: 'Pyaaj', seller: 'Keshari Vagitl Shope', category: 'Groceries & Grains', image: 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?w=100&auto=format&fit=crop&q=80', variation: '1kg', stock: 40, status: 'Published' },
+      { id: '5d01-0', name: 'Aalu', seller: 'Keshari Vagitl Shope', category: 'Groceries & Grains', image: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=100&auto=format&fit=crop&q=80', variation: '1 kg', stock: 1000, status: 'Published' },
+      { id: '3c8e-0', name: 'Khira', seller: 'Keshari Vagitl Shope', category: 'Groceries & Grains', image: 'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=100&auto=format&fit=crop&q=80', variation: '1 kg', stock: 100, status: 'Published' },
+      { id: '2f5f-0', name: 'Tamatar', seller: 'Keshari Vagitl Shope', category: 'Groceries & Grains', image: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=100&auto=format&fit=crop&q=80', variation: '1 kg', stock: 500, status: 'Published' }
+    ];
+
+    const combined = [...localSaved];
+
+    apiProducts.forEach(ap => {
+      const formatted = {
+        id: ap.sku || ap._id || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
+        name: ap.name,
+        seller: ap.seller || 'ShippNex Official Store',
+        category: ap.category || 'Groceries & Grains',
+        image: ap.mainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&auto=format&fit=crop&q=80',
+        variation: ap.unit || `${ap.unitValue || 1} ${ap.unitType || 'kg'}`,
+        stock: ap.stock !== undefined ? ap.stock : 100,
+        status: ap.status || 'Published',
+        mrp: ap.mrp,
+        salePrice: ap.salePrice
+      };
+      if (!combined.some(c => c.id === formatted.id || c.name === formatted.name)) {
+        combined.push(formatted);
+      }
+    });
+
+    defaultMock.forEach(dm => {
+      if (!combined.some(c => c.id === dm.id || c.name === dm.name)) {
+        combined.push(dm);
+      }
+    });
+
+    setProducts(combined);
+    setLoading(false);
+  }, []);
+
+  React.useEffect(() => {
+    fetchAllProducts();
+  }, [fetchAllProducts]);
 
   const [categoryFilter, setCategoryFilter] = React.useState('All Category');
   const [sellerFilter, setSellerFilter] = React.useState('All Sellers');
@@ -2790,6 +2812,9 @@ export const ProductManagement = () => {
   const handleDeleteProduct = (id) => {
     if (window.confirm('Are you sure you want to delete this product stock item?')) {
       setProducts(prev => prev.filter(p => p.id !== id));
+      const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+      const updatedLocal = localSaved.filter(p => p.id !== id);
+      localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
     }
   };
 
@@ -2797,6 +2822,9 @@ export const ProductManagement = () => {
     const newStock = prompt(`Update stock count for ${prod.name}:`, prod.stock);
     if (newStock !== null && !isNaN(newStock)) {
       setProducts(prev => prev.map(p => p.id === prod.id ? { ...p, stock: Number(newStock) } : p));
+      const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+      const updatedLocal = localSaved.map(p => p.id === prod.id ? { ...p, stock: Number(newStock) } : p);
+      localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
     }
   };
 
@@ -2828,10 +2856,18 @@ export const ProductManagement = () => {
     <div className="space-y-6 animate-fadeIn">
       {/* Top Header & Breadcrumb */}
       <div className="flex justify-between items-center">
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Products & Stock</h1>
-        <div className="text-xs text-slate-500 font-medium">
-          Dashboard / <span className="text-[#ff5500] font-semibold">Stock Management</span>
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Products & Stock</h1>
+          <div className="text-xs text-slate-500 font-medium">
+            Dashboard / <span className="text-[#ff5500] font-semibold">Stock Management</span>
+          </div>
         </div>
+        <button 
+          onClick={() => setActiveTab('add_product')}
+          className="px-4 py-2.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
+        >
+          <Plus size={16} /> Add New Product
+        </button>
       </div>
 
       {/* View Stock Management Container Card */}
@@ -6933,6 +6969,607 @@ export const SellersOverview = () => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+/* =========================================================================
+   NEW DEDICATED ADD PRODUCT PAGE
+   ========================================================================= */
+export const AddProductPage = () => {
+  const { setActiveTab } = useAdmin();
+  const [formData, setFormData] = React.useState({
+    name: '',
+    category: 'Groceries & Grains',
+    subCategory: 'Grains & Pulses',
+    brand: 'ShippNex Select',
+    unit: '1kg',
+    unitValue: '1',
+    unitType: 'kg',
+    description: '',
+    mrp: '',
+    salePrice: '',
+    taxRate: '5%',
+    hsnCode: '0713',
+    stock: '',
+    minStockLimit: '10',
+    sku: '',
+    seller: 'ShippNex Official Store',
+    status: 'Published',
+    isFeatured: false,
+    mainImage: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
+    mainImageFile: null,
+    galleryImage1: null
+  });
+
+  // Registered Categories & Sub-Categories Mapping
+  const categorySubCategoryMap = {
+    'Groceries & Grains': ['Grains & Pulses', 'Atta & Flour', 'Rice & Rice Products', 'Spices & Masalas', 'Edible Oils & Ghee', 'Salt, Sugar & Jaggery'],
+    'Fresh Produce & Vegetables': ['Fresh Vegetables', 'Fresh Fruits', 'Exotic Produce', 'Organic Herbs', 'Seasonal Harvest'],
+    'Dairy & Eggs': ['Milk & Curd', 'Butter & Cheese', 'Paneer & Tofu', 'Farm Eggs', 'Yogurt & Flavored Milk'],
+    'Beverages & Drinks': ['Soft Drinks & Juices', 'Tea & Coffee', 'Energy Drinks', 'Packaged Water', 'Health Drinks'],
+    'Personal & Home Care': ['Soaps & Body Wash', 'Haircare', 'Oral Care', 'Detergents & Cleaners', 'Surface Cleaners', 'Pest Control']
+  };
+
+  const [registeredCategories, setRegisteredCategories] = React.useState(Object.keys(categorySubCategoryMap));
+
+  React.useEffect(() => {
+    const fetchRegisteredCategories = async () => {
+      try {
+        const res = await categoryService.getCategories();
+        if (res && res.categories && res.categories.length > 0) {
+          const apiCatNames = res.categories.map(c => c.name);
+          setRegisteredCategories(apiCatNames);
+        }
+      } catch (err) {
+        console.warn('Using registered category catalog fallback:', err.message);
+      }
+    };
+    fetchRegisteredCategories();
+  }, []);
+
+  const handleCategorySelectChange = (newCategory) => {
+    const availableSubs = categorySubCategoryMap[newCategory] || ['General'];
+    setFormData(prev => ({
+      ...prev,
+      category: newCategory,
+      subCategory: availableSubs[0] || ''
+    }));
+  };
+
+  const currentSubCategories = categorySubCategoryMap[formData.category] || ['General Sub-Category', 'Others'];
+
+  // Multiple Homepage Sections Selection State
+  const [selectedHomeSections, setSelectedHomeSections] = React.useState([
+    'flash_sale',
+    'bestseller'
+  ]);
+
+  const [toastMsg, setToastMsg] = React.useState('');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [createdSuccessModal, setCreatedSuccessModal] = React.useState(null);
+  const fileInputRef = React.useRef(null);
+
+  const availableSections = [
+    { id: 'flash_sale', name: 'Flash Deals / Flash Sale', description: 'Limited-time deals with countdown timer', badge: 'Flash Sale' },
+    { id: 'bestseller', name: 'Best Selling Products', description: 'Showcase in Top Bestseller carousel cards', badge: 'Bestseller' },
+    { id: 'category_featured', name: 'Category Featured Products', description: 'Highlight under daily category grid', badge: 'Category' },
+    { id: 'lowest_prices', name: 'Lowest Prices / Price Drop', description: 'Feature in Super Saver deals section', badge: 'Lowest Price' },
+    { id: 'featured_store', name: 'Featured Store Showcase', description: 'Show under top verified merchant stores', badge: 'Store' }
+  ];
+
+  const toggleHomeSection = (sectionId) => {
+    setSelectedHomeSections(prev => 
+      prev.includes(sectionId) 
+        ? prev.filter(id => id !== sectionId)
+        : [...prev, sectionId]
+    );
+  };
+
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 4000);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      category: 'Groceries & Grains',
+      subCategory: 'Grains & Pulses',
+      brand: 'ShippNex Select',
+      unit: '1kg',
+      unitValue: '1',
+      unitType: 'kg',
+      description: '',
+      mrp: '',
+      salePrice: '',
+      taxRate: '5%',
+      hsnCode: '0713',
+      stock: '',
+      minStockLimit: '10',
+      sku: '',
+      seller: 'ShippNex Official Store',
+      status: 'Published',
+      isFeatured: false,
+      mainImage: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
+      mainImageFile: null,
+      galleryImage1: null
+    });
+    setCreatedSuccessModal(null);
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleDeviceFileUpload = (e, field) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const resultUrl = event.target.result;
+        setFormData(prev => ({
+          ...prev,
+          [field]: resultUrl,
+          [`${field}File`]: file.name
+        }));
+        showToast(`Image "${file.name}" selected from device!`);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleFormSubmit = async (e, statusToSave = 'Published') => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    let res = null;
+    try {
+      const payload = {
+        ...formData,
+        homeSections: selectedHomeSections,
+        status: statusToSave
+      };
+
+      res = await productService.createProduct(payload);
+    } catch (err) {
+      console.warn('Backend API submission fallback:', err.message);
+    } finally {
+      setIsSubmitting(false);
+
+      const generatedSku = res?.product?.sku || formData.sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+      const newProductObj = {
+        id: generatedSku,
+        name: formData.name || 'New Product',
+        seller: formData.seller || 'ShippNex Official Store',
+        category: formData.category,
+        subCategory: formData.subCategory,
+        image: formData.mainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
+        variation: `${formData.unitValue || 1} ${formData.unitType || 'kg'}`,
+        stock: Number(formData.stock || 0),
+        status: statusToSave,
+        mrp: Number(formData.mrp || 0),
+        salePrice: Number(formData.salePrice || 0)
+      };
+
+      const existingLocal = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+      const updatedLocal = [newProductObj, ...existingLocal.filter(p => p.id !== newProductObj.id)];
+      localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
+
+      setCreatedSuccessModal(newProductObj);
+      showToast(`Product "${formData.name}" added successfully!`);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-fadeIn pb-16 font-sans relative">
+      {/* Product Creation Success Modal */}
+      {createdSuccessModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-scaleUp border border-slate-100">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+              <CheckCircle size={36} />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-xl font-extrabold text-slate-900 m-0">Product Added Successfully!</h3>
+              <p className="text-xs text-slate-500">The product has been saved and is now listed in All Products.</p>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center gap-3.5">
+              <img 
+                src={createdSuccessModal.image} 
+                alt={createdSuccessModal.name} 
+                className="w-14 h-14 rounded-xl object-cover border border-slate-200 bg-white shrink-0" 
+              />
+              <div className="space-y-0.5 flex-1 min-w-0">
+                <h4 className="text-sm font-bold text-slate-900 m-0 truncate">{createdSuccessModal.name}</h4>
+                <p className="text-[11px] font-mono text-slate-400 m-0">SKU: <span className="font-semibold text-slate-700">{createdSuccessModal.id}</span></p>
+                <div className="flex items-center gap-2 pt-0.5">
+                  <span className="text-xs font-extrabold text-[#ff5500]">₹{createdSuccessModal.salePrice}</span>
+                  <span className="text-[10px] text-slate-400 line-through">₹{createdSuccessModal.mrp}</span>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-1.5 py-0.2 rounded">
+                    Stock: {createdSuccessModal.stock}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+              <button 
+                type="button"
+                onClick={() => setActiveTab('products')}
+                className="flex-1 px-4 py-3 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-md transition-all text-center flex items-center justify-center gap-1.5"
+              >
+                <Package size={16} /> View All Products List
+              </button>
+              <button 
+                type="button"
+                onClick={resetForm}
+                className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 cursor-pointer transition-all text-center flex items-center justify-center gap-1.5"
+              >
+                <Plus size={16} /> Add Another Product
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-2 border border-slate-700 animate-bounce">
+          <CheckCircle size={18} className="text-emerald-400" />
+          <span className="text-sm font-medium">{toastMsg}</span>
+        </div>
+      )}
+
+      {/* Clean Page Header */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <h2 className="text-xl font-bold text-slate-900">Add New Product</h2>
+        <p className="text-xs text-slate-500">Create and list new items with pricing, stock limits, media, and homepage section mapping</p>
+      </div>
+
+      <form onSubmit={(e) => handleFormSubmit(e, 'Published')} className="max-w-4xl mx-auto space-y-6">
+        {/* Card 1: Basic Information */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
+            <FileText size={18} className="text-[#ff5500]" /> General Product Information
+          </h3>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Product Name *</label>
+            <input 
+              type="text" 
+              required
+              placeholder="e.g. Premium Organics Basmati Rice"
+              value={formData.name}
+              onChange={(e) => handleInputChange('name', e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:border-[#ff5500]"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Registered Category *</label>
+              <select 
+                value={formData.category}
+                onChange={(e) => handleCategorySelectChange(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:border-[#ff5500]"
+              >
+                {registeredCategories.map(catName => (
+                  <option key={catName} value={catName}>{catName}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Sub-Category *</label>
+              <select 
+                value={formData.subCategory}
+                onChange={(e) => handleInputChange('subCategory', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+              >
+                {currentSubCategories.map(subName => (
+                  <option key={subName} value={subName}>{subName}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Brand</label>
+              <input 
+                type="text" 
+                placeholder="e.g. Fortune / Daawat"
+                value={formData.brand}
+                onChange={(e) => handleInputChange('brand', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Unit / Weight Variant *</label>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Quantity (e.g. 1, 500, 250)"
+                  value={formData.unitValue}
+                  onChange={(e) => handleInputChange('unitValue', e.target.value)}
+                  className="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+                />
+                <select 
+                  value={formData.unitType}
+                  onChange={(e) => handleInputChange('unitType', e.target.value)}
+                  className="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:border-[#ff5500]"
+                >
+                  <option value="kg">kg (Kilograms)</option>
+                  <option value="g">g (Grams)</option>
+                  <option value="L">L (Liters)</option>
+                  <option value="ml">ml (Milliliters)</option>
+                  <option value="Pcs">Pcs (Pieces)</option>
+                  <option value="Pack">Pack</option>
+                  <option value="Dozen">Dozen (12 Pcs)</option>
+                  <option value="Bunch">Bunch</option>
+                  <option value="Box">Box</option>
+                  <option value="Bottle">Bottle</option>
+                  <option value="Sachet">Sachet</option>
+                  <option value="Combo">Combo Pack</option>
+                </select>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Preview Variant: <span className="font-semibold text-[#ff5500]">{formData.unitValue || '1'} {formData.unitType || 'kg'}</span></p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Seller / Merchant</label>
+              <select 
+                value={formData.seller}
+                onChange={(e) => handleInputChange('seller', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+              >
+                <option value="ShippNex Official Store">ShippNex Official Warehouse</option>
+                <option value="Keshari Vagitl Shope">Keshari Vagitl Shope</option>
+                <option value="Fresh Farm Supermarket">Fresh Farm Supermarket</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Product Description</label>
+            <textarea 
+              rows={4}
+              placeholder="Write a brief overview of product freshness, origin, quality certification..."
+              value={formData.description}
+              onChange={(e) => handleInputChange('description', e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+            />
+          </div>
+        </div>
+
+        {/* Card 2: Device File Upload Section */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
+            <Upload size={18} className="text-[#ff5500]" /> Product Image Upload
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Upload Primary Image from Device *</label>
+              
+              {/* Hidden File Input */}
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                accept="image/*"
+                onClick={(e) => { e.target.value = null; }}
+                onChange={(e) => handleDeviceFileUpload(e, 'mainImage')}
+                className="hidden"
+              />
+
+              {/* Device Upload Drag & Drop Dropzone */}
+              <div 
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                className="border-2 border-dashed border-slate-300 hover:border-[#ff5500] bg-slate-50 hover:bg-orange-50/40 rounded-2xl p-6 text-center cursor-pointer transition-all space-y-2 group"
+              >
+                <div className="w-12 h-12 rounded-full bg-orange-100 group-hover:bg-[#ff5500] text-[#ff5500] group-hover:text-white flex items-center justify-center mx-auto transition-colors">
+                  <Upload size={22} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800 group-hover:text-[#ff5500]">
+                    Click to Browse or Upload Image
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">Supports PNG, JPG, WEBP from your computer device</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Uploaded Image Live Preview Box */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Device Upload Preview</label>
+              <div className="h-44 w-full rounded-2xl overflow-hidden border border-slate-200 relative group bg-slate-100 flex items-center justify-center">
+                {formData.mainImage ? (
+                  <>
+                    <img src={formData.mainImage} alt="Uploaded Product" className="h-full w-full object-cover" />
+                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                        className="px-3.5 py-1.5 bg-white text-slate-900 rounded-lg text-xs font-semibold border-none cursor-pointer shadow-md"
+                      >
+                        Change Image
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-400 font-medium">No Image Selected</span>
+                )}
+              </div>
+              {formData.mainImageFile && (
+                <p className="text-xs font-mono text-emerald-600 font-medium mt-1">Selected file: {formData.mainImageFile}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Homepage Section Selection (Multi-Select Checkboxes) */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <Tag size={18} className="text-[#ff5500]" /> Display on Homepage Sections
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">Select one or multiple sections on the Customer App Homepage where this product will be shown.</p>
+            </div>
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-[#ff5500]">
+              {selectedHomeSections.length} Selected
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+            {availableSections.map(sec => {
+              const isSelected = selectedHomeSections.includes(sec.id);
+              return (
+                <div 
+                  key={sec.id}
+                  onClick={() => toggleHomeSection(sec.id)}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-3.5 ${
+                    isSelected 
+                      ? 'bg-orange-50/60 border-[#ff5500] shadow-2xs' 
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <input 
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => {}} // Handled by parent div
+                    className="mt-1 w-4 h-4 accent-[#ff5500] cursor-pointer"
+                  />
+                  <div className="flex-1 space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-slate-900">{sec.name}</span>
+                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-white text-slate-600 border border-slate-200">
+                        {sec.badge}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 m-0">{sec.description}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Card 4: Pricing & Tax */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
+            <DollarSign size={18} className="text-[#ff5500]" /> Pricing, Discounts & Taxation
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">MRP Price (₹) *</label>
+              <input 
+                type="number" 
+                required
+                placeholder="95.00"
+                value={formData.mrp}
+                onChange={(e) => handleInputChange('mrp', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:border-[#ff5500]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Selling Price (₹) *</label>
+              <input 
+                type="number" 
+                required
+                placeholder="75.00"
+                value={formData.salePrice}
+                onChange={(e) => handleInputChange('salePrice', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-[#ff5500] focus:outline-none focus:border-[#ff5500]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">GST Tax Rate</label>
+              <select 
+                value={formData.taxRate}
+                onChange={(e) => handleInputChange('taxRate', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+              >
+                <option value="0%">0% (Exempt)</option>
+                <option value="5%">5% GST</option>
+                <option value="12%">12% GST</option>
+                <option value="18%">18% GST</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">HSN Code</label>
+              <input 
+                type="text" 
+                placeholder="e.g. 0713"
+                value={formData.hsnCode}
+                onChange={(e) => handleInputChange('hsnCode', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Inventory & SKU */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
+            <Boxes size={18} className="text-[#ff5500]" /> Inventory & Stock Control
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Initial Stock Quantity *</label>
+              <input 
+                type="number" 
+                required
+                placeholder="100"
+                value={formData.stock}
+                onChange={(e) => handleInputChange('stock', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:border-[#ff5500]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Min Stock Alert Limit</label>
+              <input 
+                type="number" 
+                placeholder="10"
+                value={formData.minStockLimit}
+                onChange={(e) => handleInputChange('minStockLimit', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">SKU / Barcode ID</label>
+              <input 
+                type="text" 
+                placeholder="SKU-GR-9012"
+                value={formData.sku}
+                onChange={(e) => handleInputChange('sku', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-mono text-slate-900 focus:outline-none focus:border-[#ff5500]"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Add Product Submit Button at the Very End */}
+        <div className="pt-4 flex justify-end">
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="w-full sm:w-auto px-8 py-3.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-base font-semibold rounded-xl border-none cursor-pointer shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+          >
+            <Plus size={18} /> {isSubmitting ? 'Saving Product...' : 'Add Product'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 };

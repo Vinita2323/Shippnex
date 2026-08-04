@@ -1315,3 +1315,489 @@ export const PromoHomeBanners = () => {
   );
 };
 
+/* =========================================================================
+   9. FLASH SALE SECTION MANAGEMENT PAGE
+   ========================================================================= */
+export const PromoFlashSale = () => {
+  const [flashTitle, setFlashTitle] = useState('Flash Deals');
+  const [flashSubtitle, setFlashSubtitle] = useState('Super Saver Limited-Time Offers');
+  const [isLive, setIsLive] = useState(true);
+  const [timerHours, setTimerHours] = useState('02');
+  const [timerMinutes, setTimerMinutes] = useState('45');
+  const [timerSeconds, setTimerSeconds] = useState('30');
+  const [toastMessage, setToastMessage] = useState('');
+
+  // Sample Flash Deals Products List
+  const [flashProducts, setFlashProducts] = useState([
+    {
+      id: 'fp-1',
+      name: 'Basmati Rice',
+      unit: '1kg',
+      originalPrice: 95,
+      salePrice: 75,
+      discount: 21,
+      image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=300&q=80',
+      stock: 45,
+      status: 'Active',
+      priority: 1
+    },
+    {
+      id: 'fp-2',
+      name: 'Sunflower Oil',
+      unit: '1L',
+      originalPrice: 140,
+      salePrice: 110,
+      discount: 21,
+      image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=300&q=80',
+      stock: 30,
+      status: 'Active',
+      priority: 2
+    },
+    {
+      id: 'fp-3',
+      name: 'Toor Dal',
+      unit: '1kg',
+      originalPrice: 150,
+      salePrice: 120,
+      discount: 20,
+      image: 'https://images.unsplash.com/photo-1515543237350-b3eea1ec8082?w=300&q=80',
+      stock: 60,
+      status: 'Active',
+      priority: 3
+    }
+  ]);
+
+  // Modal State for Adding/Editing Product
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    unit: '1kg',
+    originalPrice: '',
+    salePrice: '',
+    discount: '',
+    image: '',
+    stock: 50,
+    status: 'Active'
+  });
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3000);
+  };
+
+  const handleOpenAddModal = () => {
+    setEditingId(null);
+    setFormData({
+      name: '',
+      unit: '1kg',
+      originalPrice: '',
+      salePrice: '',
+      discount: '',
+      image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=300&q=80',
+      stock: 50,
+      status: 'Active'
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (item) => {
+    setEditingId(item.id);
+    setFormData({
+      name: item.name,
+      unit: item.unit,
+      originalPrice: item.originalPrice,
+      salePrice: item.salePrice,
+      discount: item.discount,
+      image: item.image,
+      stock: item.stock,
+      status: item.status
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteProduct = (id) => {
+    if (window.confirm('Are you sure you want to remove this product from Flash Sale?')) {
+      setFlashProducts(prev => prev.filter(p => p.id !== id));
+      showToast('Product removed from Flash Sale.');
+    }
+  };
+
+  const handleSaveModal = (e) => {
+    e.preventDefault();
+    const orig = Number(formData.originalPrice) || 100;
+    const sale = Number(formData.salePrice) || 80;
+    const computedDiscount = formData.discount ? Number(formData.discount) : Math.round(((orig - sale) / orig) * 100);
+
+    if (editingId) {
+      setFlashProducts(prev => prev.map(p => p.id === editingId ? {
+        ...p,
+        name: formData.name,
+        unit: formData.unit,
+        originalPrice: orig,
+        salePrice: sale,
+        discount: computedDiscount,
+        image: formData.image || p.image,
+        stock: Number(formData.stock),
+        status: formData.status
+      } : p));
+      showToast('Flash Sale Product updated successfully!');
+    } else {
+      const newProduct = {
+        id: `fp-${Date.now()}`,
+        name: formData.name,
+        unit: formData.unit,
+        originalPrice: orig,
+        salePrice: sale,
+        discount: computedDiscount,
+        image: formData.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=300&q=80',
+        stock: Number(formData.stock),
+        status: formData.status,
+        priority: flashProducts.length + 1
+      };
+      setFlashProducts(prev => [...prev, newProduct]);
+      showToast('New product added to Flash Sale!');
+    }
+    setIsModalOpen(false);
+  };
+
+  const handleSaveCampaign = () => {
+    showToast('Flash Sale settings saved and broadcasted to Homepage!');
+  };
+
+  return (
+    <div className="space-y-6 animate-fadeIn pb-12 font-sans">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-2 border border-slate-700 animate-bounce">
+          <CheckCircle size={18} className="text-emerald-400" />
+          <span className="text-sm font-medium">{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Header Banner */}
+      <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-slate-900 p-6 rounded-2xl text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
+        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="px-3 py-0.5 rounded-full text-xs font-semibold bg-white/20 text-white uppercase tracking-wider backdrop-blur-md">PROMOTION ENGINE</span>
+            <span className="text-sm text-orange-200 font-mono">Homepage Widget</span>
+          </div>
+          <h2 className="text-3xl font-semibold tracking-tight flex items-center gap-2.5">
+            <Zap className="text-yellow-300 fill-yellow-300" size={26} /> Flash Sale Section Management
+          </h2>
+          <p className="text-sm text-orange-100 mt-1.5 max-w-xl font-normal">Configure countdown timers, discounts, and feature limited-time products directly on the Customer App Homepage.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleSaveCampaign} 
+            className="px-5 py-2.5 bg-white hover:bg-slate-100 text-slate-900 text-sm font-semibold rounded-xl shadow-md cursor-pointer flex items-center gap-2 transition-all active:scale-95 border-none"
+          >
+            <Send size={16} className="text-[#ff5500]" /> Broadcast Live Changes
+          </button>
+        </div>
+      </div>
+
+      {/* Campaign Configuration */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Card 1: Section Info & Status */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <Tag size={18} className="text-[#ff5500]" /> Campaign Details & Visibility
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-slate-500">Live Status:</span>
+              <button 
+                onClick={() => setIsLive(!isLive)}
+                className={`px-3.5 py-1 rounded-full text-xs font-semibold cursor-pointer border-none transition-all ${
+                  isLive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {isLive ? '● LIVE ON APP' : '○ INACTIVE'}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Flash Sale Header Title</label>
+              <input 
+                type="text" 
+                value={flashTitle}
+                onChange={(e) => setFlashTitle(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:border-[#ff5500]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Tagline / Subtitle</label>
+              <input 
+                type="text" 
+                value={flashSubtitle}
+                onChange={(e) => setFlashSubtitle(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-normal text-slate-800 focus:outline-none focus:border-[#ff5500]"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Countdown Timer Setup */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <Clock size={18} className="text-[#ff5500]" /> Countdown Timer Settings
+            </h3>
+            <span className="text-xs font-medium text-slate-400 font-mono">HH : MM : SS</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 my-auto">
+            <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 text-center">
+              <label className="block text-xs font-medium uppercase text-slate-500 mb-1.5">Hours</label>
+              <input 
+                type="text" 
+                maxLength={2}
+                value={timerHours}
+                onChange={(e) => setTimerHours(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-lg py-2.5 text-center text-xl font-semibold text-[#ff5500] focus:outline-none focus:border-[#ff5500]"
+              />
+            </div>
+
+            <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 text-center">
+              <label className="block text-xs font-medium uppercase text-slate-500 mb-1.5">Minutes</label>
+              <input 
+                type="text" 
+                maxLength={2}
+                value={timerMinutes}
+                onChange={(e) => setTimerMinutes(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-lg py-2.5 text-center text-xl font-semibold text-[#ff5500] focus:outline-none focus:border-[#ff5500]"
+              />
+            </div>
+
+            <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 text-center">
+              <label className="block text-xs font-medium uppercase text-slate-500 mb-1.5">Seconds</label>
+              <input 
+                type="text" 
+                maxLength={2}
+                value={timerSeconds}
+                onChange={(e) => setTimerSeconds(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-lg py-2.5 text-center text-xl font-semibold text-[#ff5500] focus:outline-none focus:border-[#ff5500]"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Flash Sale Products Table */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Featured Flash Sale Products</h3>
+            <p className="text-sm font-normal text-slate-500 mt-0.5">Manage items currently listed under the Flash Deals section.</p>
+          </div>
+          <button 
+            onClick={handleOpenAddModal}
+            className="px-4 py-2.5 bg-[#ff5500] hover:bg-[#e64d00] text-white text-sm font-semibold rounded-xl border-none cursor-pointer flex items-center gap-2 shadow-sm transition-all active:scale-95"
+          >
+            <Plus size={18} /> Add Product to Flash Sale
+          </button>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-xs tracking-wider">
+                <th className="py-3.5 px-4">Priority</th>
+                <th className="py-3.5 px-4">Product Details</th>
+                <th className="py-3.5 px-4">Original Price</th>
+                <th className="py-3.5 px-4">Sale Price</th>
+                <th className="py-3.5 px-4">Discount</th>
+                <th className="py-3.5 px-4">Stock</th>
+                <th className="py-3.5 px-4">Status</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-800">
+              {flashProducts.map((p, idx) => (
+                <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="py-4 px-4 font-mono font-medium text-slate-400">#{idx + 1}</td>
+                  <td className="py-4 px-4">
+                    <div className="flex items-center gap-3">
+                      <img src={p.image} alt={p.name} className="w-11 h-11 rounded-xl object-cover border border-slate-200" />
+                      <div>
+                        <p className="font-semibold text-slate-900 text-sm m-0">{p.name}</p>
+                        <span className="text-xs text-slate-400 font-mono">{p.unit}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4 font-mono text-slate-400 line-through">₹{p.originalPrice}</td>
+                  <td className="py-4 px-4 font-mono font-semibold text-slate-900">₹{p.salePrice}</td>
+                  <td className="py-4 px-4">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                      {p.discount}% OFF
+                    </span>
+                  </td>
+                  <td className="py-4 px-4 font-mono text-slate-700">{p.stock} units</td>
+                  <td className="py-4 px-4">
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      p.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                    }`}>
+                      {p.status}
+                    </span>
+                  </td>
+                  <td className="py-4 px-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button 
+                        onClick={() => handleOpenEditModal(p)}
+                        className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded-lg cursor-pointer transition-colors border-none bg-transparent"
+                      >
+                        <Edit3 size={17} />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteProduct(p.id)}
+                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors border-none bg-transparent"
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Add / Edit Product Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp border border-slate-100">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-semibold text-slate-900">
+                {editingId ? 'Edit Flash Sale Item' : 'Add Product to Flash Sale'}
+              </h3>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveModal} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Product Title</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="e.g. Basmati Rice"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Unit / Weight</label>
+                  <input 
+                    type="text" 
+                    placeholder="1kg / 1L"
+                    value={formData.unit}
+                    onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Available Stock</label>
+                  <input 
+                    type="number" 
+                    value={formData.stock}
+                    onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Original (₹)</label>
+                  <input 
+                    type="number" 
+                    required
+                    placeholder="95"
+                    value={formData.originalPrice}
+                    onChange={(e) => setFormData({ ...formData, originalPrice: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Sale Price (₹)</label>
+                  <input 
+                    type="number" 
+                    required
+                    placeholder="75"
+                    value={formData.salePrice}
+                    onChange={(e) => setFormData({ ...formData, salePrice: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Discount %</label>
+                  <input 
+                    type="number" 
+                    placeholder="Auto"
+                    value={formData.discount}
+                    onChange={(e) => setFormData({ ...formData, discount: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Image URL</label>
+                <input 
+                  type="url" 
+                  placeholder="https://..."
+                  value={formData.image}
+                  onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                <select 
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl border-none cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-1 py-2.5 bg-[#ff5500] hover:bg-[#e64d00] text-white text-sm font-semibold rounded-xl border-none cursor-pointer shadow-sm"
+                >
+                  {editingId ? 'Update Item' : 'Add Item'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+

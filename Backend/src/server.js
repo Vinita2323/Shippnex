@@ -12,6 +12,7 @@ import adminAuthRoutes from './routes/adminAuthRoutes.js';
 import bannerRoutes from './routes/bannerRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import categoryRoutes from './routes/categoryRoutes.js';
+import productRoutes from './routes/productRoutes.js';
 
 dotenv.config();
 
@@ -19,8 +20,8 @@ const app = express();
 
 // Middlewares
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Serve static uploads folder
 const __dirname = path.resolve();
@@ -35,6 +36,7 @@ app.use('/api/auth/admin', adminAuthRoutes);
 app.use('/api/banners', bannerRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/products', productRoutes);
 
 // Base route
 app.get('/', (req, res) => {
