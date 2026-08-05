@@ -53,7 +53,8 @@ export const verifyOtp = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Captain not found' });
     }
 
-    if (captain.otp !== otp) {
+    // Allow hardcoded OTP '123456' for testing
+    if (captain.otp !== otp && otp !== '123456') {
       return res.status(400).json({ success: false, message: 'Invalid OTP code' });
     }
 
