@@ -35,7 +35,7 @@ export const getCategories = async (req, res, next) => {
 // Create new category (Admin)
 export const createCategory = async (req, res, next) => {
   try {
-    const { name, icon, image, status, priority } = req.body;
+    const { name, icon, image, status, priority, parent } = req.body;
 
     if (!name) {
       return res.status(400).json({ success: false, message: 'Category name is required' });
@@ -52,6 +52,7 @@ export const createCategory = async (req, res, next) => {
       image: image || '/uploads/categories/default.png',
       status: status || 'Active',
       priority: priority || 1,
+      parent: parent || null,
     });
 
     res.status(201).json({

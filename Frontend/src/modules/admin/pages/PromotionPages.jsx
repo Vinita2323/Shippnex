@@ -1155,22 +1155,12 @@ export const PromoHomeBanners = () => {
               </div>
 
               {/* Live Preview Card */}
-              <div className="bg-gradient-to-br from-[#1e2b4f] to-[#151d38] rounded-xl p-4 text-white relative overflow-hidden">
-                <div className="relative z-10 max-w-[60%]">
-                  <h4 className="text-sm font-extrabold uppercase">{b.title}</h4>
-                  <p className="text-xs text-slate-200 mt-0.5">{b.subtitle}</p>
-                  {b.discountBadge && (
-                    <span className="bg-[#ff5500] text-white text-[10px] font-bold px-2 py-0.5 rounded mt-1 inline-block">
-                      {b.discountBadge}
-                    </span>
-                  )}
-                  <div className="mt-2">
-                    <span className="bg-white text-[#1e2b4f] px-3 py-1 rounded text-[10px] font-bold inline-block">
-                      {b.ctaText || 'Shop Now'}
-                    </span>
-                  </div>
-                </div>
-                <img src={b.imageUrl || '/promo_banner_bg.png'} alt={b.title} className="absolute right-0 bottom-0 w-32 h-full object-cover opacity-80" />
+              <div className="rounded-xl overflow-hidden shadow-sm relative h-[90px] w-full border border-slate-200">
+                <img 
+                  src={b.imageUrl || '/promo_banner_bg.png'} 
+                  alt={b.title} 
+                  className="w-full h-full object-cover" 
+                />
               </div>
 
               <div className="flex justify-between items-center text-xs text-slate-500 pt-1">
@@ -1201,49 +1191,15 @@ export const PromoHomeBanners = () => {
 
             <form onSubmit={handleSaveBanner} className="p-5 space-y-3.5 text-xs text-slate-700">
               <div>
-                <label className="block font-bold text-slate-800 mb-1">Banner Main Title</label>
+                <label className="block font-bold text-slate-800 mb-1">Banner Name (Internal Use)</label>
                 <input 
                   type="text" 
-                  placeholder="e.g. BIG SAVINGS"
+                  placeholder="e.g. Summer Sale"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a]"
                   required
                 />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-800 mb-1">Subtitle / Subtext</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. on Bulk Orders"
-                  value={subtitle}
-                  onChange={(e) => setSubtitle(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-800 mb-1">Offer Tag / Badge</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Up to 25% OFF"
-                    value={discountBadge}
-                    onChange={(e) => setDiscountBadge(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a]"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-800 mb-1">Button CTA Text</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Shop Now"
-                    value={ctaText}
-                    onChange={(e) => setCtaText(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a]"
-                  />
-                </div>
               </div>
 
               <div>

@@ -1954,8 +1954,8 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
       setLoading(true);
       const res = await categoryService.getCategories();
       if (res.success && res.categories) {
-        // Map backend category format into tree structure
-        const formatted = res.categories.map((c, index) => ({
+        // Map backend category format into flat array first
+        const flatCategories = res.categories.map((c, index) => ({
           id: c._id,
           name: c.name,
           status: c.status || 'Active',
@@ -1963,9 +1963,28 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
           subcategoriesCount: 0,
           order: c.priority || index + 1,
           image: c.image || '/uploads/categories/default.png',
+          parent: c.parent,
           subcategories: []
         }));
-        setTreeData(formatted);
+
+        const categoryMap = {};
+        flatCategories.forEach(c => categoryMap[c.id] = c);
+        
+        const tree = [];
+        const initialExpanded = {};
+        
+        flatCategories.forEach(c => {
+          initialExpanded[c.id] = true; // Auto-expand ALL categories by default
+          if (c.parent && categoryMap[c.parent]) {
+            categoryMap[c.parent].subcategories.push(c);
+            categoryMap[c.parent].subcategoriesCount = categoryMap[c.parent].subcategories.length;
+          } else {
+            tree.push(c);
+          }
+        });
+
+        setTreeData(tree);
+        setExpanded(initialExpanded);
       }
     } catch (err) {
       console.error('Failed to fetch categories:', err);
@@ -2117,7 +2136,8 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
           name: formData.name.trim(),
           status: formData.status,
           priority: Number(formData.order) || treeData.length + 1,
-          image: formData.imageUrl
+          image: formData.imageUrl,
+          parent: (addModalType === 'subcategory' || addModalType === 'nested_subcategory') ? selectedParentId : null
         });
       }
       setIsAddModalOpen(false);
@@ -2500,11 +2520,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                           <div key={sub.id} className="space-y-3">
                             <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-3 flex items-center justify-between hover:bg-slate-100/70 transition-all">
                               <div className="flex items-center gap-3">
-                                {sub.children && sub.children.length > 0 ? (
-                                  <button onClick={() => toggleExpand(sub.id)} className="text-[#ff5500] hover:text-[#e04a00] cursor-pointer bg-transparent border-none p-1">
-                                    {expanded[sub.id] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                                  </button>
-                                ) : <span className="w-5" />}
+                                <span className="w-5" />
                                 <img src={sub.image} alt={sub.name} className="w-10 h-10 rounded-lg object-cover border border-slate-200" />
                                 <div className="space-y-1">
                                   <div className="flex items-center gap-2">
@@ -2520,39 +2536,10 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                                 </div>
                               </div>
                               <div className="flex items-center gap-1.5">
-                                <button onClick={() => openAddNestedSubcategoryModal(sub)} className="p-1.5 bg-[#ff5500] hover:bg-[#e04a00] text-white rounded-md border-none cursor-pointer"><Plus size={13} /></button>
                                 <button onClick={() => handleToggleStatus(sub.id, sub.status)} className="p-1.5 bg-amber-500/20 text-amber-700 hover:bg-amber-500/30 rounded-md border-none cursor-pointer text-xs font-bold px-2">×</button>
                                 <button onClick={() => handleDeleteItem(sub.id)} className="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-600 rounded-md border-none cursor-pointer"><Trash2 size={13} /></button>
                               </div>
                             </div>
-                            {expanded[sub.id] && sub.children && sub.children.length > 0 && (
-                              <div className="ml-6 border-l-2 border-[#ff5500]/40 pl-4 space-y-2">
-                                {sub.children.map((child) => (
-                                  <div key={child.id} className="bg-slate-50/40 border border-slate-200/80 rounded-xl p-3 flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                      <ChevronRight size={14} className="text-[#ff5500]" />
-                                      <img src={child.image} alt={child.name} className="w-9 h-9 rounded-lg object-cover border border-slate-200" />
-                                      <div>
-                                        <div className="flex items-center gap-2">
-                                          <h5 className="text-xs font-bold text-slate-900">{child.name}</h5>
-                                          <span className="px-1.5 py-0.2 bg-amber-50 text-amber-700 text-[10px] font-bold rounded border border-amber-200">Sub-subcategory</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
-                                          <span className={`px-1 py-0.2 font-semibold rounded border ${child.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
-                                            {child.status}
-                                          </span>
-                                          <span>Order: {child.order}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <button onClick={() => handleToggleStatus(child.id)} className="p-1.5 bg-amber-500/20 text-amber-700 hover:bg-amber-500/30 rounded-md border-none cursor-pointer text-xs font-bold px-2">×</button>
-                                      <button onClick={() => handleDeleteItem(child.id)} className="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-600 rounded-md border-none cursor-pointer"><Trash2 size={13} /></button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
                           </div>
                         ))}
                       </div>
@@ -7002,24 +6989,47 @@ export const AddProductPage = () => {
     galleryImage1: null
   });
 
-  // Registered Categories & Sub-Categories Mapping
-  const categorySubCategoryMap = {
-    'Groceries & Grains': ['Grains & Pulses', 'Atta & Flour', 'Rice & Rice Products', 'Spices & Masalas', 'Edible Oils & Ghee', 'Salt, Sugar & Jaggery'],
-    'Fresh Produce & Vegetables': ['Fresh Vegetables', 'Fresh Fruits', 'Exotic Produce', 'Organic Herbs', 'Seasonal Harvest'],
-    'Dairy & Eggs': ['Milk & Curd', 'Butter & Cheese', 'Paneer & Tofu', 'Farm Eggs', 'Yogurt & Flavored Milk'],
-    'Beverages & Drinks': ['Soft Drinks & Juices', 'Tea & Coffee', 'Energy Drinks', 'Packaged Water', 'Health Drinks'],
-    'Personal & Home Care': ['Soaps & Body Wash', 'Haircare', 'Oral Care', 'Detergents & Cleaners', 'Surface Cleaners', 'Pest Control']
-  };
-
-  const [registeredCategories, setRegisteredCategories] = React.useState(Object.keys(categorySubCategoryMap));
+  // Dynamic Categories State
+  const [dynamicCategoryMap, setDynamicCategoryMap] = React.useState({});
+  const [registeredCategories, setRegisteredCategories] = React.useState([]);
 
   React.useEffect(() => {
     const fetchRegisteredCategories = async () => {
       try {
         const res = await categoryService.getCategories();
         if (res && res.categories && res.categories.length > 0) {
-          const apiCatNames = res.categories.map(c => c.name);
-          setRegisteredCategories(apiCatNames);
+          const flat = res.categories;
+          const map = {};
+          const idToName = {};
+          
+          flat.forEach(c => {
+            idToName[c._id] = c.name;
+            if (!c.parent) {
+              map[c.name] = [];
+            }
+          });
+          
+          flat.forEach(c => {
+            if (c.parent) {
+              const parentName = idToName[c.parent];
+              if (parentName && map[parentName]) {
+                map[parentName].push(c.name);
+              }
+            }
+          });
+          
+          setDynamicCategoryMap(map);
+          setRegisteredCategories(Object.keys(map));
+          
+          if (Object.keys(map).length > 0) {
+            const firstCat = Object.keys(map)[0];
+            const firstSub = map[firstCat].length > 0 ? map[firstCat][0] : 'None';
+            setFormData(prev => ({
+              ...prev,
+              category: prev.category && map[prev.category] ? prev.category : firstCat,
+              subCategory: prev.category && map[prev.category] ? (map[prev.category].length > 0 ? map[prev.category][0] : 'None') : firstSub
+            }));
+          }
         }
       } catch (err) {
         console.warn('Using registered category catalog fallback:', err.message);
@@ -7029,15 +7039,16 @@ export const AddProductPage = () => {
   }, []);
 
   const handleCategorySelectChange = (newCategory) => {
-    const availableSubs = categorySubCategoryMap[newCategory] || ['General'];
+    const availableSubs = dynamicCategoryMap[newCategory] || [];
     setFormData(prev => ({
       ...prev,
       category: newCategory,
-      subCategory: availableSubs[0] || ''
+      subCategory: availableSubs.length > 0 ? availableSubs[0] : 'None'
     }));
   };
 
-  const currentSubCategories = categorySubCategoryMap[formData.category] || ['General Sub-Category', 'Others'];
+  const currentSubCategories = dynamicCategoryMap[formData.category] || [];
+  const displaySubCategories = currentSubCategories.length > 0 ? currentSubCategories : ['None'];
 
   // Multiple Homepage Sections Selection State
   const [selectedHomeSections, setSelectedHomeSections] = React.useState([
@@ -7267,7 +7278,7 @@ export const AddProductPage = () => {
                 onChange={(e) => handleInputChange('subCategory', e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
               >
-                {currentSubCategories.map(subName => (
+                {displaySubCategories.map(subName => (
                   <option key={subName} value={subName}>{subName}</option>
                 ))}
               </select>

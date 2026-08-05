@@ -55,8 +55,8 @@ const Home = () => {
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [bannerVisible, setBannerVisible] = useState(true);
   const [categories, setCategories] = useState([]);
-  const [flashDeals, setFlashDeals] = useState(allProducts.slice(0, 3));
-  const [bestsellerProducts, setBestsellerProducts] = useState(allProducts.slice(3));
+  const [flashDeals, setFlashDeals] = useState([]);
+  const [bestsellerProducts, setBestsellerProducts] = useState([]);
 
   useEffect(() => {
     const fetchBanners = async () => {
@@ -118,9 +118,6 @@ const Home = () => {
         const item = formatItem(p);
         if (!combinedFlash.some(c => c.id === item.id || c.name === item.name)) combinedFlash.push(item);
       });
-      allProducts.slice(0, 3).forEach(p => {
-        if (!combinedFlash.some(c => c.id === p.id || c.name === p.name)) combinedFlash.push(p);
-      });
       setFlashDeals(combinedFlash);
 
       // Bestseller products
@@ -136,9 +133,6 @@ const Home = () => {
       bestApi.forEach(p => {
         const item = formatItem(p);
         if (!combinedBest.some(c => c.id === item.id || c.name === item.name)) combinedBest.push(item);
-      });
-      allProducts.slice(3).forEach(p => {
-        if (!combinedBest.some(c => c.id === p.id || c.name === p.name)) combinedBest.push(p);
       });
       setBestsellerProducts(combinedBest);
     };
@@ -176,8 +170,9 @@ const Home = () => {
     }
   };
 
+  const allLoadedProducts = [...flashDeals, ...bestsellerProducts];
   const searchResults = searchQuery 
-    ? allProducts.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? allLoadedProducts.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
 
   const handleAddToCart = (product) => {
@@ -299,34 +294,15 @@ const Home = () => {
         {banners.length > 0 ? (
           <div className="mb-5">
             <div
-              className="bg-gradient-to-br from-[#1e2b4f] to-[#151d38] rounded-2xl py-4 px-5 flex justify-between items-center relative overflow-hidden text-white shadow-md"
+              className="rounded-2xl relative overflow-hidden shadow-md cursor-pointer w-full h-[140px]"
               style={{ transition: 'opacity 0.3s ease, transform 0.3s ease', opacity: bannerVisible ? 1 : 0, transform: bannerVisible ? 'translateY(0)' : 'translateY(6px)' }}
+              onClick={() => navigate(banners[currentBannerIndex].redirectUrl || '/categories')}
             >
-              <div className="relative z-10 max-w-[55%]">
-                <h3 className="text-[15px] font-extrabold m-0 uppercase tracking-wide">{banners[currentBannerIndex].title}</h3>
-                <p className="text-[12px] font-medium mt-0.5 mb-2">{banners[currentBannerIndex].subtitle}</p>
-                {banners[currentBannerIndex].discountBadge && (
-                  <div className="bg-[#ff5500] text-white text-[11px] font-bold px-2 py-0.5 rounded-md inline-block mb-2.5">
-                    {banners[currentBannerIndex].discountBadge}
-                  </div>
-                )}
-                <button
-                  onClick={() => navigate(banners[currentBannerIndex].redirectUrl || '/categories')}
-                  className="bg-white text-[#1e2b4f] border-none rounded-md px-3.5 py-1.5 text-[11px] font-bold cursor-pointer block hover:bg-slate-100 transition-colors"
-                >
-                  {banners[currentBannerIndex].ctaText || 'Shop Now'}
-                </button>
-              </div>
-              <div className="absolute -right-5 -bottom-2 w-[160px] h-full z-0">
-                <img
-                  src={banners[currentBannerIndex].imageUrl || "/promo_banner_bg.png"}
-                  alt={banners[currentBannerIndex].title}
-                  className="w-full h-[150%] object-cover absolute bottom-0 right-0"
-                />
-                <div className="absolute top-[20%] right-[35px] bg-white rounded-lg p-1 w-9 flex items-center justify-center shadow-sm">
-                  <img src="/splashscreenlogo.png" alt="ShippNex" className="w-full h-auto" />
-                </div>
-              </div>
+              <img
+                src={banners[currentBannerIndex].imageUrl || "/promo_banner_bg.png"}
+                alt={banners[currentBannerIndex].title}
+                className="w-full h-full object-cover"
+              />
             </div>
             {/* Dot Indicators */}
             {banners.length > 1 && (
@@ -343,26 +319,22 @@ const Home = () => {
             )}
           </div>
         ) : (
-          <div className="bg-gradient-to-br from-[#1e2b4f] to-[#151d38] rounded-2xl py-4 px-5 flex justify-between items-center relative overflow-hidden mb-5 text-white">
-            <div className="relative z-10 max-w-[55%]">
-              <h3 className="text-[15px] font-extrabold m-0 uppercase tracking-wide">BIG SAVINGS</h3>
-              <p className="text-[12px] font-medium mt-0.5 mb-2">on Bulk Orders</p>
-              <div className="bg-[#ff5500] text-white text-[11px] font-bold px-2 py-0.5 rounded-md inline-block mb-2.5">Up to 25% OFF</div>
-              <button onClick={() => navigate('/categories')} className="bg-white text-[#1e2b4f] border-none rounded-md px-3.5 py-1.5 text-[11px] font-bold cursor-pointer block">Shop Now</button>
-            </div>
-            <div className="absolute -right-5 -bottom-2 w-[160px] h-full z-0">
-              <img src="/promo_banner_bg.png" alt="Promo Boxes" className="w-full h-[150%] object-cover absolute bottom-0 right-0" />
-              <div className="absolute top-[20%] right-[35px] bg-white rounded-lg p-1 w-9 flex items-center justify-center shadow-sm">
-                <img src="/splashscreenlogo.png" alt="ShippNex" className="w-full h-auto" />
-              </div>
-            </div>
+          <div 
+            className="rounded-2xl relative overflow-hidden mb-5 shadow-md cursor-pointer w-full h-[140px]"
+            onClick={() => navigate('/categories')}
+          >
+            <img src="/promo_banner_bg.png" alt="Promo Boxes" className="w-full h-full object-cover" />
           </div>
         )}
 
         {/* Dynamic Categories Grid */}
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-[16px] font-bold m-0 text-[#ff5500]">Categories</h3>
+          <button onClick={() => navigate('/categories')} className="bg-transparent border-none text-blue-600 text-[12px] font-semibold cursor-pointer">See All</button>
+        </div>
         <div className="grid grid-cols-4 gap-y-4 gap-x-3 mb-8">
           {categories.length > 0 ? (
-            categories.map((cat) => (
+            categories.slice(0, 8).map((cat) => (
               <div 
                 key={cat._id || cat.name} 
                 onClick={() => navigate('/categories')}
@@ -446,7 +418,7 @@ const Home = () => {
           <div className="flex items-center gap-2">
             <h3 className="text-[16px] font-bold m-0 text-[#ff5500]">Best Selling Products</h3>
           </div>
-          <button onClick={() => navigate('/categories')} className="bg-transparent border-none text-blue-600 text-[12px] font-semibold cursor-pointer">See All</button>
+          <button onClick={() => navigate('/bestseller')} className="bg-transparent border-none text-blue-600 text-[12px] font-semibold cursor-pointer">See All</button>
         </div>
 
         <div className="grid grid-cols-2 gap-3 pb-4">

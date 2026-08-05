@@ -14,6 +14,7 @@ import VerifyOtp from '../pages/VerifyOtp';
 import ProductDetails from '../pages/ProductDetails';
 import Wishlist from '../pages/Wishlist';
 import FlashSale from '../pages/FlashSale';
+import BestSelling from '../pages/BestSelling';
 import LocationSelectionPage from '../pages/LocationSelectionPage';
 import Notifications from '../pages/Notifications';
 import BottomNav from '../components/BottomNav';
@@ -85,6 +86,7 @@ const UserRoutes = () => {
           <Route path="/product/:id" element={<ProductDetails />} />
           <Route path="/wishlist" element={<Wishlist />} />
           <Route path="/flash-sale" element={<FlashSale />} />
+          <Route path="/bestseller" element={<BestSelling />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/account-information" element={<AccountInfo />} />
           <Route path="/saved-addresses" element={<SavedAddresses />} />

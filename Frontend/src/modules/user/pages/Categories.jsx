@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Heart, Star, Filter } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
+import { categoryService } from '../../../services/authService';
 import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
 import oilGheeImg from '../../../assets/user/categories/OilGhee-removebg-preview.png';
 import masalaImg from '../../../assets/user/categories/masala-removebg-preview.png';
@@ -11,12 +12,52 @@ import readyCookImg from '../../../assets/user/categories/readyfoot-removebg-pre
 import homeCareImg from '../../../assets/user/categories/homecare-removebg-preview.png';
 import personalCareImg from '../../../assets/user/categories/personalcare-removebg-preview.png';
 
+const fallbackCategories = [
+  { name: 'Grains & Flours', image: grainsImg },
+  { name: 'Oil & Ghee', image: oilGheeImg },
+  { name: 'Spices & Masala', image: masalaImg },
+  { name: 'Sugar & Sweeteners', image: sugarImg },
+  { name: 'Grocery Essentials', image: groceryImg },
+  { name: 'Ready-to-Cook', image: readyCookImg },
+  { name: 'Home Care', image: homeCareImg },
+  { name: 'Personal Care', image: personalCareImg }
+];
+
 const Categories = () => {
   const navigate = useNavigate();
   const { toggleWishlist, isInWishlist } = useWishlist();
   const [toastMessage, setToastMessage] = useState('');
   const [activeCategory, setActiveCategory] = useState('Grains & Flours');
-  
+  const [allCategories, setAllCategories] = useState([]);
+  const [sidebarCategories, setSidebarCategories] = useState(fallbackCategories);
+
+  React.useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await categoryService.getCategories();
+        if (res.success && res.categories.length > 0) {
+          const active = res.categories.filter(c => c.status === 'Active');
+          setAllCategories(active);
+          
+          if (active.length > 0) {
+            const roots = active.filter(c => !c.parent);
+            setSidebarCategories(roots.map(cat => ({
+              id: cat._id,
+              name: cat.name,
+              image: cat.image || grainsImg
+            })));
+            if (!roots.find(c => c.name === activeCategory)) {
+              setActiveCategory(roots[0]?.name || activeCategory);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load categories:', err);
+      }
+    };
+    fetchCategories();
+  }, [activeCategory]);
+
   const handleWishlistClick = (e, product) => {
     e.stopPropagation();
     const isAdded = toggleWishlist(product);
@@ -28,17 +69,6 @@ const Categories = () => {
       setTimeout(() => setToastMessage(''), 3000);
     }
   };
-
-  const sidebarCategories = [
-    { name: 'Grains & Flours', image: grainsImg },
-    { name: 'Oil & Ghee', image: oilGheeImg },
-    { name: 'Spices & Masala', image: masalaImg },
-    { name: 'Sugar & Sweeteners', image: sugarImg },
-    { name: 'Grocery Essentials', image: groceryImg },
-    { name: 'Ready-to-Cook', image: readyCookImg },
-    { name: 'Home Care', image: homeCareImg },
-    { name: 'Personal Care', image: personalCareImg }
-  ];
 
   const products = [
     { id: 1, name: 'Premium Basmati', brand: 'Mynzo World', price: 2499, originalPrice: 3998, discount: 38, image: grainsImg },
@@ -99,6 +129,27 @@ const Categories = () => {
               <Filter size={20} strokeWidth={2} />
             </div>
           </div>
+
+          {/* Subcategories */}
+          {(() => {
+            const activeCatObj = sidebarCategories.find(c => c.name === activeCategory);
+            const subCategories = activeCatObj ? allCategories.filter(c => c.parent === activeCatObj.id) : [];
+            
+            if (subCategories.length === 0) return null;
+            
+            return (
+              <div className="flex gap-4 overflow-x-auto pb-4 mb-2 [&::-webkit-scrollbar]:hidden">
+                {subCategories.map(sub => (
+                  <div key={sub._id} className="flex flex-col items-center flex-shrink-0 cursor-pointer group">
+                    <div className="w-[55px] h-[55px] rounded-[14px] bg-white border border-slate-100 flex justify-center items-center overflow-hidden mb-1.5 shadow-sm group-hover:border-[#ff5500] group-hover:shadow-md transition-all">
+                      <img src={sub.image || grainsImg} alt={sub.name} className="w-[40px] h-[40px] object-contain" />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-600 text-center w-16 leading-tight group-hover:text-[#ff5500] transition-colors">{sub.name}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Grid */}
           <div className="grid grid-cols-2 gap-3 pb-24">

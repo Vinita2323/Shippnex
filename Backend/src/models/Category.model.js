@@ -21,6 +21,11 @@ const categorySchema = new mongoose.Schema(
       type: String,
       default: '/uploads/categories/default.png',
     },
+    parent: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Category',
+      default: null,
+    },
     status: {
       type: String,
       enum: ['Active', 'Inactive'],
