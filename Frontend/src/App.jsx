@@ -17,11 +17,23 @@ function App() {
   const isCaptainRoute = location.pathname.startsWith('/captain');
   const isSellerRoute = location.pathname.startsWith('/seller');
   const isAdminRoute = location.pathname.startsWith('/admin');
-  const bypassSplash = isCaptainRoute || isSellerRoute || isAdminRoute;
+  
+  // Bypass splash screen if accessing any specific sub-route or if splash has already been dismissed
+  const isSpecificRoute = location.pathname !== '/' && location.pathname !== '';
+  const hasSeenSplash = typeof window !== 'undefined' && sessionStorage.getItem('shippnex_splash_seen') === 'true';
+  const bypassSplash = isCaptainRoute || isSellerRoute || isAdminRoute || isSpecificRoute || hasSeenSplash;
+
   const [showSplash, setShowSplash] = useState(!bypassSplash);
 
+  const handleGetStarted = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('shippnex_splash_seen', 'true');
+    }
+    setShowSplash(false);
+  };
+
   if (showSplash && !bypassSplash) {
-    return <SplashScreen onGetStarted={() => setShowSplash(false)} />;
+    return <SplashScreen onGetStarted={handleGetStarted} />;
   }
 
   return (

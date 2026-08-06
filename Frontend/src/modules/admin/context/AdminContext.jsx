@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-const AdminContext = createContext();
+export const AdminContext = createContext();
+
 
 export const AdminProvider = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -29,6 +30,7 @@ export const AdminProvider = ({ children }) => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [notificationsCount, setNotificationsCount] = useState(3);
+  const [editingProductData, setEditingProductData] = useState(null);
 
   const toggleSidebar = () => {
     setSidebarOpen(prev => !prev);
@@ -46,6 +48,8 @@ export const AdminProvider = ({ children }) => {
         setSearchQuery,
         notificationsCount,
         setNotificationsCount,
+        editingProductData,
+        setEditingProductData,
       }}
     >
       {children}
@@ -53,10 +57,4 @@ export const AdminProvider = ({ children }) => {
   );
 };
 
-export const useAdmin = () => {
-  const context = useContext(AdminContext);
-  if (!context) {
-    throw new Error('useAdmin must be used within an AdminProvider');
-  }
-  return context;
-};
+

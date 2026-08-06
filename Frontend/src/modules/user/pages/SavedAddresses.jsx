@@ -1,48 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, Plus, Edit2, Trash2, X } from 'lucide-react';
+import { ArrowLeft, MapPin, Plus, Edit2, Trash2, X, Check } from 'lucide-react';
+
+const initialDefaultAddresses = (userName, userPhone) => [
+  {
+    id: 1,
+    type: 'Home',
+    name: userName || 'Sarah Jenkins',
+    address: '123, Palm Grove Apartment, Sector 45',
+    city: 'Noida',
+    state: 'Uttar Pradesh',
+    zip: '201301',
+    phone: userPhone || '+91 98765 43210',
+    isDefault: true
+  },
+  {
+    id: 2,
+    type: 'Work',
+    name: userName || 'Sarah Jenkins',
+    address: 'Tech Park, Building 5, 8th Floor',
+    city: 'Gurugram',
+    state: 'Haryana',
+    zip: '122001',
+    phone: userPhone || '+91 98765 43210',
+    isDefault: false
+  }
+];
 
 const SavedAddresses = () => {
   const navigate = useNavigate();
 
-  const [addresses, setAddresses] = useState([
-    {
-      id: 1,
-      type: 'Home',
-      name: 'John Doe',
-      address: '123, Palm Grove Apartment, Sector 45',
-      city: 'Noida',
-      state: 'Uttar Pradesh',
-      zip: '201301',
-      phone: '+91 98765 43210',
-      isDefault: true
-    },
-    {
-      id: 2,
-      type: 'Work',
-      name: 'John Doe',
-      address: 'Tech Park, Building 5, 8th Floor',
-      city: 'Gurugram',
-      state: 'Haryana',
-      zip: '122001',
-      phone: '+91 98765 43210',
-      isDefault: false
-    }
-  ]);
-
+  const [userName, setUserName] = useState('');
+  const [userPhone, setUserPhone] = useState('');
+  const [addresses, setAddresses] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState(null);
 
+  // Load user profile & saved addresses from localStorage on mount
+  useEffect(() => {
+    const name = localStorage.getItem('shippnex_user_name') || 'Sarah Jenkins';
+    const phone = localStorage.getItem('shippnex_user_phone') || '+91 98765 43210';
+    setUserName(name);
+    setUserPhone(phone);
+
+    const saved = localStorage.getItem('shippnex_saved_addresses');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAddresses(parsed);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to parse saved addresses:', err);
+      }
+    }
+    const defaults = initialDefaultAddresses(name, phone);
+    setAddresses(defaults);
+    localStorage.setItem('shippnex_saved_addresses', JSON.stringify(defaults));
+  }, []);
+
+  // Save to localStorage helper
+  const saveAddressesToStorage = (newAddresses) => {
+    setAddresses(newAddresses);
+    localStorage.setItem('shippnex_saved_addresses', JSON.stringify(newAddresses));
+
+    // Sync current default address for checkout
+    const def = newAddresses.find(a => a.isDefault) || newAddresses[0];
+    if (def) {
+      localStorage.setItem('shippnex_selected_checkout_address', JSON.stringify(def));
+    }
+  };
+
   const handleDelete = (id, e) => {
     e.stopPropagation();
-    setAddresses(addresses.filter(addr => addr.id !== id));
+    const updated = addresses.filter(addr => addr.id !== id);
+    // If deleted address was default, make first remaining default
+    if (updated.length > 0 && !updated.some(a => a.isDefault)) {
+      updated[0].isDefault = true;
+    }
+    saveAddressesToStorage(updated);
   };
 
   const handleSetDefault = (id) => {
-    setAddresses(addresses.map(addr => ({
+    const updated = addresses.map(addr => ({
       ...addr,
       isDefault: addr.id === id
-    })));
+    }));
+    saveAddressesToStorage(updated);
   };
 
   const handleEdit = (addr, e) => {
@@ -54,25 +99,27 @@ const SavedAddresses = () => {
   const handleAddNew = () => {
     setEditingAddress({
       id: Date.now(),
-      type: 'Other',
-      name: '',
+      type: 'Home',
+      name: userName || 'Sarah Jenkins',
       address: '',
-      city: '',
-      state: '',
-      zip: '',
-      phone: '',
-      isDefault: false
+      city: 'Noida',
+      state: 'Uttar Pradesh',
+      zip: '201301',
+      phone: userPhone || '+91 98765 43210',
+      isDefault: addresses.length === 0
     });
     setIsModalOpen(true);
   };
 
   const handleSaveModal = (e) => {
     e.preventDefault();
+    let updated;
     if (addresses.some(a => a.id === editingAddress.id)) {
-      setAddresses(addresses.map(a => a.id === editingAddress.id ? editingAddress : a));
+      updated = addresses.map(a => a.id === editingAddress.id ? editingAddress : a);
     } else {
-      setAddresses([...addresses, editingAddress]);
+      updated = [...addresses, editingAddress];
     }
+    saveAddressesToStorage(updated);
     setIsModalOpen(false);
   };
 
@@ -84,78 +131,94 @@ const SavedAddresses = () => {
           <ArrowLeft size={22} className="text-slate-900" />
         </button>
         <h2 className="text-[17px] font-extrabold m-0 text-slate-900 tracking-tight">Saved Addresses</h2>
-        <div className="w-6"></div> {/* Spacer for centering */}
+        <div className="w-6"></div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-6 pb-24 [&::-webkit-scrollbar]:hidden flex flex-col gap-4">
-        
-        {addresses.map((addr) => (
-          <div 
-            key={addr.id} 
-            onClick={() => handleSetDefault(addr.id)}
-            className={`bg-white rounded-[24px] p-5 shadow-[0_4px_24px_rgba(0,0,0,0.03)] border flex gap-4 cursor-pointer transition-colors ${addr.isDefault ? 'border-orange-200' : 'border-slate-100 hover:border-orange-100'}`}
-          >
-            <div className="pt-1">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${addr.type === 'Home' ? 'bg-[#ffedd5] text-[#ea580c]' : addr.type === 'Work' ? 'bg-[#e0e7ff] text-[#4338ca]' : 'bg-[#d1fae5] text-[#059669]'}`}>
-                <MapPin size={20} />
-              </div>
+      <div className="flex-1 overflow-y-auto px-5 py-6 pb-28 [&::-webkit-scrollbar]:hidden flex flex-col gap-4">
+        {addresses.length === 0 ? (
+          <div className="text-center py-16 flex flex-col items-center justify-center gap-3">
+            <div className="w-16 h-16 rounded-full bg-orange-50 text-[#ff5500] flex items-center justify-center">
+              <MapPin size={28} />
             </div>
-            
-            <div className="flex-1">
-              <div className="flex justify-between items-start mb-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-[15px] font-bold text-slate-900 m-0">{addr.type}</h3>
-                  {addr.isDefault && (
-                    <span className="bg-[#ea580c] text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">Default</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={(e) => handleEdit(addr, e)}
-                    className="p-1 border-none bg-transparent cursor-pointer text-slate-400 hover:text-blue-600 transition-colors"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                  <button 
-                    onClick={(e) => handleDelete(addr.id, e)}
-                    className="p-1 border-none bg-transparent cursor-pointer text-slate-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+            <h3 className="text-[16px] font-bold text-slate-800 m-0">No saved addresses yet</h3>
+            <p className="text-[13px] text-slate-500 max-w-[240px] m-0">Add a new address for seamless checkout and delivery.</p>
+          </div>
+        ) : (
+          addresses.map((addr) => (
+            <div 
+              key={addr.id} 
+              onClick={() => handleSetDefault(addr.id)}
+              className={`bg-white rounded-[24px] p-5 shadow-[0_4px_24px_rgba(0,0,0,0.03)] border flex gap-4 cursor-pointer transition-all ${
+                addr.isDefault ? 'border-[#ea580c] ring-2 ring-orange-500/10' : 'border-slate-100 hover:border-orange-100'
+              }`}
+            >
+              <div className="pt-1">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                  addr.type === 'Home' ? 'bg-[#ffedd5] text-[#ea580c]' : addr.type === 'Work' ? 'bg-[#e0e7ff] text-[#4338ca]' : 'bg-[#d1fae5] text-[#059669]'
+                }`}>
+                  <MapPin size={20} />
                 </div>
               </div>
               
-              <p className="text-[13px] font-semibold text-slate-800 m-0 mb-1">{addr.name}</p>
-              <p className="text-[13px] font-medium text-slate-500 leading-relaxed m-0 mb-2">
-                {addr.address},<br/>{addr.city}, {addr.state} - {addr.zip}
-              </p>
-              <p className="text-[12px] font-bold text-slate-600 m-0">📞 {addr.phone}</p>
+              <div className="flex-1">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-[15px] font-bold text-slate-900 m-0">{addr.type}</h3>
+                    {addr.isDefault && (
+                      <span className="bg-[#ea580c] text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Check size={10} strokeWidth={3} /> Default
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={(e) => handleEdit(addr, e)}
+                      className="p-1 border-none bg-transparent cursor-pointer text-slate-400 hover:text-blue-600 transition-colors"
+                      title="Edit address"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button 
+                      onClick={(e) => handleDelete(addr.id, e)}
+                      className="p-1 border-none bg-transparent cursor-pointer text-slate-400 hover:text-red-500 transition-colors"
+                      title="Delete address"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+                
+                <p className="text-[13px] font-bold text-slate-800 m-0 mb-1">{addr.name || userName}</p>
+                <p className="text-[13px] font-medium text-slate-500 leading-relaxed m-0 mb-2">
+                  {addr.address},<br/>{addr.city}, {addr.state} - {addr.zip}
+                </p>
+                <p className="text-[12px] font-bold text-slate-600 m-0">📞 {addr.phone || userPhone}</p>
+              </div>
             </div>
-          </div>
-        ))}
-        
+          ))
+        )}
       </div>
 
-      {/* Add New Button (Floating) */}
-      <div className="absolute bottom-6 w-full px-5 pointer-events-none">
+      {/* Floating Add New Address Button */}
+      <div className="absolute bottom-6 w-full px-5 z-20">
         <button 
           onClick={handleAddNew}
-          className="w-full bg-[#ea580c] text-white rounded-2xl py-4 font-bold text-[15px] cursor-pointer active:scale-[0.98] transition-transform border-none shadow-[0_8px_30px_rgba(234,88,12,0.3)] flex items-center justify-center gap-2 pointer-events-auto"
+          className="w-full bg-[#ea580c] hover:bg-[#d94e09] text-white rounded-2xl py-4 font-bold text-[15px] cursor-pointer active:scale-[0.98] transition-transform border-none shadow-[0_8px_30px_rgba(234,88,12,0.3)] flex items-center justify-center gap-2"
         >
           <Plus size={20} />
           Add New Address
         </button>
       </div>
 
-      {/* Edit/Add Modal */}
+      {/* Edit / Add Address Modal */}
       {isModalOpen && editingAddress && (
-        <div className="absolute inset-0 z-50 flex flex-col justify-end">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs" onClick={() => setIsModalOpen(false)}></div>
           
           {/* Bottom Sheet */}
-          <div className="relative bg-white w-full rounded-t-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-full duration-300">
-            <div className="flex justify-between items-center mb-6">
+          <div className="relative bg-white w-full rounded-t-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-full duration-300 max-w-[480px] mx-auto">
+            <div className="flex justify-between items-center mb-5">
               <h3 className="text-[18px] font-extrabold text-slate-900 m-0">
                 {addresses.some(a => a.id === editingAddress.id) ? 'Edit Address' : 'Add Address'}
               </h3>
@@ -167,76 +230,101 @@ const SavedAddresses = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSaveModal} className="flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleSaveModal} className="flex flex-col gap-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Address Tag</label>
+                  <select 
+                    value={editingAddress.type}
+                    onChange={e => setEditingAddress({...editingAddress, type: e.target.value})}
+                    className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-bold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors cursor-pointer"
+                  >
+                    <option value="Home">Home</option>
+                    <option value="Work">Work</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Full Name</label>
+                  <input 
+                    required
+                    type="text" 
+                    placeholder="Full Name" 
+                    value={editingAddress.name}
+                    onChange={e => setEditingAddress({...editingAddress, name: e.target.value})}
+                    className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Street Address</label>
                 <input 
                   required
                   type="text" 
-                  placeholder="Type (e.g. Home)" 
-                  value={editingAddress.type}
-                  onChange={e => setEditingAddress({...editingAddress, type: e.target.value})}
-                  className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3.5 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
-                />
-                <input 
-                  required
-                  type="text" 
-                  placeholder="Full Name" 
-                  value={editingAddress.name}
-                  onChange={e => setEditingAddress({...editingAddress, name: e.target.value})}
-                  className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3.5 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
+                  placeholder="House / Flat No., Building, Street" 
+                  value={editingAddress.address}
+                  onChange={e => setEditingAddress({...editingAddress, address: e.target.value})}
+                  className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
                 />
               </div>
 
-              <input 
-                required
-                type="text" 
-                placeholder="Street Address" 
-                value={editingAddress.address}
-                onChange={e => setEditingAddress({...editingAddress, address: e.target.value})}
-                className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3.5 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
-              />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">City</label>
+                  <input 
+                    required
+                    type="text" 
+                    placeholder="City" 
+                    value={editingAddress.city}
+                    onChange={e => setEditingAddress({...editingAddress, city: e.target.value})}
+                    className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
+                  />
+                </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <input 
-                  required
-                  type="text" 
-                  placeholder="City" 
-                  value={editingAddress.city}
-                  onChange={e => setEditingAddress({...editingAddress, city: e.target.value})}
-                  className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3.5 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
-                />
-                <input 
-                  required
-                  type="text" 
-                  placeholder="State" 
-                  value={editingAddress.state}
-                  onChange={e => setEditingAddress({...editingAddress, state: e.target.value})}
-                  className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3.5 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
-                />
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">State</label>
+                  <input 
+                    required
+                    type="text" 
+                    placeholder="State" 
+                    value={editingAddress.state}
+                    onChange={e => setEditingAddress({...editingAddress, state: e.target.value})}
+                    className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <input 
-                  required
-                  type="text" 
-                  placeholder="Zip Code" 
-                  value={editingAddress.zip}
-                  onChange={e => setEditingAddress({...editingAddress, zip: e.target.value})}
-                  className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3.5 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
-                />
-                <input 
-                  required
-                  type="tel" 
-                  placeholder="Phone" 
-                  value={editingAddress.phone}
-                  onChange={e => setEditingAddress({...editingAddress, phone: e.target.value})}
-                  className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3.5 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Zip Code</label>
+                  <input 
+                    required
+                    type="text" 
+                    placeholder="Pincode / Zip" 
+                    value={editingAddress.zip}
+                    onChange={e => setEditingAddress({...editingAddress, zip: e.target.value})}
+                    className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Phone Number</label>
+                  <input 
+                    required
+                    type="tel" 
+                    placeholder="Phone" 
+                    value={editingAddress.phone}
+                    onChange={e => setEditingAddress({...editingAddress, phone: e.target.value})}
+                    className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
+                  />
+                </div>
               </div>
 
               <button 
                 type="submit"
-                className="w-full bg-slate-900 text-white rounded-[16px] py-4 mt-2 font-bold text-[15px] cursor-pointer active:scale-[0.98] transition-transform border-none shadow-[0_4px_16px_rgba(15,23,42,0.2)]"
+                className="w-full bg-[#ea580c] text-white rounded-[16px] py-4 mt-2 font-bold text-[15px] cursor-pointer active:scale-[0.98] transition-transform border-none shadow-[0_4px_16px_rgba(234,88,12,0.25)]"
               >
                 Save Address
               </button>

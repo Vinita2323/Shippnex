@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAdmin } from '../context/AdminContext';
+import { useAdmin } from '../context/useAdmin';
 import { StatusBadge, Drawer } from '../components/AdminUIComponents';
 import { categoryService, bannerService, productService } from '../../../services/authService';
 import { mockUsers, mockSellers, mockCaptains, mockWarehouses, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
@@ -2728,9 +2728,10 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
    6. PRODUCT MANAGEMENT PAGE (VIEW STOCK MANAGEMENT)
    ========================================================================= */
 export const ProductManagement = () => {
-  const { setActiveTab } = useAdmin();
+  const { setActiveTab, setEditingProductData } = useAdmin();
   const [products, setProducts] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [viewModalData, setViewModalData] = React.useState(null);
 
   const fetchAllProducts = React.useCallback(async () => {
     setLoading(true);
@@ -2753,23 +2754,39 @@ export const ProductManagement = () => {
       { id: '2f5f-0', name: 'Tamatar', seller: 'Keshari Vagitl Shope', category: 'Groceries & Grains', image: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=100&auto=format&fit=crop&q=80', variation: '1 kg', stock: 500, status: 'Published' }
     ];
 
-    const combined = [...localSaved];
+    // 1. Convert API products from MongoDB as primary source of truth
+    const combined = apiProducts.map(ap => ({
+      _id: ap._id,
+      id: ap._id,
+      sku: ap.sku || `SKU-${ap._id.slice(-4).toUpperCase()}`,
+      name: ap.name,
+      seller: ap.seller || 'ShippNex Official Store',
+      category: ap.category || 'Groceries & Grains',
+      subCategory: ap.subCategory,
+      brand: ap.brand,
+      image: ap.mainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&auto=format&fit=crop&q=80',
+      galleryImages: ap.galleryImages || [],
+      variation: ap.unit || `${ap.unitValue || 1} ${ap.unitType || 'kg'}`,
+      unitValue: ap.unitValue,
+      unitType: ap.unitType,
+      stock: ap.stock !== undefined ? ap.stock : 100,
+      minStockLimit: ap.minStockLimit,
+      status: ap.status || 'Published',
+      mrp: ap.mrp,
+      salePrice: ap.salePrice,
+      taxRate: ap.taxRate,
+      hsnCode: ap.hsnCode,
+      homeSections: ap.homeSections || []
+    }));
 
-    apiProducts.forEach(ap => {
-      const formatted = {
-        id: ap.sku || ap._id || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
-        name: ap.name,
-        seller: ap.seller || 'ShippNex Official Store',
-        category: ap.category || 'Groceries & Grains',
-        image: ap.mainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&auto=format&fit=crop&q=80',
-        variation: ap.unit || `${ap.unitValue || 1} ${ap.unitType || 'kg'}`,
-        stock: ap.stock !== undefined ? ap.stock : 100,
-        status: ap.status || 'Published',
-        mrp: ap.mrp,
-        salePrice: ap.salePrice
-      };
-      if (!combined.some(c => c.id === formatted.id || c.name === formatted.name)) {
-        combined.push(formatted);
+    // 2. Add local storage items only if they are not already in MongoDB
+    localSaved.forEach(localItem => {
+      const matchExists = combined.some(c => 
+        (c._id && localItem._id && c._id === localItem._id) || 
+        (c.name.trim().toLowerCase() === localItem.name.trim().toLowerCase())
+      );
+      if (!matchExists) {
+        combined.push(localItem);
       }
     });
 
@@ -2783,8 +2800,17 @@ export const ProductManagement = () => {
     setLoading(false);
   }, []);
 
+  const [categories, setCategories] = React.useState([]);
+
   React.useEffect(() => {
     fetchAllProducts();
+    const fetchCats = async () => {
+      try {
+        const res = await categoryService.getCategories();
+        if (res.success) setCategories(res.categories.filter(c => c.status === 'Active'));
+      } catch (err) {}
+    };
+    fetchCats();
   }, [fetchAllProducts]);
 
   const [categoryFilter, setCategoryFilter] = React.useState('All Category');
@@ -2806,13 +2832,8 @@ export const ProductManagement = () => {
   };
 
   const handleEditProduct = (prod) => {
-    const newStock = prompt(`Update stock count for ${prod.name}:`, prod.stock);
-    if (newStock !== null && !isNaN(newStock)) {
-      setProducts(prev => prev.map(p => p.id === prod.id ? { ...p, stock: Number(newStock) } : p));
-      const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
-      const updatedLocal = localSaved.map(p => p.id === prod.id ? { ...p, stock: Number(newStock) } : p);
-      localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
-    }
+    setEditingProductData(prod);
+    setActiveTab('add_product');
   };
 
   // CSV Export
@@ -2850,7 +2871,7 @@ export const ProductManagement = () => {
           </div>
         </div>
         <button 
-          onClick={() => setActiveTab('add_product')}
+          onClick={() => { setEditingProductData(null); setActiveTab('add_product'); }}
           className="px-4 py-2.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
         >
           <Plus size={16} /> Add New Product
@@ -2880,10 +2901,10 @@ export const ProductManagement = () => {
                 onChange={(e) => setCategoryFilter(e.target.value)}
                 className="w-full border border-slate-300 rounded-md px-3.5 py-2.5 bg-slate-50/60 text-xs font-medium text-slate-800 outline-none focus:border-[#ff5500] focus:bg-white transition-all shadow-2xs"
               >
-                <option>All Category</option>
-                <option>Groceries</option>
-                <option>Electronics</option>
-                <option>Fashion</option>
+                <option value="All Category">All Category</option>
+                {categories.map(cat => (
+                  <option key={cat._id} value={cat.name}>{cat.name}</option>
+                ))}
               </select>
             </div>
 
@@ -2983,7 +3004,7 @@ export const ProductManagement = () => {
                 {filteredProducts.length > 0 ? (
                   filteredProducts.map((prod) => (
                     <tr key={prod.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-medium text-slate-500">{prod.id}</td>
+                      <td className="py-3.5 px-4 font-mono font-medium text-slate-500">{prod.sku || prod.id}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-900">{prod.name}</td>
                       <td className="py-3.5 px-4 text-slate-600 font-medium">{prod.seller}</td>
                       <td className="py-3.5 px-4">
@@ -3002,6 +3023,13 @@ export const ProductManagement = () => {
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center justify-center gap-2">
+                          <button 
+                            onClick={() => setViewModalData(prod)}
+                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg border border-emerald-200 cursor-pointer transition-colors"
+                            title="View Details"
+                          >
+                            <Eye size={13} />
+                          </button>
                           <button 
                             onClick={() => handleEditProduct(prod)}
                             className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg border border-blue-200 cursor-pointer transition-colors"
@@ -3055,6 +3083,63 @@ export const ProductManagement = () => {
           </div>
         </div>
       </div>
+
+      {/* Product Details Modal */}
+      {viewModalData && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl animate-scaleUp border border-slate-100 relative">
+            <button 
+              onClick={() => setViewModalData(null)}
+              className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-500 cursor-pointer border-none"
+            >
+              ✕
+            </button>
+            <h3 className="text-xl font-bold text-slate-900 mb-4 border-b pb-3 border-slate-100">Product Details</h3>
+            
+            <div className="flex gap-4 items-start mb-4">
+              <img 
+                src={viewModalData.image} 
+                alt={viewModalData.name} 
+                className="w-24 h-24 rounded-2xl object-cover border border-slate-200 shadow-sm"
+              />
+              <div>
+                <h4 className="text-base font-bold text-slate-900 m-0 leading-tight">{viewModalData.name}</h4>
+                <p className="text-xs text-slate-500 m-0 mt-1">{viewModalData.seller}</p>
+                <div className="mt-2 inline-block px-2.5 py-0.5 bg-[#fff4ed] text-[#ff5500] border border-[#ffcfb3] text-xs font-bold rounded-full">
+                  {viewModalData.status}
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between border-b border-slate-100 pb-2">
+                <span className="text-slate-500 font-medium">Category:</span>
+                <span className="text-slate-900 font-semibold">{viewModalData.category}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100 pb-2">
+                <span className="text-slate-500 font-medium">Sub Category:</span>
+                <span className="text-slate-900 font-semibold">{viewModalData.subCategory || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100 pb-2">
+                <span className="text-slate-500 font-medium">Variation:</span>
+                <span className="text-slate-900 font-semibold">{viewModalData.variation}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100 pb-2">
+                <span className="text-slate-500 font-medium">Stock:</span>
+                <span className="text-slate-900 font-semibold">{viewModalData.stock}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100 pb-2">
+                <span className="text-slate-500 font-medium">MRP:</span>
+                <span className="text-slate-400 font-semibold line-through">₹{viewModalData.mrp || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Sale Price:</span>
+                <span className="text-[#ff5500] font-bold text-base">₹{viewModalData.salePrice || 0}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -6964,8 +7049,32 @@ export const SellersOverview = () => {
    NEW DEDICATED ADD PRODUCT PAGE
    ========================================================================= */
 export const AddProductPage = () => {
-  const { setActiveTab } = useAdmin();
-  const [formData, setFormData] = React.useState({
+  const { setActiveTab, editingProductData, setEditingProductData } = useAdmin();
+
+  const initialData = editingProductData ? {
+    id: editingProductData.id || editingProductData._id,
+    name: editingProductData.name || '',
+    category: editingProductData.category || 'Groceries & Grains',
+    subCategory: editingProductData.subCategory || 'Grains & Pulses',
+    brand: editingProductData.brand || 'ShippNex Select',
+    unit: editingProductData.variation || editingProductData.unit || '1kg',
+    unitValue: editingProductData.unitValue || '1',
+    unitType: editingProductData.unitType || 'kg',
+    description: editingProductData.description || '',
+    mrp: editingProductData.mrp || editingProductData.originalPrice || editingProductData.price || '',
+    salePrice: editingProductData.salePrice || editingProductData.price || '',
+    taxRate: editingProductData.taxRate || '5%',
+    hsnCode: editingProductData.hsnCode || '0713',
+    stock: editingProductData.stock !== undefined ? editingProductData.stock : '',
+    minStockLimit: editingProductData.minStockLimit || '10',
+    sku: editingProductData.sku || editingProductData.id || '',
+    seller: editingProductData.seller || 'ShippNex Official Store',
+    status: editingProductData.status || 'Published',
+    isFeatured: editingProductData.isFeatured || false,
+    mainImage: editingProductData.image || editingProductData.mainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
+    mainImageFile: null,
+    galleryImages: editingProductData.galleryImages || []
+  } : {
     name: '',
     category: 'Groceries & Grains',
     subCategory: 'Grains & Pulses',
@@ -6986,8 +7095,10 @@ export const AddProductPage = () => {
     isFeatured: false,
     mainImage: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
     mainImageFile: null,
-    galleryImage1: null
-  });
+    galleryImages: []
+  };
+
+  const [formData, setFormData] = React.useState(initialData);
 
   // Dynamic Categories State
   const [dynamicCategoryMap, setDynamicCategoryMap] = React.useState({});
@@ -7060,6 +7171,7 @@ export const AddProductPage = () => {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [createdSuccessModal, setCreatedSuccessModal] = React.useState(null);
   const fileInputRef = React.useRef(null);
+  const multipleFileInputRef = React.useRef(null);
 
   const availableSections = [
     { id: 'flash_sale', name: 'Flash Deals / Flash Sale', description: 'Limited-time deals with countdown timer', badge: 'Flash Sale' },
@@ -7083,34 +7195,44 @@ export const AddProductPage = () => {
   };
 
   const resetForm = () => {
-    setFormData({
-      name: '',
-      category: 'Groceries & Grains',
-      subCategory: 'Grains & Pulses',
-      brand: 'ShippNex Select',
-      unit: '1kg',
-      unitValue: '1',
-      unitType: 'kg',
-      description: '',
-      mrp: '',
-      salePrice: '',
-      taxRate: '5%',
-      hsnCode: '0713',
-      stock: '',
-      minStockLimit: '10',
-      sku: '',
-      seller: 'ShippNex Official Store',
-      status: 'Published',
-      isFeatured: false,
-      mainImage: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
-      mainImageFile: null,
-      galleryImage1: null
-    });
+    setFormData(initialData);
     setCreatedSuccessModal(null);
   };
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleMultipleFileUpload = (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    
+    // We only take up to 3 images max
+    const maxFiles = files.slice(0, 3);
+    
+    maxFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const resultUrl = event.target.result;
+        setFormData(prev => {
+          const newGallery = [...(prev.galleryImages || [])];
+          if (newGallery.length < 3) {
+            newGallery.push(resultUrl);
+          }
+          return { ...prev, galleryImages: newGallery };
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+    
+    showToast(`${maxFiles.length} gallery images uploaded!`);
+  };
+
+  const removeGalleryImage = (indexToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      galleryImages: prev.galleryImages.filter((_, idx) => idx !== indexToRemove)
+    }));
   };
 
   const handleDeviceFileUpload = (e, field) => {
@@ -7141,7 +7263,11 @@ export const AddProductPage = () => {
         status: statusToSave
       };
 
-      res = await productService.createProduct(payload);
+      if (editingProductData && (editingProductData._id || editingProductData.id)) {
+        res = await productService.updateProduct(editingProductData._id || editingProductData.id, payload);
+      } else {
+        res = await productService.createProduct(payload);
+      }
     } catch (err) {
       console.warn('Backend API submission fallback:', err.message);
     } finally {
@@ -7149,12 +7275,14 @@ export const AddProductPage = () => {
 
       const generatedSku = res?.product?.sku || formData.sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
       const newProductObj = {
-        id: generatedSku,
+        _id: res?.product?._id || editingProductData?._id,
+        id: res?.product?._id || editingProductData?.id || generatedSku,
         name: formData.name || 'New Product',
         seller: formData.seller || 'ShippNex Official Store',
         category: formData.category,
         subCategory: formData.subCategory,
         image: formData.mainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
+        galleryImages: formData.galleryImages || [],
         variation: `${formData.unitValue || 1} ${formData.unitType || 'kg'}`,
         stock: Number(formData.stock || 0),
         status: statusToSave,
@@ -7167,7 +7295,7 @@ export const AddProductPage = () => {
       localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
 
       setCreatedSuccessModal(newProductObj);
-      showToast(`Product "${formData.name}" added successfully!`);
+      showToast(`Product "${formData.name}" ${editingProductData ? 'updated' : 'added'} successfully!`);
     }
   };
 
@@ -7182,7 +7310,7 @@ export const AddProductPage = () => {
             </div>
 
             <div className="text-center space-y-1">
-              <h3 className="text-xl font-extrabold text-slate-900 m-0">Product Added Successfully!</h3>
+              <h3 className="text-xl font-extrabold text-slate-900 m-0">Product {editingProductData ? 'Updated' : 'Added'} Successfully!</h3>
               <p className="text-xs text-slate-500">The product has been saved and is now listed in All Products.</p>
             </div>
 
@@ -7421,6 +7549,68 @@ export const AddProductPage = () => {
           </div>
         </div>
 
+        {/* Card 2.5: Product Gallery Images (Max 3) */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
+            <Upload size={18} className="text-[#ff5500]" /> Product Gallery Images
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Upload up to 3 Gallery Images</label>
+              <input 
+                type="file" 
+                ref={multipleFileInputRef}
+                accept="image/*"
+                multiple
+                onClick={(e) => { e.target.value = null; }}
+                onChange={handleMultipleFileUpload}
+                className="hidden"
+              />
+              <div 
+                onClick={() => multipleFileInputRef.current && multipleFileInputRef.current.click()}
+                className="border-2 border-dashed border-slate-300 hover:border-[#ff5500] bg-slate-50 hover:bg-orange-50/40 rounded-2xl p-6 text-center cursor-pointer transition-all space-y-2 group"
+              >
+                <div className="w-12 h-12 rounded-full bg-orange-100 group-hover:bg-[#ff5500] text-[#ff5500] group-hover:text-white flex items-center justify-center mx-auto transition-colors">
+                  <Upload size={22} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800 group-hover:text-[#ff5500]">
+                    Select Multiple Images
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">Supports PNG, JPG, WEBP</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Gallery Preview ({formData.galleryImages?.length || 0}/3)</label>
+              <div className="flex flex-wrap gap-3">
+                {formData.galleryImages && formData.galleryImages.length > 0 ? (
+                  formData.galleryImages.map((imgBase64, idx) => (
+                    <div key={idx} className="h-24 w-24 rounded-xl overflow-hidden border border-slate-200 relative group">
+                      <img src={imgBase64} alt={`Gallery ${idx+1}`} className="h-full w-full object-cover" />
+                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button 
+                          type="button"
+                          onClick={() => removeGalleryImage(idx)}
+                          className="w-6 h-6 rounded-full bg-white text-red-600 flex items-center justify-center shadow hover:bg-red-50 hover:text-red-700 cursor-pointer border-none"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="h-24 w-full rounded-xl bg-slate-50 border border-slate-200 border-dashed flex items-center justify-center text-slate-400 text-xs font-medium">
+                    No gallery images uploaded
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Card 3: Homepage Section Selection (Multi-Select Checkboxes) */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -7577,7 +7767,7 @@ export const AddProductPage = () => {
             disabled={isSubmitting}
             className="w-full sm:w-auto px-8 py-3.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-base font-semibold rounded-xl border-none cursor-pointer shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
           >
-            <Plus size={18} /> {isSubmitting ? 'Saving Product...' : 'Add Product'}
+            {isSubmitting ? 'Saving Product...' : (editingProductData ? 'Update Product' : 'Add Product')}
           </button>
         </div>
       </form>

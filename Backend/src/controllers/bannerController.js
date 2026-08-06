@@ -77,7 +77,7 @@ export const createBanner = async (req, res, next) => {
 export const updateBanner = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const banner = await Banner.findByIdAndUpdate(id, req.body, { new: true, runValidators: true });
+    const banner = await Banner.findByIdAndUpdate(id, req.body, { returnDocument: 'after', runValidators: true });
 
     if (!banner) {
       return res.status(404).json({ success: false, message: 'Banner not found' });

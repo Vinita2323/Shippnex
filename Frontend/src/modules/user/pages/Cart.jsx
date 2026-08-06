@@ -2,14 +2,27 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trash2, Minus, Plus, Tag, ShoppingCart } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
+
+const getImageUrl = (url, fallback = grainsImg) => {
+  if (!url) return fallback;
+  if (url.startsWith('http') || url.startsWith('data:')) return url;
+  if (url.startsWith('/uploads')) {
+    const baseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : `http://${window.location.hostname}:5000`;
+    return `${baseUrl}${url}`;
+  }
+  return url;
+};
 
 const Cart = () => {
   const navigate = useNavigate();
   const { cartItems, removeFromCart, updateQuantity, cartTotal, originalTotal } = useCart();
   
-  const deliveryCharge = cartTotal > 500 || cartTotal === 0 ? 0 : 40;
-  const youSaved = originalTotal - cartTotal;
-  const grandTotal = cartTotal + deliveryCharge;
+  const safeCartTotal = Number(cartTotal || 0);
+  const safeOriginalTotal = Number(originalTotal || 0);
+  const deliveryCharge = safeCartTotal > 500 || safeCartTotal === 0 ? 0 : 40;
+  const youSaved = Math.max(0, safeOriginalTotal - safeCartTotal);
+  const grandTotal = safeCartTotal + deliveryCharge;
 
   return (
     <div className="h-[100dvh] bg-slate-50 font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
@@ -37,48 +50,64 @@ const Cart = () => {
               </button>
             </div>
           ) : (
-            cartItems.map((item) => (
-              <div key={item.id} className="bg-white border border-slate-100 rounded-xl p-4 flex gap-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                <div className="w-[60px] h-[70px] flex justify-center items-center">
-                  <img src={item.image} alt={item.name} className="max-w-full max-h-full object-contain" />
-                </div>
-                <div className="flex-1 flex flex-col">
-                  <div className="flex justify-between items-start">
-                    <h4 className="text-[13px] font-bold text-slate-800 m-0 mb-1 max-w-[85%]">{item.name}</h4>
-                    <button onClick={() => removeFromCart(item.id)} className="bg-transparent border-none cursor-pointer p-0 flex">
-                      <Trash2 size={16} className="text-slate-300 hover:text-red-500 transition-colors" />
-                    </button>
+            cartItems.map((item) => {
+              const itemId = item.id || item._id;
+              const itemPrice = Number(item.price ?? item.salePrice ?? 0);
+              const itemImg = getImageUrl(item.image || item.mainImage);
+
+              return (
+                <div key={itemId} className="bg-white border border-slate-100 rounded-xl p-4 flex gap-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                  <div className="w-[60px] h-[70px] flex justify-center items-center overflow-hidden rounded-lg bg-slate-50">
+                    <img 
+                      src={itemImg} 
+                      alt={item.name} 
+                      className="max-w-full max-h-full object-contain mix-blend-multiply" 
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = grainsImg;
+                      }}
+                    />
                   </div>
-                  <p className="text-[11px] text-slate-400 m-0 mb-3">{item.unit}</p>
-                  <div className="flex justify-between items-center mt-auto">
-                    <span className="text-[15px] font-extrabold text-slate-900">₹{item.price.toFixed(2)}</span>
-                    <div className="flex items-center gap-3 border border-slate-200 rounded-lg py-1 px-2">
-                      <button onClick={() => updateQuantity(item.id, -1)} className="bg-transparent border-none cursor-pointer flex items-center justify-center p-0.5 text-slate-500"><Minus size={14} /></button>
-                      <span className="text-[13px] font-bold text-slate-900 min-w-[12px] text-center">{item.quantity}</span>
-                      <button onClick={() => updateQuantity(item.id, 1)} className="bg-transparent border-none cursor-pointer flex items-center justify-center p-0.5 text-slate-500"><Plus size={14} /></button>
+                  <div className="flex-1 flex flex-col">
+                    <div className="flex justify-between items-start">
+                      <h4 className="text-[13px] font-bold text-slate-800 m-0 mb-1 max-w-[85%]">{item.name}</h4>
+                      <button onClick={() => removeFromCart(itemId)} className="bg-transparent border-none cursor-pointer p-0 flex">
+                        <Trash2 size={16} className="text-slate-300 hover:text-red-500 transition-colors" />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-400 m-0 mb-3">{item.unit || item.variation || '1 Pack'}</p>
+                    <div className="flex justify-between items-center mt-auto">
+                      <span className="text-[15px] font-extrabold text-slate-900">₹{itemPrice.toFixed(2)}</span>
+                      <div className="flex items-center gap-3 border border-slate-200 rounded-lg py-1 px-2">
+                        <button onClick={() => updateQuantity(itemId, -1)} className="bg-transparent border-none cursor-pointer flex items-center justify-center p-0.5 text-slate-500"><Minus size={14} /></button>
+                        <span className="text-[13px] font-bold text-slate-900 min-w-[12px] text-center">{item.quantity}</span>
+                        <button onClick={() => updateQuantity(itemId, 1)} className="bg-transparent border-none cursor-pointer flex items-center justify-center p-0.5 text-slate-500"><Plus size={14} /></button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
         {/* Apply Coupon */}
-        <div className="bg-white border border-slate-100 rounded-xl p-4 flex justify-between items-center mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center gap-2">
-            <Tag size={20} color="#64748b" />
-            <span className="text-[13px] font-semibold text-slate-700">Apply Coupon</span>
+        {cartItems.length > 0 && (
+          <div className="bg-white border border-slate-100 rounded-xl p-4 flex justify-between items-center mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+            <div className="flex items-center gap-2">
+              <Tag size={20} color="#64748b" />
+              <span className="text-[13px] font-semibold text-slate-700">Apply Coupon</span>
+            </div>
+            <button className="bg-transparent border-none text-blue-600 text-[13px] font-semibold cursor-pointer">Apply</button>
           </div>
-          <button className="bg-transparent border-none text-blue-600 text-[13px] font-semibold cursor-pointer">Apply</button>
-        </div>
+        )}
 
         {/* Bill Details */}
         {cartItems.length > 0 && (
           <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
             <div className="flex justify-between items-center mb-3">
               <span className="text-[12px] font-medium text-slate-500">Item Total ({cartItems.length} items)</span>
-              <span className="text-[12px] font-semibold text-slate-700">₹{cartTotal.toFixed(2)}</span>
+              <span className="text-[12px] font-semibold text-slate-700">₹{safeCartTotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center mb-3">
               <span className="text-[12px] font-medium text-slate-500">Delivery Charges</span>

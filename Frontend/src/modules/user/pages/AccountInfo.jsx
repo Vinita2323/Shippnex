@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, Mail, Phone, Calendar } from 'lucide-react';
+import CustomDatePicker from '../../../components/CustomDatePicker';
 
 const AccountInfo = () => {
   const navigate = useNavigate();
@@ -97,17 +98,15 @@ const AccountInfo = () => {
           {/* DOB */}
           <div className="flex flex-col gap-1.5">
             <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider pl-1">Date of Birth</label>
-            <div className="relative">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+            <div className="relative z-10">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10 pointer-events-none">
                 <Calendar size={18} />
               </div>
-              <input 
-                type="date" 
-                name="dob"
+              <CustomDatePicker
                 value={formData.dob}
                 onChange={handleChange}
                 disabled={!isEditing}
-                className="w-full bg-[#f8fafc] border border-slate-200 rounded-[16px] py-3.5 pl-12 pr-4 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors disabled:opacity-70 disabled:bg-slate-50"
+                placeholder="Select Date of Birth"
               />
             </div>
           </div>

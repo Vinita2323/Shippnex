@@ -14,11 +14,14 @@ export const WishlistProvider = ({ children }) => {
   const [wishlistItems, setWishlistItems] = useState([]);
 
   const addToWishlist = (product) => {
+    if (!product) return false;
+    const itemId = product.id || product._id;
+    const normalizedProduct = { ...product, id: itemId };
     let added = false;
     setWishlistItems((prevItems) => {
-      if (!prevItems.find((item) => item.id === product.id)) {
+      if (!prevItems.some((item) => String(item.id || item._id) === String(itemId))) {
         added = true;
-        return [...prevItems, product];
+        return [...prevItems, normalizedProduct];
       }
       return prevItems;
     });
@@ -26,23 +29,29 @@ export const WishlistProvider = ({ children }) => {
   };
 
   const removeFromWishlist = (productId) => {
-    setWishlistItems((prevItems) => prevItems.filter((item) => item.id !== productId));
+    if (!productId) return;
+    setWishlistItems((prevItems) => prevItems.filter((item) => String(item.id || item._id) !== String(productId)));
   };
   
   const toggleWishlist = (product) => {
+    if (!product) return false;
+    const itemId = product.id || product._id;
+    const normalizedProduct = { ...product, id: itemId };
     let isAdded = false;
     setWishlistItems((prevItems) => {
-      if (prevItems.find((item) => item.id === product.id)) {
-        return prevItems.filter((item) => item.id !== product.id);
+      const exists = prevItems.some((item) => String(item.id || item._id) === String(itemId));
+      if (exists) {
+        return prevItems.filter((item) => String(item.id || item._id) !== String(itemId));
       }
       isAdded = true;
-      return [...prevItems, product];
+      return [...prevItems, normalizedProduct];
     });
-    return isAdded; // true if added, false if removed
+    return isAdded;
   };
 
   const isInWishlist = (productId) => {
-    return wishlistItems.some((item) => item.id === productId);
+    if (!productId) return false;
+    return wishlistItems.some((item) => String(item.id || item._id) === String(productId));
   };
 
   const wishlistCount = wishlistItems.length;

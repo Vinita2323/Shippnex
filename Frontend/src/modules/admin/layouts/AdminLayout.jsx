@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAdmin } from '../context/AdminContext';
+import { useAdmin } from '../context/useAdmin';
 import { AdminSidebar } from '../components/AdminSidebar';
 import { AdminHeader } from '../components/AdminHeader';
 import { AdminDashboard } from '../pages/AdminDashboard';

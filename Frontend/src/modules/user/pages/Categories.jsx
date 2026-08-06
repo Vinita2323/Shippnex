@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Heart, Star, Filter } from 'lucide-react';
+import { Search, Heart, Star, Filter, Plus, Minus, Check } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
-import { categoryService } from '../../../services/authService';
+import { useCart } from '../context/CartContext';
+import { categoryService, productService } from '../../../services/authService';
 import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
 import oilGheeImg from '../../../assets/user/categories/OilGhee-removebg-preview.png';
 import masalaImg from '../../../assets/user/categories/masala-removebg-preview.png';
@@ -26,88 +27,137 @@ const fallbackCategories = [
 const Categories = () => {
   const navigate = useNavigate();
   const { toggleWishlist, isInWishlist } = useWishlist();
+  const { addToCart, updateQuantity, getItemQuantity } = useCart();
   const [toastMessage, setToastMessage] = useState('');
-  const [activeCategory, setActiveCategory] = useState('Grains & Flours');
+  const [activeCategory, setActiveCategoryState] = useState(() => {
+    return sessionStorage.getItem('shippnex_active_cat') || 'Grains & Flours';
+  });
+  const [activeSubCategory, setActiveSubCategoryState] = useState(() => {
+    return sessionStorage.getItem('shippnex_active_sub') || null;
+  });
+
+  const setActiveCategory = (catName) => {
+    setActiveCategoryState(catName);
+    sessionStorage.setItem('shippnex_active_cat', catName);
+  };
+
+  const setActiveSubCategory = (subCatName) => {
+    setActiveSubCategoryState(subCatName);
+    if (subCatName) {
+      sessionStorage.setItem('shippnex_active_sub', subCatName);
+    } else {
+      sessionStorage.removeItem('shippnex_active_sub');
+    }
+  };
+
   const [allCategories, setAllCategories] = useState([]);
-  const [sidebarCategories, setSidebarCategories] = useState(fallbackCategories);
+  const [sidebarCategories, setSidebarCategories] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   React.useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchCategoriesData = async () => {
       try {
-        const res = await categoryService.getCategories();
-        if (res.success && res.categories.length > 0) {
-          const active = res.categories.filter(c => c.status === 'Active');
-          setAllCategories(active);
-          
-          if (active.length > 0) {
-            const roots = active.filter(c => !c.parent);
-            setSidebarCategories(roots.map(cat => ({
-              id: cat._id,
-              name: cat.name,
-              image: cat.image || grainsImg
-            })));
-            if (!roots.find(c => c.name === activeCategory)) {
-              setActiveCategory(roots[0]?.name || activeCategory);
-            }
+        setLoading(true);
+        const res = await categoryService.getAllCategories();
+        if (res && res.success && Array.isArray(res.categories)) {
+          setAllCategories(res.categories);
+          const topLevel = res.categories.filter(c => !c.parent);
+          if (topLevel.length > 0) {
+            setSidebarCategories(topLevel);
+          } else {
+            setSidebarCategories(fallbackCategories);
           }
+        } else {
+          setSidebarCategories(fallbackCategories);
         }
       } catch (err) {
-        console.error('Failed to load categories:', err);
+        console.error('Failed to fetch categories:', err);
+        setSidebarCategories(fallbackCategories);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchCategories();
-  }, [activeCategory]);
+    fetchCategoriesData();
+  }, []);
+
+  React.useEffect(() => {
+    const fetchCategoryProducts = async () => {
+      try {
+        const res = await productService.getProducts({ 
+          category: activeCategory, 
+          subCategory: activeSubCategory || undefined 
+        });
+        if (res && res.success && Array.isArray(res.products)) {
+          setProducts(res.products);
+        } else {
+          setProducts([]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch category products:', err);
+        setProducts([]);
+      }
+    };
+    if (activeCategory) {
+      fetchCategoryProducts();
+    }
+  }, [activeCategory, activeSubCategory]);
 
   const handleWishlistClick = (e, product) => {
     e.stopPropagation();
     const isAdded = toggleWishlist(product);
     if (isAdded) {
-      setToastMessage('Your item is added to wishlist!');
-      setTimeout(() => setToastMessage(''), 3000);
+      setToastMessage('Item added to wishlist! ❤️');
+      setTimeout(() => setToastMessage(''), 2500);
     } else {
       setToastMessage('Item removed from wishlist');
-      setTimeout(() => setToastMessage(''), 3000);
+      setTimeout(() => setToastMessage(''), 2500);
     }
   };
 
-  const products = [
-    { id: 1, name: 'Premium Basmati', brand: 'Mynzo World', price: 2499, originalPrice: 3998, discount: 38, image: grainsImg },
-    { id: 2, name: 'Refined Oil', brand: 'Mynzo World', price: 699, originalPrice: 1118, discount: 38, image: oilGheeImg },
-    { id: 3, name: 'Toor Dal 5kg', brand: 'Mynzo World', price: 1499, originalPrice: 2398, discount: 38, image: masalaImg },
-    { id: 4, name: 'Organic Sugar', brand: 'Mynzo World', price: 1299, originalPrice: 2078, discount: 38, image: sugarImg },
-  ];
-
   return (
-    <div className="h-[100dvh] bg-[#fbf9f6] font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
+    <div className="h-[100dvh] bg-[#fdfaf6] font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="flex justify-between items-center py-4 px-5 bg-gradient-to-r from-[#ea580c] to-[#f97316] rounded-b-[20px] shadow-sm z-10 relative">
-        <h2 className="text-[20px] font-semibold m-0 text-white">Categories</h2>
-        <Search size={22} color="white" className="cursor-pointer" />
-      </header>
+      <div className="p-4 bg-white shadow-2xs border-b border-slate-100/80 shrink-0">
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-[20px] font-extrabold text-[#1a1b41] m-0">All Categories</h2>
+        </div>
+        <div className="bg-[#f5f6fa] rounded-xl px-3 py-2 flex items-center gap-2 border border-slate-100">
+          <Search size={16} className="text-slate-400" />
+          <input 
+            type="text" 
+            placeholder="Search categories or products..." 
+            className="bg-transparent border-none outline-none text-[12px] w-full text-slate-700 font-medium placeholder:text-slate-400"
+          />
+        </div>
+      </div>
 
-      <div className="flex flex-1 overflow-hidden relative z-0">
+      <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
-        <div className="w-[90px] bg-[#f0f3f6] border-r border-slate-200 overflow-y-auto py-2 [&::-webkit-scrollbar]:hidden z-10">
-          {sidebarCategories.map((cat) => {
+        <div className="w-[82px] bg-white border-r border-slate-100 overflow-y-auto shrink-0 [&::-webkit-scrollbar]:hidden">
+          {sidebarCategories.map((cat, idx) => {
             const isActive = activeCategory === cat.name;
             return (
               <div 
-                key={cat.name}
-                className={`py-3 flex flex-col items-center cursor-pointer relative transition-all duration-200`}
-                onClick={() => setActiveCategory(cat.name)}
+                key={cat._id || idx}
+                onClick={() => {
+                  setActiveCategory(cat.name);
+                  setActiveSubCategory(null);
+                }}
+                className={`py-3 px-1 flex flex-col items-center justify-center cursor-pointer relative transition-all border-b border-slate-50 ${
+                  isActive ? 'bg-[#fff5ee]' : 'hover:bg-slate-50/50'
+                }`}
               >
                 {isActive && (
-                  <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-[#1a1b41] rounded-r-md"></div>
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff5500] rounded-r-full"></div>
                 )}
-                
-                <div className={`w-[60px] h-[60px] flex justify-center items-center rounded-[16px] bg-white mb-1.5 shadow-sm transition-all ${
-                  isActive ? 'border-[2px] border-[#ff5500]' : 'border-[2px] border-transparent'
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-1.5 mb-1 transition-transform ${
+                  isActive ? 'scale-105' : 'opacity-80'
                 }`}>
-                  <img src={cat.image} alt={cat.name} className="w-10 h-10 object-contain" />
+                  <img src={cat.image || grainsImg} alt={cat.name} className="w-full h-full object-contain" />
                 </div>
-                
-                <span className={`text-[10px] text-center leading-[1.1] px-1 ${
-                  isActive ? 'font-bold text-[#1a1b41]' : 'font-medium text-slate-500'
+                <span className={`text-[9.5px] text-center font-bold leading-tight ${
+                  isActive ? 'text-[#ff5500]' : 'text-slate-600'
                 }`}>
                   {cat.name}
                 </span>
@@ -118,7 +168,7 @@ const Categories = () => {
         </div>
 
         {/* Right Content Area */}
-        <div className="flex-1 p-4 overflow-y-auto [&::-webkit-scrollbar]:hidden bg-[#fdfaf6]">
+        <div className="flex-1 p-3 overflow-y-auto [&::-webkit-scrollbar]:hidden bg-[#fdfaf6]">
           {/* Top Info */}
           <div className="flex justify-between items-start mb-5">
             <div>
@@ -139,61 +189,145 @@ const Categories = () => {
             
             return (
               <div className="flex gap-4 overflow-x-auto pb-4 mb-2 [&::-webkit-scrollbar]:hidden">
+                <div 
+                  className="flex flex-col items-center flex-shrink-0 cursor-pointer group"
+                  onClick={() => setActiveSubCategory(null)}
+                >
+                  <div className={`w-[55px] h-[55px] rounded-[14px] bg-white border flex justify-center items-center overflow-hidden mb-1.5 shadow-sm transition-all ${
+                    activeSubCategory === null ? 'border-[#ff5500] shadow-md' : 'border-slate-100 group-hover:border-[#ff5500] group-hover:shadow-md'
+                  }`}>
+                    <div className="w-[40px] h-[40px] flex items-center justify-center bg-orange-50 rounded-lg">
+                      <span className="text-[#ff5500] font-bold text-sm">All</span>
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-bold text-center w-16 leading-tight transition-colors ${
+                    activeSubCategory === null ? 'text-[#ff5500]' : 'text-slate-600 group-hover:text-[#ff5500]'
+                  }`}>All</span>
+                </div>
                 {subCategories.map(sub => (
-                  <div key={sub._id} className="flex flex-col items-center flex-shrink-0 cursor-pointer group">
-                    <div className="w-[55px] h-[55px] rounded-[14px] bg-white border border-slate-100 flex justify-center items-center overflow-hidden mb-1.5 shadow-sm group-hover:border-[#ff5500] group-hover:shadow-md transition-all">
+                  <div 
+                    key={sub._id} 
+                    className="flex flex-col items-center flex-shrink-0 cursor-pointer group"
+                    onClick={() => setActiveSubCategory(sub.name === activeSubCategory ? null : sub.name)}
+                  >
+                    <div className={`w-[55px] h-[55px] rounded-[14px] bg-white border flex justify-center items-center overflow-hidden mb-1.5 shadow-sm transition-all ${
+                      activeSubCategory === sub.name ? 'border-[#ff5500] shadow-md' : 'border-slate-100 group-hover:border-[#ff5500] group-hover:shadow-md'
+                    }`}>
                       <img src={sub.image || grainsImg} alt={sub.name} className="w-[40px] h-[40px] object-contain" />
                     </div>
-                    <span className="text-[10px] font-bold text-slate-600 text-center w-16 leading-tight group-hover:text-[#ff5500] transition-colors">{sub.name}</span>
+                    <span className={`text-[10px] font-bold text-center w-16 leading-tight transition-colors ${
+                      activeSubCategory === sub.name ? 'text-[#ff5500]' : 'text-slate-600 group-hover:text-[#ff5500]'
+                    }`}>{sub.name}</span>
                   </div>
                 ))}
               </div>
             );
           })()}
 
-          {/* Grid */}
+          {/* Product Grid */}
           <div className="grid grid-cols-2 gap-3 pb-24">
-            {products.map((item) => (
+            {products.map((item) => {
+              const itemDiscount = item.mrp && item.salePrice ? Math.round(((item.mrp - item.salePrice) / item.mrp) * 100) : 0;
+              const qty = getItemQuantity(item._id || item.id);
+              return (
               <div 
-                key={item.id} 
+                key={item._id} 
                 className="bg-white rounded-[16px] overflow-hidden flex flex-col shadow-[0_4px_12px_rgba(0,0,0,0.03)] relative border border-slate-50 cursor-pointer transition-transform hover:-translate-y-1"
-                onClick={() => navigate(`/product/${item.id}`)}
+                onClick={() => navigate(`/product/${item._id}`)}
               >
                 
                 {/* Image Section */}
-                <div className="bg-[#f0f3f6] h-[110px] relative w-full flex items-center justify-center p-3">
+                <div className="bg-[#f0f3f6] h-[125px] relative w-full overflow-hidden flex items-center justify-center">
                   {/* Heart */}
                   <div 
-                    className="absolute top-2 right-2 bg-white w-7 h-7 rounded-full flex items-center justify-center shadow-sm cursor-pointer z-10 hover:bg-slate-50"
+                    className={`absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-sm cursor-pointer z-10 transition-all ${
+                      isInWishlist(item._id || item.id) 
+                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60' 
+                        : 'bg-white/90 backdrop-blur-sm text-slate-600 hover:bg-white'
+                    }`}
                     onClick={(e) => handleWishlistClick(e, item)}
                   >
-                    <Heart size={13} className={isInWishlist(item.id) ? "text-red-500" : "text-slate-600"} fill={isInWishlist(item.id) ? "currentColor" : "none"} />
+                    <Heart size={13} className={isInWishlist(item._id || item.id) ? "text-emerald-600 fill-emerald-600" : "text-slate-600"} />
                   </div>
                   
-                  <img src={item.image} alt={item.name} className="max-w-[85%] max-h-[85%] object-contain mix-blend-multiply" />
+                  <img src={item.mainImage || grainsImg} alt={item.name} className="w-full h-full object-cover" />
                   
                   {/* Rating Pill */}
-                  <div className="absolute bottom-2 left-2 bg-white px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1">
+                  <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1">
                     <span className="text-[10px] font-bold text-slate-700">0</span>
-                    <Star size={9} className="text-teal-500" fill="currentColor" />
+                    <Star size={9} className="text-teal-500 fill-teal-500" />
                     <span className="text-[10px] text-slate-300">|</span>
                     <span className="text-[10px] text-slate-500">0</span>
                   </div>
                 </div>
 
                 {/* Details Section */}
-                <div className="p-2.5 pb-3 bg-white flex flex-col">
-                  <h4 className="text-[12px] font-bold text-slate-800 m-0 mb-0.5 leading-tight">{item.name}</h4>
-                  <p className="text-[10px] font-medium text-slate-400 m-0 mb-2">{item.brand}</p>
-                  
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-[14px] font-extrabold text-slate-900">₹{item.price}</span>
-                    <span className="text-[11px] text-slate-400 line-through">₹{item.originalPrice}</span>
+                <div className="p-2.5 pb-3 bg-white flex flex-col justify-between flex-1 gap-2">
+                  <div>
+                    <h4 className="text-[12px] font-bold text-slate-800 m-0 mb-0.5 leading-tight truncate">{item.name}</h4>
+                    <p className="text-[10px] font-medium text-slate-400 m-0 truncate">{item.brand || 'No Brand'}</p>
                   </div>
-                  <span className="text-[10px] font-extrabold text-[#ff5500]">-{item.discount}% OFF</span>
+
+                  {/* Price Row */}
+                  <div className="flex items-baseline justify-between gap-1">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-[14px] font-black text-slate-900">₹{item.salePrice || item.price}</span>
+                      {item.mrp && item.mrp > (item.salePrice || item.price) && (
+                        <span className="text-[10px] text-slate-400 line-through">₹{item.mrp}</span>
+                      )}
+                    </div>
+                    {itemDiscount > 0 && <span className="text-[9.5px] font-extrabold text-[#ff5500]">-{itemDiscount}% OFF</span>}
+                  </div>
+
+                  {/* Green Button BELOW Price Row */}
+                  <div>
+                    {qty === 0 ? (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addToCart(item);
+                          setToastMessage('Item added to cart! 🛒');
+                          setTimeout(() => setToastMessage(''), 2000);
+                        }}
+                        className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
+                        aria-label="Add to cart"
+                      >
+                        <Plus size={14} strokeWidth={3} /> ADD
+                      </button>
+                    ) : (
+                      <div 
+                        onClick={(e) => e.stopPropagation()} 
+                        className="w-full bg-emerald-600 text-white rounded-lg p-1 flex items-center justify-between shadow-2xs border-none"
+                      >
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateQuantity(item._id || item.id, -1);
+                          }}
+                          className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+                          aria-label="Decrease quantity"
+                        >
+                          <Minus size={12} strokeWidth={3} />
+                        </button>
+                        <span className="px-2 text-[12px] font-black text-white text-center">
+                          {qty}
+                        </span>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateQuantity(item._id || item.id, 1);
+                          }}
+                          className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+                          aria-label="Increase quantity"
+                        >
+                          <Plus size={12} strokeWidth={3} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         </div>
       </div>

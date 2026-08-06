@@ -79,6 +79,10 @@ const productSchema = new mongoose.Schema(
       type: [String],
       default: []
     },
+    galleryImages: {
+      type: [String],
+      default: []
+    },
     status: {
       type: String,
       enum: ['Published', 'Draft', 'Pending Audit'],

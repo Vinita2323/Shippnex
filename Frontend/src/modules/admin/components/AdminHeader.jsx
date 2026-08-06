@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAdmin } from '../context/AdminContext';
+import { useAdmin } from '../context/useAdmin';
 import { X, Menu, Settings, Bell, User, LogOut } from 'lucide-react';
 
 export const AdminHeader = () => {

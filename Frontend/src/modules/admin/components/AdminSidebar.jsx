@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAdmin } from '../context/AdminContext';
+import { useAdmin } from '../context/useAdmin';
 import { 
   LayoutDashboard, 
   FolderTree, 

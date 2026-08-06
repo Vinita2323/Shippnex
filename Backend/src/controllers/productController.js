@@ -1,4 +1,26 @@
+import mongoose from 'mongoose';
 import Product from '../models/Product.model.js';
+import { uploadToCloudinary } from '../config/cloudinary.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const processImage = async (imgStr, folder = 'products') => {
+  if (!imgStr) return '';
+  dotenv.config();
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const isCloudinaryConfigured = Boolean(cloudName && cloudName !== 'your_cloud_name_here');
+
+  if (isCloudinaryConfigured && typeof imgStr === 'string' && imgStr.startsWith('data:image/')) {
+    try {
+      const res = await uploadToCloudinary(imgStr, folder);
+      return res.secure_url;
+    } catch (err) {
+      console.warn('Cloudinary auto-upload failed, using fallback:', err.message);
+    }
+  }
+  return imgStr;
+};
 
 // @desc    Create a new product
 // @route   POST /api/products
@@ -23,6 +45,7 @@ export const createProduct = async (req, res) => {
       sku,
       mainImage,
       homeSections,
+      galleryImages,
       status,
       isFeatured
     } = req.body;
@@ -35,6 +58,13 @@ export const createProduct = async (req, res) => {
     }
 
     const formattedUnit = `${unitValue || '1'} ${unitType || 'kg'}`;
+
+    // Process mainImage & galleryImages through Cloudinary if configured
+    const processedMainImage = await processImage(mainImage, 'products/main');
+    let processedGalleryImages = [];
+    if (Array.isArray(galleryImages)) {
+      processedGalleryImages = await Promise.all(galleryImages.map(img => processImage(img, 'products/gallery')));
+    }
 
     const product = await Product.create({
       name,
@@ -53,8 +83,9 @@ export const createProduct = async (req, res) => {
       stock: Number(stock),
       minStockLimit: minStockLimit ? Number(minStockLimit) : 10,
       sku: sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
-      mainImage: mainImage || '',
+      mainImage: processedMainImage || '',
       homeSections: Array.isArray(homeSections) ? homeSections : [],
+      galleryImages: processedGalleryImages,
       status: status || 'Published',
       isFeatured: Boolean(isFeatured)
     });
@@ -77,11 +108,15 @@ export const createProduct = async (req, res) => {
 // @access  Public
 export const getProducts = async (req, res) => {
   try {
-    const { category, section, search } = req.query;
+    const { category, subCategory, section, search } = req.query;
     let query = {};
 
     if (category) {
       query.category = category;
+    }
+
+    if (subCategory) {
+      query.subCategory = subCategory;
     }
 
     if (section) {
@@ -107,12 +142,22 @@ export const getProducts = async (req, res) => {
   }
 };
 
+// Helper to find product by ObjectId or SKU
+const findProductByIdOrSku = async (idOrSku) => {
+  if (!idOrSku) return null;
+  if (mongoose.Types.ObjectId.isValid(idOrSku)) {
+    const p = await Product.findById(idOrSku);
+    if (p) return p;
+  }
+  return await Product.findOne({ sku: idOrSku });
+};
+
 // @desc    Get product by ID
 // @route   GET /api/products/:id
 // @access  Public
 export const getProductById = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await findProductByIdOrSku(req.params.id);
 
     if (!product) {
       return res.status(404).json({
@@ -138,7 +183,7 @@ export const getProductById = async (req, res) => {
 // @access  Private/Admin
 export const updateProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await findProductByIdOrSku(req.params.id);
 
     if (!product) {
       return res.status(404).json({
@@ -147,10 +192,18 @@ export const updateProduct = async (req, res) => {
       });
     }
 
+    const updateData = { ...req.body };
+    if (updateData.mainImage) {
+      updateData.mainImage = await processImage(updateData.mainImage, 'products/main');
+    }
+    if (Array.isArray(updateData.galleryImages)) {
+      updateData.galleryImages = await Promise.all(updateData.galleryImages.map(img => processImage(img, 'products/gallery')));
+    }
+
     const updatedProduct = await Product.findByIdAndUpdate(
-      req.params.id,
-      { $set: req.body },
-      { new: true, runValidators: true }
+      product._id,
+      { $set: updateData },
+      { returnDocument: 'after', runValidators: true }
     );
 
     res.status(200).json({
@@ -171,7 +224,7 @@ export const updateProduct = async (req, res) => {
 // @access  Private/Admin
 export const deleteProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await findProductByIdOrSku(req.params.id);
 
     if (!product) {
       return res.status(404).json({

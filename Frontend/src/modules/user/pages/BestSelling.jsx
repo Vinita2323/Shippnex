@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, ShoppingCart, Heart, Zap } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Check, ShoppingCart, Heart, Zap } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { productService } from '../../../services/authService';
@@ -13,7 +13,7 @@ import groceryImg from '../../../assets/user/categories/Grocery-removebg-preview
 
 const BestSelling = () => {
   const navigate = useNavigate();
-  const { addToCart, cartCount } = useCart();
+  const { addToCart, updateQuantity, getItemQuantity, cartCount } = useCart();
   const { wishlistItems, addToWishlist, removeFromWishlist } = useWishlist();
   const [toastMessage, setToastMessage] = useState('');
   const [productsList, setProductsList] = useState([]);
@@ -171,9 +171,11 @@ const BestSelling = () => {
                 {/* Wishlist Button */}
                 <button
                   onClick={(e) => toggleWishlist(e, product)}
-                  className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm rounded-full p-1 shadow-sm z-10 border-none cursor-pointer"
+                  className={`absolute top-2 right-2 rounded-full p-1 shadow-sm z-10 border-none cursor-pointer transition-all ${
+                    wishlisted ? 'bg-emerald-50 text-emerald-600' : 'bg-white/80 backdrop-blur-sm text-slate-400'
+                  }`}
                 >
-                  <Heart size={14} className={wishlisted ? 'fill-red-500 text-red-500' : 'text-slate-400'} />
+                  <Heart size={14} className={wishlisted ? 'fill-emerald-600 text-emerald-600' : 'text-slate-400'} />
                 </button>
 
                 {/* Image */}
@@ -200,12 +202,35 @@ const BestSelling = () => {
                         <span className="text-[10px] text-slate-400 line-through">₹{Number(product.originalPrice).toFixed(2)}</span>
                       )}
                     </div>
-                    <button 
-                      onClick={() => handleAddToCart(product)} 
-                      className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer transition-transform active:scale-95"
-                    >
-                      <Plus size={16} color="white" />
-                    </button>
+                    {getItemQuantity(product.id || product._id) === 0 ? (
+                      <button 
+                        onClick={() => handleAddToCart(product)} 
+                        className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center border-none cursor-pointer shadow-2xs active:scale-90 transition-transform shrink-0"
+                        aria-label="Add to cart"
+                      >
+                        <Plus size={15} strokeWidth={3} />
+                      </button>
+                    ) : (
+                      <div className="bg-emerald-600 text-white rounded-lg p-0.5 flex items-center justify-between shadow-2xs border-none shrink-0">
+                        <button 
+                          onClick={() => updateQuantity(product.id || product._id, -1)}
+                          className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+                          aria-label="Decrease quantity"
+                        >
+                          <Minus size={12} strokeWidth={3} />
+                        </button>
+                        <span className="px-1 text-[11px] font-black text-white min-w-[14px] text-center">
+                          {getItemQuantity(product.id || product._id)}
+                        </span>
+                        <button 
+                          onClick={() => updateQuantity(product.id || product._id, 1)}
+                          className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+                          aria-label="Increase quantity"
+                        >
+                          <Plus size={12} strokeWidth={3} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

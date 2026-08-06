@@ -20,6 +20,8 @@ import {
   Home as HomeIcon, 
   Zap, 
   Plus,
+  Minus,
+  Check,
   Heart,
   MapPin,
   Mic,
@@ -46,7 +48,7 @@ const allProducts = [
 
 const Home = () => {
   const navigate = useNavigate();
-  const { addToCart, cartCount } = useCart();
+  const { addToCart, updateQuantity, getItemQuantity, isInCart, cartCount } = useCart();
   const { wishlistCount } = useWishlist();
   const locationContext = useLocationContext();
   const [toastMessage, setToastMessage] = useState('');
@@ -75,7 +77,8 @@ const Home = () => {
         const res = await categoryService.getCategories();
         if (res.success && res.categories.length > 0) {
           const active = res.categories.filter(c => c.status === 'Active');
-          setCategories(active);
+          const roots = active.filter(c => !c.parent);
+          setCategories(roots);
         }
       } catch (err) {
         console.error('Failed to load categories:', err);
@@ -277,7 +280,35 @@ const Home = () => {
                           <span className="text-[10px] text-slate-400 line-through">₹{product.originalPrice.toFixed(2)}</span>
                           {product.discount && <span className="text-[10px] font-extrabold text-[#ff5500]">{product.discount}</span>}
                         </div>
-                        <button onClick={() => handleAddToCart(product)} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer"><Plus size={16} color="white" /></button>
+                        {getItemQuantity(product.id || product._id) === 0 ? (
+                          <button 
+                            onClick={() => handleAddToCart(product)} 
+                            className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center border-none cursor-pointer shadow-2xs active:scale-90 transition-transform shrink-0"
+                            aria-label="Add to cart"
+                          >
+                            <Plus size={15} strokeWidth={3} />
+                          </button>
+                        ) : (
+                          <div className="bg-emerald-600 text-white rounded-lg p-0.5 flex items-center justify-between shadow-2xs border-none shrink-0">
+                            <button 
+                              onClick={() => updateQuantity(product.id || product._id, -1)}
+                              className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+                              aria-label="Decrease quantity"
+                            >
+                              <Minus size={12} strokeWidth={3} />
+                            </button>
+                            <span className="px-1 text-[11px] font-black text-white min-w-[14px] text-center">
+                              {getItemQuantity(product.id || product._id)}
+                            </span>
+                            <button 
+                              onClick={() => updateQuantity(product.id || product._id, 1)}
+                              className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+                              aria-label="Increase quantity"
+                            >
+                              <Plus size={12} strokeWidth={3} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -389,24 +420,58 @@ const Home = () => {
 
         <div className="flex overflow-x-auto gap-4 pb-4 -mr-5 pr-5 [&::-webkit-scrollbar]:hidden">
           {flashDeals.map((prod) => (
-            <div key={prod.id} className="min-w-[140px] max-w-[140px] bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between">
-              <img onClick={() => navigate(`/product/${prod.id}`)} src={prod.image} alt={prod.name} className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
-              <div className="flex flex-col p-3 pt-2 flex-1 justify-between">
+            <div key={prod.id} className="min-w-[155px] max-w-[155px] bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+              <div className="h-[125px] w-full overflow-hidden bg-slate-50 relative cursor-pointer" onClick={() => navigate(`/product/${prod.id}`)}>
+                <img src={prod.image} alt={prod.name} className="w-full h-full object-cover" />
+              </div>
+              <div className="flex flex-col p-2.5 flex-1 justify-between gap-2">
                 <div>
-                  <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{prod.name}</h4>
-                  <p className="text-[11px] text-slate-400 m-0 mb-2">{prod.unit}</p>
+                  <h4 className="text-[13px] font-bold m-0 mb-0.5 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{prod.name}</h4>
+                  <p className="text-[11px] text-slate-400 m-0">{prod.unit}</p>
                 </div>
-                <div className="flex justify-between items-end mt-1">
-                  <div className="flex flex-col gap-0.5">
+                
+                <div className="flex items-baseline justify-between gap-1">
+                  <div className="flex items-baseline gap-1">
                     <span className="text-[14px] font-extrabold text-slate-900">₹{prod.price.toFixed(2)}</span>
                     {prod.originalPrice > prod.price && (
                       <span className="text-[10px] text-slate-400 line-through">₹{prod.originalPrice.toFixed(2)}</span>
                     )}
-                    {prod.discount && (
-                      <span className="text-[10px] font-extrabold text-[#ff5500]">{prod.discount}</span>
-                    )}
                   </div>
-                  <button onClick={() => handleAddToCart(prod)} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer transition-transform active:scale-95"><Plus size={16} color="white" /></button>
+                  {prod.discount && (
+                    <span className="text-[9.5px] font-extrabold text-[#ff5500]">{prod.discount}</span>
+                  )}
+                </div>
+
+                <div>
+                  {getItemQuantity(prod.id || prod._id) === 0 ? (
+                    <button 
+                      onClick={() => handleAddToCart(prod)} 
+                      className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
+                      aria-label="Add to cart"
+                    >
+                      <Plus size={14} strokeWidth={3} /> ADD
+                    </button>
+                  ) : (
+                    <div className="w-full bg-emerald-600 text-white rounded-lg p-1 flex items-center justify-between shadow-2xs border-none">
+                      <button 
+                        onClick={() => updateQuantity(prod.id || prod._id, -1)}
+                        className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+                        aria-label="Decrease quantity"
+                      >
+                        <Minus size={12} strokeWidth={3} />
+                      </button>
+                      <span className="px-2 text-[12px] font-black text-white text-center">
+                        {getItemQuantity(prod.id || prod._id)}
+                      </span>
+                      <button 
+                        onClick={() => updateQuantity(prod.id || prod._id, 1)}
+                        className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+                        aria-label="Increase quantity"
+                      >
+                        <Plus size={12} strokeWidth={3} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -424,20 +489,54 @@ const Home = () => {
         <div className="grid grid-cols-2 gap-3 pb-4">
           {bestsellerProducts.map((prod) => (
             <div key={prod.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between">
-              <img onClick={() => navigate(`/product/${prod.id}`)} src={prod.image} alt={prod.name} className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
-              <div className="flex flex-col p-3 pt-2 flex-1 justify-between">
+              <div className="h-[125px] w-full overflow-hidden bg-slate-50 relative cursor-pointer" onClick={() => navigate(`/product/${prod.id}`)}>
+                <img src={prod.image} alt={prod.name} className="w-full h-full object-cover" />
+              </div>
+              <div className="flex flex-col p-2.5 flex-1 justify-between gap-2">
                 <div>
-                  <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{prod.name}</h4>
-                  <p className="text-[11px] text-slate-400 m-0 mb-2">{prod.unit}</p>
+                  <h4 className="text-[13px] font-bold m-0 mb-0.5 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{prod.name}</h4>
+                  <p className="text-[11px] text-slate-400 m-0">{prod.unit}</p>
                 </div>
-                <div className="flex justify-between items-end mt-1">
-                  <div className="flex flex-col gap-0.5">
+                
+                <div className="flex items-baseline justify-between gap-1">
+                  <div className="flex items-baseline gap-1">
                     <span className="text-[14px] font-extrabold text-slate-900">₹{prod.price.toFixed(2)}</span>
                     {prod.originalPrice > prod.price && (
                       <span className="text-[10px] text-slate-400 line-through">₹{prod.originalPrice.toFixed(2)}</span>
                     )}
                   </div>
-                  <button onClick={() => handleAddToCart(prod)} className="bg-slate-900 border-none rounded-md w-7 h-7 flex items-center justify-center cursor-pointer transition-transform active:scale-95"><Plus size={16} color="white" /></button>
+                </div>
+
+                <div>
+                  {getItemQuantity(prod.id || prod._id) === 0 ? (
+                    <button 
+                      onClick={() => handleAddToCart(prod)} 
+                      className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
+                      aria-label="Add to cart"
+                    >
+                      <Plus size={14} strokeWidth={3} /> ADD
+                    </button>
+                  ) : (
+                    <div className="w-full bg-emerald-600 text-white rounded-lg p-1 flex items-center justify-between shadow-2xs border-none">
+                      <button 
+                        onClick={() => updateQuantity(prod.id || prod._id, -1)}
+                        className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+                        aria-label="Decrease quantity"
+                      >
+                        <Minus size={12} strokeWidth={3} />
+                      </button>
+                      <span className="px-2 text-[12px] font-black text-white text-center">
+                        {getItemQuantity(prod.id || prod._id)}
+                      </span>
+                      <button 
+                        onClick={() => updateQuantity(prod.id || prod._id, 1)}
+                        className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+                        aria-label="Increase quantity"
+                      >
+                        <Plus size={12} strokeWidth={3} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

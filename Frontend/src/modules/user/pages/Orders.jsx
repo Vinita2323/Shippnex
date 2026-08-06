@@ -9,7 +9,14 @@ const Orders = () => {
   const navigate = useNavigate();
   const location = useLocation();
   // State
-  const [activeTab, setActiveTab] = useState(location.state?.tab || 'shopping'); // 'shopping' or 'transport'
+  const [activeTab, setActiveTabState] = useState(() => {
+    return location.state?.tab || sessionStorage.getItem('shippnex_orders_tab') || 'shopping';
+  });
+
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    sessionStorage.setItem('shippnex_orders_tab', tab);
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
