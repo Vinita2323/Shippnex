@@ -1,16 +1,35 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Mail, Phone, Calendar } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, User, Mail, Phone, Calendar, AlertCircle } from 'lucide-react';
 import CustomDatePicker from '../../../components/CustomDatePicker';
 
 const AccountInfo = () => {
   const navigate = useNavigate();
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    fullName: localStorage.getItem('shippnex_user_name') || 'Sarah Jenkins',
-    email: localStorage.getItem('shippnex_user_email') || 'sarah.j@example.com',
-    phone: localStorage.getItem('shippnex_user_phone') || '+91 98765 43210',
-    dob: localStorage.getItem('shippnex_user_dob') || '1995-08-15'
+  const location = useLocation();
+
+  const notice = location.state?.notice || '';
+  const returnUrl = location.state?.returnUrl || '';
+
+  const [isEditing, setIsEditing] = useState(() => Boolean(notice));
+  const [formData, setFormData] = useState(() => {
+    const userDataRaw = localStorage.getItem('shippnex_user_data');
+    let name = localStorage.getItem('shippnex_user_name');
+    let email = localStorage.getItem('shippnex_user_email');
+    let phone = localStorage.getItem('shippnex_user_phone');
+    if (userDataRaw) {
+      try {
+        const u = JSON.parse(userDataRaw);
+        if (!name && u.name) name = u.name;
+        if (!email && u.email) email = u.email;
+        if (!phone && u.phone) phone = u.phone;
+      } catch (e) {}
+    }
+    return {
+      fullName: name && name !== 'User' && name !== 'Customer' ? name : '',
+      email: email || '',
+      phone: phone || '',
+      dob: localStorage.getItem('shippnex_user_dob') || ''
+    };
   });
 
   const handleChange = (e) => {
@@ -19,11 +38,37 @@ const AccountInfo = () => {
   };
 
   const handleSave = () => {
-    localStorage.setItem('shippnex_user_name', formData.fullName);
-    localStorage.setItem('shippnex_user_email', formData.email);
-    localStorage.setItem('shippnex_user_phone', formData.phone);
-    localStorage.setItem('shippnex_user_dob', formData.dob);
+    if (!formData.fullName || formData.fullName.trim().length < 2) {
+      alert('Please enter a valid Full Name.');
+      return;
+    }
+
+    const cleanName = formData.fullName.trim();
+    const cleanEmail = formData.email.trim();
+    const cleanPhone = formData.phone.trim();
+    const cleanDob = formData.dob;
+
+    localStorage.setItem('shippnex_user_name', cleanName);
+    localStorage.setItem('shippnex_user_email', cleanEmail);
+    localStorage.setItem('shippnex_user_phone', cleanPhone);
+    localStorage.setItem('shippnex_user_dob', cleanDob);
+
+    const userDataRaw = localStorage.getItem('shippnex_user_data');
+    if (userDataRaw) {
+      try {
+        const u = JSON.parse(userDataRaw);
+        u.name = cleanName;
+        u.email = cleanEmail;
+        u.phone = cleanPhone;
+        localStorage.setItem('shippnex_user_data', JSON.stringify(u));
+      } catch (e) {}
+    }
+
     setIsEditing(false);
+
+    if (returnUrl) {
+      navigate(returnUrl, { replace: true });
+    }
   };
 
   return (
@@ -37,13 +82,20 @@ const AccountInfo = () => {
         <div className="w-6"></div> {/* Spacer for centering */}
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-6 [&::-webkit-scrollbar]:hidden flex flex-col gap-6">
+      <div className="flex-1 overflow-y-auto px-5 py-6 [&::-webkit-scrollbar]:hidden flex flex-col gap-5">
         
+        {notice && (
+          <div className="bg-orange-50 border border-orange-200 text-[#ea580c] px-4 py-3 rounded-2xl text-[13px] font-semibold flex items-center gap-2.5 shadow-sm">
+            <AlertCircle size={20} className="shrink-0 text-[#ea580c]" />
+            <span>{notice}</span>
+          </div>
+        )}
+
         <div className="bg-white rounded-[24px] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100 flex flex-col gap-5">
           
           {/* Full Name */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider pl-1">Full Name</label>
+            <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider pl-1">Full Name *</label>
             <div className="relative">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                 <User size={18} />
@@ -51,6 +103,7 @@ const AccountInfo = () => {
               <input 
                 type="text" 
                 name="fullName"
+                placeholder="Enter your full name"
                 value={formData.fullName}
                 onChange={handleChange}
                 disabled={!isEditing}
@@ -69,6 +122,7 @@ const AccountInfo = () => {
               <input 
                 type="email" 
                 name="email"
+                placeholder="Enter your email address"
                 value={formData.email}
                 onChange={handleChange}
                 disabled={!isEditing}
@@ -87,6 +141,7 @@ const AccountInfo = () => {
               <input 
                 type="tel" 
                 name="phone"
+                placeholder="Enter your mobile number"
                 value={formData.phone}
                 onChange={handleChange}
                 disabled={!isEditing}
@@ -122,7 +177,7 @@ const AccountInfo = () => {
             className="w-full bg-[#ea580c] text-white rounded-2xl py-4 font-bold text-[15px] cursor-pointer active:scale-[0.98] transition-transform border-none shadow-[0_4px_16px_rgba(234,88,12,0.2)]"
             onClick={handleSave}
           >
-            Save Changes
+            {returnUrl ? 'Save & Continue to Checkout' : 'Save Changes'}
           </button>
         ) : (
           <button 

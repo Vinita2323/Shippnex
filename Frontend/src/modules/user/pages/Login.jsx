@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, ArrowRight, Package, MapPin, Loader2 } from 'lucide-react';
+import { Phone, ArrowRight, ArrowLeft, Package, MapPin, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../../services/authService';
 
@@ -41,16 +41,24 @@ const Login = () => {
         
         <div>
           {/* Header Section */}
-          <div className="flex justify-between items-start mb-6 relative">
-            <img src="/Logo.png" alt="Shippnex" className="h-8 object-contain ml-1 mt-1" />
+          <div className="flex justify-between items-center mb-6 relative">
+            <button 
+              onClick={() => navigate(-1)}
+              className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer text-slate-700 shrink-0"
+              aria-label="Go Back"
+            >
+              <ArrowLeft size={18} />
+            </button>
+
+            <img src="/Logo.png" alt="Shippnex" className="h-20 max-w-[180px] object-contain my-1" />
             
-            {/* Decorative Illustration Area */}
-            <div className="relative w-16 h-16 -mr-2 opacity-90">
-              <div className="absolute top-0 right-0 w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center animate-bounce">
-                <MapPin size={12} className="text-[#ea580c]" />
-              </div>
-              <div className="absolute bottom-0 left-0">
-                <Package size={38} className="text-[#ea580c]" strokeWidth={1.5} />
+            {/* Right side spacer for perfect center alignment */}
+            <div className="w-10 flex justify-end shrink-0">
+              <div className="relative w-8 h-8 opacity-90 flex items-center justify-center">
+                <div className="absolute top-0 right-0 w-3.5 h-3.5 bg-orange-100 rounded-full flex items-center justify-center animate-bounce">
+                  <MapPin size={8} className="text-[#ea580c]" />
+                </div>
+                <Package size={24} className="text-[#ea580c]" strokeWidth={1.5} />
               </div>
             </div>
           </div>

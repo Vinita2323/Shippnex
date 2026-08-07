@@ -1,29 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, Plus, Edit2, Trash2, X, Check } from 'lucide-react';
+import { addressService } from '../../../services/authService';
 
 const initialDefaultAddresses = (userName, userPhone) => [
   {
-    id: 1,
+    id: 'addr_1',
+    _id: 'addr_1',
     type: 'Home',
+    addressType: 'Home',
     name: userName || 'Sarah Jenkins',
+    fullName: userName || 'Sarah Jenkins',
     address: '123, Palm Grove Apartment, Sector 45',
+    addressLine1: '123, Palm Grove Apartment, Sector 45',
     city: 'Noida',
     state: 'Uttar Pradesh',
     zip: '201301',
+    pincode: '201301',
     phone: userPhone || '+91 98765 43210',
     isDefault: true
-  },
-  {
-    id: 2,
-    type: 'Work',
-    name: userName || 'Sarah Jenkins',
-    address: 'Tech Park, Building 5, 8th Floor',
-    city: 'Gurugram',
-    state: 'Haryana',
-    zip: '122001',
-    phone: userPhone || '+91 98765 43210',
-    isDefault: false
   }
 ];
 
@@ -33,72 +28,124 @@ const SavedAddresses = () => {
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
   const [addresses, setAddresses] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState(null);
 
-  // Load user profile & saved addresses from localStorage on mount
-  useEffect(() => {
-    const name = localStorage.getItem('shippnex_user_name') || 'Sarah Jenkins';
-    const phone = localStorage.getItem('shippnex_user_phone') || '+91 98765 43210';
-    setUserName(name);
-    setUserPhone(phone);
+  const formatAddresses = (rawList) => {
+    return rawList.map(a => ({
+      ...a,
+      id: a._id || a.id,
+      name: a.fullName || a.name || userName,
+      fullName: a.fullName || a.name || userName,
+      address: a.addressLine1 || a.address,
+      addressLine1: a.addressLine1 || a.address,
+      zip: a.pincode || a.zip,
+      pincode: a.pincode || a.zip,
+      type: a.addressType || a.type || 'Home',
+      addressType: a.addressType || a.type || 'Home',
+    }));
+  };
 
+  const fetchUserAddresses = async () => {
+    try {
+      setLoading(true);
+      const res = await addressService.getAddresses();
+      if (res && res.success && res.addresses) {
+        if (res.addresses.length > 0) {
+          const formatted = formatAddresses(res.addresses);
+          setAddresses(formatted);
+          localStorage.setItem('shippnex_saved_addresses', JSON.stringify(formatted));
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch backend addresses:', err);
+    } finally {
+      setLoading(false);
+    }
+
+    // Fallback to local storage
     const saved = localStorage.getItem('shippnex_saved_addresses');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setAddresses(parsed);
+          setAddresses(formatAddresses(parsed));
           return;
         }
       } catch (err) {
         console.error('Failed to parse saved addresses:', err);
       }
     }
-    const defaults = initialDefaultAddresses(name, phone);
+    const defaults = initialDefaultAddresses(userName, userPhone);
     setAddresses(defaults);
     localStorage.setItem('shippnex_saved_addresses', JSON.stringify(defaults));
+  };
+
+  useEffect(() => {
+    const name = localStorage.getItem('shippnex_user_name') || 'Sarah Jenkins';
+    const phone = localStorage.getItem('shippnex_user_phone') || '+91 98765 43210';
+    setUserName(name);
+    setUserPhone(phone);
+    fetchUserAddresses();
   }, []);
 
-  // Save to localStorage helper
-  const saveAddressesToStorage = (newAddresses) => {
-    setAddresses(newAddresses);
-    localStorage.setItem('shippnex_saved_addresses', JSON.stringify(newAddresses));
+  const handleDelete = async (id, e) => {
+    e.stopPropagation();
+    try {
+      if (id && !String(id).startsWith('addr_')) {
+        await addressService.deleteAddress(id);
+      }
+    } catch (err) {
+      console.error('Failed to delete backend address:', err);
+    }
+    const updated = addresses.filter(addr => (addr.id || addr._id) !== id);
+    if (updated.length > 0 && !updated.some(a => a.isDefault)) {
+      updated[0].isDefault = true;
+    }
+    setAddresses(updated);
+    localStorage.setItem('shippnex_saved_addresses', JSON.stringify(updated));
+  };
 
-    // Sync current default address for checkout
-    const def = newAddresses.find(a => a.isDefault) || newAddresses[0];
+  const handleSetDefault = async (id) => {
+    try {
+      if (id && !String(id).startsWith('addr_')) {
+        await addressService.setDefaultAddress(id);
+      }
+    } catch (err) {
+      console.error('Failed to set default address on server:', err);
+    }
+    const updated = addresses.map(addr => ({
+      ...addr,
+      isDefault: (addr.id || addr._id) === id
+    }));
+    setAddresses(updated);
+    localStorage.setItem('shippnex_saved_addresses', JSON.stringify(updated));
+    const def = updated.find(a => a.isDefault);
     if (def) {
       localStorage.setItem('shippnex_selected_checkout_address', JSON.stringify(def));
     }
   };
 
-  const handleDelete = (id, e) => {
-    e.stopPropagation();
-    const updated = addresses.filter(addr => addr.id !== id);
-    // If deleted address was default, make first remaining default
-    if (updated.length > 0 && !updated.some(a => a.isDefault)) {
-      updated[0].isDefault = true;
-    }
-    saveAddressesToStorage(updated);
-  };
-
-  const handleSetDefault = (id) => {
-    const updated = addresses.map(addr => ({
-      ...addr,
-      isDefault: addr.id === id
-    }));
-    saveAddressesToStorage(updated);
-  };
-
   const handleEdit = (addr, e) => {
     e.stopPropagation();
-    setEditingAddress(addr);
+    setEditingAddress({
+      ...addr,
+      type: addr.addressType || addr.type || 'Home',
+      name: addr.fullName || addr.name || userName,
+      address: addr.addressLine1 || addr.address || '',
+      city: addr.city || 'Noida',
+      state: addr.state || 'Uttar Pradesh',
+      zip: addr.pincode || addr.zip || '201301',
+      phone: addr.phone || userPhone || '+91 98765 43210',
+    });
     setIsModalOpen(true);
   };
 
   const handleAddNew = () => {
     setEditingAddress({
-      id: Date.now(),
+      id: '',
       type: 'Home',
       name: userName || 'Sarah Jenkins',
       address: '',
@@ -111,15 +158,40 @@ const SavedAddresses = () => {
     setIsModalOpen(true);
   };
 
-  const handleSaveModal = (e) => {
+  const handleSaveModal = async (e) => {
     e.preventDefault();
-    let updated;
-    if (addresses.some(a => a.id === editingAddress.id)) {
-      updated = addresses.map(a => a.id === editingAddress.id ? editingAddress : a);
-    } else {
-      updated = [...addresses, editingAddress];
+    const payload = {
+      fullName: editingAddress.name,
+      phone: editingAddress.phone,
+      addressLine1: editingAddress.address,
+      city: editingAddress.city,
+      state: editingAddress.state,
+      pincode: editingAddress.zip,
+      country: editingAddress.country || 'India',
+      addressType: editingAddress.type || 'Home',
+      isDefault: editingAddress.isDefault,
+    };
+
+    try {
+      if (editingAddress.id && !String(editingAddress.id).startsWith('addr_')) {
+        await addressService.updateAddress(editingAddress.id, payload);
+      } else {
+        await addressService.addAddress(payload);
+      }
+      await fetchUserAddresses();
+    } catch (err) {
+      console.error('Failed to save address on backend:', err);
+      // Local fallback
+      let updated;
+      if (editingAddress.id && addresses.some(a => a.id === editingAddress.id)) {
+        updated = addresses.map(a => a.id === editingAddress.id ? { ...editingAddress, fullName: editingAddress.name, addressLine1: editingAddress.address, pincode: editingAddress.zip } : a);
+      } else {
+        const newAddr = { ...editingAddress, id: `addr_${Date.now()}`, fullName: editingAddress.name, addressLine1: editingAddress.address, pincode: editingAddress.zip };
+        updated = [...addresses, newAddr];
+      }
+      setAddresses(updated);
+      localStorage.setItem('shippnex_saved_addresses', JSON.stringify(updated));
     }
-    saveAddressesToStorage(updated);
     setIsModalOpen(false);
   };
 

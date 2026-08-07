@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, Package, CreditCard, PackageOpen, ArrowLeft, SlidersHorizontal, X, Check, Box, Truck } from 'lucide-react';
 import { useOrder } from '../context/OrderContext';
 import { useTransport } from '../context/TransportContext';
 import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
 
+import { orderService } from '../../../services/authService';
+
 const Orders = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  // State
+
   const [activeTab, setActiveTabState] = useState(() => {
     return location.state?.tab || sessionStorage.getItem('shippnex_orders_tab') || 'shopping';
   });
@@ -17,27 +19,59 @@ const Orders = () => {
     setActiveTabState(tab);
     sessionStorage.setItem('shippnex_orders_tab', tab);
   };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [serverOrders, setServerOrders] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const filterOptions = ['All', 'In Transit', 'Delivered', 'Cancelled'];
+  const filterOptions = ['All', 'Placed', 'Processing', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
-  const { orders } = useOrder();
+  const { orders: contextOrders } = useOrder();
   const { transportBookings } = useTransport();
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true);
+        const res = await orderService.getOrders();
+        if (res && res.success && res.orders) {
+          const formatted = res.orders.map(o => ({
+            id: o.orderId || o._id,
+            _id: o._id,
+            date: new Date(o.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+            status: o.orderStatus || 'Placed',
+            items: o.items || [],
+            total: o.grandTotal || 0,
+            itemCount: (o.items || []).reduce((acc, i) => acc + (i.quantity || 1), 0),
+          }));
+          setServerOrders(formatted);
+        }
+      } catch (err) {
+        console.error('Failed to fetch backend orders:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrders();
+  }, []);
+
+  const allOrders = serverOrders.length > 0 ? serverOrders : contextOrders;
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Processing': return 'text-orange-500';
-      case 'In Transit': return 'text-blue-600';
+      case 'Placed': return 'text-orange-500';
+      case 'Processing': return 'text-[#ff5500]';
+      case 'Out for Delivery': return 'text-blue-600';
       case 'Delivered': return 'text-green-500';
       case 'Cancelled': return 'text-red-500';
       default: return 'text-slate-500';
     }
   };
 
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredOrders = allOrders.filter(order => {
+    const matchesSearch = String(order.id).toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = selectedFilter === 'All' || order.status === selectedFilter;
     return matchesSearch && matchesFilter;
   });
@@ -164,10 +198,10 @@ const Orders = () => {
                 <div className="flex flex-col items-end gap-0.5">
                   <span className="text-[15px] font-extrabold text-slate-900">₹{order.total}.00</span>
                   <button 
-                    onClick={() => navigate('/track-order')}
-                    className="bg-transparent border-none text-blue-600 text-[11px] font-bold cursor-pointer p-0 hover:text-blue-700 transition-colors"
+                    onClick={() => navigate('/track-order', { state: { order } })}
+                    className="bg-transparent border-none text-[#ff5500] hover:text-[#d97706] text-[12px] font-extrabold cursor-pointer p-0 transition-colors"
                   >
-                    View Details
+                    View Details →
                   </button>
                 </div>
               </div>

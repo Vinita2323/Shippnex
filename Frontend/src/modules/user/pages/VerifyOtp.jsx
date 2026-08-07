@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { ArrowLeft, ArrowRight, ShieldCheck, Edit2, Loader2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, ShieldCheck, Edit2, Loader2 } from 'lucide-react';
+import { useWishlist } from '../context/WishlistContext';
+import { useCart } from '../context/CartContext';
 import { authService } from '../../../services/authService';
 
 const VerifyOtp = () => {
@@ -10,6 +12,9 @@ const VerifyOtp = () => {
   const inputRefs = useRef([]);
   const navigate = useNavigate();
   const location = useLocation();
+
+  const { syncWishlistWithServer } = useWishlist();
+  const { fetchCart, addToCart } = useCart();
 
   const phone = location.state?.phone || '+91 9876543210';
 
@@ -22,6 +27,45 @@ const VerifyOtp = () => {
     try {
       setLoading(true);
       await authService.verifyUserOtp(phone, enteredOtp);
+
+      // 1. Sync guest wishlist to backend database
+      await syncWishlistWithServer();
+
+      // 2. Fetch server cart
+      await fetchCart();
+
+      // 3. Handle pending actions
+      const pendingRaw = localStorage.getItem('shippnex_pending_action');
+      if (pendingRaw) {
+        try {
+          const pending = JSON.parse(pendingRaw);
+          localStorage.removeItem('shippnex_pending_action');
+
+          if (pending.type === 'ADD_TO_CART' && pending.product) {
+            await addToCart(pending.product, pending.quantity || 1);
+            navigate(pending.returnUrl || '/cart');
+            return;
+          } else if (pending.type === 'BUY_NOW' && pending.product) {
+            await addToCart(pending.product, pending.quantity || 1);
+            navigate('/checkout');
+            return;
+          } else if (pending.type === 'CHECKOUT') {
+            navigate('/checkout');
+            return;
+          }
+        } catch (pErr) {
+          console.error('Error handling pending action:', pErr);
+        }
+      }
+
+      // Check expired redirect
+      const expRedir = sessionStorage.getItem('shippnex_auth_expired_redirect');
+      if (expRedir) {
+        sessionStorage.removeItem('shippnex_auth_expired_redirect');
+        navigate(expRedir);
+        return;
+      }
+
       navigate('/');
     } catch (err) {
       setErrorMsg(err.response?.data?.message || 'Invalid OTP code. Please try again.');
@@ -78,7 +122,7 @@ const VerifyOtp = () => {
             >
               <ArrowLeft size={18} />
             </button>
-            <img src="/Logo.png" alt="Shippnex" className="h-7 object-contain" />
+            <img src="/Logo.png" alt="Shippnex" className="h-20 max-w-[180px] object-contain my-1" />
             <div className="w-10"></div> {/* Spacer */}
           </div>
 

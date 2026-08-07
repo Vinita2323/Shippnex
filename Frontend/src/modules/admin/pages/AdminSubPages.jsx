@@ -7162,10 +7162,12 @@ export const AddProductPage = () => {
   const displaySubCategories = currentSubCategories.length > 0 ? currentSubCategories : ['None'];
 
   // Multiple Homepage Sections Selection State
-  const [selectedHomeSections, setSelectedHomeSections] = React.useState([
-    'flash_sale',
-    'bestseller'
-  ]);
+  const [selectedHomeSections, setSelectedHomeSections] = React.useState(() => {
+    if (editingProductData && Array.isArray(editingProductData.homeSections)) {
+      return editingProductData.homeSections;
+    }
+    return ['flash_sale', 'bestseller'];
+  });
 
   const [toastMsg, setToastMsg] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -7174,11 +7176,14 @@ export const AddProductPage = () => {
   const multipleFileInputRef = React.useRef(null);
 
   const availableSections = [
-    { id: 'flash_sale', name: 'Flash Deals / Flash Sale', description: 'Limited-time deals with countdown timer', badge: 'Flash Sale' },
-    { id: 'bestseller', name: 'Best Selling Products', description: 'Showcase in Top Bestseller carousel cards', badge: 'Bestseller' },
-    { id: 'category_featured', name: 'Category Featured Products', description: 'Highlight under daily category grid', badge: 'Category' },
-    { id: 'lowest_prices', name: 'Lowest Prices / Price Drop', description: 'Feature in Super Saver deals section', badge: 'Lowest Price' },
-    { id: 'featured_store', name: 'Featured Store Showcase', description: 'Show under top verified merchant stores', badge: 'Store' }
+    { id: 'flash_sale', name: 'Flash Sale', description: 'Limited-time deals with countdown timer', badge: 'Flash Sale' },
+    { id: 'best_deals', name: 'Best Deals', description: 'Special discounted deal cards on Homepage', badge: 'Best Deals' },
+    { id: 'featured', name: 'Featured Products', description: 'Top highlighted products on Homepage', badge: 'Featured' },
+    { id: 'bestseller', name: 'Bestseller', description: 'Showcase in Top Bestseller carousel cards', badge: 'Bestseller' },
+    { id: 'trending', name: 'Trending', description: 'Popular trending items section', badge: 'Trending' },
+    { id: 'new_arrivals', name: 'New Arrivals', description: 'Newly launched product additions', badge: 'New Arrival' },
+    { id: 'recommended', name: 'Recommended', description: 'Personalized recommendation widget', badge: 'Recommended' },
+    { id: 'category_featured', name: 'Category Deals', description: 'Highlight under daily category grid', badge: 'Category' }
   ];
 
   const toggleHomeSection = (sectionId) => {
@@ -7287,7 +7292,8 @@ export const AddProductPage = () => {
         stock: Number(formData.stock || 0),
         status: statusToSave,
         mrp: Number(formData.mrp || 0),
-        salePrice: Number(formData.salePrice || 0)
+        salePrice: Number(formData.salePrice || 0),
+        homeSections: selectedHomeSections
       };
 
       const existingLocal = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');

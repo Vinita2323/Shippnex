@@ -12,6 +12,17 @@ export const authService = {
     if (response.data.token) {
       localStorage.setItem('shippnex_user_token', response.data.token);
       localStorage.setItem('shippnex_user_data', JSON.stringify(response.data.user));
+      const uName = response.data.user?.name || response.data.user?.phone || 'User';
+      localStorage.setItem('shippnex_user_name', uName);
+      if (response.data.user?.email) {
+        localStorage.setItem('shippnex_user_email', response.data.user.email);
+      }
+      if (response.data.user?.phone) {
+        localStorage.setItem('shippnex_user_phone', response.data.user.phone);
+      }
+      if (response.data.user?.addresses && Array.isArray(response.data.user.addresses)) {
+        localStorage.setItem('shippnex_saved_addresses', JSON.stringify(response.data.user.addresses));
+      }
     }
     return response.data;
   },
@@ -68,6 +79,14 @@ export const authService = {
     if (role === 'user') {
       localStorage.removeItem('shippnex_user_token');
       localStorage.removeItem('shippnex_user_data');
+      localStorage.removeItem('shippnex_user_name');
+      localStorage.removeItem('shippnex_user_email');
+      localStorage.removeItem('shippnex_user_phone');
+      localStorage.removeItem('shippnex_user_dob');
+      localStorage.removeItem('shippnex_saved_addresses');
+      localStorage.removeItem('shippnex_selected_checkout_address');
+      localStorage.removeItem('shippnex_pending_action');
+      sessionStorage.removeItem('shippnex_auth_expired_redirect');
     } else if (role === 'seller') {
       localStorage.removeItem('shippnex_seller_token');
       localStorage.removeItem('shippnex_seller_data');
@@ -113,6 +132,10 @@ export const categoryService = {
     const response = await API.get('/categories');
     return response.data;
   },
+  getAllCategories: async () => {
+    const response = await API.get('/categories');
+    return response.data;
+  },
   createCategory: async (data) => {
     const response = await API.post('/categories', data);
     return response.data;
@@ -149,3 +172,84 @@ export const productService = {
     return response.data;
   },
 };
+
+export const cartService = {
+  getCart: async () => {
+    const response = await API.get('/cart');
+    return response.data;
+  },
+  addToCart: async (productId, quantity = 1, productData = null) => {
+    const response = await API.post('/cart/add', { productId, quantity, product: productData });
+    return response.data;
+  },
+  syncCart: async (items = []) => {
+    const response = await API.post('/cart/sync', { items });
+    return response.data;
+  },
+  updateCartItem: async (productId, delta, quantity, productData = null) => {
+    const response = await API.put('/cart/update', { productId, delta, quantity, product: productData });
+    return response.data;
+  },
+  removeFromCart: async (productId) => {
+    const response = await API.delete(`/cart/remove/${productId}`);
+    return response.data;
+  },
+  clearCart: async () => {
+    const response = await API.delete('/cart/clear');
+    return response.data;
+  },
+};
+
+export const wishlistService = {
+  getWishlist: async () => {
+    const response = await API.get('/wishlist');
+    return response.data;
+  },
+  toggleWishlist: async (productId) => {
+    const response = await API.post('/wishlist/toggle', { productId });
+    return response.data;
+  },
+  syncWishlist: async (productIds) => {
+    const response = await API.post('/wishlist/sync', { productIds });
+    return response.data;
+  },
+};
+
+export const addressService = {
+  getAddresses: async () => {
+    const response = await API.get('/user/addresses');
+    return response.data;
+  },
+  addAddress: async (addressData) => {
+    const response = await API.post('/user/addresses', addressData);
+    return response.data;
+  },
+  updateAddress: async (addressId, addressData) => {
+    const response = await API.put(`/user/addresses/${addressId}`, addressData);
+    return response.data;
+  },
+  deleteAddress: async (addressId) => {
+    const response = await API.delete(`/user/addresses/${addressId}`);
+    return response.data;
+  },
+  setDefaultAddress: async (addressId) => {
+    const response = await API.put(`/user/addresses/${addressId}/default`);
+    return response.data;
+  },
+};
+
+export const orderService = {
+  placeOrder: async (orderData) => {
+    const response = await API.post('/orders', orderData);
+    return response.data;
+  },
+  getOrders: async () => {
+    const response = await API.get('/orders');
+    return response.data;
+  },
+  getOrderById: async (id) => {
+    const response = await API.get(`/orders/${id}`);
+    return response.data;
+  },
+};
+

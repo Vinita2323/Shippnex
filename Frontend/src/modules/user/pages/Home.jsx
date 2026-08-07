@@ -25,7 +25,8 @@ import {
   Heart,
   MapPin,
   Mic,
-  Gamepad2
+  Gamepad2,
+  Trash2
 } from 'lucide-react';
 import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
 import oilGheeImg from '../../../assets/user/categories/OilGhee-removebg-preview.png';
@@ -48,7 +49,7 @@ const allProducts = [
 
 const Home = () => {
   const navigate = useNavigate();
-  const { addToCart, updateQuantity, getItemQuantity, isInCart, cartCount } = useCart();
+  const { addToCart, updateQuantity, getItemQuantity, isInCart, cartCount, removeFromCart } = useCart();
   const { wishlistCount } = useWishlist();
   const locationContext = useLocationContext();
   const [toastMessage, setToastMessage] = useState('');
@@ -114,10 +115,13 @@ const Home = () => {
         if (res && res.products && Array.isArray(res.products)) flashApi = res.products;
       } catch (err) {}
 
-      const localFlash = localSaved.filter(p => !p.homeSections || p.homeSections.includes('flash_sale'));
+      const localFlash = localSaved.filter(p => Array.isArray(p.homeSections) && p.homeSections.includes('flash_sale'));
       const combinedFlash = [];
-      localFlash.forEach(p => combinedFlash.push(formatItem(p)));
       flashApi.forEach(p => {
+        const item = formatItem(p);
+        combinedFlash.push(item);
+      });
+      localFlash.forEach(p => {
         const item = formatItem(p);
         if (!combinedFlash.some(c => c.id === item.id || c.name === item.name)) combinedFlash.push(item);
       });
@@ -130,10 +134,13 @@ const Home = () => {
         if (res && res.products && Array.isArray(res.products)) bestApi = res.products;
       } catch (err) {}
 
-      const localBest = localSaved.filter(p => !p.homeSections || p.homeSections.includes('bestseller'));
+      const localBest = localSaved.filter(p => Array.isArray(p.homeSections) && p.homeSections.includes('bestseller'));
       const combinedBest = [];
-      localBest.forEach(p => combinedBest.push(formatItem(p)));
       bestApi.forEach(p => {
+        const item = formatItem(p);
+        combinedBest.push(item);
+      });
+      localBest.forEach(p => {
         const item = formatItem(p);
         if (!combinedBest.some(c => c.id === item.id || c.name === item.name)) combinedBest.push(item);
       });
@@ -178,12 +185,14 @@ const Home = () => {
     ? allLoadedProducts.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
 
-  const handleAddToCart = (product) => {
-    addToCart(product);
-    setToastMessage(`${product.name} added to cart!`);
-    setTimeout(() => {
-      setToastMessage('');
-    }, 3000);
+  const handleAddToCart = async (product) => {
+    const res = await addToCart(product, 1, { navigate, returnUrl: window.location.pathname });
+    if (res && res.success) {
+      setToastMessage(`${product.name} added to cart!`);
+      setTimeout(() => {
+        setToastMessage('');
+      }, 3000);
+    }
   };
 
   return (
@@ -203,7 +212,7 @@ const Home = () => {
                    Deliver to
                </div>
                <div className="text-[13px] font-bold leading-tight truncate max-w-[140px]">
-                   {locationContext?.currentLocation?.area || locationContext?.currentLocation?.city || "Select Location"}
+                   {locationContext?.currentLocation?.addressLine1 || locationContext?.currentLocation?.area || locationContext?.currentLocation?.city || "Select Location"}
                </div>
             </div>
           </div>
@@ -233,16 +242,23 @@ const Home = () => {
 
         {/* Address Section */}
         <div className="px-4 pb-2.5">
-          <div className="flex items-center justify-between bg-white/20 border border-white/30 rounded-xl px-3 py-2 text-white cursor-pointer">
-            <div className="flex items-center gap-2">
-              <MapPin size={16} />
-              <div className="text-[12px] flex items-center gap-1.5">
-                <span className="font-extrabold uppercase tracking-wider">HOME</span> 
-                <span className="text-white/60 font-light mx-0.5">|</span>
-                <span className="font-medium text-[12px]">Select Location</span>
+          <div 
+            onClick={() => navigate('/location')}
+            className="flex items-center justify-between bg-white/20 hover:bg-white/30 border border-white/30 rounded-xl px-3 py-2 text-white cursor-pointer transition-colors"
+          >
+            <div className="flex items-center gap-2 overflow-hidden">
+              <MapPin size={16} className="shrink-0 text-white" />
+              <div className="text-[12px] flex items-center gap-1.5 truncate">
+                <span className="font-extrabold uppercase tracking-wider shrink-0">
+                  {(locationContext?.currentLocation?.addressType || locationContext?.currentLocation?.type || 'HOME').toUpperCase()}
+                </span> 
+                <span className="text-white/60 font-light mx-0.5 shrink-0">|</span>
+                <span className="font-medium text-[12px] truncate">
+                  {locationContext?.currentLocation?.addressLine1 || locationContext?.currentLocation?.address || locationContext?.currentLocation?.area || locationContext?.currentLocation?.city || 'Select Location'}
+                </span>
               </div>
             </div>
-            <ChevronDown size={16} className="text-white/90" />
+            <ChevronDown size={16} className="text-white/90 shrink-0 ml-1" />
           </div>
         </div>
 
@@ -280,34 +296,22 @@ const Home = () => {
                           <span className="text-[10px] text-slate-400 line-through">₹{product.originalPrice.toFixed(2)}</span>
                           {product.discount && <span className="text-[10px] font-extrabold text-[#ff5500]">{product.discount}</span>}
                         </div>
-                        {getItemQuantity(product.id || product._id) === 0 ? (
+                        {!isInCart(product.id || product._id) ? (
                           <button 
                             onClick={() => handleAddToCart(product)} 
-                            className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center border-none cursor-pointer shadow-2xs active:scale-90 transition-transform shrink-0"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-95 transition-all shrink-0"
                             aria-label="Add to cart"
                           >
-                            <Plus size={15} strokeWidth={3} />
+                            <Plus size={13} strokeWidth={3} /> ADD
                           </button>
                         ) : (
-                          <div className="bg-emerald-600 text-white rounded-lg p-0.5 flex items-center justify-between shadow-2xs border-none shrink-0">
-                            <button 
-                              onClick={() => updateQuantity(product.id || product._id, -1)}
-                              className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
-                              aria-label="Decrease quantity"
-                            >
-                              <Minus size={12} strokeWidth={3} />
-                            </button>
-                            <span className="px-1 text-[11px] font-black text-white min-w-[14px] text-center">
-                              {getItemQuantity(product.id || product._id)}
-                            </span>
-                            <button 
-                              onClick={() => updateQuantity(product.id || product._id, 1)}
-                              className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
-                              aria-label="Increase quantity"
-                            >
-                              <Plus size={12} strokeWidth={3} />
-                            </button>
-                          </div>
+                          <button 
+                            onClick={() => removeFromCart(product.id || product._id)} 
+                            className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[11px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-95 transition-all shrink-0"
+                            aria-label="Remove from cart"
+                          >
+                            <Trash2 size={12} strokeWidth={2.5} /> REMOVE
+                          </button>
                         )}
                       </div>
                     </div>
@@ -443,7 +447,7 @@ const Home = () => {
                 </div>
 
                 <div>
-                  {getItemQuantity(prod.id || prod._id) === 0 ? (
+                  {!isInCart(prod.id || prod._id) ? (
                     <button 
                       onClick={() => handleAddToCart(prod)} 
                       className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
@@ -452,25 +456,13 @@ const Home = () => {
                       <Plus size={14} strokeWidth={3} /> ADD
                     </button>
                   ) : (
-                    <div className="w-full bg-emerald-600 text-white rounded-lg p-1 flex items-center justify-between shadow-2xs border-none">
-                      <button 
-                        onClick={() => updateQuantity(prod.id || prod._id, -1)}
-                        className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
-                        aria-label="Decrease quantity"
-                      >
-                        <Minus size={12} strokeWidth={3} />
-                      </button>
-                      <span className="px-2 text-[12px] font-black text-white text-center">
-                        {getItemQuantity(prod.id || prod._id)}
-                      </span>
-                      <button 
-                        onClick={() => updateQuantity(prod.id || prod._id, 1)}
-                        className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
-                        aria-label="Increase quantity"
-                      >
-                        <Plus size={12} strokeWidth={3} />
-                      </button>
-                    </div>
+                    <button 
+                      onClick={() => removeFromCart(prod.id || prod._id)}
+                      className="w-full py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
+                      aria-label="Remove from cart"
+                    >
+                      <Trash2 size={13} strokeWidth={2.5} /> REMOVE
+                    </button>
                   )}
                 </div>
               </div>
@@ -508,7 +500,7 @@ const Home = () => {
                 </div>
 
                 <div>
-                  {getItemQuantity(prod.id || prod._id) === 0 ? (
+                  {!isInCart(prod.id || prod._id) ? (
                     <button 
                       onClick={() => handleAddToCart(prod)} 
                       className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
@@ -517,25 +509,13 @@ const Home = () => {
                       <Plus size={14} strokeWidth={3} /> ADD
                     </button>
                   ) : (
-                    <div className="w-full bg-emerald-600 text-white rounded-lg p-1 flex items-center justify-between shadow-2xs border-none">
-                      <button 
-                        onClick={() => updateQuantity(prod.id || prod._id, -1)}
-                        className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
-                        aria-label="Decrease quantity"
-                      >
-                        <Minus size={12} strokeWidth={3} />
-                      </button>
-                      <span className="px-2 text-[12px] font-black text-white text-center">
-                        {getItemQuantity(prod.id || prod._id)}
-                      </span>
-                      <button 
-                        onClick={() => updateQuantity(prod.id || prod._id, 1)}
-                        className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
-                        aria-label="Increase quantity"
-                      >
-                        <Plus size={12} strokeWidth={3} />
-                      </button>
-                    </div>
+                    <button 
+                      onClick={() => removeFromCart(prod.id || prod._id)}
+                      className="w-full py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
+                      aria-label="Remove from cart"
+                    >
+                      <Trash2 size={13} strokeWidth={2.5} /> REMOVE
+                    </button>
                   )}
                 </div>
               </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trash2, Heart } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
+import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
 
 const Wishlist = () => {
   const navigate = useNavigate();
@@ -32,33 +33,46 @@ const Wishlist = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 pb-6">
-            {wishlistItems.map((item) => (
-              <div key={item.id} className="bg-white rounded-[16px] overflow-hidden flex flex-col shadow-[0_4px_12px_rgba(0,0,0,0.03)] relative border border-slate-50 cursor-pointer transition-transform hover:-translate-y-1" onClick={() => navigate(`/product/${item.id}`)}>
-                
-                {/* Image Section */}
-                <div className="bg-[#f0f3f6] h-[110px] relative w-full flex items-center justify-center p-3">
-                  <div 
-                    className="absolute top-2 right-2 bg-white w-7 h-7 rounded-full flex items-center justify-center shadow-sm cursor-pointer z-10 hover:bg-red-50"
-                    onClick={(e) => { e.stopPropagation(); removeFromWishlist(item.id); }}
-                  >
-                    <Trash2 size={13} className="text-red-500" />
-                  </div>
-                  
-                  <img src={item.image} alt={item.name} className="max-w-[85%] max-h-[85%] object-contain mix-blend-multiply" />
-                </div>
+            {wishlistItems.map((item) => {
+              const itemImg = item.image || item.mainImage || grainsImg;
+              const itemPrice = item.price || item.salePrice || 0;
+              const itemMrp = item.originalPrice || item.mrp || itemPrice;
 
-                {/* Details Section */}
-                <div className="p-2.5 pb-3 bg-white flex flex-col">
-                  <h4 className="text-[12px] font-bold text-slate-800 m-0 mb-0.5 leading-tight">{item.name}</h4>
-                  <p className="text-[10px] font-medium text-slate-400 m-0 mb-2">{item.brand}</p>
+              return (
+                <div key={item.id || item._id} className="bg-white rounded-[16px] overflow-hidden flex flex-col shadow-[0_4px_12px_rgba(0,0,0,0.03)] relative border border-slate-50 cursor-pointer transition-transform hover:-translate-y-1" onClick={() => navigate(`/product/${item.id || item._id}`)}>
                   
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-[14px] font-extrabold text-slate-900">₹{item.price}</span>
-                    <span className="text-[11px] text-slate-400 line-through">₹{item.originalPrice}</span>
+                  {/* Image Section */}
+                  <div className="relative w-full h-[145px] bg-slate-100 overflow-hidden">
+                    <div 
+                      className="absolute top-2 right-2 bg-white/95 backdrop-blur-xs w-7 h-7 rounded-full flex items-center justify-center shadow-md cursor-pointer z-10 hover:bg-red-50 transition-all active:scale-95 border border-slate-100"
+                      onClick={(e) => { e.stopPropagation(); removeFromWishlist(item.id || item._id); }}
+                    >
+                      <Trash2 size={13} className="text-red-500" />
+                    </div>
+                    
+                    <img 
+                      src={itemImg} 
+                      alt={item.name} 
+                      onError={(e) => { e.target.src = grainsImg; }}
+                      className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" 
+                    />
+                  </div>
+
+                  {/* Details Section */}
+                  <div className="p-2.5 pb-3 bg-white flex flex-col">
+                    <h4 className="text-[12px] font-bold text-slate-800 m-0 mb-0.5 leading-tight">{item.name}</h4>
+                    <p className="text-[10px] font-medium text-slate-400 m-0 mb-2">{item.brand || 'ShippNex Select'}</p>
+                    
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-[14px] font-extrabold text-slate-900">₹{itemPrice}</span>
+                      {itemMrp > itemPrice && (
+                        <span className="text-[11px] text-slate-400 line-through">₹{itemMrp}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

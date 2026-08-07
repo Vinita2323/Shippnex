@@ -1,19 +1,40 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, Pencil, Camera, Package, Heart, Gift, Headphones, 
   ChevronRight, Wallet, User, MapPin, Lock, FileText, HelpCircle, 
   PhoneCall, LogOut, Trash2, Sparkles 
 } from 'lucide-react';
+import { authService } from '../../../services/authService';
+import { useCart } from '../context/CartContext';
+import { useWishlist } from '../context/WishlistContext';
 
 const Profile = () => {
   const navigate = useNavigate();
+  const { clearCart } = useCart();
+  const { refreshWishlist } = useWishlist();
+
   const [profileImage, setProfileImage] = useState(null);
-  const [userName, setUserName] = useState(() => localStorage.getItem('shippnex_user_name') || 'Sarah Jenkins');
+  
+  const getUserDisplayName = () => {
+    const storedName = localStorage.getItem('shippnex_user_name');
+    if (storedName) return storedName;
+    const userDataRaw = localStorage.getItem('shippnex_user_data');
+    if (userDataRaw) {
+      try {
+        const u = JSON.parse(userDataRaw);
+        if (u.name) return u.name;
+        if (u.phone) return u.phone;
+      } catch (e) {}
+    }
+    return 'User';
+  };
+
+  const [userName, setUserName] = useState(getUserDisplayName);
   const fileInputRef = useRef(null);
   
-  React.useEffect(() => {
-    setUserName(localStorage.getItem('shippnex_user_name') || 'Sarah Jenkins');
+  useEffect(() => {
+    setUserName(getUserDisplayName());
   }, []);
 
   const handleImageUpload = (event) => {
@@ -22,6 +43,13 @@ const Profile = () => {
       const imageUrl = URL.createObjectURL(file);
       setProfileImage(imageUrl);
     }
+  };
+
+  const handleLogout = () => {
+    authService.logout('user');
+    clearCart();
+    refreshWishlist();
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -99,8 +127,6 @@ const Profile = () => {
             <span className="text-[13px] font-bold text-[#1e1b4b]">Help Center</span>
           </button>
         </div>
-
-
 
         {/* Account Settings Section */}
         <div className="w-full bg-white rounded-[20px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] mb-4">
@@ -204,7 +230,7 @@ const Profile = () => {
 
         {/* Danger Section */}
         <div className="w-full bg-white rounded-[20px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] flex flex-col gap-3">
-          <div className="flex items-center justify-between cursor-pointer group" onClick={() => navigate('/login')}>
+          <div className="flex items-center justify-between cursor-pointer group" onClick={handleLogout}>
             <div className="flex items-center gap-3">
               <div className="w-[36px] h-[36px] rounded-[12px] bg-[#fee2e2] flex items-center justify-center shrink-0">
                 <LogOut size={16} className="text-[#e11d48]" />
@@ -217,7 +243,7 @@ const Profile = () => {
             <ChevronRight size={16} className="text-slate-200 group-hover:text-slate-300 transition-colors" />
           </div>
 
-          <div className="flex items-center justify-between cursor-pointer group">
+          <div className="flex items-center justify-between cursor-pointer group" onClick={handleLogout}>
             <div className="flex items-center gap-3">
               <div className="w-[36px] h-[36px] rounded-[12px] bg-[#fee2e2] flex items-center justify-center shrink-0">
                 <Trash2 size={16} className="text-[#e11d48]" />

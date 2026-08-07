@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, Heart, Star, ShoppingCart, ChevronRight, ChevronDown, 
-  ShieldCheck, Tag, Share2, Plus, Minus, Clock, Check
+  ShieldCheck, Tag, Share2, Plus, Minus, Clock, Check, Trash2
 } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
@@ -26,7 +26,7 @@ const ProductDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const { toggleWishlist, isInWishlist } = useWishlist();
-  const { addToCart, updateQuantity, getItemQuantity } = useCart();
+  const { addToCart, updateQuantity, getItemQuantity, isInCart, removeFromCart } = useCart();
   const [toastMessage, setToastMessage] = useState('');
   const [activeAccordion, setActiveAccordion] = useState(null);
   const [activeImage, setActiveImage] = useState(null);
@@ -85,21 +85,21 @@ const ProductDetails = () => {
     }
   };
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!product) return;
-    for (let i = 0; i < quantity; i++) {
-      addToCart(product);
+    const res = await addToCart(product, quantity, { navigate, returnUrl: window.location.pathname });
+    if (res && res.success) {
+      setToastMessage(`${quantity} item${quantity > 1 ? 's' : ''} added to cart! 🛒`);
+      setTimeout(() => setToastMessage(''), 2500);
     }
-    setToastMessage(`${quantity} item${quantity > 1 ? 's' : ''} added to cart`);
-    setTimeout(() => setToastMessage(''), 2500);
   };
 
-  const handleBuyNow = () => {
+  const handleBuyNow = async () => {
     if (!product) return;
-    for (let i = 0; i < quantity; i++) {
-      addToCart(product);
+    const res = await addToCart(product, quantity, { isBuyNow: true, navigate, returnUrl: window.location.pathname });
+    if (res && res.success) {
+      navigate('/checkout');
     }
-    navigate('/cart');
   };
 
   const isFav = product && isInWishlist(product.id || product._id);
@@ -136,47 +136,43 @@ const ProductDetails = () => {
   return (
     <div className="min-h-[100dvh] bg-white font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_25px_rgba(0,0,0,0.05)] flex flex-col pb-24">
       
-      {/* 1. Header Bar */}
-      <header className="sticky top-0 w-full z-40 bg-white/95 backdrop-blur-md border-b border-slate-100 px-4 py-3 flex items-center justify-between shadow-2xs">
-        <button 
-          className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-full flex items-center justify-center cursor-pointer border-none transition-colors"
-          onClick={() => navigate(-1)}
-        >
-          <ArrowLeft size={18} />
-        </button>
-        
-        <span className="font-semibold text-slate-800 text-sm truncate max-w-[220px]">
-          {product.name}
-        </span>
-
-        <div className="flex items-center gap-1.5">
-          <button 
-            className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-full flex items-center justify-center cursor-pointer border-none transition-colors"
-            onClick={handleShare}
-          >
-            <Share2 size={16} />
-          </button>
-          <button 
-            className={`w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border-none transition-colors ${
-              isFav ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60' : 'bg-slate-50 hover:bg-slate-100 text-slate-600'
-            }`}
-            onClick={handleWishlistClick}
-          >
-            <Heart size={17} className={isFav ? "text-emerald-600 fill-emerald-600" : "text-slate-600"} />
-          </button>
-        </div>
-      </header>
-
-      {/* 2. Full-Cover Hero Product Image Canvas */}
+      {/* Full-Cover Hero Product Image Canvas */}
       <div className="w-full relative overflow-hidden bg-slate-100 border-b border-slate-100">
         
+        {/* Floating Top Header Controls */}
+        <div className="absolute top-4 left-0 right-0 z-30 px-4 flex items-center justify-between pointer-events-none">
+          <button 
+            onClick={() => navigate(-1)}
+            className="pointer-events-auto w-9 h-9 rounded-full bg-slate-900/40 hover:bg-slate-900/60 backdrop-blur-md text-white flex items-center justify-center border-none cursor-pointer shadow-md transition-all active:scale-95"
+          >
+            <ArrowLeft size={20} color="white" />
+          </button>
+
+          <div className="pointer-events-auto flex items-center gap-2">
+            <button 
+              onClick={handleShare}
+              className="w-9 h-9 rounded-full bg-slate-900/40 hover:bg-slate-900/60 backdrop-blur-md text-white flex items-center justify-center border-none cursor-pointer shadow-md transition-all active:scale-95"
+            >
+              <Share2 size={18} color="white" />
+            </button>
+            <button 
+              onClick={handleWishlistClick}
+              className={`w-9 h-9 rounded-full backdrop-blur-md flex items-center justify-center border-none cursor-pointer shadow-md transition-all active:scale-95 ${
+                isFav ? 'bg-white text-red-500' : 'bg-slate-900/40 hover:bg-slate-900/60 text-white'
+              }`}
+            >
+              <Heart size={19} className={isFav ? "text-red-500 fill-red-500" : "text-white"} />
+            </button>
+          </div>
+        </div>
+
         {/* Floating Express Delivery Badge */}
-        <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md border border-emerald-200/80 text-emerald-700 font-medium text-[11px] px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+        <div className="absolute top-16 left-4 z-20 bg-white/90 backdrop-blur-md border border-emerald-200/80 text-emerald-700 font-medium text-[11px] px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
           <Clock size={12} className="text-emerald-600" /> 10-MIN EXPRESS DELIVERY
         </div>
 
         {/* Full Edge-to-Edge Image Container */}
-        <div className="w-full h-[300px] sm:h-[340px] relative overflow-hidden bg-slate-100">
+        <div className="w-full h-[320px] sm:h-[360px] relative overflow-hidden bg-slate-100">
           <img 
             src={getImageUrl(activeImage || product.image || product.mainImage)} 
             alt={product.name} 
@@ -431,16 +427,31 @@ const ProductDetails = () => {
 
         {/* Action Buttons */}
         <div className="flex-1 flex items-center gap-2">
-          <button 
-            onClick={handleAddToCart}
-            className="flex-1 bg-slate-900 text-white rounded-xl py-2.5 text-[13px] font-medium cursor-pointer border-none flex items-center justify-center gap-1.5 active:scale-98 transition-transform"
-          >
-            <ShoppingCart size={15} /> Add
-          </button>
+          {product && !isInCart(product.id || product._id) ? (
+            <button 
+              onClick={handleAddToCart}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-2.5 text-[13px] font-extrabold cursor-pointer border-none flex items-center justify-center gap-1.5 active:scale-98 transition-transform shadow-sm"
+            >
+              <Plus size={16} strokeWidth={3} /> ADD TO CART
+            </button>
+          ) : (
+            <button 
+              onClick={async () => {
+                if (product) {
+                  await removeFromCart(product.id || product._id);
+                  setToastMessage('Item removed from cart');
+                  setTimeout(() => setToastMessage(''), 2000);
+                }
+              }}
+              className="flex-1 bg-rose-600 hover:bg-rose-700 text-white rounded-xl py-2.5 text-[13px] font-extrabold cursor-pointer border-none flex items-center justify-center gap-1.5 active:scale-98 transition-transform shadow-sm"
+            >
+              <Trash2 size={16} strokeWidth={2.5} /> REMOVE
+            </button>
+          )}
 
           <button 
             onClick={handleBuyNow}
-            className="flex-1 bg-[#ff5500] hover:bg-orange-600 text-white rounded-xl py-2.5 text-[13px] font-medium cursor-pointer border-none active:scale-98 transition-transform shadow-sm"
+            className="flex-1 bg-[#ff5500] hover:bg-orange-600 text-white rounded-xl py-2.5 text-[13px] font-bold cursor-pointer border-none active:scale-98 transition-transform shadow-sm"
           >
             Buy Now
           </button>

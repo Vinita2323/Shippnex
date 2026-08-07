@@ -25,4 +25,23 @@ API.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Response interceptor to handle 401 Unauthorized globally
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Clear user auth data
+      localStorage.removeItem('shippnex_user_token');
+      localStorage.removeItem('shippnex_user_data');
+
+      // If we are on a protected user page, redirect to login
+      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/verify-otp')) {
+        sessionStorage.setItem('shippnex_auth_expired_redirect', window.location.pathname);
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default API;

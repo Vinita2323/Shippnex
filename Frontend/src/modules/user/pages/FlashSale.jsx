@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Minus, Check, ShoppingCart, Heart, Zap } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Check, ShoppingCart, Heart, Zap, Trash2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { productService } from '../../../services/authService';
@@ -22,7 +22,7 @@ const defaultFlashSaleProducts = [
 
 const FlashSale = () => {
   const navigate = useNavigate();
-  const { addToCart, updateQuantity, getItemQuantity, cartCount } = useCart();
+  const { addToCart, updateQuantity, getItemQuantity, isInCart, removeFromCart, cartCount } = useCart();
   const { wishlistItems, addToWishlist, removeFromWishlist } = useWishlist();
   const [toastMessage, setToastMessage] = useState('');
   const [productsList, setProductsList] = useState(defaultFlashSaleProducts);
@@ -54,10 +54,7 @@ const FlashSale = () => {
       }
 
       const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
-      const localFlashItems = localSaved.filter(p => {
-        if (!p.homeSections || p.homeSections.length === 0) return true;
-        return p.homeSections.includes('flash_sale');
-      });
+      const localFlashItems = localSaved.filter(p => Array.isArray(p.homeSections) && p.homeSections.includes('flash_sale'));
 
       const formatItem = (p) => {
         const salePrice = Number(p.salePrice || p.price || 0);
@@ -79,23 +76,23 @@ const FlashSale = () => {
       };
 
       const combined = [];
-      // Put custom local items first
-      localFlashItems.forEach(p => combined.push(formatItem(p)));
-
-      // Add API items
+      // 1. Add API items first (MongoDB source of truth)
       apiItems.forEach(p => {
+        combined.push(formatItem(p));
+      });
+
+      // 2. Add local custom items if homeSections includes 'flash_sale'
+      localFlashItems.forEach(p => {
         const formatted = formatItem(p);
         if (!combined.some(c => c.id === formatted.id || c.name === formatted.name)) {
           combined.push(formatted);
         }
       });
 
-      // Add default mock items
-      defaultFlashSaleProducts.forEach(p => {
-        if (!combined.some(c => c.id === p.id || c.name === p.name)) {
-          combined.push(p);
-        }
-      });
+      // 3. Fallback to default mock items if combined list is empty
+      if (combined.length === 0) {
+        defaultFlashSaleProducts.forEach(p => combined.push(p));
+      }
 
       setProductsList(combined);
     };
@@ -103,10 +100,12 @@ const FlashSale = () => {
     fetchFlashProducts();
   }, []);
 
-  const handleAddToCart = (product) => {
-    addToCart(product);
-    setToastMessage(`${product.name} added to cart!`);
-    setTimeout(() => setToastMessage(''), 2000);
+  const handleAddToCart = async (product) => {
+    const res = await addToCart(product, 1, { navigate, returnUrl: window.location.pathname });
+    if (res && res.success) {
+      setToastMessage(`${product.name} added to cart!`);
+      setTimeout(() => setToastMessage(''), 2000);
+    }
   };
 
   const isWishlisted = (id) => wishlistItems?.some(item => item.id === id);
@@ -218,34 +217,22 @@ const FlashSale = () => {
                         <span className="text-[10px] text-slate-400 line-through">₹{Number(product.originalPrice).toFixed(2)}</span>
                       )}
                     </div>
-                    {getItemQuantity(product.id || product._id) === 0 ? (
+                    {!isInCart(product.id || product._id) ? (
                       <button 
                         onClick={() => handleAddToCart(product)} 
-                        className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center border-none cursor-pointer shadow-2xs active:scale-90 transition-transform shrink-0"
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-95 transition-all shrink-0"
                         aria-label="Add to cart"
                       >
-                        <Plus size={15} strokeWidth={3} />
+                        <Plus size={13} strokeWidth={3} /> ADD
                       </button>
                     ) : (
-                      <div className="bg-emerald-600 text-white rounded-lg p-0.5 flex items-center justify-between shadow-2xs border-none shrink-0">
-                        <button 
-                          onClick={() => updateQuantity(product.id || product._id, -1)}
-                          className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
-                          aria-label="Decrease quantity"
-                        >
-                          <Minus size={12} strokeWidth={3} />
-                        </button>
-                        <span className="px-1 text-[11px] font-black text-white min-w-[14px] text-center">
-                          {getItemQuantity(product.id || product._id)}
-                        </span>
-                        <button 
-                          onClick={() => updateQuantity(product.id || product._id, 1)}
-                          className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
-                          aria-label="Increase quantity"
-                        >
-                          <Plus size={12} strokeWidth={3} />
-                        </button>
-                      </div>
+                      <button 
+                        onClick={() => removeFromCart(product.id || product._id)}
+                        className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[11px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-95 transition-all shrink-0"
+                        aria-label="Remove from cart"
+                      >
+                        <Trash2 size={12} strokeWidth={2.5} /> REMOVE
+                      </button>
                     )}
                   </div>
                 </div>

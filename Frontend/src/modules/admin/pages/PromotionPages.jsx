@@ -30,7 +30,7 @@ import {
   Zap,
   Tag
 } from 'lucide-react';
-import { bannerService } from '../../../services/authService';
+import { bannerService, productService } from '../../../services/authService';
 import { 
   initialPromotionStats, 
   initialHomeSections, 
@@ -1323,6 +1323,33 @@ export const PromoFlashSale = () => {
     }
   ]);
 
+  useEffect(() => {
+    const fetchLiveFlashProducts = async () => {
+      try {
+        const res = await productService.getProducts({ section: 'flash_sale' });
+        if (res && res.products && Array.isArray(res.products) && res.products.length > 0) {
+          const formatted = res.products.map((p, idx) => ({
+            _id: p._id,
+            id: p._id,
+            name: p.name,
+            unit: p.unit || `${p.unitValue || 1} ${p.unitType || 'kg'}`,
+            originalPrice: p.mrp || p.salePrice || 0,
+            salePrice: p.salePrice || 0,
+            discount: (p.mrp && p.mrp > p.salePrice) ? Math.round(((p.mrp - p.salePrice) / p.mrp) * 100) : 0,
+            image: p.mainImage || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=300&q=80',
+            stock: p.stock !== undefined ? p.stock : 50,
+            status: p.status || 'Active',
+            priority: idx + 1
+          }));
+          setFlashProducts(formatted);
+        }
+      } catch (err) {
+        console.warn('Flash sale promotion fetch fallback:', err.message);
+      }
+    };
+    fetchLiveFlashProducts();
+  }, []);
+
   // Modal State for Adding/Editing Product
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -1358,7 +1385,7 @@ export const PromoFlashSale = () => {
   };
 
   const handleOpenEditModal = (item) => {
-    setEditingId(item.id);
+    setEditingId(item.id || item._id);
     setFormData({
       name: item.name,
       unit: item.unit,
@@ -1372,21 +1399,46 @@ export const PromoFlashSale = () => {
     setIsModalOpen(true);
   };
 
-  const handleDeleteProduct = (id) => {
+  const handleDeleteProduct = async (id) => {
     if (window.confirm('Are you sure you want to remove this product from Flash Sale?')) {
-      setFlashProducts(prev => prev.filter(p => p.id !== id));
+      try {
+        await productService.updateProduct(id, { homeSections: [] });
+      } catch (err) {}
+      setFlashProducts(prev => prev.filter(p => p.id !== id && p._id !== id));
       showToast('Product removed from Flash Sale.');
     }
   };
 
-  const handleSaveModal = (e) => {
+  const handleSaveModal = async (e) => {
     e.preventDefault();
     const orig = Number(formData.originalPrice) || 100;
     const sale = Number(formData.salePrice) || 80;
     const computedDiscount = formData.discount ? Number(formData.discount) : Math.round(((orig - sale) / orig) * 100);
 
+    const payload = {
+      name: formData.name,
+      unit: formData.unit,
+      mrp: orig,
+      salePrice: sale,
+      stock: Number(formData.stock),
+      mainImage: formData.image,
+      homeSections: ['flash_sale'],
+      status: formData.status === 'Active' ? 'Published' : 'Draft'
+    };
+
+    let res = null;
+    try {
+      if (editingId) {
+        res = await productService.updateProduct(editingId, payload);
+      } else {
+        res = await productService.createProduct(payload);
+      }
+    } catch (err) {
+      console.warn('Save flash sale product API error:', err.message);
+    }
+
     if (editingId) {
-      setFlashProducts(prev => prev.map(p => p.id === editingId ? {
+      setFlashProducts(prev => prev.map(p => (p.id === editingId || p._id === editingId) ? {
         ...p,
         name: formData.name,
         unit: formData.unit,
@@ -1399,8 +1451,10 @@ export const PromoFlashSale = () => {
       } : p));
       showToast('Flash Sale Product updated successfully!');
     } else {
+      const dbId = res?.product?._id;
       const newProduct = {
-        id: `fp-${Date.now()}`,
+        _id: dbId,
+        id: dbId || `fp-${Date.now()}`,
         name: formData.name,
         unit: formData.unit,
         originalPrice: orig,
@@ -1411,7 +1465,7 @@ export const PromoFlashSale = () => {
         status: formData.status,
         priority: flashProducts.length + 1
       };
-      setFlashProducts(prev => [...prev, newProduct]);
+      setFlashProducts(prev => [newProduct, ...prev]);
       showToast('New product added to Flash Sale!');
     }
     setIsModalOpen(false);

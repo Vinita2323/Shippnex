@@ -145,7 +145,15 @@ const Cart = () => {
         <div className="absolute bottom-0 left-0 w-full pt-4 pb-6 px-5 bg-gradient-to-t from-white via-white/90 to-transparent z-[90]">
           <button 
             className="w-full bg-[#ff5500] text-white border-none rounded-xl p-4 text-[15px] font-bold cursor-pointer shadow-[0_4px_12px_rgba(255,85,0,0.2)] transition-transform duration-200 active:scale-[0.98]" 
-            onClick={() => navigate('/checkout')}
+            onClick={() => {
+              const token = localStorage.getItem('shippnex_user_token');
+              if (!token) {
+                localStorage.setItem('shippnex_pending_action', JSON.stringify({ type: 'CHECKOUT', returnUrl: '/checkout' }));
+                navigate('/login');
+              } else {
+                navigate('/checkout');
+              }
+            }}
           >
             Proceed to Checkout • ₹{grandTotal.toFixed(2)}
           </button>

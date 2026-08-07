@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Heart, Star, Filter, Plus, Minus, Check } from 'lucide-react';
+import { Search, Heart, Star, Filter, Plus, Minus, Check, Trash2 } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { categoryService, productService } from '../../../services/authService';
@@ -24,10 +24,29 @@ const fallbackCategories = [
   { name: 'Personal Care', image: personalCareImg }
 ];
 
+const defaultSubCategoryMap = {
+  'Grains & Flours': [
+    { _id: 'sub_atta', name: 'Atta & Flours', image: grainsImg },
+    { _id: 'sub_rice', name: 'Rice & Rice Products', image: grainsImg },
+    { _id: 'sub_dal', name: 'Dal & Pulses', image: grainsImg }
+  ],
+  'Oil & Ghee': [
+    { _id: 'sub_oil', name: 'Edible Oils', image: oilGheeImg },
+    { _id: 'sub_ghee', name: 'Ghee & Vanaspati', image: oilGheeImg }
+  ],
+  'Spices & Masala': [
+    { _id: 'sub_spices', name: 'Whole Spices', image: masalaImg },
+    { _id: 'sub_powder', name: 'Powdered Spices', image: masalaImg }
+  ],
+  'Sugar & Sweeteners': [
+    { _id: 'sub_sugar', name: 'Sugar & Salt', image: sugarImg }
+  ]
+};
+
 const Categories = () => {
   const navigate = useNavigate();
   const { toggleWishlist, isInWishlist } = useWishlist();
-  const { addToCart, updateQuantity, getItemQuantity } = useCart();
+  const { addToCart, updateQuantity, getItemQuantity, isInCart, removeFromCart } = useCart();
   const [toastMessage, setToastMessage] = useState('');
   const [activeCategory, setActiveCategoryState] = useState(() => {
     return sessionStorage.getItem('shippnex_active_cat') || 'Grains & Flours';
@@ -59,7 +78,7 @@ const Categories = () => {
     const fetchCategoriesData = async () => {
       try {
         setLoading(true);
-        const res = await categoryService.getAllCategories();
+        const res = await (categoryService.getAllCategories ? categoryService.getAllCategories() : categoryService.getCategories());
         if (res && res.success && Array.isArray(res.categories)) {
           setAllCategories(res.categories);
           const topLevel = res.categories.filter(c => !c.parent);
@@ -182,10 +201,15 @@ const Categories = () => {
 
           {/* Subcategories */}
           {(() => {
-            const activeCatObj = sidebarCategories.find(c => c.name === activeCategory);
-            const subCategories = activeCatObj ? allCategories.filter(c => c.parent === activeCatObj.id) : [];
-            
-            if (subCategories.length === 0) return null;
+            const activeCatObj = sidebarCategories.find(c => c.name === activeCategory || c._id === activeCategory);
+            const catId = activeCatObj ? (activeCatObj._id || activeCatObj.id) : null;
+            let subCategories = catId 
+              ? allCategories.filter(c => c.parent && (String(c.parent) === String(catId) || String(c.parent._id || '') === String(catId)))
+              : [];
+
+            if (subCategories.length === 0 && defaultSubCategoryMap[activeCategory]) {
+              subCategories = defaultSubCategoryMap[activeCategory];
+            }
             
             return (
               <div className="flex gap-4 overflow-x-auto pb-4 mb-2 [&::-webkit-scrollbar]:hidden">
@@ -206,7 +230,7 @@ const Categories = () => {
                 </div>
                 {subCategories.map(sub => (
                   <div 
-                    key={sub._id} 
+                    key={sub._id || sub.name} 
                     className="flex flex-col items-center flex-shrink-0 cursor-pointer group"
                     onClick={() => setActiveSubCategory(sub.name === activeSubCategory ? null : sub.name)}
                   >
@@ -279,15 +303,17 @@ const Categories = () => {
                     {itemDiscount > 0 && <span className="text-[9.5px] font-extrabold text-[#ff5500]">-{itemDiscount}% OFF</span>}
                   </div>
 
-                  {/* Green Button BELOW Price Row */}
+                  {/* Green / Red Button BELOW Price Row */}
                   <div>
-                    {qty === 0 ? (
+                    {!isInCart(item._id || item.id) ? (
                       <button 
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
-                          addToCart(item);
-                          setToastMessage('Item added to cart! 🛒');
-                          setTimeout(() => setToastMessage(''), 2000);
+                          const res = await addToCart(item, 1, { navigate, returnUrl: window.location.pathname });
+                          if (res && res.success) {
+                            setToastMessage('Item added to cart! 🛒');
+                            setTimeout(() => setToastMessage(''), 2000);
+                          }
                         }}
                         className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
                         aria-label="Add to cart"
@@ -295,34 +321,18 @@ const Categories = () => {
                         <Plus size={14} strokeWidth={3} /> ADD
                       </button>
                     ) : (
-                      <div 
-                        onClick={(e) => e.stopPropagation()} 
-                        className="w-full bg-emerald-600 text-white rounded-lg p-1 flex items-center justify-between shadow-2xs border-none"
+                      <button 
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          await removeFromCart(item._id || item.id);
+                          setToastMessage('Item removed from cart');
+                          setTimeout(() => setToastMessage(''), 2000);
+                        }}
+                        className="w-full py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
+                        aria-label="Remove from cart"
                       >
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateQuantity(item._id || item.id, -1);
-                          }}
-                          className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
-                          aria-label="Decrease quantity"
-                        >
-                          <Minus size={12} strokeWidth={3} />
-                        </button>
-                        <span className="px-2 text-[12px] font-black text-white text-center">
-                          {qty}
-                        </span>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateQuantity(item._id || item.id, 1);
-                          }}
-                          className="w-6 h-6 rounded-md bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
-                          aria-label="Increase quantity"
-                        >
-                          <Plus size={12} strokeWidth={3} />
-                        </button>
-                      </div>
+                        <Trash2 size={13} strokeWidth={2.5} /> REMOVE
+                      </button>
                     )}
                   </div>
                 </div>

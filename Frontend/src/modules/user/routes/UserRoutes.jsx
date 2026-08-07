@@ -46,31 +46,43 @@ const UserRoutes = () => {
   const isWishlist = location.pathname === '/wishlist';
   const isFlashSale = location.pathname === '/flash-sale';
   const isNotifications = location.pathname === '/notifications';
+  const isLocation = location.pathname === '/location';
   const isPlaceholder = ['/account-information', '/saved-addresses', '/security', '/terms', '/faqs', '/support'].includes(location.pathname);
   
   // Transport flow routes that should hide the bottom nav
   const isTransportFlow = ['/transport/register', '/transport/location', '/transport/goods', '/transport/vehicle', '/transport/summary', '/transport/success', '/transport/booking-details'].includes(location.pathname);
   
-  // Do NOT hide bottom nav on /transport
-  const hideBottomNav = isCart || isCheckout || isPayment || isTrackOrder || isProfile || isLogin || isVerifyOtp || isProductDetails || isWishlist || isFlashSale || isNotifications || isPlaceholder || isTransportFlow;
+  const hideBottomNav = isCart || isCheckout || isPayment || isTrackOrder || isProfile || isLogin || isVerifyOtp || isProductDetails || isWishlist || isFlashSale || isNotifications || isLocation || isPlaceholder || isTransportFlow;
 
   return (
     <>
       <Routes>
-        {/* Public Routes */}
+        {/* Public Browsing Routes (Accessible to Guests) */}
+        <Route path="/" element={<Home />} />
+        <Route path="/categories" element={<Categories />} />
+        <Route path="/product/:id" element={<ProductDetails />} />
+        <Route path="/wishlist" element={<Wishlist />} />
+        <Route path="/flash-sale" element={<FlashSale />} />
+        <Route path="/bestseller" element={<BestSelling />} />
+        <Route path="/location" element={<LocationSelectionPage />} />
+        <Route path="/notifications" element={<Notifications />} />
         <Route path="/login" element={<Login />} />
         <Route path="/verify-otp" element={<VerifyOtp />} />
-        <Route path="/location" element={<LocationSelectionPage />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/faqs" element={<Faqs />} />
+        <Route path="/support" element={<HelpSupport />} />
 
-        {/* Protected User Routes */}
+        {/* Protected User Routes (Requires User Authentication) */}
         <Route element={<ProtectedRoute role="user" />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/categories" element={<Categories />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/payment" element={<Payment />} />
           <Route path="/track-order" element={<TrackOrder />} />
           <Route path="/orders" element={<Orders />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/account-information" element={<AccountInfo />} />
+          <Route path="/saved-addresses" element={<SavedAddresses />} />
+          <Route path="/security" element={<Security />} />
           
           {/* Transport Routes */}
           <Route path="/transport" element={<TransportHome />} />
@@ -81,19 +93,6 @@ const UserRoutes = () => {
           <Route path="/transport/summary" element={<FareSummary />} />
           <Route path="/transport/success" element={<BookingCompleted />} />
           <Route path="/transport/booking-details" element={<TransportBookingDetails />} />
-
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/product/:id" element={<ProductDetails />} />
-          <Route path="/wishlist" element={<Wishlist />} />
-          <Route path="/flash-sale" element={<FlashSale />} />
-          <Route path="/bestseller" element={<BestSelling />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/account-information" element={<AccountInfo />} />
-          <Route path="/saved-addresses" element={<SavedAddresses />} />
-          <Route path="/security" element={<Security />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/faqs" element={<Faqs />} />
-          <Route path="/support" element={<HelpSupport />} />
         </Route>
       </Routes>
       
