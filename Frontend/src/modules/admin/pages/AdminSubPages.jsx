@@ -216,83 +216,39 @@ export const UserManagement = () => {
    2. SELLER MANAGEMENT PAGE (VIEW SELLER LIST)
    ========================================================================= */
 export const SellerManagement = () => {
-  const [sellers, setSellers] = React.useState([
-    {
-      id: '14301495',
-      name: 'ankit keshri',
-      storeName: 'Keshari Vagitl Shope',
-      contactPhone: '9065036488',
-      contactEmail: 'mahadeokeshri9065036488@gmail.com',
-      logoText: 'AK',
-      logoBg: 'bg-lime-500',
-      balance: '0.00',
-      commission: '0.00%',
-      categoriesCount: 2,
-      assignedCategories: ['Groceries', 'Fresh Vegetables'],
-      status: 'Pending',
-      needApproval: 'Yes'
-    },
-    {
-      id: '11305875',
-      name: 'Deepanshu Kumar',
-      storeName: 'Rahi hot food',
-      contactPhone: '9798996821',
-      contactEmail: 'live11media@gmail.com',
-      logoText: 'DK',
-      logoBg: 'bg-[#a3e635]',
-      balance: '0.00',
-      commission: '0.00%',
-      categoriesCount: 2,
-      assignedCategories: ['Fast Food', 'Snacks & Beverages'],
-      status: 'Approved',
-      needApproval: 'No'
-    },
-    {
-      id: '385511',
-      name: 'Diler khan',
-      storeName: 'Salim Khan',
-      contactPhone: '7033272184',
-      contactEmail: 'dilerk36@gmail.com',
-      logoText: 'DK',
-      logoBg: 'bg-amber-500',
-      balance: '0.00',
-      commission: '0.00%',
-      categoriesCount: 1,
-      assignedCategories: ['Grocery Staples'],
-      status: 'Approved',
-      needApproval: 'No'
-    },
-    {
-      id: '372318',
-      name: 'Mohammad javed',
-      storeName: 'Daimond mobile shop',
-      contactPhone: '7461954107',
-      contactEmail: 'jdkhan249@gmail.com',
-      logoText: 'MJ',
-      logoBg: 'bg-pink-500',
-      balance: '0.00',
-      commission: '20.00%',
-      categoriesCount: 1,
-      assignedCategories: ['Mobile Accessories'],
-      status: 'Approved',
-      needApproval: 'No'
-    },
-    {
-      id: '368524',
-      name: 'Manish Kumar',
-      storeName: 'Kesari Fruts',
-      contactPhone: '6200280923',
-      contactEmail: 'manishkeshari90901@gmail.com',
-      logoText: 'MK',
-      logoBg: 'bg-emerald-500',
-      balance: '0.00',
-      commission: '20.00%',
-      categoriesCount: 1,
-      assignedCategories: ['Fresh Fruits'],
-      status: 'Approved',
-      needApproval: 'No'
+  const [sellers, setSellers] = React.useState([]);
+
+  React.useEffect(() => {
+    fetchSellers();
+  }, []);
+
+  const fetchSellers = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/admin/sellers');
+      const data = await res.json();
+      if (data.success) {
+        const mappedSellers = data.sellers.map(s => ({
+          ...s,
+          id: s._id,
+          name: s.ownerName || s.businessName,
+          storeName: s.businessName,
+          contactPhone: s.phone,
+          contactEmail: s.email || '-',
+          logoText: s.businessName.substring(0, 2).toUpperCase(),
+          logoBg: 'bg-emerald-500',
+          balance: '0.00',
+          commission: '0.00%',
+          categoriesCount: 0,
+          assignedCategories: [],
+          status: s.status === 'pending' ? 'Pending' : (s.status === 'approved' ? 'Approved' : 'Rejected'),
+          needApproval: s.status === 'pending' ? 'Yes' : 'No'
+        }));
+        setSellers(mappedSellers);
+      }
+    } catch (err) {
+      console.error('Error fetching sellers:', err);
     }
-  ]);
+  };
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const [entriesPerPage, setEntriesPerPage] = React.useState('10');
@@ -330,14 +286,32 @@ export const SellerManagement = () => {
   };
 
   // Toggle Approval Status
-  const handleToggleStatus = (id) => {
-    setSellers(prev => prev.map(s => {
-      if (s.id === id) {
-        const nextStatus = s.status === 'Approved' ? 'Pending' : 'Approved';
-        return { ...s, status: nextStatus, needApproval: nextStatus === 'Approved' ? 'No' : 'Yes' };
+  const handleToggleStatus = async (id) => {
+    const seller = sellers.find(s => s.id === id);
+    if (!seller) return;
+    
+    const nextStatus = seller.status === 'Approved' ? 'pending' : 'approved';
+    try {
+      const res = await fetch(`http://localhost:5000/api/admin/sellers/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSellers(prev => prev.map(s => {
+          if (s.id === id) {
+            const displayStatus = nextStatus === 'approved' ? 'Approved' : 'Pending';
+            return { ...s, status: displayStatus, needApproval: displayStatus === 'Approved' ? 'No' : 'Yes' };
+          }
+          return s;
+        }));
+      } else {
+        alert(data.message || 'Failed to update status');
       }
-      return s;
-    }));
+    } catch (err) {
+      console.error('Error updating status:', err);
+    }
   };
 
   // Delete Action
@@ -483,7 +457,9 @@ export const SellerManagement = () => {
                 {displayedSellers.length > 0 ? (
                   displayedSellers.map((seller) => (
                     <tr key={seller.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-medium text-slate-500">{seller.id}</td>
+                      <td className="py-3.5 px-4 font-mono font-medium text-slate-500" title={seller.id}>
+                        #{seller.id.slice(-6).toUpperCase()}
+                      </td>
                       <td className="py-3.5 px-4 font-bold text-slate-900">{seller.name}</td>
                       <td className="py-3.5 px-4 text-slate-800 font-semibold">{seller.storeName}</td>
                       <td className="py-3.5 px-4 space-y-0.5">
@@ -525,7 +501,20 @@ export const SellerManagement = () => {
                       <td className="py-3.5 px-4">
                         <div className="flex items-center justify-center gap-1.5">
                           <button 
-                            onClick={() => openEditModal(seller)}
+                            onClick={() => {
+                              setEditFormData({ name: seller.name, storeName: seller.storeName, commission: seller.commission, balance: seller.balance });
+                              setEditingSellerModal(seller);
+                            }}
+                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg border border-emerald-200 cursor-pointer transition-colors flex items-center gap-1 font-semibold text-xs px-2"
+                            title="View Seller Details"
+                          >
+                            <Eye size={13} /> View
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setEditFormData({ name: seller.name, storeName: seller.storeName, commission: seller.commission, balance: seller.balance });
+                              setEditingSellerModal(seller);
+                            }}
                             className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg border border-blue-200 cursor-pointer transition-colors"
                             title="Edit Seller Details"
                           >
@@ -668,18 +657,40 @@ export const SellerManagement = () => {
 
                 <div className="flex items-center gap-2">
                   <button 
-                    onClick={() => {
-                      setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, status: 'Approved', needApproval: 'No' } : s));
-                      setEditingSellerModal(prev => ({ ...prev, status: 'Approved', needApproval: 'No' }));
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`http://localhost:5000/api/admin/sellers/${editingSellerModal.id}/status`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'approved' })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, status: 'Approved', needApproval: 'No' } : s));
+                          setEditingSellerModal(prev => ({ ...prev, status: 'Approved', needApproval: 'No' }));
+                          alert('Seller has been approved successfully!');
+                        }
+                      } catch (err) { console.error(err); }
                     }}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all"
                   >
                     ✓ Approve
                   </button>
                   <button 
-                    onClick={() => {
-                      setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, status: 'Pending', needApproval: 'Yes' } : s));
-                      setEditingSellerModal(prev => ({ ...prev, status: 'Pending', needApproval: 'Yes' }));
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`http://localhost:5000/api/admin/sellers/${editingSellerModal.id}/status`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'rejected' })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, status: 'Rejected', needApproval: 'Yes' } : s));
+                          setEditingSellerModal(prev => ({ ...prev, status: 'Rejected', needApproval: 'Yes' }));
+                          alert('Seller application has been rejected.');
+                        }
+                      } catch (err) { console.error(err); }
                     }}
                     className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all"
                   >
@@ -732,12 +743,22 @@ export const SellerManagement = () => {
                   </div>
 
                   <div>
-                    <label className="text-slate-500 font-medium block mb-1">Category</label>
+                    <label className="text-slate-500 font-medium block mb-1">Business Type</label>
                     <input 
                       type="text"
-                      defaultValue={(editingSellerModal.assignedCategories || ['Vagitable'])[0]}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      defaultValue={editingSellerModal.businessType || 'N/A'}
+                      readOnly
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none"
                     />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-500 font-medium block mb-1">Store Logo</label>
+                    {editingSellerModal.storeLogo ? (
+                      <img src={editingSellerModal.storeLogo} alt="Logo" className="h-12 w-12 object-contain rounded-lg border border-slate-200 bg-white" />
+                    ) : (
+                      <span className="text-xs text-slate-400">No logo</span>
+                    )}
                   </div>
 
                   <div>
@@ -779,8 +800,9 @@ export const SellerManagement = () => {
                     <label className="text-slate-500 font-medium block mb-1">Address</label>
                     <input 
                       type="text"
-                      defaultValue="Dakra, Churi, Jharkhand 829210, India"
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      defaultValue={editingSellerModal.warehouseLocation?.storeAddress || 'N/A'}
+                      readOnly
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none"
                     />
                   </div>
 
@@ -789,16 +811,18 @@ export const SellerManagement = () => {
                       <label className="text-slate-500 font-medium block mb-1">City</label>
                       <input 
                         type="text"
-                        defaultValue="Dakra"
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                        defaultValue={editingSellerModal.warehouseLocation?.city || 'N/A'}
+                        readOnly
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none"
                       />
                     </div>
                     <div>
-                      <label className="text-slate-500 font-medium block mb-1">Serviceable Area</label>
+                      <label className="text-slate-500 font-medium block mb-1">State / Pincode</label>
                       <input 
                         type="text"
-                        defaultValue="Dakra Region"
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                        defaultValue={`${editingSellerModal.warehouseLocation?.state || ''} ${editingSellerModal.warehouseLocation?.pincode || ''}`.trim() || 'N/A'}
+                        readOnly
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none"
                       />
                     </div>
                   </div>
@@ -808,16 +832,18 @@ export const SellerManagement = () => {
                       <label className="text-slate-500 font-medium block mb-1">Latitude</label>
                       <input 
                         type="text"
-                        defaultValue="23.669614"
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                        defaultValue={editingSellerModal.warehouseLocation?.location?.coordinates?.[1] || 'N/A'}
+                        readOnly
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none"
                       />
                     </div>
                     <div>
                       <label className="text-slate-500 font-medium block mb-1">Longitude</label>
                       <input 
                         type="text"
-                        defaultValue="85.021944"
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                        defaultValue={editingSellerModal.warehouseLocation?.location?.coordinates?.[0] || 'N/A'}
+                        readOnly
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none"
                       />
                     </div>
                   </div>
@@ -833,8 +859,9 @@ export const SellerManagement = () => {
                     <label className="text-slate-500 font-medium block mb-1">Service Radius (km)</label>
                     <input 
                       type="text"
-                      defaultValue="5.1"
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      defaultValue={editingSellerModal.serviceRadius || 'N/A'}
+                      readOnly
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none"
                     />
                   </div>
                   <button 
