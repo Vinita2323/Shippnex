@@ -49,6 +49,23 @@ export const authService = {
     }
   },
 
+  getSellerProfile: async () => {
+    const response = await API.get('/auth/seller/profile');
+    if (response.data.seller) {
+      localStorage.setItem('shippnex_seller_data', JSON.stringify(response.data.seller));
+    }
+    return response.data;
+  },
+
+  updateSellerProfile: async (profileData) => {
+    const response = await API.put('/auth/seller/profile', profileData);
+    if (response.data.seller) {
+      localStorage.setItem('shippnex_seller_data', JSON.stringify(response.data.seller));
+    }
+    return response.data;
+  },
+
+
   // Captain Auth
   sendCaptainOtp: async (phone) => {
     const response = await API.post('/auth/captain/send-otp', { phone });

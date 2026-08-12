@@ -21,6 +21,11 @@ const sellerSchema = new mongoose.Schema(
     gstNumber: { type: String, trim: true },
     panNumber: { type: String, trim: true },
     fssaiLicense: { type: String, trim: true },
+    tagline: { type: String, trim: true },
+    bankName: { type: String, trim: true },
+    accountNumber: { type: String, trim: true },
+    ifscCode: { type: String, trim: true },
+    categories: [{ type: String }],
     role: {
       type: String,
       default: 'seller',

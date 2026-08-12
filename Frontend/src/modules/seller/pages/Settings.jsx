@@ -1,49 +1,110 @@
-import React, { useState } from 'react';
-import { User, Store, Image as ImageIcon, CreditCard, Edit, CheckCircle2, Save, Check, MapPin, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Store, Image as ImageIcon, CreditCard, Edit, CheckCircle2, Save, Check, MapPin, Loader2, Upload, AlertCircle } from 'lucide-react';
+import { authService } from '../../../services/authService';
 
 const allStoreCategories = [
-  { id: 'cat-1', label: 'Chinese Fast Food', defaultChecked: false },
-  { id: 'cat-2', label: 'Beauty', defaultChecked: false },
-  { id: 'cat-3', label: 'Stationary', defaultChecked: false },
-  { id: 'cat-4', label: 'Toys', defaultChecked: false },
-  { id: 'cat-5', label: 'Pet', defaultChecked: false },
-  { id: 'cat-6', label: 'Sports', defaultChecked: false },
-  { id: 'cat-7', label: 'Fruits', defaultChecked: true },
-  { id: 'cat-8', label: 'Cake & Bakery', defaultChecked: false },
-  { id: 'cat-9', label: 'Vagitable', defaultChecked: false },
-  { id: 'cat-10', label: 'Restaurant & Food', defaultChecked: false },
-  { id: 'cat-11', label: 'Fast Food', defaultChecked: true },
-  { id: 'cat-12', label: 'Nonveg Items', defaultChecked: false },
-  { id: 'cat-13', label: 'Wedding', defaultChecked: true },
-  { id: 'cat-14', label: 'Winter', defaultChecked: false },
-  { id: 'cat-15', label: 'Electronics', defaultChecked: false },
-  { id: 'cat-16', label: 'Grocery', defaultChecked: true },
-  { id: 'cat-17', label: 'Fashion', defaultChecked: false },
+  { id: 'cat-1', label: 'Chinese Fast Food' },
+  { id: 'cat-2', label: 'Beauty' },
+  { id: 'cat-3', label: 'Stationary' },
+  { id: 'cat-4', label: 'Toys' },
+  { id: 'cat-5', label: 'Pet' },
+  { id: 'cat-6', label: 'Sports' },
+  { id: 'cat-7', label: 'Fruits' },
+  { id: 'cat-8', label: 'Cake & Bakery' },
+  { id: 'cat-9', label: 'Vagitable' },
+  { id: 'cat-10', label: 'Restaurant & Food' },
+  { id: 'cat-11', label: 'Fast Food' },
+  { id: 'cat-12', label: 'Nonveg Items' },
+  { id: 'cat-13', label: 'Wedding' },
+  { id: 'cat-14', label: 'Winter' },
+  { id: 'cat-15', label: 'Electronics' },
+  { id: 'cat-16', label: 'Grocery' },
+  { id: 'cat-17', label: 'Fashion' },
 ];
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('store');
   const [isEditing, setIsEditing] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const [selectedCategories, setSelectedCategories] = useState(['Fruits', 'Fast Food', 'Wedding', 'Grocery']);
+  const [selectedCategories, setSelectedCategories] = useState(['Fruits', 'Fast Food', 'Grocery']);
 
   const [formData, setFormData] = useState({
-    fullName: 'Harsh shop',
-    email: 'harshvardhanpanc145@gmail.com',
-    mobile: '9111966732',
-    newPassword: '',
-    confirmPassword: '',
-    storeName: 'Harshvardhan',
-    storeLocation: '169, 507, Corporate House, RNT Marg, Near Central Mall, Flim Colony, South Tukoganj, Indore, Madhya Pradesh 452001, India',
-    city: 'Indore',
-    serviceRadius: '10 km',
-    tagline: 'Fresh & Premium Quality Wholesaler',
-    gstin: '07AAAAA0000A1Z5',
-    fssai: '10020011004567',
-    bankName: 'HDFC Bank',
-    accountNumber: '50100234567890',
+    fullName: '',
+    email: '',
+    mobile: '',
+    storeName: '',
+    storeLocation: '',
+    city: '',
+    serviceRadius: '5',
+    tagline: '',
+    gstin: '',
+    fssai: '',
+    bankName: '',
+    accountNumber: '',
+    storeLogo: '',
+    status: 'pending',
+    createdAt: '',
   });
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      setErrorMsg('');
+      const res = await authService.getSellerProfile();
+      if (res && res.seller) {
+        const s = res.seller;
+        setFormData({
+          fullName: s.ownerName || '',
+          email: s.email || '',
+          mobile: s.phone || '',
+          storeName: s.businessName || '',
+          storeLocation: s.warehouseLocation?.storeAddress || '',
+          city: s.warehouseLocation?.city || '',
+          serviceRadius: String(s.serviceRadius || '5'),
+          tagline: s.tagline || '',
+          gstin: s.gstNumber || '',
+          fssai: s.fssaiLicense || '',
+          bankName: s.bankName || '',
+          accountNumber: s.accountNumber || '',
+          storeLogo: s.storeLogo || '',
+          status: s.status || 'approved',
+          createdAt: s.createdAt ? new Date(s.createdAt).getFullYear() : '2026',
+        });
+        if (s.categories && Array.isArray(s.categories) && s.categories.length > 0) {
+          setSelectedCategories(s.categories);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch seller profile:', err);
+      // Fallback to local storage cache if network error
+      const cached = localStorage.getItem('shippnex_seller_data');
+      if (cached) {
+        try {
+          const s = JSON.parse(cached);
+          setFormData(prev => ({
+            ...prev,
+            fullName: s.ownerName || s.businessName || '',
+            email: s.email || '',
+            mobile: s.phone || '',
+            storeName: s.businessName || '',
+            status: s.status || 'approved',
+          }));
+        } catch (e) {}
+      }
+      setErrorMsg('Could not fetch profile from server. Displaying cached session data.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleCategory = (label) => {
     if (!isEditing) return;
@@ -51,6 +112,17 @@ const Settings = () => {
       setSelectedCategories(selectedCategories.filter(c => c !== label));
     } else {
       setSelectedCategories([...selectedCategories, label]);
+    }
+  };
+
+  const handleLogoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, storeLogo: reader.result }));
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -79,14 +151,14 @@ const Settings = () => {
           } else {
             setFormData(prev => ({
               ...prev,
-              storeLocation: `Lat: ${latitude.toFixed(4)}, Long: ${longitude.toFixed(4)}, Central Mall, South Tukoganj, Indore, Madhya Pradesh 452001`,
+              storeLocation: `Lat: ${latitude.toFixed(4)}, Long: ${longitude.toFixed(4)}, Central Hub`,
               city: 'Indore'
             }));
           }
         } catch (err) {
           setFormData(prev => ({
             ...prev,
-            storeLocation: `Lat: ${latitude.toFixed(4)}, Long: ${longitude.toFixed(4)}, RNT Marg, Indore, Madhya Pradesh 452001`,
+            storeLocation: `Lat: ${latitude.toFixed(4)}, Long: ${longitude.toFixed(4)}`,
             city: 'Indore'
           }));
         } finally {
@@ -95,16 +167,84 @@ const Settings = () => {
       },
       (error) => {
         setIsLocating(false);
-        alert('Could not retrieve current location. Please allow location permissions in your browser or enter address manually.');
+        alert('Could not retrieve location. Please allow location permissions or enter address manually.');
       },
       { timeout: 10000, enableHighAccuracy: true }
     );
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    alert('Account settings updated successfully!');
-    setIsEditing(false);
+    setSuccessMsg('');
+    setErrorMsg('');
+    setSaving(true);
+
+    try {
+      const payload = {
+        ownerName: formData.fullName,
+        email: formData.email,
+        businessName: formData.storeName,
+        storeAddress: formData.storeLocation,
+        city: formData.city,
+        serviceRadius: formData.serviceRadius,
+        tagline: formData.tagline,
+        gstNumber: formData.gstin,
+        fssaiLicense: formData.fssai,
+        bankName: formData.bankName,
+        accountNumber: formData.accountNumber,
+        categories: selectedCategories,
+        storeLogo: formData.storeLogo,
+      };
+
+      const res = await authService.updateSellerProfile(payload);
+      if (res && res.success) {
+        setSuccessMsg('Account settings updated successfully!');
+        setIsEditing(false);
+        if (res.seller) {
+          const s = res.seller;
+          setFormData(prev => ({
+            ...prev,
+            fullName: s.ownerName || prev.fullName,
+            email: s.email || prev.email,
+            storeName: s.businessName || prev.storeName,
+            storeLocation: s.warehouseLocation?.storeAddress || prev.storeLocation,
+            city: s.warehouseLocation?.city || prev.city,
+            serviceRadius: String(s.serviceRadius || prev.serviceRadius),
+            tagline: s.tagline || prev.tagline,
+            gstin: s.gstNumber || prev.gstin,
+            fssai: s.fssaiLicense || prev.fssai,
+            bankName: s.bankName || prev.bankName,
+            accountNumber: s.accountNumber || prev.accountNumber,
+            storeLogo: s.storeLogo || prev.storeLogo,
+          }));
+        }
+      } else {
+        setErrorMsg(res.message || 'Failed to update settings');
+      }
+    } catch (err) {
+      console.error('Error updating seller profile:', err);
+      setErrorMsg(err.response?.data?.message || 'Server error updating profile settings.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center justify-center space-y-3 font-sans">
+        <Loader2 size={36} className="animate-spin text-[#ff7526]" />
+        <p className="text-sm font-medium text-slate-600">Loading your seller profile...</p>
+      </div>
+    );
+  }
+
+  const getInitials = (name) => {
+    if (!name) return 'S';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
   };
 
   return (
@@ -124,10 +264,24 @@ const Settings = () => {
             className="bg-[#ff7526] hover:bg-[#e65507] text-white font-medium py-2 px-4 rounded-lg shadow-sm transition-colors cursor-pointer border-none flex items-center gap-2 text-sm"
           >
             {isEditing ? <Save size={16} /> : <Edit size={16} />}
-            {isEditing ? 'Save Changes' : 'Edit Profile'}
+            {isEditing ? 'Editing Profile' : 'Edit Profile'}
           </button>
         </div>
       </div>
+
+      {successMsg && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium p-4 rounded-xl flex items-center gap-2">
+          <CheckCircle2 size={18} className="shrink-0 text-emerald-600" />
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm font-medium p-4 rounded-xl flex items-center gap-2">
+          <AlertCircle size={18} className="shrink-0 text-red-600" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
       {/* Grid Layout: Left Tabs Sidebar + Right Main Content Card */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -196,13 +350,17 @@ const Settings = () => {
               ACCOUNT STATUS
             </span>
             <div className="flex items-center gap-3 pt-1">
-              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-lg text-white">
-                H
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-lg text-white shrink-0 overflow-hidden">
+                {formData.storeLogo ? (
+                  <img src={formData.storeLogo} alt="Logo" className="w-full h-full object-cover" />
+                ) : (
+                  getInitials(formData.storeName || formData.fullName)
+                )}
               </div>
-              <div>
-                <h4 className="font-semibold text-base leading-tight">{formData.storeName}</h4>
-                <span className="text-xs text-white/90 font-medium inline-flex items-center gap-1 mt-0.5">
-                  <CheckCircle2 size={13} /> APPROVED
+              <div className="overflow-hidden">
+                <h4 className="font-semibold text-base leading-tight truncate">{formData.storeName || 'Seller Store'}</h4>
+                <span className="text-xs text-white/90 font-medium inline-flex items-center gap-1 mt-0.5 uppercase">
+                  <CheckCircle2 size={13} /> {formData.status}
                 </span>
               </div>
             </div>
@@ -220,27 +378,32 @@ const Settings = () => {
                   
                   {/* Avatar Banner Header */}
                   <div className="flex items-center gap-5 pb-6 border-b border-slate-100">
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-[#ff7526] p-1 shrink-0 overflow-hidden bg-slate-100 flex items-center justify-center">
-                      <div className="w-full h-full rounded-full bg-slate-200 flex items-center justify-center font-bold text-2xl text-slate-600">
-                        HS
-                      </div>
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-[#ff7526] p-1 shrink-0 overflow-hidden bg-slate-100 flex items-center justify-center relative">
+                      {formData.storeLogo ? (
+                        <img src={formData.storeLogo} alt="Store Logo" className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full rounded-full bg-slate-200 flex items-center justify-center font-bold text-2xl text-slate-600">
+                          {getInitials(formData.fullName || formData.storeName)}
+                        </div>
+                      )}
                     </div>
                     <div>
-                      <h2 className="text-xl sm:text-2xl font-semibold text-slate-900">{formData.fullName}</h2>
-                      <p className="text-sm font-normal text-slate-500 mt-0.5">{formData.email}</p>
-                      <p className="text-xs font-normal text-slate-400 mt-1">Member since 2026</p>
+                      <h2 className="text-xl sm:text-2xl font-semibold text-slate-900">{formData.fullName || 'Seller Profile'}</h2>
+                      <p className="text-sm font-normal text-slate-500 mt-0.5">{formData.email || 'No email added'}</p>
+                      <p className="text-xs font-normal text-slate-400 mt-1">Phone: +91 {formData.mobile}</p>
                     </div>
                   </div>
 
                   {/* Profile Form Fields */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">Full Name</label>
+                      <label className="block text-sm font-medium text-slate-700">Full Name / Owner Name</label>
                       <input 
                         type="text" 
                         disabled={!isEditing}
                         value={formData.fullName}
                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                        placeholder="Enter full owner name"
                         className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
                       />
                     </div>
@@ -252,42 +415,28 @@ const Settings = () => {
                         disabled={!isEditing}
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        placeholder="seller@example.com"
                         className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">Mobile Number</label>
+                      <label className="block text-sm font-medium text-slate-700">Mobile Number (Verified Login)</label>
                       <input 
                         type="text" 
-                        disabled={!isEditing}
+                        disabled={true}
                         value={formData.mobile}
-                        onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
+                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none bg-slate-100 text-slate-600 text-sm font-normal cursor-not-allowed" 
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">New Password</label>
+                      <label className="block text-sm font-medium text-slate-700">Account Status</label>
                       <input 
-                        type="password" 
-                        disabled={!isEditing}
-                        placeholder="Leave blank to keep current"
-                        value={formData.newPassword}
-                        onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">Confirm Password</label>
-                      <input 
-                        type="password" 
-                        disabled={!isEditing}
-                        placeholder="Re-enter new password"
-                        value={formData.confirmPassword}
-                        onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
+                        type="text" 
+                        disabled={true}
+                        value={formData.status.toUpperCase()}
+                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none bg-slate-100 text-slate-600 text-sm font-semibold cursor-not-allowed" 
                       />
                     </div>
                   </div>
@@ -295,18 +444,19 @@ const Settings = () => {
                 </div>
               )}
 
-              {/* TAB 2: STORE DETAILS (EXACT FROM USER'S SCREENSHOT) */}
+              {/* TAB 2: STORE DETAILS */}
               {activeTab === 'store' && (
                 <div className="space-y-6">
                   
                   {/* Store Name */}
                   <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-slate-700">Store Name</label>
+                    <label className="block text-sm font-medium text-slate-700">Store / Business Name</label>
                     <input 
                       type="text" 
                       disabled={!isEditing}
                       value={formData.storeName}
                       onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
+                      placeholder="Enter store name"
                       className="w-full max-w-md px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
                     />
                   </div>
@@ -346,17 +496,19 @@ const Settings = () => {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <label className="block text-sm font-medium text-slate-700">
-                        Store Location <span className="text-red-500">*</span>
+                        Store Address Location <span className="text-red-500">*</span>
                       </label>
-                      <button
-                        type="button"
-                        onClick={handleFetchLocation}
-                        disabled={isLocating}
-                        className="text-xs text-[#ff7526] hover:text-[#e65507] hover:underline flex items-center gap-1 font-semibold bg-transparent border-none cursor-pointer disabled:opacity-50"
-                      >
-                        {isLocating ? <Loader2 size={13} className="animate-spin" /> : <MapPin size={13} />}
-                        {isLocating ? 'Detecting Location...' : 'Fetch Current Location'}
-                      </button>
+                      {isEditing && (
+                        <button
+                          type="button"
+                          onClick={handleFetchLocation}
+                          disabled={isLocating}
+                          className="text-xs text-[#ff7526] hover:text-[#e65507] hover:underline flex items-center gap-1 font-semibold bg-transparent border-none cursor-pointer disabled:opacity-50"
+                        >
+                          {isLocating ? <Loader2 size={13} className="animate-spin" /> : <MapPin size={13} />}
+                          {isLocating ? 'Detecting Location...' : 'Fetch Current Location'}
+                        </button>
+                      )}
                     </div>
 
                     <textarea 
@@ -364,6 +516,7 @@ const Settings = () => {
                       disabled={!isEditing}
                       value={formData.storeLocation}
                       onChange={(e) => setFormData({ ...formData, storeLocation: e.target.value })}
+                      placeholder="Enter full complete store address"
                       className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all leading-relaxed" 
                     />
                   </div>
@@ -377,6 +530,7 @@ const Settings = () => {
                         disabled={!isEditing}
                         value={formData.city}
                         onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                        placeholder="e.g. Indore"
                         className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
                       />
                     </div>
@@ -386,10 +540,11 @@ const Settings = () => {
                         Service Radius (KM) <span className="text-red-500">*</span>
                       </label>
                       <input 
-                        type="text" 
+                        type="number" 
                         disabled={!isEditing}
                         value={formData.serviceRadius}
                         onChange={(e) => setFormData({ ...formData, serviceRadius: e.target.value })}
+                        placeholder="5"
                         className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
                       />
                     </div>
@@ -410,8 +565,29 @@ const Settings = () => {
                       disabled={!isEditing}
                       value={formData.tagline}
                       onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
+                      placeholder="e.g. Fresh & Premium Quality Wholesaler"
                       className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
                     />
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <label className="block text-sm font-medium text-slate-700">Store Logo</label>
+                    <div className="flex items-center gap-4">
+                      {formData.storeLogo ? (
+                        <img src={formData.storeLogo} alt="Logo preview" className="w-16 h-16 rounded-xl object-cover border border-slate-200" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 font-medium text-xs">
+                          No Logo
+                        </div>
+                      )}
+                      {isEditing && (
+                        <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 border border-slate-200">
+                          <Upload size={16} />
+                          Choose Image
+                          <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+                        </label>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -429,7 +605,8 @@ const Settings = () => {
                         disabled={!isEditing}
                         value={formData.gstin}
                         onChange={(e) => setFormData({ ...formData, gstin: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal font-mono disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
+                        placeholder="e.g. 07AAAAA0000A1Z5"
+                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal font-mono disabled:bg-slate-50 disabled:text-slate-600 transition-all uppercase" 
                       />
                     </div>
 
@@ -440,6 +617,7 @@ const Settings = () => {
                         disabled={!isEditing}
                         value={formData.fssai}
                         onChange={(e) => setFormData({ ...formData, fssai: e.target.value })}
+                        placeholder="e.g. 10020011004567"
                         className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
                       />
                     </div>
@@ -451,6 +629,7 @@ const Settings = () => {
                         disabled={!isEditing}
                         value={formData.bankName}
                         onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                        placeholder="e.g. HDFC Bank"
                         className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
                       />
                     </div>
@@ -458,10 +637,11 @@ const Settings = () => {
                     <div className="space-y-1.5">
                       <label className="block text-sm font-medium text-slate-700">Account Number</label>
                       <input 
-                        type="password" 
+                        type="text" 
                         disabled={!isEditing}
                         value={formData.accountNumber}
                         onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
+                        placeholder="Enter bank account number"
                         className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal font-mono disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
                       />
                     </div>
@@ -475,16 +655,18 @@ const Settings = () => {
                   <button
                     type="button"
                     onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 font-medium text-sm cursor-pointer"
+                    disabled={saving}
+                    className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 font-medium text-sm cursor-pointer disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-[#ff7526] hover:bg-[#e65507] text-white rounded-lg font-medium text-sm cursor-pointer border-none shadow-sm flex items-center gap-2"
+                    disabled={saving}
+                    className="px-5 py-2 bg-[#ff7526] hover:bg-[#e65507] text-white rounded-lg font-medium text-sm cursor-pointer border-none shadow-sm flex items-center gap-2 disabled:opacity-50"
                   >
-                    <Save size={16} />
-                    Save Changes
+                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    {saving ? 'Saving...' : 'Save Changes'}
                   </button>
                 </div>
               )}

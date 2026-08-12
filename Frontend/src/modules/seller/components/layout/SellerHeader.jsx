@@ -1,10 +1,16 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { X, Menu, Settings, MapPin, LogOut } from 'lucide-react';
+import { authService } from '../../../../services/authService';
 
 const SellerHeader = ({ isSidebarOpen, toggleSidebar }) => {
   const location = useLocation();
   const navigate = useNavigate();
+
+  const handleLogout = () => {
+    authService.logout('seller');
+    navigate('/seller/login');
+  };
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
 
@@ -68,7 +74,7 @@ const SellerHeader = ({ isSidebarOpen, toggleSidebar }) => {
         </button>
 
         <button 
-          onClick={() => navigate('/seller/login')}
+          onClick={handleLogout}
           className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer"
           title="Logout"
         >

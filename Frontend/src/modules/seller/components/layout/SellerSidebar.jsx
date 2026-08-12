@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { authService } from '../../../../services/authService';
 import { 
   Home, 
   ShoppingCart,
@@ -259,7 +260,10 @@ const SellerSidebar = ({ isOpen, setIsOpen }) => {
       {/* Footer / Logout */}
       <div className="p-3 border-t border-[#0b3d3b]">
         <button
-          onClick={() => navigate('/seller/login')}
+          onClick={() => {
+            authService.logout('seller');
+            navigate('/seller/login');
+          }}
           className={`flex items-center ${isOpen ? 'gap-3 px-4' : 'justify-center px-2'} py-2.5 rounded-xl text-slate-200 hover:bg-red-500/20 hover:text-white transition-all cursor-pointer bg-transparent border-none w-full text-left font-medium text-[15px]`}
           title={!isOpen ? 'Logout' : undefined}
         >
