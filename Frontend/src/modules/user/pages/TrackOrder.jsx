@@ -68,10 +68,32 @@ const TrackOrder = () => {
 
           <div className="flex items-center justify-between">
             <span className="text-[12px] font-bold text-slate-500">Status</span>
-            <span className="bg-orange-50 text-[#ea580c] border border-orange-200/60 text-[11px] font-extrabold px-3 py-1 rounded-full uppercase">
+            <span className={`text-[11px] font-extrabold px-3 py-1 rounded-full uppercase ${
+              orderStatus === 'Accepted' 
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : orderStatus === 'Rejected'
+                ? 'bg-red-50 text-red-700 border border-red-200'
+                : 'bg-orange-50 text-[#ea580c] border border-orange-200/60'
+            }`}>
               {orderStatus}
             </span>
           </div>
+
+          {/* Rejection Alert Box */}
+          {orderStatus === 'Rejected' && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-xs mt-1">
+              <span className="font-extrabold block text-red-800">✕ Order Rejected by Seller</span>
+              <span className="font-medium text-slate-700">Reason: "{order?.rejectionReason || 'Unable to fulfill order'}"</span>
+            </div>
+          )}
+
+          {/* Acceptance Alert Box */}
+          {orderStatus === 'Accepted' && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-800 text-xs mt-1">
+              <span className="font-extrabold block text-emerald-900">✓ Order Accepted by Seller</span>
+              <span className="font-medium text-emerald-700">The seller has confirmed your order and is preparing it for shipment.</span>
+            </div>
+          )}
         </div>
 
         {/* Real Order Items List */}

@@ -100,6 +100,7 @@ const Home = () => {
         return {
           id: p.id || p.sku || p._id || `p_${Math.random()}`,
           name: p.name,
+          seller: p.seller || 'Fashion Hub',
           price: salePrice,
           originalPrice: mrp,
           discount: discountStr || '',
@@ -289,7 +290,8 @@ const Home = () => {
                     <img onClick={() => navigate(`/product/${product.id}`)} src={product.image} alt={product.name} className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
                     <div className="flex flex-col p-3 pt-2">
                       <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{product.name}</h4>
-                      <p className="text-[11px] text-slate-400 m-0 mb-2">{product.unit}</p>
+                      <p className="text-[11px] text-slate-400 m-0 mb-0.5">{product.unit}</p>
+                      <p className="text-[10px] font-medium text-slate-500 m-0 mb-2 truncate">by:- <span className="font-bold text-slate-700">{product.seller || 'Fashion Hub'}</span></p>
                       <div className="flex justify-between items-end mt-1">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-[14px] font-extrabold text-slate-900">₹{product.price.toFixed(2)}</span>
@@ -432,6 +434,7 @@ const Home = () => {
                 <div>
                   <h4 className="text-[13px] font-bold m-0 mb-0.5 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{prod.name}</h4>
                   <p className="text-[11px] text-slate-400 m-0">{prod.unit}</p>
+                  <p className="text-[10px] font-medium text-slate-500 m-0 mt-0.5 truncate">by:- <span className="font-bold text-slate-700">{prod.seller || 'Fashion Hub'}</span></p>
                 </div>
                 
                 <div className="flex items-baseline justify-between gap-1">
@@ -442,7 +445,7 @@ const Home = () => {
                     )}
                   </div>
                   {prod.discount && (
-                    <span className="text-[9.5px] font-extrabold text-[#ff5500]">{prod.discount}</span>
+                    <span className="text-[9.5px] font-extrabold text-[#ff5500] whitespace-nowrap shrink-0">{prod.discount}</span>
                   )}
                 </div>
 
@@ -488,6 +491,7 @@ const Home = () => {
                 <div>
                   <h4 className="text-[13px] font-bold m-0 mb-0.5 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{prod.name}</h4>
                   <p className="text-[11px] text-slate-400 m-0">{prod.unit}</p>
+                  <p className="text-[10px] font-medium text-slate-500 m-0 mt-0.5 truncate">by:- <span className="font-bold text-slate-700">{prod.seller || 'Fashion Hub'}</span></p>
                 </div>
                 
                 <div className="flex items-baseline justify-between gap-1">
@@ -497,6 +501,9 @@ const Home = () => {
                       <span className="text-[10px] text-slate-400 line-through">₹{prod.originalPrice.toFixed(2)}</span>
                     )}
                   </div>
+                  {prod.discount && (
+                    <span className="text-[9.5px] font-extrabold text-[#ff5500] whitespace-nowrap shrink-0">{prod.discount}</span>
+                  )}
                 </div>
 
                 <div>

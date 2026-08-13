@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { AlertTriangle, Plus, Search, Download, ChevronDown, FileText, FileSpreadsheet } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertTriangle, Plus, Search, Download, ChevronDown, FileText, FileSpreadsheet, RefreshCw, Box, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { productService } from '../../../services/authService';
 
-const mockInventory = [
+const defaultMockInventory = [
   { id: 'INV-101', name: 'Premium Basmati Rice', category: 'Grains & Flours', available: 1250, reserved: 200, unit: 'kg', threshold: 300, status: 'In Stock' },
   { id: 'INV-102', name: 'Refined Sunflower Oil', category: 'Oil & Ghee', available: 450, reserved: 80, unit: 'Liters', threshold: 200, status: 'In Stock' },
   { id: 'INV-103', name: 'Organic Toor Dal', category: 'Spices & Masala', available: 80, reserved: 30, unit: 'kg', threshold: 150, status: 'Low Stock' },
@@ -15,8 +16,94 @@ const Inventory = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [pageSize, setPageSize] = useState(10);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [inventory, setInventory] = useState(mockInventory);
+  const [inventory, setInventory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [categoriesList, setCategoriesList] = useState(['Grains & Flours', 'Oil & Ghee', 'Spices & Masala', 'Groceries']);
 
+  // Stock Adjustment Modal State
+  const [adjustModalItem, setAdjustModalItem] = useState(null);
+  const [adjustAmount, setAdjustAmount] = useState('');
+  const [adjustType, setAdjustType] = useState('add'); // 'add' or 'deduct'
+  const [adjusting, setAdjusting] = useState(false);
+
+  const fetchInventory = async () => {
+    setLoading(true);
+    let apiProducts = [];
+    try {
+      const res = await productService.getProducts();
+      if (res && res.products && Array.isArray(res.products)) {
+        apiProducts = res.products;
+      }
+    } catch (err) {
+      console.warn('Error fetching inventory products from API:', err.message);
+    }
+
+    const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+
+    const formattedApi = apiProducts.map(ap => {
+      const stockVal = Number(ap.stock !== undefined ? ap.stock : 0);
+      const minLimit = Number(ap.minStockLimit || 10);
+      let st = 'In Stock';
+      if (stockVal === 0) st = 'Out of Stock';
+      else if (stockVal <= minLimit) st = 'Low Stock';
+
+      return {
+        id: ap._id || ap.id || ap.sku,
+        _id: ap._id,
+        name: ap.name,
+        category: ap.category || 'General',
+        available: stockVal,
+        reserved: Math.floor(stockVal * 0.05), // Estimated reserved
+        unit: ap.unitType || 'kg',
+        threshold: minLimit,
+        status: st,
+        rawProduct: ap
+      };
+    });
+
+    const formattedLocal = localSaved.map(lp => {
+      const stockVal = Number(lp.stock !== undefined ? lp.stock : 0);
+      const minLimit = Number(lp.minStockLimit || 10);
+      let st = 'In Stock';
+      if (stockVal === 0) st = 'Out of Stock';
+      else if (stockVal <= minLimit) st = 'Low Stock';
+
+      return {
+        id: lp._id || lp.id || lp.sku,
+        _id: lp._id,
+        name: lp.name,
+        category: lp.category || 'General',
+        available: stockVal,
+        reserved: Math.floor(stockVal * 0.05),
+        unit: lp.unitType || 'kg',
+        threshold: minLimit,
+        status: st,
+        rawProduct: lp
+      };
+    });
+
+    const combined = [...formattedApi, ...formattedLocal, ...defaultMockInventory];
+    const seen = new Set();
+    const unique = combined.filter(item => {
+      const key = (item._id || item.id || item.name).toString();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Collect dynamic category names
+    const cats = Array.from(new Set(unique.map(i => i.category))).filter(Boolean);
+    if (cats.length > 0) setCategoriesList(cats);
+
+    setInventory(unique);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchInventory();
+  }, []);
+
+  // Filtered inventory calculation
   const filtered = inventory.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
@@ -24,17 +111,89 @@ const Inventory = () => {
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
-  const handleAdjustStock = (id, delta) => {
-    setInventory(inventory.map(item => {
-      if (item.id === id) {
-        const newAvailable = Math.max(0, item.available + delta);
-        let newStatus = 'In Stock';
-        if (newAvailable === 0) newStatus = 'Out of Stock';
-        else if (newAvailable < item.threshold) newStatus = 'Low Stock';
-        return { ...item, available: newAvailable, status: newStatus };
+  const lowStockCount = inventory.filter(i => i.status === 'Low Stock' || i.status === 'Out of Stock').length;
+
+  const handleAdjustStockSubmit = async (e) => {
+    e.preventDefault();
+    if (!adjustModalItem || !adjustAmount) return;
+
+    const amountNum = Math.abs(Number(adjustAmount));
+    if (isNaN(amountNum) || amountNum === 0) return;
+
+    setAdjusting(true);
+    const delta = adjustType === 'add' ? amountNum : -amountNum;
+    const newAvailable = Math.max(0, adjustModalItem.available + delta);
+
+    let newStatus = 'In Stock';
+    if (newAvailable === 0) newStatus = 'Out of Stock';
+    else if (newAvailable <= adjustModalItem.threshold) newStatus = 'Low Stock';
+
+    // Update state locally
+    setInventory(prev => prev.map(item => {
+      if (item.id === adjustModalItem.id) {
+        return {
+          ...item,
+          available: newAvailable,
+          status: newStatus
+        };
       }
       return item;
     }));
+
+    // Update in backend API if _id exists
+    if (adjustModalItem._id) {
+      try {
+        await productService.updateProduct(adjustModalItem._id, {
+          stock: newAvailable,
+          status: newStatus === 'Out of Stock' ? 'Draft' : 'Published'
+        });
+      } catch (err) {
+        console.warn('Backend stock update warning:', err.message);
+      }
+    }
+
+    // Update in localStorage custom products
+    const localProds = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+    const updatedLocal = localProds.map(p => {
+      if ((p._id || p.id) === adjustModalItem.id || p.name === adjustModalItem.name) {
+        return { ...p, stock: newAvailable };
+      }
+      return p;
+    });
+    localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
+
+    setAdjusting(false);
+    setAdjustModalItem(null);
+    setAdjustAmount('');
+  };
+
+  const handleQuickAdjust = async (item, delta) => {
+    const newAvailable = Math.max(0, item.available + delta);
+    let newStatus = 'In Stock';
+    if (newAvailable === 0) newStatus = 'Out of Stock';
+    else if (newAvailable <= item.threshold) newStatus = 'Low Stock';
+
+    setInventory(prev => prev.map(i => {
+      if (i.id === item.id) {
+        return { ...i, available: newAvailable, status: newStatus };
+      }
+      return i;
+    }));
+
+    if (item._id) {
+      try {
+        await productService.updateProduct(item._id, { stock: newAvailable });
+      } catch (e) {}
+    }
+
+    const localProds = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+    const updatedLocal = localProds.map(p => {
+      if ((p._id || p.id) === item.id || p.name === item.name) {
+        return { ...p, stock: newAvailable };
+      }
+      return p;
+    });
+    localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
   };
 
   const exportInventory = (format = 'csv') => {
@@ -75,7 +234,13 @@ const Inventory = () => {
           <p className="text-sm font-normal text-slate-500 mt-1">Real-time stock audit and stock refill alerts.</p>
         </div>
         <button 
-          onClick={() => alert('Opening Stock Level Adjustment Dialog...')}
+          onClick={() => {
+            if (inventory.length > 0) {
+              setAdjustModalItem(inventory[0]);
+              setAdjustAmount('50');
+              setAdjustType('add');
+            }
+          }}
           className="bg-[#ff7526] hover:bg-[#e65507] text-white font-medium py-2.5 px-4 rounded-lg shadow-sm transition-colors cursor-pointer border-none flex items-center gap-2 text-sm"
         >
           <Plus size={18} strokeWidth={2} />
@@ -84,30 +249,128 @@ const Inventory = () => {
       </div>
 
       {/* Low Stock Alert Banner */}
-      <div className="bg-orange-50/80 border border-orange-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-[#ff7526] text-white rounded-lg flex items-center justify-center font-bold shrink-0">
-            <AlertTriangle size={20} />
+      {lowStockCount > 0 && (
+        <div className="bg-orange-50/80 border border-orange-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#ff7526] text-white rounded-lg flex items-center justify-center font-bold shrink-0">
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <h4 className="font-semibold text-slate-900 text-sm">Low Stock Alert</h4>
+              <p className="text-xs text-slate-600 font-normal">{lowStockCount} items are currently below safety threshold. Restock recommended to prevent order fulfillment delays.</p>
+            </div>
           </div>
-          <div>
-            <h4 className="font-semibold text-slate-900 text-sm">Low Stock Alert</h4>
-            <p className="text-xs text-slate-600 font-normal">2 items are currently below safety threshold. Restock recommended to prevent order fulfillment delays.</p>
+          <button 
+            onClick={() => setStatusFilter('Low Stock')}
+            className="px-3.5 py-1.5 bg-[#ff7526] hover:bg-[#e65507] text-white font-medium text-xs rounded-lg border-none cursor-pointer transition-colors shadow-xs"
+          >
+            Restock Now
+          </button>
+        </div>
+      )}
+
+      {/* Stock Adjust Modal */}
+      {adjustModalItem && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 border border-slate-100 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Box size={18} className="text-[#ff7526]" /> Adjust Item Stock
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setAdjustModalItem(null)} 
+                className="text-slate-400 hover:text-slate-600 border-none bg-transparent text-lg cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <p className="text-xs font-semibold text-slate-500 m-0">SELECTED PRODUCT</p>
+              <h4 className="text-sm font-bold text-slate-900 m-0 mt-0.5">{adjustModalItem.name}</h4>
+              <p className="text-xs text-slate-500 m-0 mt-0.5">Current Stock: <span className="font-bold text-slate-800">{adjustModalItem.available} {adjustModalItem.unit}</span></p>
+            </div>
+
+            <form onSubmit={handleAdjustStockSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Action Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAdjustType('add')}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-all border ${
+                      adjustType === 'add' 
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-2xs font-bold' 
+                        : 'bg-slate-50 text-slate-600 border-slate-200'
+                    }`}
+                  >
+                    <ArrowUpRight size={14} /> Add Stock (+)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdjustType('deduct')}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-all border ${
+                      adjustType === 'deduct' 
+                        ? 'bg-red-50 text-red-700 border-red-300 shadow-2xs font-bold' 
+                        : 'bg-slate-50 text-slate-600 border-slate-200'
+                    }`}
+                  >
+                    <ArrowDownRight size={14} /> Deduct Stock (-)
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Quantity to {adjustType === 'add' ? 'Add' : 'Deduct'} *</label>
+                <input 
+                  type="number"
+                  required
+                  min="1"
+                  placeholder="e.g. 50"
+                  value={adjustAmount}
+                  onChange={(e) => setAdjustAmount(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-semibold text-slate-900 focus:outline-none focus:border-[#ff7526]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setAdjustModalItem(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={adjusting}
+                  className="px-5 py-2 bg-[#ff7526] hover:bg-[#e65507] text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-sm"
+                >
+                  {adjusting ? 'Saving...' : 'Update Stock'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-        <button 
-          onClick={() => setStatusFilter('Low Stock')}
-          className="px-3.5 py-1.5 bg-[#ff7526] hover:bg-[#e65507] text-white font-medium text-xs rounded-lg border-none cursor-pointer transition-colors shadow-xs"
-        >
-          Restock Now
-        </button>
-      </div>
+      )}
 
       {/* Main Unified Card Container */}
       <div className="rounded-xl overflow-hidden shadow-sm border border-slate-200 bg-white">
         
         {/* Light Orange Header Title Banner */}
         <div className="bg-[#ff7526] px-5 py-3.5 flex justify-between items-center">
-          <h2 className="text-white font-semibold text-lg tracking-wide">View Inventory & Stock List</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-white font-semibold text-lg tracking-wide">View Inventory & Stock List</h2>
+            <button
+              onClick={fetchInventory}
+              className="p-1 text-white/80 hover:text-white rounded-md bg-white/10 hover:bg-white/20 transition-all border-none cursor-pointer flex items-center gap-1 text-xs"
+              title="Refresh Inventory"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
           <span className="text-white/90 text-xs font-medium">Total Items: {filtered.length}</span>
         </div>
 
@@ -123,9 +386,9 @@ const Inventory = () => {
               className="border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 bg-white outline-none focus:border-[#ff7526] cursor-pointer text-sm font-normal transition-all"
             >
               <option value="All">All Category</option>
-              <option value="Grains & Flours">Grains & Flours</option>
-              <option value="Oil & Ghee">Oil & Ghee</option>
-              <option value="Spices & Masala">Spices & Masala</option>
+              {categoriesList.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
             </select>
           </div>
 
@@ -217,7 +480,16 @@ const Inventory = () => {
               </tr>
             </thead>
             <tbody className="text-[15px] font-normal text-slate-700 divide-y divide-slate-100">
-              {filtered.slice(0, pageSize).map((item) => (
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-slate-500 text-sm font-medium">
+                    <div className="flex items-center justify-center gap-2">
+                      <RefreshCw size={16} className="animate-spin text-[#ff7526]" />
+                      Loading inventory records...
+                    </div>
+                  </td>
+                </tr>
+              ) : filtered.slice(0, pageSize).map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="px-6 py-4 font-semibold text-slate-900">
                     <div>
@@ -226,7 +498,7 @@ const Inventory = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`font-semibold ${item.available === 0 ? 'text-red-600' : item.available < item.threshold ? 'text-amber-600' : 'text-slate-900'}`}>
+                    <span className={`font-semibold ${item.available === 0 ? 'text-red-600' : item.available <= item.threshold ? 'text-amber-600' : 'text-slate-900'}`}>
                       {item.available} {item.unit}
                     </span>
                   </td>
@@ -237,22 +509,35 @@ const Inventory = () => {
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       <button 
-                        onClick={() => handleAdjustStock(item.id, 50)}
+                        onClick={() => handleQuickAdjust(item, 50)}
                         className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md font-medium text-xs border border-emerald-200 cursor-pointer transition-colors"
+                        title="Add 50 stock"
                       >
-                        + Add
+                        + Add 50
                       </button>
                       <button 
-                        onClick={() => handleAdjustStock(item.id, -50)}
+                        onClick={() => handleQuickAdjust(item, -50)}
                         className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 rounded-md font-medium text-xs border border-red-200 cursor-pointer transition-colors"
+                        title="Deduct 50 stock"
                       >
-                        - Deduct
+                        - Deduct 50
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAdjustModalItem(item);
+                          setAdjustAmount('50');
+                          setAdjustType('add');
+                        }}
+                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium text-xs border border-slate-200 cursor-pointer transition-colors"
+                        title="Custom stock level adjustment"
+                      >
+                        Custom
                       </button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={5} className="text-center py-8 text-slate-400 text-sm font-normal">
                     No inventory items match your search criteria.

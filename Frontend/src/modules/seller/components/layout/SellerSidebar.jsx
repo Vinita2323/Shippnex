@@ -31,7 +31,7 @@ const SellerSidebar = ({ isOpen, setIsOpen }) => {
   // Automatically keep submenus open if active route is inside them
   useEffect(() => {
     const path = location.pathname;
-    if (path.includes('/seller/product') || path.includes('/seller/taxes') || path.includes('/seller/stock-management') || path.includes('/seller/products')) {
+    if (path.includes('/seller/product') || path.includes('/seller/stock-management') || path.includes('/seller/products')) {
       setOpenMenus(prev => ({ ...prev, product: true }));
     }
     if (path.includes('/seller/reports')) {
@@ -91,35 +91,7 @@ const SellerSidebar = ({ isOpen, setIsOpen }) => {
           {isOpen && <span>Orders</span>}
         </Link>
 
-        {/* 3. Category */}
-        <Link
-          to="/seller/category"
-          className={`flex items-center ${isOpen ? 'gap-3 px-4' : 'justify-center px-2'} py-3 rounded-xl transition-all cursor-pointer font-semibold text-[15px] ${
-            isActive('/seller/category') || isActive('/seller/categories')
-              ? 'bg-[#0b3d3b] text-white shadow-sm font-bold border-l-4 border-[#ff5500]'
-              : 'text-slate-200 hover:bg-[#0b3d3b]/60'
-          }`}
-          title={!isOpen ? 'Category' : undefined}
-        >
-          <FolderTree size={20} className="shrink-0 text-white" />
-          {isOpen && <span>Category</span>}
-        </Link>
-
-        {/* 4. SubCategory */}
-        <Link
-          to="/seller/subcategory"
-          className={`flex items-center ${isOpen ? 'gap-3 px-4' : 'justify-center px-2'} py-3 rounded-xl transition-all cursor-pointer font-semibold text-[15px] ${
-            isActive('/seller/subcategory') || isActive('/seller/subcategories')
-              ? 'bg-[#0b3d3b] text-white shadow-sm font-bold border-l-4 border-[#ff5500]'
-              : 'text-slate-200 hover:bg-[#0b3d3b]/60'
-          }`}
-          title={!isOpen ? 'SubCategory' : undefined}
-        >
-          <Layers size={20} className="shrink-0 text-white" />
-          {isOpen && <span>SubCategory</span>}
-        </Link>
-
-        {/* 5. Product (Collapsible Menu) */}
+        {/* 3. Product (Collapsible Menu) */}
         <div>
           <button
             onClick={() => toggleSubmenu('product')}
@@ -149,19 +121,6 @@ const SellerSidebar = ({ isOpen, setIsOpen }) => {
               >
                 <Package size={18} className="shrink-0 text-white/90" />
                 <span>Add new Product</span>
-              </Link>
-
-              {/* Taxes */}
-              <Link
-                to="/seller/taxes"
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] font-medium transition-all ${
-                  isActive('/seller/taxes')
-                    ? 'bg-[#0b3d3b] text-white font-bold border-l-2 border-[#ff5500]'
-                    : 'text-slate-300 hover:bg-[#0b3d3b]/50 hover:text-white'
-                }`}
-              >
-                <Percent size={18} className="shrink-0 text-white/90" />
-                <span>Taxes</span>
               </Link>
 
               {/* Product List */}

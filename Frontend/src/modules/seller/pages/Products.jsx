@@ -1,14 +1,7 @@
-import React, { useState } from 'react';
-import { Plus, Search, Download, ChevronDown, Edit, Trash2, Eye, FileText, FileSpreadsheet, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Search, Download, ChevronDown, Edit, Trash2, Eye, FileText, FileSpreadsheet, CheckCircle2, RefreshCw, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-const mockProducts = [
-  { id: 'PROD-101', name: 'Premium Basmati Rice', sku: 'RICE-BAS-01', category: 'Grains & Flours', stock: 1250, price: 75.00, status: 'Published' },
-  { id: 'PROD-102', name: 'Refined Sunflower Oil', sku: 'OIL-SUN-05', category: 'Oil & Ghee', stock: 450, price: 140.00, status: 'Published' },
-  { id: 'PROD-103', name: 'Organic Toor Dal', sku: 'DAL-TOO-01', category: 'Spices & Masala', stock: 80, price: 120.00, status: 'Low Stock' },
-  { id: 'PROD-104', name: 'Whole Wheat Atta (5kg)', sku: 'ATTA-WH-05', category: 'Grains & Flours', stock: 0, price: 250.00, status: 'Out of Stock' },
-  { id: 'PROD-105', name: 'Himalayan Pink Salt', sku: 'SALT-PNK-01', category: 'Spices & Masala', stock: 500, price: 85.00, status: 'Draft' },
-];
+import { productService } from '../../../services/authService';
 
 const Products = () => {
   const navigate = useNavigate();
@@ -17,12 +10,77 @@ const Products = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [pageSize, setPageSize] = useState(10);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [products] = useState(mockProducts);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [categoriesList, setCategoriesList] = useState([]);
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    let apiProds = [];
+    try {
+      const res = await productService.getProducts();
+      if (res && res.products && Array.isArray(res.products)) {
+        apiProds = res.products;
+      }
+    } catch (err) {
+      console.warn('Error fetching products from API:', err.message);
+    }
+
+    const localProds = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+
+    const formattedApi = apiProds.map(ap => ({
+      id: ap._id || ap.id || ap.sku,
+      _id: ap._id,
+      name: ap.name,
+      sku: ap.sku || ap.id || 'SKU-001',
+      category: ap.category || 'General',
+      subCategory: ap.subCategory || '',
+      stock: Number(ap.stock !== undefined ? ap.stock : 0),
+      price: Number(ap.salePrice || ap.mrp || ap.price || 0),
+      mrp: Number(ap.mrp || 0),
+      status: ap.status || 'Published',
+      image: ap.mainImage || ap.image || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&auto=format&fit=crop&q=80',
+    }));
+
+    const formattedLocal = localProds.map(lp => ({
+      id: lp._id || lp.id || lp.sku,
+      _id: lp._id,
+      name: lp.name,
+      sku: lp.sku || lp.id || 'SKU-001',
+      category: lp.category || 'General',
+      subCategory: lp.subCategory || '',
+      stock: Number(lp.stock !== undefined ? lp.stock : 0),
+      price: Number(lp.salePrice || lp.mrp || lp.price || 0),
+      mrp: Number(lp.mrp || 0),
+      status: lp.status || 'Published',
+      image: lp.mainImage || lp.image || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&auto=format&fit=crop&q=80',
+    }));
+
+    const combined = [...formattedApi, ...formattedLocal];
+    const seen = new Set();
+    const unique = combined.filter(p => {
+      const key = (p._id || p.id || p.name).toString();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Populate category dropdown from loaded products
+    const cats = Array.from(new Set(unique.map(p => p.category))).filter(Boolean);
+    setCategoriesList(cats);
+
+    setProducts(unique);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
   const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          p.sku.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (p.sku || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === 'All' || p.category === categoryFilter;
     const matchesStatus = statusFilter === 'All' || p.status === statusFilter;
     return matchesSearch && matchesCategory && matchesStatus;
@@ -44,6 +102,19 @@ const Products = () => {
     }
   };
 
+  const handleDeleteProduct = async (product) => {
+    if (!window.confirm(`Are you sure you want to delete "${product.name}"?`)) return;
+    if (product._id) {
+      try {
+        await productService.deleteProduct(product._id);
+      } catch (e) {}
+    }
+    const localProds = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+    const updatedLocal = localProds.filter(p => (p._id || p.id) !== product.id && p.name !== product.name);
+    localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
+    fetchProducts();
+  };
+
   const exportProducts = (format = 'csv') => {
     if (filteredProducts.length === 0) {
       alert('No product data available to export.');
@@ -56,7 +127,7 @@ const Products = () => {
       `"${p.name}"`,
       `"${p.sku}"`,
       `"${p.category}"`,
-      `"${p.price.toFixed(2)}"`,
+      `"${Number(p.price).toFixed(2)}"`,
       `"${p.stock} units"`,
       `"${p.status}"`
     ]);
@@ -80,7 +151,7 @@ const Products = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Products</h1>
-          <p className="text-sm font-normal text-slate-500 mt-1">Manage your warehouse inventory catalog.</p>
+          <p className="text-sm font-normal text-slate-500 mt-1">Manage your store product catalog.</p>
         </div>
         <button 
           onClick={() => navigate('/seller/product/add')}
@@ -96,7 +167,17 @@ const Products = () => {
         
         {/* Light Orange Header Title Banner */}
         <div className="bg-[#ff7526] px-5 py-3.5 flex justify-between items-center">
-          <h2 className="text-white font-semibold text-lg tracking-wide">View Product List</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-white font-semibold text-lg tracking-wide">View Product List</h2>
+            <button
+              onClick={fetchProducts}
+              className="p-1 text-white/80 hover:text-white rounded-md bg-white/10 hover:bg-white/20 transition-all border-none cursor-pointer flex items-center gap-1 text-xs"
+              title="Refresh Products List"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
           <span className="text-white/90 text-xs font-medium">Total Items: {filteredProducts.length}</span>
         </div>
 
@@ -112,9 +193,9 @@ const Products = () => {
               className="border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 bg-white outline-none focus:border-[#ff7526] cursor-pointer text-sm font-normal transition-all"
             >
               <option value="All">All Categories</option>
-              <option value="Grains & Flours">Grains & Flours</option>
-              <option value="Oil & Ghee">Oil & Ghee</option>
-              <option value="Spices & Masala">Spices & Masala</option>
+              {categoriesList.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
             </select>
           </div>
 
@@ -128,9 +209,9 @@ const Products = () => {
             >
               <option value="All">All Status</option>
               <option value="Published">Published</option>
+              <option value="Draft">Draft</option>
               <option value="Low Stock">Low Stock</option>
               <option value="Out of Stock">Out of Stock</option>
-              <option value="Draft">Draft</option>
             </select>
           </div>
 
@@ -153,7 +234,7 @@ const Products = () => {
             <span className="text-slate-600 font-normal">Search:</span>
             <input
               type="text"
-              placeholder="Search by product name or SKU..."
+              placeholder="Search product name or SKU..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 outline-none focus:border-[#ff7526] text-sm font-normal w-48 sm:w-64 transition-all"
@@ -216,7 +297,16 @@ const Products = () => {
               </tr>
             </thead>
             <tbody className="text-[15px] font-normal text-slate-700 divide-y divide-slate-100">
-              {filteredProducts.slice(0, pageSize).map((product) => (
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-8 text-slate-500 text-sm font-medium">
+                    <div className="flex items-center justify-center gap-2">
+                      <RefreshCw size={16} className="animate-spin text-[#ff7526]" />
+                      Loading product catalog...
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredProducts.slice(0, pageSize).map((product) => (
                 <tr key={product.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="px-5 py-4">
                     <input 
@@ -228,8 +318,12 @@ const Products = () => {
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200">
-                        <span className="text-slate-400 font-bold text-xs">IMG</span>
+                      <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200 overflow-hidden">
+                        {product.image ? (
+                          <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Package size={18} className="text-slate-400" />
+                        )}
                       </div>
                       <div className="flex flex-col">
                         <span className="font-semibold text-slate-900 leading-tight">{product.name}</span>
@@ -238,7 +332,7 @@ const Products = () => {
                     </div>
                   </td>
                   <td className="px-5 py-4 text-sm font-normal text-slate-600">{product.category}</td>
-                  <td className="px-5 py-4 font-semibold text-slate-900">₹{product.price.toFixed(2)}</td>
+                  <td className="px-5 py-4 font-semibold text-slate-900">₹{Number(product.price).toFixed(2)}</td>
                   <td className="px-5 py-4 text-sm">
                     <span className={`font-semibold ${product.stock === 0 ? 'text-red-600' : product.stock < 100 ? 'text-orange-600' : 'text-slate-900'}`}>
                       {product.stock} units
@@ -248,10 +342,9 @@ const Products = () => {
                     <StatusBadge status={product.status} />
                   </td>
                   <td className="px-5 py-4 text-right">
-                    {/* Action buttons visible all the time */}
                     <div className="flex items-center justify-end gap-2">
                       <button 
-                        onClick={() => alert(`View ${product.name}`)}
+                        onClick={() => alert(`Viewing details for ${product.name}`)}
                         className="p-1.5 text-slate-500 hover:text-blue-600 bg-white rounded-md border border-slate-200 shadow-xs cursor-pointer transition-colors" 
                         title="View Product"
                       >
@@ -265,7 +358,7 @@ const Products = () => {
                         <Edit size={16} />
                       </button>
                       <button 
-                        onClick={() => alert(`Delete ${product.name}`)}
+                        onClick={() => handleDeleteProduct(product)}
                         className="p-1.5 text-slate-500 hover:text-red-600 bg-white rounded-md border border-slate-200 shadow-xs cursor-pointer transition-colors" 
                         title="Delete Product"
                       >
@@ -276,39 +369,28 @@ const Products = () => {
                 </tr>
               ))}
               
-              {filteredProducts.length === 0 && (
+              {!loading && filteredProducts.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="px-6 py-12 text-center text-slate-400 text-sm font-normal">
-                    No products found matching your filter criteria.
+                  <td colSpan={7} className="text-center py-12 text-slate-400 text-sm font-normal">
+                    No products found in database. Click "+ Add New Product" to create your first item.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-        
-        {/* Pagination Footer */}
-        <div className="p-4 border-t border-slate-100 flex items-center justify-between text-sm text-slate-600 font-normal bg-white">
-          <div>Showing 1 to {Math.min(pageSize, filteredProducts.length)} of {filteredProducts.length} entries</div>
-          <div className="flex gap-1.5">
-            <button className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 cursor-pointer font-medium">Previous</button>
-            <button className="px-3 py-1.5 border border-[#ff7526] bg-[#ff7526] text-white rounded-lg font-semibold cursor-pointer">1</button>
-            <button className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 cursor-pointer font-medium">2</button>
-            <button className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 cursor-pointer font-medium">Next</button>
-          </div>
-        </div>
 
       </div>
+
     </div>
   );
 };
 
 const StatusBadge = ({ status }) => {
   let style = 'bg-slate-100 text-slate-700 border border-slate-200';
-  if (status === 'Published') style = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+  if (status === 'Published' || status === 'In Stock') style = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
   if (status === 'Low Stock') style = 'bg-amber-50 text-amber-700 border border-amber-200';
-  if (status === 'Out of Stock') style = 'bg-red-50 text-red-700 border border-red-200';
-  if (status === 'Draft') style = 'bg-slate-100 text-slate-600 border border-slate-200';
+  if (status === 'Out of Stock' || status === 'Draft') style = 'bg-red-50 text-red-700 border border-red-200';
   return <span className={`px-2.5 py-1 rounded-md text-xs font-semibold ${style}`}>{status}</span>;
 };
 

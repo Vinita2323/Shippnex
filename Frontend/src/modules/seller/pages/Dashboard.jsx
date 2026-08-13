@@ -1,31 +1,122 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, TrendingDown, IndianRupee, ShoppingBag, 
-  Package, Clock, CheckCircle2, AlertCircle, ArrowRight, Plus, Calendar, Filter
+  Package, Clock, CheckCircle2, AlertCircle, ArrowRight, Plus, Calendar, RefreshCw, Truck, XCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-const mockRecentOrders = [
-  { id: '#ORD-8821', customer: 'FreshMart Groceries', date: 'Today, 10:42 AM', amount: '₹14,500.00', status: 'Pending', items: 12 },
-  { id: '#ORD-8820', customer: 'Daily Needs Superstore', date: 'Today, 09:15 AM', amount: '₹8,250.00', status: 'Packed', items: 6 },
-  { id: '#ORD-8819', customer: 'Super Saver Market', date: 'Yesterday, 04:30 PM', amount: '₹22,100.00', status: 'Out for Delivery', items: 18 },
-  { id: '#ORD-8818', customer: 'City Mega Wholesaler', date: 'Yesterday, 02:10 PM', amount: '₹4,800.00', status: 'Delivered', items: 4 },
-  { id: '#ORD-8817', customer: 'Rajesh Retail Traders', date: '25 Jul 2026', amount: '₹38,900.00', status: 'Delivered', items: 25 },
-];
-
-const chartData = [
-  { day: 'Mon', val: 45, amount: '₹45,000' },
-  { day: 'Tue', val: 65, amount: '₹65,000' },
-  { day: 'Wed', val: 40, amount: '₹40,000' },
-  { day: 'Thu', val: 80, amount: '₹80,000' },
-  { day: 'Fri', val: 55, amount: '₹55,000' },
-  { day: 'Sat', val: 95, amount: '₹95,000' },
-  { day: 'Sun', val: 70, amount: '₹70,000' },
-];
+import { authService, orderService, productService } from '../../../services/authService';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState('This Week');
+  const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState([]);
+  const [productsCount, setProductsCount] = useState(0);
+  const [seller, setSeller] = useState(() => {
+    try {
+      const cached = localStorage.getItem('shippnex_seller_data');
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch Seller Profile
+      const profRes = await authService.getSellerProfile().catch(() => null);
+      if (profRes?.seller) {
+        setSeller(profRes.seller);
+      }
+
+      // 2. Fetch Seller Order Notifications
+      const notifRes = await orderService.getSellerNotifications().catch(() => null);
+      if (notifRes && Array.isArray(notifRes.notifications)) {
+        setNotifications(notifRes.notifications);
+      }
+
+      // 3. Fetch Seller Products Count
+      const prodRes = await productService.getProducts().catch(() => null);
+      let apiProds = prodRes?.products && Array.isArray(prodRes.products) ? prodRes.products : [];
+      const localProds = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+      setProductsCount(apiProds.length + localProds.length);
+    } catch (err) {
+      console.error('Error loading dashboard dynamic data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const sellerName = seller?.ownerName || seller?.businessName || seller?.name || 'Seller';
+  const storeName = seller?.businessName ? seller.businessName : 'your store';
+
+  // --- Dynamic Stats Calculations ---
+  const validNotifications = notifications.filter(n => n.status !== 'REJECTED' && n.status !== 'Rejected');
+  
+  const totalRevenue = validNotifications.reduce((sum, n) => sum + Number(n.totalAmount || 0), 0);
+  const totalOrders = notifications.length;
+  const productsSold = validNotifications.reduce((sum, n) => {
+    const itemQtySum = (n.items || []).reduce((iqSum, item) => iqSum + Number(item.quantity || 1), 0);
+    return sum + itemQtySum;
+  }, 0);
+
+  const pendingDispatches = notifications.filter(n => 
+    n.status === 'NEW' || n.status === 'VIEWED' || n.status === 'ACCEPTED' || n.status === 'OUT_FOR_DELIVERY' || n.status === 'Out for Delivery'
+  ).length;
+
+  // --- Order Fulfillment Status Counts ---
+  const pendingPackaging = notifications.filter(n => n.status === 'NEW' || n.status === 'VIEWED').length;
+  const acceptedOrders = notifications.filter(n => n.status === 'ACCEPTED' || n.status === 'Accepted').length;
+  const outForDelivery = notifications.filter(n => n.status === 'OUT_FOR_DELIVERY' || n.status === 'Out for Delivery').length;
+  const delivered = notifications.filter(n => n.status === 'DELIVERED' || n.status === 'Delivered').length;
+  const rejected = notifications.filter(n => n.status === 'REJECTED' || n.status === 'Rejected').length;
+
+  const totalFulfillmentCount = notifications.length || 1;
+
+  // --- Dynamic Sales Analytics Chart Data ---
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const daySalesMap = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
+
+  validNotifications.forEach(n => {
+    if (n.createdAt) {
+      const d = new Date(n.createdAt);
+      const dayName = dayNames[d.getDay()];
+      if (dayName && daySalesMap[dayName] !== undefined) {
+        daySalesMap[dayName] += Number(n.totalAmount || 0);
+      }
+    }
+  });
+
+  const orderedDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const maxDaySale = Math.max(...Object.values(daySalesMap), 1);
+
+  const chartData = orderedDays.map(day => {
+    const amt = daySalesMap[day] || 0;
+    const valPercent = maxDaySale > 0 ? Math.max(Math.round((amt / maxDaySale) * 100), amt > 0 ? 15 : 5) : 5;
+    return {
+      day,
+      val: valPercent,
+      amount: `₹${amt.toFixed(2)}`,
+      rawAmt: amt
+    };
+  });
+
+  // Calculate Peak Sales Day
+  let peakDay = 'Mon';
+  let peakVal = 0;
+  chartData.forEach(cd => {
+    if (cd.rawAmt >= peakVal) {
+      peakVal = cd.rawAmt;
+      peakDay = cd.day;
+    }
+  });
+
+  const avgDailySales = (totalRevenue / 7).toFixed(2);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 font-sans pb-12">
@@ -33,21 +124,30 @@ const Dashboard = () => {
       {/* Top Welcome Header Banner */}
       <div className="bg-gradient-to-r from-[#ff7526] via-[#ff6814] to-[#e65507] rounded-2xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="space-y-1.5 z-10">
-          <span className="bg-white/20 text-white text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider backdrop-blur-xs">
-            Seller Dashboard Overview
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white pt-1">
-            Welcome back, Harshvardhan! 👋
+          <div className="flex items-center gap-2">
+            <span className="bg-white/20 text-white text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider backdrop-blur-xs">
+              Seller Dashboard Overview
+            </span>
+            <button
+              onClick={fetchDashboardData}
+              className="p-1.5 text-white/90 hover:text-white rounded-full bg-white/10 hover:bg-white/20 transition-all border-none cursor-pointer flex items-center justify-center"
+              title="Refresh Real-time Data"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white pt-1">
+            Welcome back, {sellerName}! 👋
           </h1>
           <p className="text-sm font-normal text-white/90 max-w-xl">
-            Here is your live store performance, sales revenue analytics, and pending order dispatches for today.
+            Here is your live store performance, sales revenue analytics, and order dispatches for <strong className="font-semibold text-white">{storeName}</strong>.
           </p>
         </div>
 
         <div className="flex items-center gap-3 z-10 shrink-0">
           <button 
             onClick={() => navigate('/seller/product/add')}
-            className="px-4 py-2.5 bg-white hover:bg-slate-50 text-[#ff7526] font-medium text-sm rounded-lg border-none cursor-pointer transition-all shadow-sm flex items-center gap-2"
+            className="px-4 py-2.5 bg-white hover:bg-slate-50 text-[#ff7526] font-extrabold text-sm rounded-xl border-none cursor-pointer transition-all shadow-sm flex items-center gap-2 active:scale-95"
           >
             <Plus size={18} />
             Add New Product
@@ -63,17 +163,17 @@ const Dashboard = () => {
         <div className="flex items-center gap-2 text-slate-700 text-sm font-normal">
           <Calendar size={18} className="text-[#ff7526]" />
           <span>Showing stats for:</span>
-          <span className="font-semibold text-slate-900">{timeRange}</span>
+          <span className="font-extrabold text-slate-900">{timeRange}</span>
         </div>
 
         <div className="flex items-center gap-2">
-          {['Today', 'This Week', 'This Month', 'This Year'].map((range) => (
+          {['Today', 'This Week', 'This Month', 'All Time'].map((range) => (
             <button
               key={range}
               onClick={() => setTimeRange(range)}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all ${
                 timeRange === range
-                  ? 'bg-[#ff7526] text-white shadow-2xs font-semibold'
+                  ? 'bg-[#ff7526] text-white shadow-2xs font-extrabold'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -87,65 +187,65 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         
         {/* KPI 1: Revenue */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow space-y-3">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Revenue</span>
-            <div className="w-9 h-9 rounded-lg bg-orange-50 border border-orange-200 text-[#ff7526] flex items-center justify-center">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Revenue</span>
+            <div className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-200 text-[#ff7526] flex items-center justify-center shadow-2xs">
               <IndianRupee size={18} />
             </div>
           </div>
           <div>
-            <h3 className="text-2xl sm:text-3xl font-semibold text-slate-900">₹84,250.00</h3>
-            <p className="text-xs font-normal text-emerald-600 mt-1 flex items-center gap-1">
-              <TrendingUp size={14} /> +12.5% vs last week
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">₹{totalRevenue.toFixed(2)}</h3>
+            <p className="text-xs font-semibold text-emerald-600 mt-1 flex items-center gap-1">
+              <TrendingUp size={14} /> Live Real-time Earnings
             </p>
           </div>
         </div>
 
         {/* KPI 2: Total Orders */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow space-y-3">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Orders</span>
-            <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Orders</span>
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shadow-2xs">
               <ShoppingBag size={18} />
             </div>
           </div>
           <div>
-            <h3 className="text-2xl sm:text-3xl font-semibold text-slate-900">142</h3>
-            <p className="text-xs font-normal text-emerald-600 mt-1 flex items-center gap-1">
-              <TrendingUp size={14} /> +5.2% vs last week
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{totalOrders}</h3>
+            <p className="text-xs font-semibold text-emerald-600 mt-1 flex items-center gap-1">
+              <TrendingUp size={14} /> Customer Orders Received
             </p>
           </div>
         </div>
 
         {/* KPI 3: Products Sold */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow space-y-3">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Products Sold</span>
-            <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Products Sold</span>
+            <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shadow-2xs">
               <Package size={18} />
             </div>
           </div>
           <div>
-            <h3 className="text-2xl sm:text-3xl font-semibold text-slate-900">845</h3>
-            <p className="text-xs font-normal text-rose-500 mt-1 flex items-center gap-1">
-              <TrendingDown size={14} /> -2.1% vs last week
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{productsSold}</h3>
+            <p className="text-xs font-semibold text-blue-600 mt-1 flex items-center gap-1">
+              <Package size={14} /> Across {productsCount} Store Products
             </p>
           </div>
         </div>
 
         {/* KPI 4: Pending Dispatches */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow space-y-3">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Pending Dispatches</span>
-            <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Actions</span>
+            <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shadow-2xs">
               <Clock size={18} />
             </div>
           </div>
           <div>
-            <h3 className="text-2xl sm:text-3xl font-semibold text-slate-900">24</h3>
-            <p className="text-xs font-normal text-amber-600 mt-1 flex items-center gap-1">
-              <AlertCircle size={14} /> Requires attention
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{pendingDispatches}</h3>
+            <p className="text-xs font-semibold text-amber-600 mt-1 flex items-center gap-1">
+              <AlertCircle size={14} /> Active Orders Pending Action
             </p>
           </div>
         </div>
@@ -156,16 +256,16 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Sales Analytics Chart Card */}
-        <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
+        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">Weekly Revenue & Sales Trend</h3>
-              <p className="text-xs font-normal text-slate-400 mt-0.5">Overview of daily gross revenue in Rupees</p>
+              <h3 className="text-lg font-extrabold text-slate-900">Weekly Revenue & Sales Trend</h3>
+              <p className="text-xs font-normal text-slate-400 mt-0.5">Real gross sales revenue by day</p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                 <span className="w-3 h-3 rounded-full bg-[#ff7526]"></span>
-                Gross Sales
+                Gross Sales (₹)
               </div>
             </div>
           </div>
@@ -175,7 +275,7 @@ const Dashboard = () => {
             {chartData.map((item, i) => (
               <div key={i} className="w-full flex flex-col items-center group relative cursor-pointer">
                 {/* Tooltip on Hover */}
-                <div className="absolute -top-9 bg-slate-900 text-white text-xs font-medium py-1 px-2.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shadow-md pointer-events-none z-10 whitespace-nowrap">
+                <div className="absolute -top-9 bg-slate-900 text-white text-xs font-bold py-1 px-2.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shadow-md pointer-events-none z-10 whitespace-nowrap">
                   {item.amount}
                 </div>
 
@@ -188,36 +288,36 @@ const Dashboard = () => {
                 </div>
 
                 {/* Day Label */}
-                <span className="mt-3 text-xs font-medium text-slate-500">{item.day}</span>
+                <span className="mt-3 text-xs font-extrabold text-slate-600">{item.day}</span>
               </div>
             ))}
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs text-slate-500 font-normal gap-2">
-            <span>Peak Sales Day: <strong className="font-semibold text-slate-800">Saturday (₹95,000)</strong></span>
-            <span>Avg. Daily Sales: <strong className="font-semibold text-slate-800">₹64,285</strong></span>
+            <span>Peak Sales Day: <strong className="font-extrabold text-slate-900">{peakDay} (₹{peakVal.toFixed(2)})</strong></span>
+            <span>Avg. Daily Sales: <strong className="font-extrabold text-slate-900">₹{avgDailySales}</strong></span>
           </div>
         </div>
 
         {/* Order Fulfillment Status Breakdown */}
-        <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
+        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
           <div className="border-b border-slate-100 pb-4">
-            <h3 className="text-lg font-semibold text-slate-900">Order Fulfillment</h3>
-            <p className="text-xs font-normal text-slate-400 mt-0.5">Live order processing statuses</p>
+            <h3 className="text-lg font-extrabold text-slate-900">Order Fulfillment</h3>
+            <p className="text-xs font-normal text-slate-400 mt-0.5">Live status breakdown of customer orders</p>
           </div>
 
           <div className="space-y-4">
-            <FulfillmentRow label="Pending Packaging" count="24" color="bg-amber-500" total={189} />
-            <FulfillmentRow label="Ready for Pickup" count="18" color="bg-blue-500" total={189} />
-            <FulfillmentRow label="Out for Delivery" count="45" color="bg-purple-500" total={189} />
-            <FulfillmentRow label="Delivered Today" count="102" color="bg-emerald-500" total={189} />
-            <FulfillmentRow label="Cancelled / Returned" count="3" color="bg-rose-500" total={189} />
+            <FulfillmentRow label="New / Pending" count={pendingPackaging} color="bg-amber-500" total={totalFulfillmentCount} />
+            <FulfillmentRow label="Accepted Orders" count={acceptedOrders} color="bg-emerald-500" total={totalFulfillmentCount} />
+            <FulfillmentRow label="Out for Delivery" count={outForDelivery} color="bg-blue-500" total={totalFulfillmentCount} />
+            <FulfillmentRow label="Delivered Orders" count={delivered} color="bg-green-600" total={totalFulfillmentCount} />
+            <FulfillmentRow label="Rejected Orders" count={rejected} color="bg-rose-500" total={totalFulfillmentCount} />
           </div>
 
           <div className="pt-2">
             <button 
               onClick={() => navigate('/seller/orders')}
-              className="w-full py-2.5 bg-orange-50 hover:bg-orange-100/80 text-[#ff7526] font-medium text-xs rounded-lg cursor-pointer transition-colors border border-orange-200 flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 bg-orange-50 hover:bg-orange-100/80 text-[#ff7526] font-extrabold text-xs rounded-xl cursor-pointer transition-colors border border-orange-200 flex items-center justify-center gap-1.5"
             >
               Manage All Orders
               <ArrowRight size={14} />
@@ -227,17 +327,17 @@ const Dashboard = () => {
 
       </div>
 
-      {/* Main Card Container: Recent Bulk Orders */}
-      <div className="rounded-xl overflow-hidden shadow-sm border border-slate-200 bg-white">
+      {/* Main Card Container: Recent Orders */}
+      <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-white">
         
-        {/* Light Orange Title Banner */}
+        {/* Title Banner */}
         <div className="bg-[#ff7526] px-5 py-3.5 flex justify-between items-center">
-          <h2 className="text-white font-semibold text-lg tracking-wide">Recent Bulk Orders</h2>
+          <h2 className="text-white font-extrabold text-lg tracking-wide">Recent Customer Orders</h2>
           <button 
             onClick={() => navigate('/seller/orders')}
-            className="text-white/90 hover:text-white text-xs font-medium bg-transparent border-none cursor-pointer flex items-center gap-1"
+            className="text-white/90 hover:text-white text-xs font-bold bg-transparent border-none cursor-pointer flex items-center gap-1"
           >
-            View All Orders
+            View All Orders ({notifications.length})
             <ArrowRight size={14} />
           </button>
         </div>
@@ -246,38 +346,50 @@ const Dashboard = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 text-[13px] uppercase tracking-wider border-b border-slate-100">
-                <th className="px-6 py-4 font-semibold">Order ID</th>
-                <th className="px-6 py-4 font-semibold">Customer / Store</th>
-                <th className="px-6 py-4 font-semibold">Date & Time</th>
-                <th className="px-6 py-4 font-semibold">Amount</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
-                <th className="px-6 py-4 font-semibold text-right">Action</th>
+              <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-100">
+                <th className="px-6 py-4 font-bold">Order ID</th>
+                <th className="px-6 py-4 font-bold">Customer Details</th>
+                <th className="px-6 py-4 font-bold">Date & Time</th>
+                <th className="px-6 py-4 font-bold">Amount</th>
+                <th className="px-6 py-4 font-bold">Status</th>
+                <th className="px-6 py-4 font-bold text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="text-[15px] font-normal text-slate-700 divide-y divide-slate-100">
-              {mockRecentOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-6 py-4 font-semibold text-[#ff7526]">{order.id}</td>
-                  <td className="px-6 py-4 font-semibold text-slate-900">
-                    {order.customer}
-                    <span className="block text-xs font-normal text-slate-400 mt-0.5">{order.items} Items</span>
+            <tbody className="text-sm font-normal text-slate-700 divide-y divide-slate-100">
+              {notifications.slice(0, 5).map((order) => (
+                <tr key={order._id || order.orderId} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="px-6 py-4 font-extrabold text-[#ff7526] font-mono">{order.orderId}</td>
+                  <td className="px-6 py-4 font-bold text-slate-900">
+                    {order.customerDetails?.name || 'Customer'}
+                    <span className="block text-xs font-normal text-slate-400 mt-0.5">
+                      {order.items?.length || 0} Item{(order.items?.length || 0) > 1 ? 's' : ''}
+                    </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-500 font-normal text-sm">{order.date}</td>
-                  <td className="px-6 py-4 font-semibold text-slate-900">{order.amount}</td>
+                  <td className="px-6 py-4 text-slate-500 font-normal text-xs">
+                    {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td className="px-6 py-4 font-extrabold text-slate-900">₹{Number(order.totalAmount || 0).toFixed(2)}</td>
                   <td className="px-6 py-4">
                     <OrderStatusBadge status={order.status} />
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button 
                       onClick={() => navigate('/seller/orders')}
-                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-orange-50 hover:text-[#ff7526] border border-slate-200 rounded-md font-medium text-xs cursor-pointer transition-colors"
+                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-orange-50 hover:text-[#ff7526] border border-slate-200 rounded-xl font-bold text-xs cursor-pointer transition-colors"
                     >
                       View Order
                     </button>
                   </td>
                 </tr>
               ))}
+
+              {!loading && notifications.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center py-12 text-slate-400 text-sm font-normal">
+                    No customer orders received yet.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -294,44 +406,52 @@ const FulfillmentRow = ({ label, count, color, total }) => {
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-xs font-normal">
         <span className="text-slate-700 font-medium">{label}</span>
-        <span className="text-slate-900 font-semibold">{count}</span>
+        <span className="text-slate-900 font-extrabold">{count}</span>
       </div>
       <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-        <div className={`h-full ${color} rounded-full`} style={{ width: `${percentage}%` }}></div>
+        <div className={`h-full ${color} rounded-full transition-all duration-500`} style={{ width: `${percentage}%` }}></div>
       </div>
     </div>
   );
 };
 
 const OrderStatusBadge = ({ status }) => {
-  if (status === 'Delivered') {
+  if (status === 'DELIVERED' || status === 'Delivered') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-green-100 text-green-800 border border-green-300 uppercase">
         <CheckCircle2 size={13} />
         Delivered
       </span>
     );
   }
-  if (status === 'Out for Delivery') {
+  if (status === 'OUT_FOR_DELIVERY' || status === 'Out for Delivery') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-        <Clock size={13} />
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 uppercase">
+        <Truck size={13} />
         Out for Delivery
       </span>
     );
   }
-  if (status === 'Packed') {
+  if (status === 'ACCEPTED' || status === 'Accepted') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-        <Package size={13} />
-        Packed
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">
+        <CheckCircle2 size={13} />
+        Accepted
+      </span>
+    );
+  }
+  if (status === 'REJECTED' || status === 'Rejected') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-200 uppercase">
+        <XCircle size={13} />
+        Rejected
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 uppercase">
       <AlertCircle size={13} />
-      Pending
+      New Order
     </span>
   );
 };

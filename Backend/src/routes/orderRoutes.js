@@ -3,15 +3,26 @@ import {
   placeOrder,
   getUserOrders,
   getOrderById,
+  getSellerNotifications,
+  markNotificationViewed,
+  acceptSellerOrder,
+  rejectSellerOrder,
+  updateSellerOrderStatus,
 } from '../controllers/orderController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.use(protect('user'));
+// Seller Routes
+router.get('/seller/notifications', protect('seller'), getSellerNotifications);
+router.put('/seller/notifications/:id/view', protect('seller'), markNotificationViewed);
+router.put('/seller/notifications/:id/accept', protect('seller'), acceptSellerOrder);
+router.put('/seller/notifications/:id/reject', protect('seller'), rejectSellerOrder);
+router.put('/seller/notifications/:id/status', protect('seller'), updateSellerOrderStatus);
 
-router.post('/', placeOrder);
-router.get('/', getUserOrders);
-router.get('/:id', getOrderById);
+// User Routes
+router.post('/', protect('user'), placeOrder);
+router.get('/', protect('user'), getUserOrders);
+router.get('/:id', protect('user'), getOrderById);
 
 export default router;

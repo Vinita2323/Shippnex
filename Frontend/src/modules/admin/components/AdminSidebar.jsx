@@ -121,7 +121,6 @@ export const AdminSidebar = () => {
             { id: 'manage_sellers', label: 'Manage Seller List' }
           ]
         },
-        { id: 'sellers', label: 'Sellers', icon: Store, badge: '9' },
       ]
     },
     {

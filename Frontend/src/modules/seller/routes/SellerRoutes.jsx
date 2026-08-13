@@ -34,15 +34,16 @@ const SellerRoutes = () => {
         <Route element={<SellerLayout />}>
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="orders" element={<Orders />} />
-          <Route path="category" element={<Categories />} />
-          <Route path="categories" element={<Categories />} />
-          <Route path="subcategory" element={<SubCategory />} />
-          <Route path="subcategories" element={<SubCategory />} />
+          {/* Category & Subcategory routes disabled for Sellers in Multi-vendor setup */}
+          <Route path="category" element={<Navigate to="/seller/dashboard" replace />} />
+          <Route path="categories" element={<Navigate to="/seller/dashboard" replace />} />
+          <Route path="subcategory" element={<Navigate to="/seller/dashboard" replace />} />
+          <Route path="subcategories" element={<Navigate to="/seller/dashboard" replace />} />
           
           {/* Product Group */}
           <Route path="product/add" element={<AddProduct />} />
           <Route path="products/add" element={<AddProduct />} />
-          <Route path="taxes" element={<Taxes />} />
+          <Route path="taxes" element={<Navigate to="/seller/dashboard" replace />} />
           <Route path="products" element={<Products />} />
           <Route path="product/list" element={<Products />} />
           <Route path="stock-management" element={<Inventory />} />

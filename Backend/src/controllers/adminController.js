@@ -41,3 +41,35 @@ export const toggleSellerStatus = async (req, res, next) => {
     next(error);
   }
 };
+
+// Update seller commission percentage (%)
+export const updateSellerCommission = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { commissionPercentage } = req.body;
+
+    const commRate = Number(commissionPercentage);
+    if (isNaN(commRate) || commRate < 0 || commRate > 100) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid commission percentage between 0 and 100' });
+    }
+
+    const seller = await Seller.findById(id);
+    if (!seller) {
+      return res.status(404).json({ success: false, message: 'Seller not found' });
+    }
+
+    seller.commissionPercentage = commRate;
+    await seller.save();
+
+    console.log(`[Admin] Updated Seller "${seller.businessName}" Commission Percentage to ${commRate}%`);
+
+    res.status(200).json({
+      success: true,
+      message: `Commission percentage updated to ${commRate}% for ${seller.businessName || 'Seller'}`,
+      seller,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

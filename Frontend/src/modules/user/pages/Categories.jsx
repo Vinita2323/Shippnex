@@ -289,7 +289,8 @@ const Categories = () => {
                 <div className="p-2.5 pb-3 bg-white flex flex-col justify-between flex-1 gap-2">
                   <div>
                     <h4 className="text-[12px] font-bold text-slate-800 m-0 mb-0.5 leading-tight truncate">{item.name}</h4>
-                    <p className="text-[10px] font-medium text-slate-400 m-0 truncate">{item.brand || 'No Brand'}</p>
+                    <p className="text-[10px] font-medium text-slate-400 m-0 truncate">{item.unit || `${item.unitValue || 1} ${item.unitType || 'kg'}`}</p>
+                    <p className="text-[10.5px] font-medium text-slate-500 m-0 mt-0.5 truncate">by:- <span className="font-bold text-slate-700">{item.seller || 'Fashion Hub'}</span></p>
                   </div>
 
                   {/* Price Row */}
@@ -300,7 +301,7 @@ const Categories = () => {
                         <span className="text-[10px] text-slate-400 line-through">₹{item.mrp}</span>
                       )}
                     </div>
-                    {itemDiscount > 0 && <span className="text-[9.5px] font-extrabold text-[#ff5500]">-{itemDiscount}% OFF</span>}
+                    {itemDiscount > 0 && <span className="text-[9.5px] font-extrabold text-[#ff5500] whitespace-nowrap shrink-0">-{itemDiscount}% OFF</span>}
                   </div>
 
                   {/* Green / Red Button BELOW Price Row */}

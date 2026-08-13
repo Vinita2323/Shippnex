@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../context/useAdmin';
 import { StatusBadge, Drawer } from '../components/AdminUIComponents';
-import { categoryService, bannerService, productService } from '../../../services/authService';
+import { categoryService, bannerService, productService, walletService } from '../../../services/authService';
 import { mockUsers, mockSellers, mockCaptains, mockWarehouses, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
 import { 
   Search, 
@@ -762,20 +762,31 @@ export const SellerManagement = () => {
                   </div>
 
                   <div>
-                    <label className="text-slate-500 font-medium block mb-1">Commission (%) (Static Update)</label>
+                    <label className="text-slate-500 font-medium block mb-1">Commission (%)</label>
                     <div className="flex gap-2">
                       <input 
-                        type="text"
+                        type="number"
+                        min="0"
+                        max="100"
                         value={editFormData.commission}
                         onChange={(e) => setEditFormData({ ...editFormData, commission: e.target.value })}
                         className="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                        placeholder="e.g. 10"
                       />
                       <button 
                         type="button"
-                        onClick={() => alert(`Commission set to ${editFormData.commission}`)}
-                        className="px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl border-none cursor-pointer"
+                        onClick={async () => {
+                          try {
+                            const res = await walletService.updateSellerCommission(editingSellerModal._id, editFormData.commission);
+                            alert(res.message || `Commission set to ${editFormData.commission}%`);
+                            fetchSellers();
+                          } catch (err) {
+                            alert(err.response?.data?.message || err.message || 'Failed to update commission');
+                          }
+                        }}
+                        className="px-4 py-2.5 bg-[#ff7526] hover:bg-[#e65507] text-white font-extrabold rounded-xl border-none cursor-pointer shadow-sm transition-all"
                       >
-                        Set
+                        Set Rate
                       </button>
                     </div>
                   </div>
@@ -7807,4 +7818,114 @@ export const AddProductPage = () => {
     </div>
   );
 };
+
+/* =========================================================================
+   ADMIN SETTLEMENTS & COMMISSION REPORT PAGE
+   ========================================================================= */
+export const AdminSettlementsReport = () => {
+  const [settlements, setSettlements] = React.useState([]);
+  const [summary, setSummary] = React.useState({ totalCommissionEarned: 0, totalSettledAmount: 0, totalTransactions: 0 });
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetchSettlements();
+  }, []);
+
+  const fetchSettlements = async () => {
+    setLoading(true);
+    try {
+      const res = await walletService.getAdminSettlements();
+      if (res && res.success) {
+        setSettlements(res.settlements || []);
+        setSummary(res.summary || {});
+      }
+    } catch (err) {
+      console.error('Error fetching admin settlements:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 font-sans">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-extrabold text-slate-900">Admin Commission & Settlements</h2>
+          <p className="text-xs text-slate-500">Live order settlement records and platform commission earned from sellers.</p>
+        </div>
+        <button 
+          onClick={fetchSettlements} 
+          className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-pointer shadow-xs hover:bg-slate-50"
+        >
+          Refresh Report
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-1">
+          <span className="text-[11px] font-extrabold text-slate-400 uppercase">Total Admin Commission</span>
+          <p className="text-2xl font-black text-[#ff7526]">₹{Number(summary.totalCommissionEarned || 0).toFixed(2)}</p>
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-1">
+          <span className="text-[11px] font-extrabold text-slate-400 uppercase">Total Seller Wallet Credits</span>
+          <p className="text-2xl font-black text-emerald-600">₹{Number(summary.totalSettledAmount || 0).toFixed(2)}</p>
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-1">
+          <span className="text-[11px] font-extrabold text-slate-400 uppercase">Total Settlements</span>
+          <p className="text-2xl font-black text-slate-900">{summary.totalTransactions || 0}</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
+                <th className="py-3.5 px-4 font-bold">Order ID</th>
+                <th className="py-3.5 px-4 font-bold">Seller</th>
+                <th className="py-3.5 px-4 font-bold">Customer</th>
+                <th className="py-3.5 px-4 font-bold">Gross Amount</th>
+                <th className="py-3.5 px-4 font-bold">Commission %</th>
+                <th className="py-3.5 px-4 font-bold">Commission Earned</th>
+                <th className="py-3.5 px-4 font-bold">Net Seller Amount</th>
+                <th className="py-3.5 px-4 font-bold">Payment</th>
+                <th className="py-3.5 px-4 font-bold">Settlement Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs font-normal">
+              {settlements.map((s) => (
+                <tr key={s._id} className="hover:bg-slate-50/70 transition-colors">
+                  <td className="py-3.5 px-4 font-mono font-bold text-[#ff7526]">{s.orderId}</td>
+                  <td className="py-3.5 px-4 font-bold text-slate-900">{s.sellerName}</td>
+                  <td className="py-3.5 px-4 text-slate-700">{s.customerDetails?.name || 'Customer'}</td>
+                  <td className="py-3.5 px-4 font-bold text-slate-900">₹{Number(s.totalAmount || 0).toFixed(2)}</td>
+                  <td className="py-3.5 px-4 font-extrabold text-blue-600">{s.commissionRate || 10}%</td>
+                  <td className="py-3.5 px-4 font-extrabold text-[#ff7526]">₹{Number(s.commissionAmount || 0).toFixed(2)}</td>
+                  <td className="py-3.5 px-4 font-extrabold text-emerald-600">₹{Number(s.netSellerAmount || 0).toFixed(2)}</td>
+                  <td className="py-3.5 px-4 font-medium text-slate-600">{s.paymentMethod} ({s.paymentStatus})</td>
+                  <td className="py-3.5 px-4">
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${
+                      s.settlementStatus === 'SETTLED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {s.settlementStatus}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+
+              {!loading && settlements.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="text-center py-12 text-slate-400 text-xs">
+                    No order settlement records found yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 

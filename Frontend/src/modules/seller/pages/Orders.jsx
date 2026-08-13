@@ -1,13 +1,9 @@
-import React, { useState } from 'react';
-import { Search, Download, ChevronDown, Eye, Printer, FileSpreadsheet, FileText } from 'lucide-react';
-
-const mockOrders = [
-  { id: '#ORD-9021', customer: 'Shree Krishna Retailers', itemsCount: 14, total: '₹48,200', orderDate: '27-07-2026', deliveryDate: '29-07-2026', rawDate: '2026-07-27', status: 'Pending', payment: 'Paid (UPI)', address: 'Sector 18, Gurugram' },
-  { id: '#ORD-9020', customer: 'Gupta Kirana Superstore', itemsCount: 22, total: '₹84,500', orderDate: '27-07-2026', deliveryDate: '28-07-2026', rawDate: '2026-07-27', status: 'Packed', payment: 'Credit (15 Days)', address: 'Karol Bagh, Delhi' },
-  { id: '#ORD-9019', customer: 'FreshBazaar Wholesale', itemsCount: 8, total: '₹18,900', orderDate: '26-07-2026', deliveryDate: '28-07-2026', rawDate: '2026-07-26', status: 'Dispatched', payment: 'Paid (Net Banking)', address: 'Noida Sector 62' },
-  { id: '#ORD-9018', customer: 'Aman General Mart', itemsCount: 45, total: '₹1,24,000', orderDate: '26-07-2026', deliveryDate: '27-07-2026', rawDate: '2026-07-26', status: 'Delivered', payment: 'Paid (COD)', address: 'Connaught Place, Delhi' },
-  { id: '#ORD-9017', customer: 'SuperSaver Mart', itemsCount: 5, total: '₹12,400', orderDate: '23-07-2026', deliveryDate: '-', rawDate: '2026-07-23', status: 'Cancelled', payment: 'Refunded', address: 'Faridabad NIT-3' },
-];
+import React, { useState, useEffect } from 'react';
+import { 
+  Search, Download, ChevronDown, Eye, CheckCircle2, XCircle, AlertCircle, 
+  RefreshCw, FileText, FileSpreadsheet, User, Phone, MapPin, CreditCard, Calendar, Box, Package, ArrowRight, Volume2, Truck
+} from 'lucide-react';
+import { orderService } from '../../../services/authService';
 
 const Orders = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -15,37 +11,248 @@ const Orders = () => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [pageSize, setPageSize] = useState(10);
-  const [selectedOrder, setSelectedOrder] = useState(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
 
-  const filteredOrders = mockOrders.filter(o => {
-    const matchesSearch = o.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          o.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          o.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          o.address.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'All' || o.status === statusFilter;
-    const matchesFrom = !fromDate || o.rawDate >= fromDate;
-    const matchesTo = !toDate || o.rawDate <= toDate;
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+
+  // Active Order Modal State
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [modalMode, setModalMode] = useState('BIG'); // 'SMALL' for auto new order popup, 'BIG' for view details
+
+  // Rejection Modal State
+  const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
+  const [selectedReason, setSelectedReason] = useState('Product unavailable');
+  const [customReasonText, setCustomReasonText] = useState('');
+
+  const knownOrderIdsRef = React.useRef(new Set());
+
+  const playOrderRingtone = () => {
+    try {
+      const audio = new Audio('/SellerOrder.mpeg');
+      audio.type = 'audio/mpeg';
+      audio.play().catch((e) => {
+        console.log('Audio file playback info:', e.message);
+        // Fallback Web Audio API chime tone
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.5);
+        } catch (err) {}
+      });
+    } catch (err) {
+      console.warn('Audio ringtone error:', err);
+    }
+  };
+
+  const fetchSellerOrders = async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const res = await orderService.getSellerNotifications();
+      if (res && res.notifications && Array.isArray(res.notifications)) {
+        setNotifications(res.notifications);
+        
+        // Keep active modal synced with latest polled DB data
+        setSelectedNotification(prev => {
+          if (!prev) return null;
+          const fresh = res.notifications.find(n => n._id === prev._id);
+          return fresh || prev;
+        });
+
+        // Detect brand new incoming orders to trigger ringtone alert
+        let hasBrandNewOrder = false;
+        for (const n of res.notifications) {
+          if (!knownOrderIdsRef.current.has(n._id)) {
+            knownOrderIdsRef.current.add(n._id);
+            if (n.status === 'NEW') {
+              hasBrandNewOrder = true;
+            }
+          }
+        }
+
+        if (hasBrandNewOrder) {
+          playOrderRingtone();
+        }
+
+        // Auto-open SMALL modal for newest incoming order if no modal currently opened
+        const newestNew = res.notifications.find(n => n.status === 'NEW');
+        if (newestNew && !selectedNotification && !rejectionModalOpen) {
+          setSelectedNotification(newestNew);
+          setModalMode('SMALL');
+          playOrderRingtone();
+          // Mark notification as viewed
+          orderService.markNotificationViewed(newestNew._id).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching seller notifications:', err.message);
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSellerOrders();
+    // Poll every 5 seconds for real-time incoming order notifications
+    const interval = setInterval(() => {
+      fetchSellerOrders(true);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 4000);
+  };
+
+  const handleOpenOrderModal = async (notification, mode = 'BIG') => {
+    setSelectedNotification(notification);
+    setModalMode(mode);
+    if (notification.status === 'NEW') {
+      try {
+        await orderService.markNotificationViewed(notification._id);
+        setNotifications(prev => prev.map(n => n._id === notification._id ? { ...n, status: 'VIEWED' } : n));
+      } catch (e) {}
+    }
+  };
+
+  const handleAcceptOrder = async (notification) => {
+    if (!notification) return;
+    setActionLoading(true);
+    try {
+      const res = await orderService.acceptSellerOrder(notification._id);
+      showToast(`Order #${notification.orderId} Accepted Successfully! 🎉`);
+      
+      const updatedObj = res.notification || { ...notification, status: 'ACCEPTED', acceptedAt: new Date() };
+      setNotifications(prev => prev.map(n => n._id === notification._id ? updatedObj : n));
+
+      if (modalMode === 'SMALL') {
+        setSelectedNotification(null); // Close compact popup modal upon acceptance!
+      } else {
+        setSelectedNotification(updatedObj); // Update full details modal state
+      }
+    } catch (err) {
+      showToast(`Error accepting order: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUpdateStatus = async (notification, newStatus) => {
+    if (!notification) return;
+    if (newStatus === 'REJECTED' || newStatus === 'Rejected') {
+      setRejectionModalOpen(true);
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const res = await orderService.updateSellerOrderStatus(notification._id, newStatus);
+      showToast(`Order #${notification.orderId} status changed to "${newStatus}"! 🎉`);
+      
+      const targetStatus = (res.notification && res.notification.status)
+        ? res.notification.status
+        : (newStatus === 'Out for Delivery' ? 'OUT_FOR_DELIVERY' : (newStatus === 'Delivered' ? 'DELIVERED' : (newStatus === 'Accepted' ? 'ACCEPTED' : newStatus)));
+
+      const updatedObj = { ...(res.notification || notification), status: targetStatus };
+      setSelectedNotification(updatedObj);
+      setNotifications(prev => prev.map(n => n._id === notification._id ? updatedObj : n));
+    } catch (err) {
+      showToast(`Error updating order status: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectOrderSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedNotification) return;
+
+    const finalReason = selectedReason === 'Other' ? customReasonText.trim() : selectedReason;
+    if (!finalReason) {
+      alert('Please select or specify a reason for order rejection.');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const res = await orderService.rejectSellerOrder(selectedNotification._id, {
+        rejectionReason: selectedReason,
+        customReason: customReasonText
+      });
+
+      showToast(`Order #${selectedNotification.orderId} Rejected`);
+      
+      const updatedObj = res.notification || { 
+        ...selectedNotification, 
+        status: 'REJECTED', 
+        rejectionReason: finalReason, 
+        rejectedAt: new Date() 
+      };
+      
+      setSelectedNotification(updatedObj);
+      setNotifications(prev => prev.map(n => n._id === selectedNotification._id ? updatedObj : n));
+      setRejectionModalOpen(false);
+      setCustomReasonText('');
+    } catch (err) {
+      showToast(`Error rejecting order: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Filtered Notifications List
+  const filteredNotifications = notifications.filter(n => {
+    const search = searchTerm.toLowerCase();
+    const matchesSearch = (n.orderId || '').toLowerCase().includes(search) ||
+                          (n.customerDetails?.name || '').toLowerCase().includes(search) ||
+                          (n.customerDetails?.phone || '').toLowerCase().includes(search) ||
+                          (n.deliveryAddress?.city || '').toLowerCase().includes(search);
+
+    let matchesStatus = true;
+    if (statusFilter !== 'All') {
+      if (statusFilter === 'Pending') matchesStatus = n.status === 'NEW' || n.status === 'VIEWED';
+      else if (statusFilter === 'Accepted') matchesStatus = n.status === 'ACCEPTED' || n.status === 'Accepted';
+      else if (statusFilter === 'Out for Delivery') matchesStatus = n.status === 'OUT_FOR_DELIVERY' || n.status === 'Out for Delivery';
+      else if (statusFilter === 'Delivered') matchesStatus = n.status === 'DELIVERED' || n.status === 'Delivered';
+      else if (statusFilter === 'Rejected') matchesStatus = n.status === 'REJECTED' || n.status === 'Rejected';
+    }
+
+    const nDate = new Date(n.createdAt).toISOString().slice(0, 10);
+    const matchesFrom = !fromDate || nDate >= fromDate;
+    const matchesTo = !toDate || nDate <= toDate;
+
     return matchesSearch && matchesStatus && matchesFrom && matchesTo;
   });
 
+  const newOrdersCount = notifications.filter(n => n.status === 'NEW').length;
+
   const exportOrders = (format = 'csv') => {
-    if (filteredOrders.length === 0) {
+    if (filteredNotifications.length === 0) {
       alert('No orders available to export for current filter criteria.');
       return;
     }
 
-    const headers = ['Order ID', 'Buyer Shop', 'Address', 'Order Date', 'Deliver Date', 'Items', 'Total Bill', 'Payment', 'Status'];
-    const rows = filteredOrders.map(o => [
-      `"${o.id}"`,
-      `"${o.customer}"`,
-      `"${o.address}"`,
-      `"${o.orderDate}"`,
-      `"${o.deliveryDate}"`,
-      `"${o.itemsCount} Products"`,
-      `"${o.total}"`,
-      `"${o.payment}"`,
-      `"${o.status}"`
+    const headers = ['Order ID', 'Customer Name', 'Phone', 'Address', 'Order Date', 'Items Total', 'Total Amount', 'Payment', 'Status'];
+    const rows = filteredNotifications.map(n => [
+      `"${n.orderId}"`,
+      `"${n.customerDetails?.name || 'Customer'}"`,
+      `"${n.customerDetails?.phone || ''}"`,
+      `"${n.deliveryAddress?.addressLine1 || ''}, ${n.deliveryAddress?.city || ''}"`,
+      `"${new Date(n.createdAt).toLocaleString()}"`,
+      `"${n.items?.length || 0} Products"`,
+      `"₹${n.totalAmount}"`,
+      `"${n.paymentMethod} (${n.paymentStatus})"`,
+      `"${n.status}"`
     ]);
 
     const csvString = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -53,7 +260,7 @@ const Orders = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Order_Report_${new Date().toISOString().slice(0, 10)}.${format === 'excel' ? 'csv' : 'csv'}`);
+    link.setAttribute('download', `Seller_Orders_Report_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -61,15 +268,76 @@ const Orders = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 font-sans">
+    <div className="max-w-7xl mx-auto space-y-6 font-sans relative">
       
-      {/* Unified Single Card Container */}
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-2 border border-slate-700 animate-bounce">
+          <CheckCircle2 size={18} className="text-emerald-400" />
+          <span className="text-sm font-medium">{toastMsg}</span>
+        </div>
+      )}
+
+      {/* Prominent New Order Incoming Alert Bar */}
+      {newOrdersCount > 0 && (
+        <div className="bg-gradient-to-r from-orange-500 to-[#ff7526] text-white rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-pulse">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center font-bold text-white shrink-0 shadow-inner">
+              <Package size={26} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-white text-[#ff7526] text-[11px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  New Order Alert
+                </span>
+                <span className="text-xs text-white/90 font-mono">
+                  {newOrdersCount} Pending Action
+                </span>
+              </div>
+              <h3 className="text-lg font-extrabold text-white m-0 mt-0.5">
+                You have {newOrdersCount} new customer order{newOrdersCount > 1 ? 's' : ''} waiting for acceptance!
+              </h3>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={playOrderRingtone}
+              className="p-2.5 bg-white/20 hover:bg-white/30 text-white rounded-xl border-none cursor-pointer shadow-xs transition-all active:scale-95 flex items-center justify-center"
+              title="Play Order Ringtone Alert"
+            >
+              <Volume2 size={18} />
+            </button>
+            <button
+              onClick={() => {
+                const newest = notifications.find(n => n.status === 'NEW');
+                if (newest) handleOpenOrderModal(newest, 'SMALL');
+                playOrderRingtone();
+              }}
+              className="px-5 py-2.5 bg-white text-[#ff7526] hover:bg-orange-50 font-extrabold text-xs rounded-xl border-none cursor-pointer shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+            >
+              Review New Order <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Unified Single Card Container */}
       <div className="rounded-xl overflow-hidden shadow-sm border border-slate-200 bg-white">
         
         {/* Light Orange Header Title Banner */}
         <div className="bg-[#ff7526] px-5 py-3.5 flex justify-between items-center">
-          <h2 className="text-white font-semibold text-lg tracking-wide">View Order List</h2>
-          <span className="text-white/90 text-xs font-medium">Total Items: {filteredOrders.length}</span>
+          <div className="flex items-center gap-3">
+            <h2 className="text-white font-semibold text-lg tracking-wide">Seller Incoming Orders & History</h2>
+            <button
+              onClick={() => fetchSellerOrders()}
+              className="p-1 text-white/80 hover:text-white rounded-md bg-white/10 hover:bg-white/20 transition-all border-none cursor-pointer flex items-center gap-1 text-xs"
+              title="Refresh Orders"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
+          <span className="text-white/90 text-xs font-medium">Total Orders: {filteredNotifications.length}</span>
         </div>
 
         {/* Filter Controls Bar */}
@@ -77,7 +345,7 @@ const Orders = () => {
           
           {/* From - To Date Filters */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-slate-600 font-normal">From - To Order Date</span>
+            <span className="text-slate-600 font-normal">Order Date Range</span>
             <div className="flex items-center gap-1 bg-slate-50 p-1 border border-slate-200 rounded-lg">
               <input 
                 type="date" 
@@ -104,11 +372,9 @@ const Orders = () => {
               className="border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 bg-white outline-none focus:border-[#ff7526] cursor-pointer text-sm font-normal transition-all"
             >
               <option value="All">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Packed">Packed</option>
-              <option value="Dispatched">Dispatched</option>
-              <option value="Delivered">Delivered</option>
-              <option value="Cancelled">Cancelled</option>
+              <option value="Pending">Pending Action (New / Viewed)</option>
+              <option value="Accepted">Accepted Orders</option>
+              <option value="Rejected">Rejected Orders</option>
             </select>
           </div>
 
@@ -131,7 +397,7 @@ const Orders = () => {
             <span className="text-slate-600 font-normal">Search:</span>
             <input
               type="text"
-              placeholder="Search by Order ID, Status, or Ar"
+              placeholder="Search Order ID, Customer, City..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 outline-none focus:border-[#ff7526] text-sm font-normal w-48 sm:w-64 transition-all"
@@ -178,48 +444,75 @@ const Orders = () => {
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-[13px] uppercase tracking-wider border-b border-slate-100">
                 <th className="px-5 py-4 font-semibold">Order ID</th>
-                <th className="px-5 py-4 font-semibold">Buyer Shop</th>
-                <th className="px-5 py-4 font-semibold">Order Date</th>
-                <th className="px-5 py-4 font-semibold">Deliver Date</th>
+                <th className="px-5 py-4 font-semibold">Customer Details</th>
+                <th className="px-5 py-4 font-semibold">City / Location</th>
+                <th className="px-5 py-4 font-semibold">Order Date & Time</th>
                 <th className="px-5 py-4 font-semibold">Items</th>
-                <th className="px-5 py-4 font-semibold">Total Bill</th>
+                <th className="px-5 py-4 font-semibold">Total Amount</th>
                 <th className="px-5 py-4 font-semibold">Payment</th>
                 <th className="px-5 py-4 font-semibold">Status</th>
                 <th className="px-5 py-4 font-semibold text-right">Action</th>
               </tr>
             </thead>
             <tbody className="text-[15px] font-normal text-slate-700 divide-y divide-slate-100">
-              {filteredOrders.slice(0, pageSize).map((order) => (
-                <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-5 py-4 font-semibold text-slate-900">{order.id}</td>
-                  <td className="px-5 py-4">
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-slate-900">{order.customer}</span>
-                      <span className="text-[13px] text-slate-400 font-normal">{order.address}</span>
+              {loading ? (
+                <tr>
+                  <td colSpan={9} className="text-center py-8 text-slate-500 text-sm font-medium">
+                    <div className="flex items-center justify-center gap-2">
+                      <RefreshCw size={16} className="animate-spin text-[#ff7526]" />
+                      Loading incoming order notifications...
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-sm font-normal text-slate-600">{order.orderDate}</td>
-                  <td className="px-5 py-4 text-sm font-normal text-slate-600">{order.deliveryDate}</td>
-                  <td className="px-5 py-4 font-normal">{order.itemsCount} Products</td>
-                  <td className="px-5 py-4 font-semibold text-slate-900">{order.total}</td>
-                  <td className="px-5 py-4 text-sm font-normal text-slate-600">{order.payment}</td>
+                </tr>
+              ) : filteredNotifications.slice(0, pageSize).map((n) => (
+                <tr key={n._id} className={`hover:bg-slate-50/80 transition-colors ${n.status === 'NEW' ? 'bg-orange-50/40 font-medium' : ''}`}>
+                  <td className="px-5 py-4 font-bold text-slate-900 font-mono flex items-center gap-1.5">
+                    {n.status === 'NEW' && <span className="w-2 h-2 rounded-full bg-[#ff7526] animate-ping shrink-0" title="New incoming order" />}
+                    {n.orderId}
+                  </td>
                   <td className="px-5 py-4">
-                    <OrderStatusBadge status={order.status} />
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-slate-900">{n.customerDetails?.name || 'Customer'}</span>
+                      <span className="text-[12px] text-slate-400 font-normal">{n.customerDetails?.phone || '-'}</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 text-sm font-normal text-slate-600">
+                    {n.deliveryAddress?.city || 'City'}, {n.deliveryAddress?.state || ''}
+                  </td>
+                  <td className="px-5 py-4 text-xs font-normal text-slate-600">
+                    {new Date(n.createdAt).toLocaleDateString()} {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td className="px-5 py-4 font-normal text-sm">
+                    {n.items?.length || 0} Products
+                  </td>
+                  <td className="px-5 py-4 font-extrabold text-[#ff7526]">
+                    ₹{Number(n.totalAmount || 0).toFixed(2)}
+                  </td>
+                  <td className="px-5 py-4 text-xs font-normal text-slate-600">
+                    <span className="font-semibold">{n.paymentMethod}</span> ({n.paymentStatus})
+                  </td>
+                  <td className="px-5 py-4">
+                    <NotificationStatusBadge status={n.status} />
                   </td>
                   <td className="px-5 py-4 text-right">
                     <button 
-                      onClick={() => setSelectedOrder(order)}
-                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-orange-50 hover:text-[#ff7526] border border-slate-200 rounded-md font-medium text-xs cursor-pointer transition-colors"
+                      onClick={() => handleOpenOrderModal(n, 'BIG')}
+                      className={`px-3.5 py-1.5 rounded-xl font-bold text-xs cursor-pointer transition-all border shadow-2xs ${
+                        n.status === 'NEW'
+                          ? 'bg-[#ff7526] text-white border-[#ff7526] hover:bg-[#e65507]'
+                          : 'bg-slate-100 hover:bg-orange-50 hover:text-[#ff7526] text-slate-700 border-slate-200'
+                      }`}
                     >
-                      View Order
+                      View Order Details
                     </button>
                   </td>
                 </tr>
               ))}
-              {filteredOrders.length === 0 && (
+
+              {!loading && filteredNotifications.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="text-center py-8 text-slate-400 text-sm font-normal">
-                    No orders match your filter criteria.
+                  <td colSpan={9} className="text-center py-12 text-slate-400 text-sm font-normal">
+                    No orders found matching your filter criteria.
                   </td>
                 </tr>
               )}
@@ -228,71 +521,543 @@ const Orders = () => {
         </div>
       </div>
 
-      {/* Order Modal Drawer */}
-      {selectedOrder && (
+      {/* ------------------------------------------------------------- */}
+      {/* 3A. SMALL MODAL - COMPACT POPUP FOR INCOMING NEW ORDERS */}
+      {/* ------------------------------------------------------------- */}
+      {selectedNotification && modalMode === 'SMALL' && (
         <div 
-          onClick={() => setSelectedOrder(null)}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex justify-end z-30 animate-in fade-in duration-200"
+          onClick={() => setSelectedNotification(null)}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white h-full p-6 overflow-y-auto space-y-6 flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300"
+            className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden my-4 animate-in zoom-in-95 duration-150"
           >
-            <div>
-              <div className="flex justify-between items-center pb-4 border-b border-slate-100">
-                <h2 className="text-xl font-bold text-slate-900">Order Details {selectedOrder.id}</h2>
-                <button onClick={() => setSelectedOrder(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer bg-transparent border-none font-bold text-lg">✕</button>
-              </div>
-
-              <div className="mt-4 space-y-4">
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                  <span className="text-xs text-slate-400 font-semibold uppercase">Customer Info</span>
-                  <p className="font-semibold text-slate-900 mt-1">{selectedOrder.customer}</p>
-                  <p className="text-xs text-slate-500">{selectedOrder.address}</p>
+            {/* Modal Header Banner - Vibrant Orange */}
+            <div className="bg-[#ff7526] text-white p-4 sm:p-5 flex items-center justify-between">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold uppercase bg-white text-[#ff7526] px-2 py-0.5 rounded-full tracking-wider shadow-2xs">
+                    NEW ORDER ALERT
+                  </span>
+                  <span className="text-xs text-white/90 font-mono font-medium">
+                    ID: {selectedNotification.orderId}
+                  </span>
                 </div>
-
-                <div className="space-y-2">
-                  <span className="text-xs text-slate-400 font-semibold uppercase">Order Items</span>
-                  <div className="flex justify-between text-sm py-2 border-b border-slate-100">
-                    <span>1. Premium Basmati Rice (100kg Bag)</span>
-                    <span className="font-semibold">₹7,500</span>
-                  </div>
-                  <div className="flex justify-between text-sm py-2 border-b border-slate-100">
-                    <span>2. Sunflower Oil 15L Tin x 4</span>
-                    <span className="font-semibold">₹6,400</span>
-                  </div>
-                  <div className="flex justify-between text-sm py-2 border-b border-slate-100">
-                    <span>3. Whole Wheat Atta 50kg x 5</span>
-                    <span className="font-semibold">₹5,000</span>
-                  </div>
-                </div>
+                <h2 className="text-lg font-extrabold text-white m-0 leading-tight">Incoming Customer Order</h2>
+                <p className="text-[11px] text-white/80 m-0">
+                  Received on {new Date(selectedNotification.createdAt).toLocaleDateString()} at {new Date(selectedNotification.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
               </div>
-            </div>
 
-            <div className="pt-4 border-t border-slate-100 space-y-3">
-              <div className="flex justify-between text-base font-bold">
-                <span>Total Amount:</span>
-                <span className="text-[#ff661a]">{selectedOrder.total}</span>
-              </div>
-              <button className="w-full bg-[#ff661a] hover:bg-[#e65507] text-white py-3 rounded-md font-semibold cursor-pointer transition-colors border-none">
-                Mark as Packed & Dispatch
+              <button 
+                type="button"
+                onClick={() => setSelectedNotification(null)} 
+                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center border-none cursor-pointer text-base font-bold transition-all shrink-0"
+              >
+                ✕
               </button>
             </div>
+
+            {/* Modal Body Content (Compact) */}
+            <div className="p-4 space-y-3.5 max-h-[70vh] overflow-y-auto text-slate-800">
+              
+              {/* Customer Details Card */}
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-1">
+                <div className="flex items-center gap-1.5 border-b border-slate-200/60 pb-1">
+                  <User size={14} className="text-[#ff7526]" />
+                  <span className="text-[11px] font-extrabold uppercase text-slate-700 tracking-wider">Customer Details</span>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div>
+                    <p className="font-bold text-slate-900 text-sm m-0">{selectedNotification.customerDetails?.name || 'Customer'}</p>
+                    {selectedNotification.customerDetails?.email && (
+                      <p className="text-slate-500 m-0 text-[11px] font-normal">{selectedNotification.customerDetails.email}</p>
+                    )}
+                  </div>
+                  <a 
+                    href={`tel:${selectedNotification.customerDetails?.phone}`} 
+                    className="text-blue-600 font-semibold underline flex items-center gap-1 text-xs bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100"
+                  >
+                    <Phone size={12} className="text-blue-500" />
+                    {selectedNotification.customerDetails?.phone || 'No phone'}
+                  </a>
+                </div>
+              </div>
+
+              {/* Ordered Items List */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                  <div className="flex items-center gap-1.5">
+                    <Box size={15} className="text-[#ff7526]" />
+                    <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider m-0">Ordered Items ({selectedNotification.items?.length || 0})</h3>
+                  </div>
+                </div>
+
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                  {selectedNotification.items && selectedNotification.items.map((item, idx) => (
+                    <div key={idx} className="p-2.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors">
+                      <div className="flex items-center gap-2.5">
+                        <img 
+                          src={item.image || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&auto=format&fit=crop&q=80'} 
+                          alt={item.name} 
+                          className="w-11 h-11 rounded-lg object-cover border border-slate-200 bg-slate-100 shrink-0"
+                        />
+                        <div className="space-y-0.5">
+                          <h4 className="text-xs font-bold text-slate-900 m-0 leading-tight">{item.name}</h4>
+                          <p className="text-[11px] text-slate-500 m-0">
+                            Unit Price: <span className="font-semibold text-slate-700">₹{item.price}</span> &times; <span className="font-extrabold text-slate-900">{item.quantity} Qty</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-extrabold text-slate-900">₹{Number(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Payment Details & Total Seller Amount */}
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-[#ff7526] shrink-0 shadow-2xs">
+                    <CreditCard size={16} />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Payment Method</span>
+                    <p className="text-xs font-bold text-slate-800 m-0">
+                      {selectedNotification.paymentMethod} (<span className="text-amber-600">{selectedNotification.paymentStatus}</span>)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Total Amount</span>
+                  <span className="text-lg font-black text-[#ff7526]">₹{Number(selectedNotification.totalAmount || 0).toFixed(2)}</span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Bottom Action Buttons */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => setRejectionModalOpen(true)}
+                className="px-4 py-2 bg-white hover:bg-red-50 text-red-600 hover:text-red-700 font-bold text-xs rounded-xl border border-red-200 cursor-pointer shadow-xs transition-all active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <XCircle size={15} /> Reject Order
+              </button>
+
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => handleAcceptOrder(selectedNotification)}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl border-none cursor-pointer shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <CheckCircle2 size={15} /> {actionLoading ? 'Accepting...' : 'Accept Order'}
+              </button>
+            </div>
+
           </div>
         </div>
       )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 3B. BIG MODAL - FULL DETAILS & ORDER MANAGEMENT MODAL */}
+      {/* ------------------------------------------------------------- */}
+      {selectedNotification && modalMode === 'BIG' && (
+        <div 
+          onClick={() => setSelectedNotification(null)}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-150"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 overflow-hidden my-4 animate-in zoom-in-95 duration-150"
+          >
+            {/* Modal Top Header Banner - Vibrant Orange Header */}
+            <div className="bg-[#ff7526] text-white p-5 sm:p-6 flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold uppercase bg-white text-[#ff7526] px-2.5 py-0.5 rounded-full tracking-wider shadow-2xs">
+                    ORDER DETAILS
+                  </span>
+                  <span className="text-xs text-white/90 font-mono font-medium">
+                    ID: {selectedNotification.orderId}
+                  </span>
+                </div>
+                <h2 className="text-xl font-extrabold text-white m-0 leading-tight">Order Details & Management</h2>
+                <p className="text-xs text-white/80 m-0">
+                  Received on {new Date(selectedNotification.createdAt).toLocaleDateString()} at {new Date(selectedNotification.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+
+              <button 
+                type="button"
+                onClick={() => setSelectedNotification(null)} 
+                className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center border-none cursor-pointer text-lg font-bold transition-all shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body Content (Full Layout) */}
+            <div className="p-5 sm:p-6 space-y-5 max-h-[75vh] overflow-y-auto text-slate-800">
+              
+              {/* Dynamic Status Alert Banner */}
+              {(selectedNotification.status === 'REJECTED' || selectedNotification.status === 'Rejected') && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3 text-red-700 text-xs">
+                  <XCircle size={22} className="shrink-0 mt-0.5 text-red-600" />
+                  <div>
+                    <h4 className="text-xs font-extrabold m-0 uppercase tracking-wider">Order Status: REJECTED</h4>
+                    <p className="text-[11px] m-0 mt-0.5 text-red-600 font-medium">
+                      Reason: <span className="font-bold text-slate-800">"{selectedNotification.rejectionReason || 'Unable to fulfill order'}"</span>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {(selectedNotification.status === 'ACCEPTED' || selectedNotification.status === 'Accepted') && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-start gap-3 text-emerald-800 text-xs">
+                  <CheckCircle2 size={22} className="shrink-0 mt-0.5 text-emerald-600" />
+                  <div>
+                    <h4 className="text-xs font-extrabold m-0 uppercase tracking-wider">Order Status: ACCEPTED</h4>
+                    <p className="text-[11px] m-0 mt-0.5 text-emerald-700 font-medium">
+                      Order accepted and ready for dispatch.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {(selectedNotification.status === 'OUT_FOR_DELIVERY' || selectedNotification.status === 'Out for Delivery') && (
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-start gap-3 text-blue-800 text-xs">
+                  <Truck size={22} className="shrink-0 mt-0.5 text-blue-600" />
+                  <div>
+                    <h4 className="text-xs font-extrabold m-0 uppercase tracking-wider">Order Status: OUT FOR DELIVERY</h4>
+                    <p className="text-[11px] m-0 mt-0.5 text-blue-700 font-medium">
+                      Package is currently out for delivery to the customer's address.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {(selectedNotification.status === 'DELIVERED' || selectedNotification.status === 'Delivered') && (
+                <div className="bg-green-100 border border-green-300 rounded-2xl p-4 flex items-start gap-3 text-green-900 text-xs">
+                  <CheckCircle2 size={22} className="shrink-0 mt-0.5 text-green-700" />
+                  <div>
+                    <h4 className="text-xs font-extrabold m-0 uppercase tracking-wider">Order Status: DELIVERED</h4>
+                    <p className="text-[11px] m-0 mt-0.5 text-green-800 font-medium">
+                      Order has been successfully delivered to the customer.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Order Status Change Access Controls */}
+              <div className="bg-orange-50/60 p-4 rounded-2xl border border-orange-200/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold uppercase text-slate-800 tracking-wider">Change Order Status</span>
+                  <NotificationStatusBadge status={selectedNotification.status} />
+                </div>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={actionLoading || selectedNotification.status === 'ACCEPTED'}
+                    onClick={() => handleUpdateStatus(selectedNotification, 'ACCEPTED')}
+                    className={`px-3.5 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all ${
+                      selectedNotification.status === 'ACCEPTED' || selectedNotification.status === 'Accepted'
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white hover:bg-emerald-50 text-emerald-700 border-emerald-300'
+                    }`}
+                  >
+                    ✓ Accept Order
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={actionLoading || selectedNotification.status === 'OUT_FOR_DELIVERY'}
+                    onClick={() => handleUpdateStatus(selectedNotification, 'Out for Delivery')}
+                    className={`px-3.5 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all ${
+                      selectedNotification.status === 'OUT_FOR_DELIVERY' || selectedNotification.status === 'Out for Delivery'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white hover:bg-blue-50 text-blue-700 border-blue-300'
+                    }`}
+                  >
+                    🚚 Out for Delivery
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={actionLoading || selectedNotification.status === 'DELIVERED'}
+                    onClick={() => handleUpdateStatus(selectedNotification, 'Delivered')}
+                    className={`px-3.5 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all ${
+                      selectedNotification.status === 'DELIVERED' || selectedNotification.status === 'Delivered'
+                        ? 'bg-green-700 text-white border-green-700'
+                        : 'bg-white hover:bg-green-50 text-green-800 border-green-300'
+                    }`}
+                  >
+                    📦 Delivered
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={actionLoading || selectedNotification.status === 'REJECTED'}
+                    onClick={() => setRejectionModalOpen(true)}
+                    className={`px-3.5 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all ${
+                      selectedNotification.status === 'REJECTED' || selectedNotification.status === 'Rejected'
+                        ? 'bg-red-600 text-white border-red-600'
+                        : 'bg-white hover:bg-red-50 text-red-600 border-red-300'
+                    }`}
+                  >
+                    ✕ Reject Order
+                  </button>
+                </div>
+              </div>
+
+              {/* Grid 1: Customer Details & Delivery Address Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Customer Info Card */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
+                  <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2">
+                    <User size={16} className="text-[#ff7526]" />
+                    <span className="text-xs font-extrabold uppercase text-slate-700 tracking-wider">Customer Details</span>
+                  </div>
+                  <div className="space-y-1 text-xs">
+                    <p className="font-bold text-slate-900 text-sm m-0">{selectedNotification.customerDetails?.name || 'Customer'}</p>
+                    <p className="text-slate-600 m-0 flex items-center gap-1.5 font-medium">
+                      <Phone size={13} className="text-slate-400" />
+                      <a href={`tel:${selectedNotification.customerDetails?.phone}`} className="text-blue-600 underline font-mono">
+                        {selectedNotification.customerDetails?.phone || 'No phone provided'}
+                      </a>
+                    </p>
+                    {selectedNotification.customerDetails?.email && (
+                      <p className="text-slate-500 m-0 font-normal">{selectedNotification.customerDetails.email}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Delivery Address Details Card */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
+                  <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                    <div className="flex items-center gap-2">
+                      <MapPin size={16} className="text-[#ff7526]" />
+                      <span className="text-xs font-extrabold uppercase text-slate-700 tracking-wider">Delivery Address</span>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-600">
+                      {selectedNotification.deliveryAddress?.addressType || 'Home'}
+                    </span>
+                  </div>
+                  <div className="space-y-0.5 text-xs text-slate-700 font-medium">
+                    <p className="m-0 font-semibold">{selectedNotification.deliveryAddress?.addressLine1 || 'Street Address'}</p>
+                    {selectedNotification.deliveryAddress?.addressLine2 && <p className="m-0 text-slate-500">{selectedNotification.deliveryAddress.addressLine2}</p>}
+                    {selectedNotification.deliveryAddress?.landmark && <p className="m-0 text-slate-400">Landmark: {selectedNotification.deliveryAddress.landmark}</p>}
+                    <p className="m-0 font-bold text-slate-900 pt-0.5">
+                      {selectedNotification.deliveryAddress?.city || 'City'}, {selectedNotification.deliveryAddress?.state || 'State'} - <span className="font-mono text-[#ff7526]">{selectedNotification.deliveryAddress?.pincode}</span>
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Ordered Items List */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Box size={18} className="text-[#ff7526]" />
+                    <h3 className="text-sm font-extrabold text-slate-900 m-0">Ordered Items ({selectedNotification.items?.length || 0})</h3>
+                  </div>
+                  <span className="text-xs text-slate-500 font-medium">Belonging to your store</span>
+                </div>
+
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                  {selectedNotification.items && selectedNotification.items.map((item, idx) => (
+                    <div key={idx} className="p-3.5 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
+                      <div className="flex items-center gap-3.5">
+                        <img 
+                          src={item.image || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&auto=format&fit=crop&q=80'} 
+                          alt={item.name} 
+                          className="w-14 h-14 rounded-xl object-cover border border-slate-200 bg-slate-100 shrink-0"
+                        />
+                        <div className="space-y-0.5">
+                          <h4 className="text-sm font-bold text-slate-900 m-0 leading-snug">{item.name}</h4>
+                          <p className="text-xs text-slate-500 m-0">
+                            Unit Price: <span className="font-semibold text-slate-700">₹{item.price}</span> &times; <span className="font-extrabold text-slate-900">{item.quantity} Qty</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-sm font-extrabold text-slate-900">₹{Number(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Payment Details & Total Seller Amount */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-[#ff7526] shrink-0 shadow-2xs">
+                    <CreditCard size={20} />
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-400 font-semibold uppercase">Payment Details</span>
+                    <p className="text-xs font-bold text-slate-800 m-0 mt-0.5">
+                      Method: <span className="font-extrabold text-slate-900">{selectedNotification.paymentMethod}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-500 m-0">
+                      Status: <span className={`font-bold ${selectedNotification.paymentStatus === 'Paid' ? 'text-emerald-600' : 'text-amber-600'}`}>{selectedNotification.paymentStatus}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-right w-full sm:w-auto border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-200">
+                  <span className="text-xs text-slate-400 font-semibold uppercase block">Total Seller Amount</span>
+                  <span className="text-2xl font-black text-[#ff7526]">₹{Number(selectedNotification.totalAmount || 0).toFixed(2)}</span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Bottom Footer Actions */}
+            <div className="p-5 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-xs font-semibold text-slate-500">
+                Order ID: <span className="font-bold text-slate-900 font-mono">{selectedNotification.orderId}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedNotification(null)}
+                className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl border-none cursor-pointer shadow-sm transition-all"
+              >
+                Close Order Details
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 4. REJECTION CONFIRMATION & REASON MODAL DIALOG */}
+      {/* ------------------------------------------------------------- */}
+      {rejectionModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-in zoom-in-95 border border-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2 m-0">
+                <AlertCircle size={20} className="text-red-500" /> Reject Order Confirmation
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setRejectionModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 border-none bg-transparent font-bold text-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 m-0">
+              Please select a reason for rejecting Order <span className="font-bold text-slate-900 font-mono">#{selectedNotification?.orderId}</span>. The customer will be notified with this reason.
+            </p>
+
+            <form onSubmit={handleRejectOrderSubmit} className="space-y-4">
+              <div className="space-y-2">
+                {[
+                  'Product unavailable',
+                  'Unable to fulfill order',
+                  'Out of stock',
+                  'Delivery issue',
+                  'Other'
+                ].map((reason) => (
+                  <label 
+                    key={reason}
+                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all text-xs font-semibold ${
+                      selectedReason === reason 
+                        ? 'bg-red-50/70 border-red-300 text-red-900 shadow-2xs' 
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    <input 
+                      type="radio" 
+                      name="rejectionReason" 
+                      value={reason}
+                      checked={selectedReason === reason}
+                      onChange={(e) => setSelectedReason(e.target.value)}
+                      className="accent-red-600 cursor-pointer"
+                    />
+                    <span>{reason}</span>
+                  </label>
+                ))}
+              </div>
+
+              {selectedReason === 'Other' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Specify Custom Reason *</label>
+                  <textarea 
+                    rows={3}
+                    required
+                    placeholder="Enter specific reason for rejecting order..."
+                    value={customReasonText}
+                    onChange={(e) => setCustomReasonText(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 focus:outline-none focus:border-red-500"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setRejectionModalOpen(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold rounded-xl border-none cursor-pointer shadow-md transition-all active:scale-95"
+                >
+                  {actionLoading ? 'Rejecting...' : 'Confirm Rejection'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
 
-const OrderStatusBadge = ({ status }) => {
-  let style = 'bg-slate-100 text-slate-700';
-  if (status === 'Pending') style = 'bg-amber-50 text-amber-700 border border-amber-200';
-  if (status === 'Packed') style = 'bg-blue-50 text-blue-700 border border-blue-200';
-  if (status === 'Dispatched') style = 'bg-purple-50 text-purple-700 border border-purple-200';
-  if (status === 'Delivered') style = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-  if (status === 'Cancelled') style = 'bg-red-50 text-red-700 border border-red-200';
-  return <span className={`px-2.5 py-1 rounded-md text-xs font-semibold ${style}`}>{status}</span>;
+const NotificationStatusBadge = ({ status }) => {
+  let style = 'bg-slate-100 text-slate-700 border border-slate-200';
+  let label = status;
+
+  if (status === 'NEW') {
+    style = 'bg-orange-100 text-[#ff7526] border border-orange-300 animate-pulse';
+    label = 'NEW ORDER';
+  } else if (status === 'VIEWED') {
+    style = 'bg-amber-50 text-amber-700 border border-amber-200';
+    label = 'VIEWED';
+  } else if (status === 'ACCEPTED' || status === 'Accepted') {
+    style = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+    label = 'ACCEPTED';
+  } else if (status === 'OUT_FOR_DELIVERY' || status === 'Out for Delivery') {
+    style = 'bg-blue-50 text-blue-700 border border-blue-200';
+    label = 'OUT FOR DELIVERY';
+  } else if (status === 'DELIVERED' || status === 'Delivered') {
+    style = 'bg-green-100 text-green-800 border border-green-300';
+    label = 'DELIVERED';
+  } else if (status === 'REJECTED' || status === 'Rejected') {
+    style = 'bg-red-50 text-red-700 border border-red-200';
+    label = 'REJECTED';
+  }
+
+  return <span className={`px-2.5 py-1 rounded-md text-xs font-bold uppercase ${style}`}>{label}</span>;
 };
 
 export default Orders;

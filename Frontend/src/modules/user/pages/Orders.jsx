@@ -42,6 +42,7 @@ const Orders = () => {
             _id: o._id,
             date: new Date(o.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
             status: o.orderStatus || 'Placed',
+            rejectionReason: o.rejectionReason || '',
             items: o.items || [],
             total: o.grandTotal || 0,
             itemCount: (o.items || []).reduce((acc, i) => acc + (i.quantity || 1), 0),
@@ -62,6 +63,8 @@ const Orders = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'Placed': return 'text-orange-500';
+      case 'Accepted': return 'text-emerald-600 font-extrabold';
+      case 'Rejected': return 'text-red-600 font-extrabold';
       case 'Processing': return 'text-[#ff5500]';
       case 'Out for Delivery': return 'text-blue-600';
       case 'Delivered': return 'text-green-500';

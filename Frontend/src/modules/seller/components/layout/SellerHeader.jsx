@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { X, Menu, Settings, MapPin, LogOut } from 'lucide-react';
 import { authService } from '../../../../services/authService';
@@ -6,6 +6,24 @@ import { authService } from '../../../../services/authService';
 const SellerHeader = ({ isSidebarOpen, toggleSidebar }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [seller, setSeller] = useState(() => {
+    try {
+      const cached = localStorage.getItem('shippnex_seller_data');
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const fetchSeller = async () => {
+      try {
+        const res = await authService.getSellerProfile();
+        if (res?.seller) setSeller(res.seller);
+      } catch (err) {}
+    };
+    fetchSeller();
+  }, []);
 
   const handleLogout = () => {
     authService.logout('seller');
@@ -13,6 +31,11 @@ const SellerHeader = ({ isSidebarOpen, toggleSidebar }) => {
   };
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
+
+  const handleLocationClick = () => {
+    const loc = seller?.warehouseLocation?.storeAddress || seller?.city || 'Main City Logistics Hub';
+    alert(`Warehouse Location: ${loc}`);
+  };
 
   return (
     <header className="h-20 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 z-30 shadow-sm font-sans">
@@ -66,7 +89,7 @@ const SellerHeader = ({ isSidebarOpen, toggleSidebar }) => {
         </button>
 
         <button 
-          onClick={() => alert('Warehouse Location: Main City Logistics Hub')}
+          onClick={handleLocationClick}
           className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer"
           title="Location"
         >

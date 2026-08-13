@@ -11,6 +11,7 @@ const orderItemSchema = new mongoose.Schema({
   originalPrice: { type: Number },
   quantity: { type: Number, required: true, min: 1 },
   image: { type: String },
+  seller: { type: String, default: 'ShippNex Official Store' },
 });
 
 const orderSchema = new mongoose.Schema(
@@ -57,9 +58,17 @@ const orderSchema = new mongoose.Schema(
     },
     orderStatus: {
       type: String,
-      enum: ['Placed', 'Processing', 'Out for Delivery', 'Delivered', 'Cancelled'],
+      enum: ['Placed', 'Accepted', 'Rejected', 'Processing', 'Out for Delivery', 'Delivered', 'Cancelled'],
       default: 'Placed',
     },
+    sellerStatus: {
+      type: String,
+      enum: ['Pending', 'Accepted', 'Rejected'],
+      default: 'Pending',
+    },
+    rejectionReason: { type: String, default: '' },
+    acceptedAt: { type: Date },
+    rejectedAt: { type: Date },
     itemsTotal: { type: Number, required: true },
     shippingFee: { type: Number, required: true, default: 0 },
     discount: { type: Number, required: true, default: 0 },

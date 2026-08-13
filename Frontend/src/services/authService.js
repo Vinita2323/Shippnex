@@ -268,5 +268,53 @@ export const orderService = {
     const response = await API.get(`/orders/${id}`);
     return response.data;
   },
+  getSellerNotifications: async () => {
+    const response = await API.get('/orders/seller/notifications');
+    return response.data;
+  },
+  markNotificationViewed: async (id) => {
+    const response = await API.put(`/orders/seller/notifications/${id}/view`);
+    return response.data;
+  },
+  acceptSellerOrder: async (id) => {
+    const response = await API.put(`/orders/seller/notifications/${id}/accept`);
+    return response.data;
+  },
+  rejectSellerOrder: async (id, payload) => {
+    const response = await API.put(`/orders/seller/notifications/${id}/reject`, payload);
+    return response.data;
+  },
+  updateSellerOrderStatus: async (id, status, payload = {}) => {
+    const response = await API.put(`/orders/seller/notifications/${id}/status`, { status, ...payload });
+    return response.data;
+  },
 };
+
+export const walletService = {
+  getSellerWallet: async () => {
+    const response = await API.get('/wallet/seller');
+    return response.data;
+  },
+  requestWithdrawal: async (payload) => {
+    const response = await API.post('/wallet/seller/withdraw', payload);
+    return response.data;
+  },
+  getAdminSettlements: async () => {
+    const response = await API.get('/wallet/admin/settlements');
+    return response.data;
+  },
+  getAdminWithdrawals: async () => {
+    const response = await API.get('/wallet/admin/withdrawals');
+    return response.data;
+  },
+  updateWithdrawalStatus: async (id, status, adminRemark = '') => {
+    const response = await API.put(`/wallet/admin/withdrawals/${id}/status`, { status, adminRemark });
+    return response.data;
+  },
+  updateSellerCommission: async (sellerId, commissionPercentage) => {
+    const response = await API.put(`/admin/sellers/${sellerId}/commission`, { commissionPercentage });
+    return response.data;
+  },
+};
+
 

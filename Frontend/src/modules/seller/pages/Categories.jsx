@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Search, Download, ChevronDown, FolderTree, CheckCircle2, XCircle, FileText, FileSpreadsheet } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Download, ChevronDown, FolderTree, CheckCircle2, XCircle, FileText, FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { categoryService } from '../../../services/authService';
 
-const initialCategories = [
+const fallbackCategories = [
   { id: 'CAT-01', name: 'Grains & Flours', slug: 'grains-flours', subcategoriesCount: 6, productsCount: 42, status: 'Active', icon: '🌾' },
   { id: 'CAT-02', name: 'Edible Oils & Ghee', slug: 'oils-ghee', subcategoriesCount: 4, productsCount: 28, status: 'Active', icon: '🛢️' },
   { id: 'CAT-03', name: 'Spices & Masala', slug: 'spices-masala', subcategoriesCount: 12, productsCount: 95, status: 'Active', icon: '🌶️' },
@@ -15,7 +16,39 @@ const Categories = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [pageSize, setPageSize] = useState(10);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [categories] = useState(initialCategories);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchCategories = async () => {
+    setLoading(true);
+    try {
+      const res = await categoryService.getCategories();
+      if (res && res.success && Array.isArray(res.categories) && res.categories.length > 0) {
+        const formatted = res.categories.map((c, index) => ({
+          id: c._id || c.id || `CAT-${index + 1}`,
+          name: c.name,
+          slug: c.slug || c.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+          subcategoriesCount: c.subcategoriesCount || (Array.isArray(c.subcategories) ? c.subcategories.length : 0),
+          productsCount: c.productsCount || 0,
+          status: c.status || 'Active',
+          icon: c.icon && typeof c.icon === 'string' && c.icon.length <= 3 ? c.icon : (c.image ? '🖼️' : '📦'),
+          image: c.image
+        }));
+        setCategories(formatted);
+      } else {
+        setCategories(fallbackCategories);
+      }
+    } catch (err) {
+      console.error('Failed to fetch dynamic categories from Admin Panel API:', err);
+      setCategories(fallbackCategories);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   const filteredCategories = categories.filter(c => {
     const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -60,8 +93,20 @@ const Categories = () => {
         
         {/* Light Orange Header Title Banner */}
         <div className="bg-[#ff7526] px-5 py-3.5 flex justify-between items-center">
-          <h2 className="text-white font-semibold text-lg tracking-wide">View Category List</h2>
-          <span className="text-white/90 text-xs font-medium">Total Items: {filteredCategories.length}</span>
+          <div className="flex items-center gap-3">
+            <h2 className="text-white font-semibold text-lg tracking-wide">View Category List</h2>
+            <button
+              onClick={fetchCategories}
+              className="p-1 text-white/80 hover:text-white rounded-md bg-white/10 hover:bg-white/20 transition-all border-none cursor-pointer flex items-center gap-1 text-xs"
+              title="Refresh from Admin Panel"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
+          <span className="text-white/90 text-xs font-medium">
+            Total Items: {filteredCategories.length}
+          </span>
         </div>
 
         {/* Filter Controls Bar */}
@@ -154,12 +199,25 @@ const Categories = () => {
               </tr>
             </thead>
             <tbody className="text-[15px] font-normal text-slate-700 divide-y divide-slate-100">
-              {filteredCategories.slice(0, pageSize).map((cat) => (
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-slate-500 text-sm font-medium">
+                    <div className="flex items-center justify-center gap-2">
+                      <RefreshCw size={16} className="animate-spin text-[#ff7526]" />
+                      Loading categories from Admin Panel...
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredCategories.slice(0, pageSize).map((cat) => (
                 <tr key={cat.id} className="hover:bg-slate-50/80 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center text-xl shrink-0">
-                        {cat.icon}
+                      <div className="w-10 h-10 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center text-xl shrink-0 overflow-hidden">
+                        {cat.image ? (
+                          <img src={cat.image} alt={cat.name} className="w-full h-full object-contain p-1" />
+                        ) : (
+                          cat.icon
+                        )}
                       </div>
                       <div className="flex flex-col">
                         <span className="font-semibold text-slate-900">{cat.name}</span>
@@ -183,7 +241,7 @@ const Categories = () => {
                   </td>
                 </tr>
               ))}
-              {filteredCategories.length === 0 && (
+              {!loading && filteredCategories.length === 0 && (
                 <tr>
                   <td colSpan={5} className="text-center py-8 text-slate-400 text-sm font-normal">
                     No categories match your search criteria.

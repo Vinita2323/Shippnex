@@ -6,17 +6,18 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const processImage = async (imgStr, folder = 'products') => {
-  if (!imgStr) return '';
-  dotenv.config();
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const isCloudinaryConfigured = Boolean(cloudName && cloudName !== 'your_cloud_name_here');
-
-  if (isCloudinaryConfigured && typeof imgStr === 'string' && imgStr.startsWith('data:image/')) {
+  if (!imgStr) return 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
+  
+  if (typeof imgStr === 'string' && imgStr.startsWith('data:image/')) {
     try {
       const res = await uploadToCloudinary(imgStr, folder);
-      return res.secure_url;
+      if (res && res.secure_url) return res.secure_url;
     } catch (err) {
-      console.warn('Cloudinary auto-upload failed, using fallback:', err.message);
+      console.warn('Cloudinary upload bypassed/failed:', err.message);
+    }
+    // If Cloudinary fails or is disabled, fallback to standard clean URL if base64 is large
+    if (imgStr.length > 500000) {
+      return 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
     }
   }
   return imgStr;
@@ -50,12 +51,16 @@ export const createProduct = async (req, res) => {
       isFeatured
     } = req.body;
 
-    if (!name || !mrp || salePrice === undefined || stock === undefined) {
+    if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide all required fields (Name, MRP, Sale Price, Stock)'
+        message: 'Please provide Product Name'
       });
     }
+
+    const parsedMrp = Number(mrp || salePrice || 0);
+    const parsedSalePrice = Number(salePrice || mrp || 0);
+    const parsedStock = Number(stock || 0);
 
     const formattedUnit = `${unitValue || '1'} ${unitType || 'kg'}`;
 
@@ -67,28 +72,30 @@ export const createProduct = async (req, res) => {
     }
 
     const product = await Product.create({
-      name,
+      name: name.trim(),
       category: category || 'Groceries',
       subCategory: subCategory || '',
       brand: brand || '',
-      unitValue: unitValue || '1',
-      unitType: unitType || 'kg',
+      unitValue: String(unitValue || '1'),
+      unitType: String(unitType || 'kg'),
       unit: formattedUnit,
       seller: seller || 'ShippNex Official Store',
       description: description || '',
-      mrp: Number(mrp),
-      salePrice: Number(salePrice),
+      mrp: parsedMrp,
+      salePrice: parsedSalePrice,
       taxRate: taxRate || '5%',
       hsnCode: hsnCode || '',
-      stock: Number(stock),
+      stock: parsedStock,
       minStockLimit: minStockLimit ? Number(minStockLimit) : 10,
       sku: sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
-      mainImage: processedMainImage || '',
-      homeSections: Array.isArray(homeSections) ? homeSections : [],
+      mainImage: processedMainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
+      homeSections: Array.isArray(homeSections) && homeSections.length > 0 ? homeSections : ['flash_sale', 'bestseller'],
       galleryImages: processedGalleryImages,
       status: status || 'Published',
       isFeatured: Boolean(isFeatured)
     });
+
+    console.log(`[PRODUCT CREATED IN DB] ID: ${product._id}, Name: ${product.name}, Seller: ${product.seller}`);
 
     res.status(201).json({
       success: true,
@@ -96,6 +103,7 @@ export const createProduct = async (req, res) => {
       product
     });
   } catch (error) {
+    console.error('[PRODUCT CREATION ERROR]', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Error creating product'

@@ -26,6 +26,30 @@ const sellerSchema = new mongoose.Schema(
     accountNumber: { type: String, trim: true },
     ifscCode: { type: String, trim: true },
     categories: [{ type: String }],
+    commissionPercentage: {
+      type: Number,
+      default: 10,
+    },
+    walletBalance: {
+      type: Number,
+      default: 0,
+    },
+    pendingBalance: {
+      type: Number,
+      default: 0,
+    },
+    totalEarnings: {
+      type: Number,
+      default: 0,
+    },
+    totalCommissionDeducted: {
+      type: Number,
+      default: 0,
+    },
+    totalWithdrawn: {
+      type: Number,
+      default: 0,
+    },
     role: {
       type: String,
       default: 'seller',

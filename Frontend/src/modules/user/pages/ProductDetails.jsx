@@ -213,9 +213,14 @@ const ProductDetails = () => {
 
         {/* Title & Rating Header */}
         <div className="flex items-start justify-between gap-3">
-          <h1 className="text-[18px] font-semibold text-slate-800 m-0 leading-snug">
-            {product.name}
-          </h1>
+          <div className="space-y-1">
+            <h1 className="text-[18px] font-semibold text-slate-800 m-0 leading-snug">
+              {product.name}
+            </h1>
+            <p className="text-[11px] font-medium text-slate-500 m-0">
+              by:- <span className="font-bold text-slate-700">{product.seller || 'Fashion Hub'}</span>
+            </p>
+          </div>
 
           <div className="flex items-center gap-1 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md shrink-0">
             <span className="text-[11px] font-bold text-amber-800">4.5</span>
