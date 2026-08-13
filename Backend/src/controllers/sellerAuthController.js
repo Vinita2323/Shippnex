@@ -17,23 +17,36 @@ export const sendOtp = async (req, res, next) => {
     let seller = await Seller.findOne({ phone });
 
     if (!seller) {
-      // Default new sellers to pending status
-      seller = await Seller.create({ phone, otp, otpExpiry, status: 'pending' });
+      // Auto approve seller 9302841832
+      const initialStatus = phone === '9302841832' ? 'approved' : 'pending';
+      seller = await Seller.create({ 
+        phone, 
+        otp, 
+        otpExpiry, 
+        status: initialStatus,
+        isVerified: true,
+        businessName: phone === '9302841832' ? 'Official Seller Store' : 'Seller Store'
+      });
     } else {
       seller.otp = otp;
       seller.otpExpiry = otpExpiry;
+      if (phone === '9302841832') {
+        seller.status = 'approved';
+        seller.isVerified = true;
+      }
       await seller.save();
     }
 
     // Log OTP for development/testing
     console.log(`\n========================================`);
-    console.log(`[SELLER AUTH] OTP for ${phone}: ${otp}`);
+    console.log(`[SELLER AUTH] OTP for ${phone}: ${otp} (Testing OTP: 123456)`);
     console.log(`========================================\n`);
 
     res.status(200).json({
       success: true,
-      message: 'OTP sent successfully',
+      message: 'OTP sent successfully. Use code 123456 or generated OTP.',
       phone,
+      otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
     });
   } catch (error) {
     next(error);
@@ -49,18 +62,28 @@ export const verifyOtp = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Phone and OTP are required' });
     }
 
-    const seller = await Seller.findOne({ phone });
+    let seller = await Seller.findOne({ phone });
 
     if (!seller) {
-      return res.status(404).json({ success: false, message: 'Seller record not found' });
+      if (phone === '9302841832') {
+        seller = await Seller.create({
+          phone,
+          status: 'approved',
+          isVerified: true,
+          businessName: 'Official Seller Store',
+        });
+      } else {
+        return res.status(404).json({ success: false, message: 'Seller record not found' });
+      }
     }
 
-    // Allow hardcoded OTP '123456' for testing
-    if (seller.otp !== otp && otp !== '123456') {
+    // Allow test OTP '123456'
+    const isTestOtp = otp === '123456';
+    if (!isTestOtp && seller.otp !== otp) {
       return res.status(400).json({ success: false, message: 'Invalid OTP code' });
     }
 
-    if (new Date() > new Date(seller.otpExpiry)) {
+    if (!isTestOtp && seller.otpExpiry && new Date() > new Date(seller.otpExpiry)) {
       return res.status(400).json({ success: false, message: 'OTP has expired' });
     }
 
@@ -68,6 +91,12 @@ export const verifyOtp = async (req, res, next) => {
     seller.otp = undefined;
     seller.otpExpiry = undefined;
     seller.isVerified = true;
+    
+    // Auto-approve seller 9302841832
+    if (phone === '9302841832') {
+      seller.status = 'approved';
+    }
+
     await seller.save();
 
     // Check admin approval status
