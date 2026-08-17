@@ -6,6 +6,90 @@ import User from '../models/User.model.js';
 import Seller from '../models/Seller.model.js';
 import SellerNotification from '../models/SellerNotification.model.js';
 import WalletTransaction from '../models/WalletTransaction.model.js';
+import Captain from '../models/Captain.model.js';
+import CaptainNotification from '../models/CaptainNotification.model.js';
+
+// Helper: Generate delivery OTP
+const genDeliveryOtp = () => Math.floor(1000 + Math.random() * 9000).toString();
+
+// Helper: Find nearest available captain to a seller/order
+// Strategy 1: geo-query if captain has real coordinates
+// Strategy 2: city/workingArea match as fallback
+const findNearestCaptain = async (deliveryCity, deliveryState) => {
+  // First try: find online + approved captains in the same city
+  const cityCaptains = await Captain.find({
+    status: 'approved',
+    isOnline: true,
+    $or: [
+      { city: { $regex: deliveryCity || '', $options: 'i' } },
+      { 'workingArea.city': { $regex: deliveryCity || '', $options: 'i' } },
+    ],
+  }).sort({ createdAt: 1 }); // oldest first = most experienced
+
+  if (cityCaptains.length > 0) return cityCaptains[0];
+
+  // Fallback: any online + approved captain in the same state
+  if (deliveryState) {
+    const stateCaptains = await Captain.find({
+      status: 'approved',
+      isOnline: true,
+      $or: [
+        { state: { $regex: deliveryState, $options: 'i' } },
+        { 'workingArea.state': { $regex: deliveryState, $options: 'i' } },
+      ],
+    });
+    if (stateCaptains.length > 0) return stateCaptains[0];
+  }
+
+  // Last resort: any online + approved captain at all
+  return Captain.findOne({ status: 'approved', isOnline: true });
+};
+
+// Helper: Auto-assign captain and create notification
+export const autoAssignCaptainToOrder = async (notification) => {
+  try {
+    const parentOrder = await Order.findById(notification.order);
+    if (parentOrder && (!parentOrder.captainId || parentOrder.captainStatus === 'Rejected')) {
+      const deliveryCity = notification.deliveryAddress?.city || parentOrder.shippingAddress?.city || '';
+      const deliveryState = notification.deliveryAddress?.state || parentOrder.shippingAddress?.state || '';
+      const captainEarnings = Math.max(15, Math.round((notification.totalAmount || parentOrder.grandTotal || 0) * 0.08 * 100) / 100);
+
+      const nearestCaptain = await findNearestCaptain(deliveryCity, deliveryState);
+
+      if (nearestCaptain) {
+        const otp = genDeliveryOtp();
+
+        await Order.findByIdAndUpdate(parentOrder._id, {
+          captainId: nearestCaptain._id,
+          captainStatus: 'Assigned',
+          deliveryOtp: otp,
+          captainEarnings,
+          captainAssignedAt: new Date(),
+        });
+
+        await CaptainNotification.create({
+          captainId: nearestCaptain._id,
+          type: 'JOB_ASSIGNED',
+          title: 'New Delivery Assigned!',
+          message: `Order #${notification.orderId} from ${notification.sellerName || 'Seller'} — Drop: ${deliveryCity}. Payout: ₹${captainEarnings.toFixed(2)}. Report to pickup immediately.`,
+          orderId: notification.orderId,
+          order: parentOrder._id,
+          amount: captainEarnings,
+          icon: 'local_shipping',
+        });
+
+        console.log(`[CaptainAssign] Auto-assigned Captain "${nearestCaptain.name}" (${nearestCaptain.phone}) to Order #${notification.orderId}. OTP: ${otp}, Payout: ₹${captainEarnings}`);
+        return nearestCaptain;
+      } else {
+        console.warn(`[CaptainAssign] No available online captain found for Order #${notification.orderId} in ${deliveryCity || 'any area'}.`);
+      }
+    }
+  } catch (err) {
+    console.error(`[CaptainAssign ERROR] Failed to auto-assign captain for Order #${notification.orderId}:`, err.message);
+  }
+  return null;
+};
+
 
 // Helper to find existing product or auto-create fallback for seed/mock frontend items
 const findOrCreateProduct = async (productId, productData = {}) => {
@@ -175,22 +259,30 @@ export const placeOrder = async (req, res, next) => {
     for (const [sellerName, groupItems] of Object.entries(sellerGroups)) {
       const groupSubtotal = groupItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
       
-      // Try to find matching seller in Seller model
-      let sellerDoc = await Seller.findOne({
-        $or: [
-          { businessName: sellerName },
-          { ownerName: sellerName },
-        ]
-      });
+      // Try to find matching seller in Seller model (by ObjectId, phone, businessName, ownerName)
+      let sellerDoc = null;
+      if (mongoose.Types.ObjectId.isValid(sellerName)) {
+        sellerDoc = await Seller.findById(sellerName);
+      }
+      if (!sellerDoc) {
+        sellerDoc = await Seller.findOne({
+          $or: [
+            { phone: sellerName },
+            { businessName: sellerName },
+            { ownerName: sellerName },
+          ]
+        });
+      }
 
       const assignedSellerId = sellerDoc ? String(sellerDoc._id) : sellerName;
+      const actualSellerName = sellerDoc ? (sellerDoc.businessName || sellerDoc.ownerName || sellerName) : sellerName;
       const commRate = Number(sellerDoc?.commissionPercentage !== undefined ? sellerDoc.commissionPercentage : 10);
       const commAmount = Number(((groupSubtotal * commRate) / 100).toFixed(2));
       const netAmount = Number((groupSubtotal - commAmount).toFixed(2));
 
       await SellerNotification.create({
         sellerId: assignedSellerId,
-        sellerName: sellerName,
+        sellerName: actualSellerName,
         order: order._id,
         orderId: order.orderId,
         items: groupItems,
@@ -211,7 +303,7 @@ export const placeOrder = async (req, res, next) => {
         status: 'NEW',
       });
 
-      console.log(`[SellerNotification] Created notification for Seller "${sellerName}" (SellerID: ${assignedSellerId}, Gross: ₹${groupSubtotal}, Comm: ${commRate}% = ₹${commAmount}, Net: ₹${netAmount}) for Order ${order.orderId}`);
+      console.log(`[SellerNotification] Created notification for Seller "${actualSellerName}" (SellerID: ${assignedSellerId}, Gross: ₹${groupSubtotal}, Comm: ${commRate}% = ₹${commAmount}, Net: ₹${netAmount}) for Order ${order.orderId}`);
     }
 
     // Clear user cart array in User collection after successful order creation
@@ -352,15 +444,29 @@ export const getUserOrders = async (req, res, next) => {
   }
 };
 
-// Get Order Details by ID
+// Get Order Details by ID (supports MongoDB _id or orderId string)
 export const getOrderById = async (req, res, next) => {
   try {
-    const userId = req.user.id;
     const { id } = req.params;
 
-    const order = await Order.findOne({ _id: id, user: userId });
+    let order = await Order.findOne({
+      $or: [
+        { _id: mongoose.Types.ObjectId.isValid(id) ? id : null },
+        { orderId: id },
+      ],
+    })
+      .populate('captainId', 'name phone vehicleType')
+      .populate('items.product', 'name mainImage price salePrice');
+
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // Auto-generate deliveryOtp if missing so customer can see it on /track-order
+    if (!order.deliveryOtp && order.orderStatus !== 'Delivered' && order.orderStatus !== 'Cancelled' && order.orderStatus !== 'Rejected') {
+      const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
+      order.deliveryOtp = generatedOtp;
+      await Order.findByIdAndUpdate(order._id, { deliveryOtp: generatedOtp });
     }
 
     res.status(200).json({
@@ -481,11 +587,15 @@ export const acceptSellerOrder = async (req, res, next) => {
 
     console.log(`[OrderController] Seller accepted Order ID ${notification.orderId}`);
 
+    // Auto-assign nearest available captain and notify them immediately
+    await autoAssignCaptainToOrder(notification);
+
     res.status(200).json({
       success: true,
-      message: 'Order accepted successfully!',
+      message: 'Order accepted successfully and assigned to nearest delivery captain!',
       notification,
     });
+
   } catch (error) {
     next(error);
   }
@@ -587,6 +697,7 @@ export const updateSellerOrderStatus = async (req, res, next) => {
       mappedNotificationStatus = 'ACCEPTED';
       mappedOrderStatus = 'Accepted';
       notification.acceptedAt = now;
+      await autoAssignCaptainToOrder(notification);
     } else if (status === 'REJECTED' || status === 'Rejected') {
       mappedNotificationStatus = 'REJECTED';
       mappedOrderStatus = 'Rejected';
@@ -604,9 +715,11 @@ export const updateSellerOrderStatus = async (req, res, next) => {
     } else if (status === 'Out for Delivery' || status === 'OUT_FOR_DELIVERY') {
       mappedNotificationStatus = 'OUT_FOR_DELIVERY';
       mappedOrderStatus = 'Out for Delivery';
+      await autoAssignCaptainToOrder(notification);
     } else if (status === 'Delivered' || status === 'DELIVERED') {
       mappedNotificationStatus = 'DELIVERED';
       mappedOrderStatus = 'Delivered';
+      notification.paymentStatus = 'Paid';
     } else if (status === 'Processing' || status === 'PACKED') {
       mappedNotificationStatus = 'PROCESSING';
       mappedOrderStatus = 'Processing';
@@ -619,6 +732,7 @@ export const updateSellerOrderStatus = async (req, res, next) => {
       await Order.findByIdAndUpdate(notification.order, {
         orderStatus: mappedOrderStatus,
         sellerStatus: mappedNotificationStatus,
+        ...(mappedNotificationStatus === 'DELIVERED' ? { paymentStatus: 'Paid' } : {}),
         ...(mappedNotificationStatus === 'REJECTED' ? { rejectionReason: notification.rejectionReason } : {}),
       });
     }
@@ -663,12 +777,12 @@ export const processSellerSettlement = async (notificationId) => {
       return null;
     }
 
-    // Requirement 3: Check Online Payment & Delivery Status
+    // Payment Verification: Online Pay or Delivered COD (which marks paymentStatus = 'Paid')
     const payMethod = (notification.paymentMethod || '').toUpperCase();
-    const isOnlinePay = ['ONLINE', 'UPI', 'CARD', 'NETBANKING', 'WALLET'].includes(payMethod) || notification.paymentStatus === 'Paid';
+    const isPayCompleted = ['ONLINE', 'UPI', 'CARD', 'NETBANKING', 'WALLET'].includes(payMethod) || notification.paymentStatus === 'Paid' || notification.status === 'DELIVERED';
 
-    if (!isOnlinePay) {
-      console.log(`[Settlement] Notification ${notificationId} skipped automatic wallet credit because Payment Method is "${notification.paymentMethod}" (COD).`);
+    if (!isPayCompleted) {
+      console.log(`[Settlement] Notification ${notificationId} skipped automatic wallet credit because Payment is not completed.`);
       return notification;
     }
 

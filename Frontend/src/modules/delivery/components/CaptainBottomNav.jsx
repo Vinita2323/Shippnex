@@ -8,7 +8,7 @@ const CaptainBottomNav = () => {
   const navItems = [
     { path: '/captain/dashboard', icon: 'home', label: 'Home' },
     { path: '/captain/jobs', icon: 'local_shipping', label: 'Jobs' },
-    { path: '/captain/active-delivery', icon: 'explore', label: 'Active' },
+    { path: '/captain/active-delivery', icon: 'explore', label: 'Orders' },
     { path: '/captain/wallet', icon: 'account_balance_wallet', label: 'Wallet' },
     { path: '/captain/profile', icon: 'person', label: 'Profile' },
   ];

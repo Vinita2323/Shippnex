@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authService } from '../../../services/authService';
 
 const CaptainRegister = () => {
   const navigate = useNavigate();
@@ -47,6 +48,7 @@ const CaptainRegister = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleTextChange = (e) => {
     const { name, value } = e.target;
@@ -60,14 +62,59 @@ const CaptainRegister = () => {
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  const fileToBase64 = (file) => {
+    return new Promise((resolve) => {
+      if (!file) return resolve('');
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
 
-    setTimeout(() => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+
+    if (!formData.fullName || !formData.mobileNumber) {
+      alert('Full Name and Mobile Number are required.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Convert all uploaded documents to base64
+      const [dl, rc, aFront, aBack, pPhoto] = await Promise.all([
+        fileToBase64(files.drivingLicense),
+        fileToBase64(files.rcDocument),
+        fileToBase64(files.aadhaarFront),
+        fileToBase64(files.aadhaarBack),
+        fileToBase64(files.profilePhoto),
+      ]);
+
+      const payload = {
+        ...formData,
+        documents: {
+          drivingLicense: dl,
+          rcDocument: rc,
+          aadhaarFront: aFront,
+          aadhaarBack: aBack,
+          profilePhoto: pPhoto,
+        },
+      };
+
+      const res = await authService.registerCaptain(payload);
+      if (res.success) {
+        setSubmitted(true);
+      } else {
+        setErrorMsg(res.message || 'Failed to submit registration');
+      }
+    } catch (err) {
+      console.error('API submission failed:', err);
+      setErrorMsg(err.response?.data?.message || err.message || 'Failed to submit registration application.');
+    } finally {
       setIsSubmitting(false);
-      setSubmitted(true);
-    }, 1500);
+    }
   };
 
   return (
@@ -151,9 +198,8 @@ const CaptainRegister = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Email ID *</label>
+                <label className="text-xs font-bold text-slate-700">Email ID</label>
                 <input
-                  required
                   type="email"
                   name="email"
                   value={formData.email}
@@ -165,9 +211,8 @@ const CaptainRegister = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Date of Birth *</label>
+                  <label className="text-xs font-bold text-slate-700">Date of Birth</label>
                   <input
-                    required
                     type="date"
                     name="dob"
                     value={formData.dob}
@@ -210,9 +255,8 @@ const CaptainRegister = () => {
               </h2>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Current Address *</label>
+                <label className="text-xs font-bold text-slate-700">Current Address</label>
                 <input
-                  required
                   type="text"
                   name="currentAddress"
                   value={formData.currentAddress}
@@ -236,9 +280,8 @@ const CaptainRegister = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">City *</label>
+                  <label className="text-xs font-bold text-slate-700">City</label>
                   <input
-                    required
                     type="text"
                     name="city"
                     value={formData.city}
@@ -261,9 +304,8 @@ const CaptainRegister = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">PIN Code *</label>
+                  <label className="text-xs font-bold text-slate-700">PIN Code</label>
                   <input
-                    required
                     type="text"
                     name="pinCode"
                     value={formData.pinCode}
@@ -287,9 +329,8 @@ const CaptainRegister = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Aadhaar Number *</label>
+                <label className="text-xs font-bold text-slate-700">Aadhaar Number</label>
                 <input
-                  required
                   type="text"
                   name="aadhaarNumber"
                   value={formData.aadhaarNumber}
@@ -308,9 +349,8 @@ const CaptainRegister = () => {
               </h2>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Driving License Number *</label>
+                <label className="text-xs font-bold text-slate-700">Driving License Number</label>
                 <input
-                  required
                   type="text"
                   name="drivingLicenseNumber"
                   value={formData.drivingLicenseNumber}
@@ -367,14 +407,13 @@ const CaptainRegister = () => {
 
               {/* Driving License Upload */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Upload Driving License *</label>
+                <label className="text-xs font-bold text-slate-700">Upload Driving License</label>
                 <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
                   <span className="material-symbols-outlined text-slate-400">upload</span>
                   <span className="text-xs font-bold text-slate-600">
                     {files.drivingLicense ? files.drivingLicense.name : 'TAP TO UPLOAD'}
                   </span>
                   <input
-                    required
                     type="file"
                     accept="image/*,.pdf"
                     onChange={(e) => handleFileChange(e, 'drivingLicense')}
@@ -386,14 +425,13 @@ const CaptainRegister = () => {
               {/* Aadhaar Front & Back Upload */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Aadhaar Front *</label>
+                  <label className="text-xs font-bold text-slate-700">Aadhaar Front</label>
                   <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
                     <span className="material-symbols-outlined text-slate-400">upload</span>
                     <span className="text-xs font-bold text-slate-600 truncate">
                       {files.aadhaarFront ? files.aadhaarFront.name : 'TAP TO UPLOAD'}
                     </span>
                     <input
-                      required
                       type="file"
                       accept="image/*,.pdf"
                       onChange={(e) => handleFileChange(e, 'aadhaarFront')}
@@ -445,9 +483,8 @@ const CaptainRegister = () => {
               </h2>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Bank Name *</label>
+                <label className="text-xs font-bold text-slate-700">Bank Name</label>
                 <input
-                  required
                   type="text"
                   name="bankName"
                   value={formData.bankName}
@@ -458,9 +495,8 @@ const CaptainRegister = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Account Holder Name *</label>
+                <label className="text-xs font-bold text-slate-700">Account Holder Name</label>
                 <input
-                  required
                   type="text"
                   name="accountHolderName"
                   value={formData.accountHolderName}
@@ -471,9 +507,8 @@ const CaptainRegister = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Account Number *</label>
+                <label className="text-xs font-bold text-slate-700">Account Number</label>
                 <input
-                  required
                   type="text"
                   name="accountNumber"
                   value={formData.accountNumber}
@@ -485,9 +520,8 @@ const CaptainRegister = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">IFSC Code *</label>
+                  <label className="text-xs font-bold text-slate-700">IFSC Code</label>
                   <input
-                    required
                     type="text"
                     name="ifscCode"
                     value={formData.ifscCode}

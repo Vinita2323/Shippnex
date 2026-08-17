@@ -77,14 +77,29 @@ const CaptainLogin = () => {
 
     setOtpStatus('processing');
     try {
-      await authService.verifyCaptainOtp(mobileNumber, enteredOtp);
+      const res = await authService.verifyCaptainOtp(mobileNumber, enteredOtp);
       setOtpStatus('success');
       setTimeout(() => {
         navigate('/captain/dashboard');
       }, 800);
     } catch (err) {
-      // Fallback verification for dev/demo mode
-      if (enteredOtp === '123456' || err.response?.status === 404 || !err.response) {
+      setOtpStatus('idle');
+      const responseData = err.response?.data;
+      
+      // Strict Approval Gate: If unapproved / pending / rejected, display backend error message!
+      if (err.response?.status === 403 || responseData?.status === 'pending' || responseData?.status === 'rejected') {
+        setErrorMsg(responseData?.message || 'Your account is pending Admin approval. Please wait for Admin to approve your account.');
+        return;
+      }
+
+      // If invalid OTP
+      if (responseData?.message) {
+        setErrorMsg(responseData.message);
+        return;
+      }
+
+      // Fallback for offline demo mode only if no response from server
+      if (!err.response) {
         localStorage.setItem('shippnex_captain_token', 'mock_captain_token');
         localStorage.setItem('shippnex_captain_data', JSON.stringify({
           phone: mobileNumber,
@@ -96,8 +111,7 @@ const CaptainLogin = () => {
           navigate('/captain/dashboard');
         }, 800);
       } else {
-        setOtpStatus('idle');
-        setErrorMsg(err.response?.data?.message || 'Invalid OTP code.');
+        setErrorMsg(responseData?.message || 'Invalid OTP code.');
       }
     }
   };

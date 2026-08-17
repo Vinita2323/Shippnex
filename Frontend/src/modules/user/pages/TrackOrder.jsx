@@ -1,17 +1,53 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, HelpCircle, ChevronRight, Check, Truck, MapPin, CreditCard, Box, ShieldCheck, Clock } from 'lucide-react';
+import { ChevronLeft, HelpCircle, ChevronRight, Check, Truck, MapPin, CreditCard, Box, ShieldCheck, Clock, User, Phone, KeyRound } from 'lucide-react';
 import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
+import { orderService } from '../../../services/authService';
 
 const TrackOrder = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const order = location.state?.order;
+  const initialOrder = location.state?.order;
 
-  // Fallback demo order if opened directly without route state
+  const [liveOrder, setLiveOrder] = useState(initialOrder || null);
+  const [loadingOrder, setLoadingOrder] = useState(!initialOrder);
+
+  // Poll for live status update every 4 seconds
+  useEffect(() => {
+    const targetId = liveOrder?._id || liveOrder?.id || liveOrder?.orderId || initialOrder?._id || initialOrder?.orderId;
+    if (!targetId) return;
+
+    let isMounted = true;
+    const fetchLive = async () => {
+      try {
+        const res = await orderService.getOrderById(targetId);
+        if (isMounted && res.success && res.order) {
+          setLiveOrder(res.order);
+        }
+      } catch (err) {
+        console.warn('TrackOrder fetch error:', err.message);
+      } finally {
+        if (isMounted) setLoadingOrder(false);
+      }
+    };
+
+    fetchLive();
+    const interval = setInterval(fetchLive, 4000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const order = liveOrder || initialOrder;
+
+  // Order Details
   const orderId = order?.id || order?.orderId || order?._id || 'ORD-849201';
   const orderDate = order?.date || (order?.createdAt ? new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today');
-  const orderStatus = order?.status || order?.orderStatus || 'Placed';
+  const orderStatus = order?.orderStatus || order?.status || 'Placed';
+  const captainStatus = order?.captainStatus || '';
+  const deliveryOtp = order?.deliveryOtp || '';
+
   const items = order?.items && order.items.length > 0 ? order.items : [
     { name: 'Basmati Rice Premium 5kg', price: 540, quantity: 1, image: grainsImg }
   ];
@@ -27,9 +63,33 @@ const TrackOrder = () => {
   const paymentMethod = order?.paymentMethod || 'COD';
   const paymentStatus = order?.paymentStatus || (paymentMethod === 'COD' ? 'Pending' : 'Paid');
 
-  // Status steps helper
-  const steps = ['Placed', 'Processing', 'Out for Delivery', 'Delivered'];
-  const currentStepIndex = Math.max(0, steps.indexOf(orderStatus));
+  // Status steps mapping
+  const steps = [
+    { key: 'Placed', label: 'Order Placed', sub: 'Order received' },
+    { key: 'Processing', label: 'Store Processing', sub: captainStatus === 'At Pickup' ? 'Captain at Store' : 'Preparing items' },
+    { key: 'Out for Delivery', label: 'Out for Delivery', sub: 'On the way to you' },
+    { key: 'Delivered', label: 'Delivered', sub: 'Order completed' },
+  ];
+
+  const getStepIndex = () => {
+    if (orderStatus === 'Delivered' || captainStatus === 'Delivered') return 3;
+    if (orderStatus === 'Out for Delivery' || captainStatus === 'In Transit' || captainStatus === 'Picked Up') return 2;
+    if (orderStatus === 'Accepted' || orderStatus === 'Processing' || orderStatus === 'Reached Store / Pickup' || ['Assigned', 'Accepted', 'At Pickup'].includes(captainStatus)) return 1;
+    return 0;
+  };
+
+  const currentStepIndex = getStepIndex();
+
+  const getDisplayStatusBadge = () => {
+    if (orderStatus === 'Delivered' || captainStatus === 'Delivered') return { text: 'Delivered', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    if (orderStatus === 'Out for Delivery' || captainStatus === 'In Transit') return { text: 'Out for Delivery', color: 'bg-amber-50 text-amber-700 border-amber-200' };
+    if (captainStatus === 'At Pickup' || orderStatus === 'Reached Store / Pickup') return { text: 'Captain at Store', color: 'bg-blue-50 text-blue-700 border-blue-200' };
+    if (orderStatus === 'Accepted' || captainStatus === 'Accepted' || captainStatus === 'Assigned') return { text: 'Order Accepted', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    if (orderStatus === 'Rejected') return { text: 'Rejected', color: 'bg-red-50 text-red-700 border-red-200' };
+    return { text: 'Order Placed', color: 'bg-orange-50 text-[#ea580c] border-orange-200/60' };
+  };
+
+  const statusBadge = getDisplayStatusBadge();
 
   return (
     <div className="h-[100dvh] bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
@@ -40,7 +100,7 @@ const TrackOrder = () => {
           <button className="bg-transparent border-none cursor-pointer p-0 flex items-center" onClick={() => navigate(-1)}>
             <ChevronLeft size={24} className="text-slate-800" />
           </button>
-          <h2 className="text-[15px] font-extrabold tracking-wide m-0 text-slate-900 uppercase">Order Details</h2>
+          <h2 className="text-[15px] font-extrabold tracking-wide m-0 text-slate-900 uppercase">Live Order Tracking</h2>
         </div>
         <button 
           onClick={() => navigate('/support')}
@@ -58,7 +118,7 @@ const TrackOrder = () => {
           <div className="flex justify-between items-start pb-3 border-b border-slate-100">
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Order ID</span>
-              <span className="text-[15px] font-extrabold text-slate-900">{orderId}</span>
+              <span className="text-[15px] font-extrabold text-slate-900">#{orderId}</span>
             </div>
             <div className="text-right">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Placed On</span>
@@ -67,17 +127,29 @@ const TrackOrder = () => {
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-[12px] font-bold text-slate-500">Status</span>
-            <span className={`text-[11px] font-extrabold px-3 py-1 rounded-full uppercase ${
-              orderStatus === 'Accepted' 
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : orderStatus === 'Rejected'
-                ? 'bg-red-50 text-red-700 border border-red-200'
-                : 'bg-orange-50 text-[#ea580c] border border-orange-200/60'
-            }`}>
-              {orderStatus}
+            <span className="text-[12px] font-bold text-slate-500">Live Status</span>
+            <span className={`text-[11px] font-extrabold px-3 py-1 rounded-full uppercase border ${statusBadge.color}`}>
+              {statusBadge.text}
             </span>
           </div>
+
+          {/* Delivery OTP Box for Customer */}
+          {deliveryOtp && orderStatus !== 'Delivered' && (
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                  <KeyRound size={16} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase text-emerald-900 tracking-wider block">Delivery Verification OTP</span>
+                  <span className="text-[11px] text-emerald-700">Share this code with the delivery partner upon arrival</span>
+                </div>
+              </div>
+              <div className="bg-white px-3 py-1.5 rounded-lg border border-emerald-300 shadow-xs font-mono font-black text-base text-emerald-900 tracking-widest">
+                {deliveryOtp}
+              </div>
+            </div>
+          )}
 
           {/* Rejection Alert Box */}
           {orderStatus === 'Rejected' && (
@@ -86,15 +158,71 @@ const TrackOrder = () => {
               <span className="font-medium text-slate-700">Reason: "{order?.rejectionReason || 'Unable to fulfill order'}"</span>
             </div>
           )}
-
-          {/* Acceptance Alert Box */}
-          {orderStatus === 'Accepted' && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-800 text-xs mt-1">
-              <span className="font-extrabold block text-emerald-900">✓ Order Accepted by Seller</span>
-              <span className="font-medium text-emerald-700">The seller has confirmed your order and is preparing it for shipment.</span>
-            </div>
-          )}
         </div>
+
+        {/* Live Delivery Progress Steps */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-xs flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Truck size={18} className="text-[#ea580c]" />
+              <h3 className="text-[13px] font-extrabold text-slate-900 uppercase tracking-wider m-0">Delivery Progress</h3>
+            </div>
+            <span className="text-[10px] font-bold text-slate-400">Auto-synced</span>
+          </div>
+
+          <div className="relative py-2">
+            <div className="flex justify-between relative z-10">
+              {steps.map((step, index) => {
+                const isCompleted = index <= currentStepIndex;
+                const isCurrent = index === currentStepIndex;
+
+                return (
+                  <div key={step.key} className="flex flex-col items-center gap-1.5 w-1/4">
+                    <div 
+                      className={`w-[28px] h-[28px] rounded-full flex items-center justify-center border-2 transition-all ${
+                        isCompleted 
+                          ? 'bg-[#ea580c] border-[#ea580c] text-white shadow-xs' 
+                          : 'bg-white border-slate-200 text-slate-300'
+                      }`}
+                    >
+                      {isCompleted ? <Check size={14} strokeWidth={3} /> : <div className="w-2 h-2 rounded-full bg-slate-300"></div>}
+                    </div>
+                    <span className={`text-[10px] text-center font-bold leading-tight ${isCurrent ? 'text-[#ea580c]' : isCompleted ? 'text-slate-800' : 'text-slate-400'}`}>
+                      {step.label}
+                    </span>
+                    <span className="text-[9px] text-center text-slate-400 leading-tight">
+                      {step.sub}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Captain Information (If Assigned) */}
+        {order?.captainId && (
+          <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                <Truck size={20} />
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Delivery Captain</span>
+                <p className="text-xs font-bold text-slate-900 m-0">{order.captainId.name || 'Assigned Partner'}</p>
+                <p className="text-[11px] text-emerald-700 font-semibold m-0">{order.captainId.vehicleType || 'Two Wheeler'} • {statusBadge.text}</p>
+              </div>
+            </div>
+            {order.captainId.phone && (
+              <a
+                href={`tel:${order.captainId.phone}`}
+                className="w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 flex items-center justify-center transition-colors shadow-2xs no-underline"
+              >
+                <Phone size={16} />
+              </a>
+            )}
+          </div>
+        )}
 
         {/* Real Order Items List */}
         <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-xs flex flex-col gap-3">
@@ -125,40 +253,6 @@ const TrackOrder = () => {
                 </div>
               );
             })}
-          </div>
-        </div>
-
-        {/* Live Tracking Progress Bar */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-xs flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <Truck size={18} className="text-[#ea580c]" />
-            <h3 className="text-[13px] font-extrabold text-slate-900 uppercase tracking-wider m-0">Delivery Status</h3>
-          </div>
-
-          <div className="relative py-2">
-            <div className="flex justify-between relative z-10">
-              {steps.map((stepName, index) => {
-                const isCompleted = index <= currentStepIndex;
-                const isCurrent = index === currentStepIndex;
-
-                return (
-                  <div key={stepName} className="flex flex-col items-center gap-1.5 w-1/4">
-                    <div 
-                      className={`w-[26px] h-[26px] rounded-full flex items-center justify-center border-2 transition-all ${
-                        isCompleted 
-                          ? 'bg-[#ea580c] border-[#ea580c] text-white shadow-xs' 
-                          : 'bg-white border-slate-200 text-slate-300'
-                      }`}
-                    >
-                      {isCompleted ? <Check size={14} strokeWidth={3} /> : <div className="w-2 h-2 rounded-full bg-slate-300"></div>}
-                    </div>
-                    <span className={`text-[10px] text-center font-bold leading-tight ${isCurrent ? 'text-[#ea580c]' : isCompleted ? 'text-slate-800' : 'text-slate-400'}`}>
-                      {stepName}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         </div>
 

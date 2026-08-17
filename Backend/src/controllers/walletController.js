@@ -170,15 +170,28 @@ export const getAdminSettlements = async (req, res, next) => {
       .sort({ createdAt: -1 });
 
     const totalCommissionEarned = settlements.reduce((acc, s) => acc + (s.commissionAmount || 0), 0);
+    const settledCommissionEarned = settlements
+      .filter(s => s.settlementStatus === 'SETTLED')
+      .reduce((acc, s) => acc + (s.commissionAmount || 0), 0);
+    const pendingAdminCommission = settlements
+      .filter(s => s.settlementStatus === 'PENDING')
+      .reduce((acc, s) => acc + (s.commissionAmount || 0), 0);
+
     const totalSettledAmount = settlements
       .filter(s => s.settlementStatus === 'SETTLED')
+      .reduce((acc, s) => acc + (s.netSellerAmount || 0), 0);
+    const pendingSellerAmount = settlements
+      .filter(s => s.settlementStatus === 'PENDING')
       .reduce((acc, s) => acc + (s.netSellerAmount || 0), 0);
 
     res.status(200).json({
       success: true,
       summary: {
         totalCommissionEarned: Number(totalCommissionEarned.toFixed(2)),
+        settledCommissionEarned: Number(settledCommissionEarned.toFixed(2)),
+        pendingAdminCommission: Number(pendingAdminCommission.toFixed(2)),
         totalSettledAmount: Number(totalSettledAmount.toFixed(2)),
+        pendingSellerAmount: Number(pendingSellerAmount.toFixed(2)),
         totalTransactions: settlements.length,
       },
       settlements,

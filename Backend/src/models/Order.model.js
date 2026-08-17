@@ -58,7 +58,7 @@ const orderSchema = new mongoose.Schema(
     },
     orderStatus: {
       type: String,
-      enum: ['Placed', 'Accepted', 'Rejected', 'Processing', 'Out for Delivery', 'Delivered', 'Cancelled'],
+      enum: ['Placed', 'Accepted', 'Rejected', 'Processing', 'Reached Store / Pickup', 'Out for Delivery', 'Delivered', 'Cancelled'],
       default: 'Placed',
     },
     sellerStatus: {
@@ -74,6 +74,24 @@ const orderSchema = new mongoose.Schema(
     discount: { type: Number, required: true, default: 0 },
     gst: { type: Number, required: true, default: 0 },
     grandTotal: { type: Number, required: true },
+
+    // Captain Delivery Fields
+    captainId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Captain',
+      default: null,
+    },
+    captainStatus: {
+      type: String,
+      enum: [null, 'Assigned', 'Accepted', 'Rejected', 'At Pickup', 'Picked Up', 'In Transit', 'Delivered'],
+      default: null,
+    },
+    deliveryOtp: { type: String, default: null },
+    captainEarnings: { type: Number, default: 0 },
+    proofOfDeliveryUrl: { type: String, default: null },
+    captainAssignedAt: { type: Date, default: null },
+    captainPickedUpAt: { type: Date, default: null },
+    captainDeliveredAt: { type: Date, default: null },
   },
   {
     timestamps: true,

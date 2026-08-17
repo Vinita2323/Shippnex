@@ -1,8 +1,9 @@
 import express from 'express';
-import { sendOtp, verifyOtp } from '../controllers/captainAuthController.js';
+import { registerCaptain, sendOtp, verifyOtp } from '../controllers/captainAuthController.js';
 
 const router = express.Router();
 
+router.post('/register', registerCaptain);
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
 

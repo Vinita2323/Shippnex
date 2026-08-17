@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../context/useAdmin';
 import { StatusBadge, Drawer } from '../components/AdminUIComponents';
-import { categoryService, bannerService, productService, walletService } from '../../../services/authService';
+import { categoryService, bannerService, productService, walletService, captainService } from '../../../services/authService';
 import { mockUsers, mockSellers, mockCaptains, mockWarehouses, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
 import { 
   Search, 
@@ -28,7 +28,8 @@ import {
   DollarSign,
   Boxes,
   Image,
-  Tag
+  Tag,
+  RefreshCw
 } from 'lucide-react';
 
 /* =========================================================================
@@ -1020,16 +1021,8 @@ export const SellerManagement = () => {
    3. CAPTAIN MANAGEMENT PAGE
    ========================================================================= */
 export const CaptainManagement = () => {
-  const [captains, setCaptains] = React.useState([
-    { id: '03c6a1', name: 'Vishal Patel', mobile: '9302841836', address: 'Main Road Sector 2', city: 'Ranchi', commission: 'Fixed', balance: '₹824.10', cashCollected: '₹2976.00', status: 'Active', available: 'Available', email: 'vishal@patel.com', vehicle: 'Express Bike' },
-    { id: '41f1b9', name: 'Deepak kumar', mobile: '9031275861', address: 'Lohardaga - Chandwa Rd', city: 'Kundgara', commission: 'Fixed', balance: '₹0.00', cashCollected: '₹0.00', status: 'Active', available: 'Available', email: 'deepak@gmail.com', vehicle: 'Hero Splendor' },
-    { id: '43945c', name: 'Test', mobile: '6264715409', address: 'Indore Central', city: 'Indore', commission: 'Fixed', balance: '₹0.00', cashCollected: '₹0.00', status: 'Active', available: 'Available', email: 'test@captain.com', vehicle: 'Cargo Van' },
-    { id: '3e6bcf', name: 'Ram', mobile: '9109599487', address: 'Zjjs Main Street', city: 'Indore', commission: 'Fixed', balance: '₹0.00', cashCollected: '₹0.00', status: 'Active', available: 'Available', email: 'ram@indore.com', vehicle: 'Auto Rickshaw' },
-    { id: '3e6be9', name: 'Rahul', mobile: '7348419775', address: 'Gs Sector 5', city: 'Indore', commission: 'Fixed', balance: '₹0.00', cashCollected: '₹0.00', status: 'Active', available: 'Available', email: 'rahul@gmail.com', vehicle: 'Honda Activa' },
-    { id: '3cf776', name: 'Rahul sahu', mobile: '9241673736', address: 'Carcutta khelan dhoura', city: 'Khalari', commission: 'Fixed', balance: '₹0.00', cashCollected: '₹0.00', status: 'Inactive', available: 'Not Available', email: 'rahulsahu@gmail.com', vehicle: 'TVS XL 100' },
-    { id: '5a81e2', name: 'Anand Sharma', mobile: '9827104928', address: 'Karkatta Road', city: 'Dakra', commission: 'Fixed', balance: '₹450.00', cashCollected: '₹1200.00', status: 'Active', available: 'Available', email: 'anand@sharma.com', vehicle: 'Bajaj Pulsar' },
-    { id: '7d92a1', name: 'Vikram Singh', mobile: '9431092817', address: 'Piparwar Colony', city: 'Bachra', commission: 'Fixed', balance: '₹150.00', cashCollected: '₹850.00', status: 'Active', available: 'Available', email: 'vikram@singh.com', vehicle: 'Mahindra Bolero Pickup' },
-  ]);
+  const [captains, setCaptains] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
 
   // Filters & State
   const [statusFilter, setStatusFilter] = React.useState('All');
@@ -1043,6 +1036,41 @@ export const CaptainManagement = () => {
   // Modals & Drawer State
   const [selectedCaptain, setSelectedCaptain] = React.useState(null);
   const [editingCaptain, setEditingCaptain] = React.useState(null);
+  const [previewDocImage, setPreviewDocImage] = React.useState(null);
+
+  // Fetch Live Captains from Backend API
+  const fetchCaptains = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await captainService.getAllCaptains();
+      if (res && res.success) {
+        const mapped = (res.captains || []).map(c => ({
+          _id: c._id,
+          id: c._id.slice(-6).toUpperCase(),
+          name: c.name || 'Captain Partner',
+          mobile: c.phone || '',
+          email: c.email || 'N/A',
+          address: c.currentAddress || c.workingArea?.city || 'N/A',
+          city: c.city || c.workingArea?.city || 'N/A',
+          commission: 'Standard',
+          balance: `₹${Number(c.walletBalance || 0).toFixed(2)}`,
+          cashCollected: `₹${Number(c.cashCollected || 0).toFixed(2)}`,
+          status: c.status || 'pending',
+          available: c.isOnline ? 'Online' : 'Offline',
+          raw: c,
+        }));
+        setCaptains(mapped);
+      }
+    } catch (err) {
+      console.error('Error fetching captains:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchCaptains();
+  }, [fetchCaptains]);
 
   // Sorting Handler
   const handleSort = (field) => {
@@ -1056,14 +1084,20 @@ export const CaptainManagement = () => {
 
   // Filtered & Sorted Captains
   const filteredCaptains = captains.filter(d => {
-    const matchesStatus = statusFilter === 'All' || d.status === statusFilter;
+    const statusUpper = (d.status || '').toUpperCase();
+    const filterUpper = statusFilter.toUpperCase();
+    
+    const matchesStatus = 
+      statusFilter === 'All' || 
+      statusUpper === filterUpper;
+
     const matchesAvailability = availabilityFilter === 'All' || d.available === availabilityFilter;
     const matchesSearch = 
-      d.name.toLowerCase().includes(search.toLowerCase()) ||
-      d.mobile.includes(search) ||
-      d.address.toLowerCase().includes(search.toLowerCase()) ||
-      d.city.toLowerCase().includes(search.toLowerCase()) ||
-      d.id.toLowerCase().includes(search.toLowerCase());
+      (d.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (d.mobile || '').toLowerCase().includes(search.toLowerCase()) ||
+      (d.address || '').toLowerCase().includes(search.toLowerCase()) ||
+      (d.city || '').toLowerCase().includes(search.toLowerCase()) ||
+      (d.id || '').toLowerCase().includes(search.toLowerCase());
     return matchesStatus && matchesAvailability && matchesSearch;
   });
 
@@ -1085,18 +1119,32 @@ export const CaptainManagement = () => {
   const startIndex = (currentPage - 1) * entriesPerPage;
   const paginatedCaptains = sortedCaptains.slice(startIndex, startIndex + entriesPerPage);
 
-  // Actions
-  const toggleStatus = (id) => {
-    setCaptains(prev => prev.map(d => d.id === id ? { ...d, status: d.status === 'Active' ? 'Inactive' : 'Active' } : d));
+  // Live Status Change Handler (Approve / Pending / Reject)
+  const handleToggleCaptainStatus = async (id, newStatus) => {
+    try {
+      const res = await captainService.toggleCaptainStatus(id, newStatus);
+      if (res.success) {
+        alert(res.message || `Captain status updated to ${newStatus.toUpperCase()}`);
+        fetchCaptains();
+      } else {
+        alert(res.message || 'Failed to update status');
+      }
+    } catch (err) {
+      alert(`Error updating status: ${err.message}`);
+    }
   };
 
-  const toggleAvailability = (id) => {
-    setCaptains(prev => prev.map(d => d.id === id ? { ...d, available: d.available === 'Available' ? 'Not Available' : 'Available' } : d));
-  };
-
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this captain?')) {
-      setCaptains(prev => prev.filter(d => d.id !== id));
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this captain application permanently?')) {
+      try {
+        const res = await captainService.deleteCaptain(id);
+        if (res.success) {
+          alert(res.message || 'Captain deleted successfully');
+          fetchCaptains();
+        }
+      } catch (err) {
+        alert(`Error deleting captain: ${err.message}`);
+      }
     }
   };
 
@@ -1181,13 +1229,25 @@ export const CaptainManagement = () => {
               </div>
             </div>
 
-            {/* Right Export Button */}
-            <button 
-              onClick={handleExportCSV}
-              className="px-4 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 shrink-0"
-            >
-              <Download size={14} /> Export v
-            </button>
+            {/* Right Controls: Refresh & Export */}
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={fetchCaptains}
+                disabled={loading}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 transition-all active:scale-95 shrink-0"
+                title="Reload Latest Data"
+              >
+                <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+
+              <button 
+                onClick={handleExportCSV}
+                className="px-4 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 shrink-0"
+              >
+                <Download size={14} /> Export v
+              </button>
+            </div>
           </div>
 
           {/* Show Entries Dropdown */}
@@ -1242,20 +1302,22 @@ export const CaptainManagement = () => {
                       {/* Status Badge */}
                       <td className="py-3 px-3">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          captain.status === 'Active' 
+                          (captain.status || '').toLowerCase() === 'approved' 
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                            : (captain.status || '').toLowerCase() === 'pending'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
                             : 'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}>
-                          {captain.status}
+                          {(captain.status || 'pending').toUpperCase()}
                         </span>
                       </td>
 
                       {/* Availability Badge */}
                       <td className="py-3 px-3">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          captain.available === 'Available' 
+                          captain.available === 'Online' 
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : 'bg-slate-100 text-slate-600 border border-slate-200'
                         }`}>
                           {captain.available}
                         </span>
@@ -1273,42 +1335,33 @@ export const CaptainManagement = () => {
                             <Eye size={15} />
                           </button>
 
-                          {/* Edit Icon */}
-                          <button 
-                            onClick={() => setEditingCaptain({ ...captain })}
-                            className="p-1 rounded-md text-teal-600 hover:bg-teal-50 border-none bg-transparent cursor-pointer transition-colors"
-                            title="Edit Captain"
-                          >
-                            <Edit3 size={15} />
-                          </button>
+                          {/* Approve Button */}
+                          {(captain.status || '').toLowerCase() !== 'approved' && (
+                            <button 
+                              onClick={() => handleToggleCaptainStatus(captain._id, 'approved')}
+                              className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 cursor-pointer transition-colors text-[10px] font-bold flex items-center gap-1"
+                              title="Approve Captain"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                              Approve
+                            </button>
+                          )}
 
-                          {/* Toggle Active/Inactive Status */}
-                          <button 
-                            onClick={() => toggleStatus(captain.id)}
-                            className={`p-1 rounded-md border-none bg-transparent cursor-pointer transition-colors ${
-                              captain.status === 'Active' ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'
-                            }`}
-                            title={captain.status === 'Active' ? 'Deactivate' : 'Activate'}
-                          >
-                            {captain.status === 'Active' ? (
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-                            ) : (
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                            )}
-                          </button>
-
-                          {/* Toggle Availability */}
-                          <button 
-                            onClick={() => toggleAvailability(captain.id)}
-                            className="p-1 rounded-md text-amber-500 hover:bg-amber-50 border-none bg-transparent cursor-pointer transition-colors"
-                            title="Toggle Availability"
-                          >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                          </button>
+                          {/* Reject Button */}
+                          {(captain.status || '').toLowerCase() !== 'rejected' && (
+                            <button 
+                              onClick={() => handleToggleCaptainStatus(captain._id, 'rejected')}
+                              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 cursor-pointer transition-colors text-[10px] font-bold flex items-center gap-1"
+                              title="Reject Captain"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                              Reject
+                            </button>
+                          )}
 
                           {/* Delete Icon */}
                           <button 
-                            onClick={() => handleDelete(captain.id)}
+                            onClick={() => handleDelete(captain._id)}
                             className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border-none bg-transparent cursor-pointer transition-colors"
                             title="Delete Captain"
                           >
@@ -1372,47 +1425,352 @@ export const CaptainManagement = () => {
 
       </div>
 
-      {/* VIEW DETAILS DRAWER */}
+      {/* VIEW DETAILS CENTERED MODAL */}
       {selectedCaptain && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex justify-end">
-          <div className="bg-white w-full max-w-md h-full shadow-2xl overflow-y-auto animate-slideInRight flex flex-col">
-            <div className="bg-[#fff4ed] border-b border-orange-200/70 p-5 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-[#002625] m-0">{selectedCaptain.name}</h3>
-                <p className="text-xs text-slate-500 font-mono mt-0.5 m-0">ID: {selectedCaptain.id}</p>
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
+            
+            {/* Modal Header */}
+            <div className="bg-white border-b border-slate-100 p-6 flex items-center justify-between sticky top-0 z-10">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-[#15803d] flex items-center justify-center font-black text-xl border border-emerald-100">
+                  {selectedCaptain.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-extrabold text-[#002625] m-0">{selectedCaptain.name}</h3>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      (selectedCaptain.status || '').toLowerCase() === 'approved' 
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                        : (selectedCaptain.status || '').toLowerCase() === 'pending'
+                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                        : 'bg-rose-50 text-rose-700 border border-rose-200'
+                    }`}>
+                      {(selectedCaptain.status || 'pending').toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-mono mt-0.5 m-0">ID: {selectedCaptain.id} • Mobile: {selectedCaptain.mobile}</p>
+                </div>
               </div>
+
+              <div className="flex items-center gap-3">
+                {(selectedCaptain.status || '').toLowerCase() !== 'approved' && (
+                  <button 
+                    onClick={() => {
+                      handleToggleCaptainStatus(selectedCaptain._id, 'approved');
+                      setSelectedCaptain(null);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-colors text-xs font-bold flex items-center gap-1.5 shadow-sm border-none"
+                  >
+                    Approve Application
+                  </button>
+                )}
+
+                <button 
+                  onClick={() => setSelectedCaptain(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 border-none cursor-pointer flex items-center justify-center text-lg font-bold transition-colors"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div className="p-6 space-y-6 overflow-y-auto text-xs flex-1">
+
+              {/* Quick Financial Overview */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
+                  <p className="text-base font-extrabold text-emerald-600">{selectedCaptain.balance}</p>
+                </div>
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Cash Collected</p>
+                  <p className="text-base font-extrabold text-[#ff5500]">{selectedCaptain.cashCollected}</p>
+                </div>
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Duty Status</p>
+                  <p className="text-sm font-bold text-slate-800">{selectedCaptain.available}</p>
+                </div>
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Registered On</p>
+                  <p className="text-xs font-bold text-slate-700">
+                    {selectedCaptain.raw?.createdAt ? new Date(selectedCaptain.raw.createdAt).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Section 1: Personal Information */}
+              <div className="border border-slate-100 rounded-2xl p-4 bg-white space-y-3">
+                <h4 className="text-xs font-black text-[#15803d] uppercase tracking-wider border-b border-slate-100 pb-2 m-0">
+                  1. Personal Details
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-slate-700">
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Full Name:</span> <span className="font-bold text-slate-900">{selectedCaptain.raw?.name || selectedCaptain.name}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Primary Mobile:</span> <span className="font-bold text-slate-900">{selectedCaptain.raw?.phone || selectedCaptain.mobile}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Alternate Mobile:</span> <span className="font-semibold text-slate-800">{selectedCaptain.raw?.alternateMobile || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Email ID:</span> <span className="font-semibold text-slate-800">{selectedCaptain.raw?.email || selectedCaptain.email || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Date of Birth:</span> <span className="font-semibold text-slate-800">{selectedCaptain.raw?.dob || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Age:</span> <span className="font-semibold text-slate-800">{selectedCaptain.raw?.age || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Father's Name:</span> <span className="font-semibold text-slate-800">{selectedCaptain.raw?.fatherName || 'N/A'}</span></div>
+                </div>
+              </div>
+
+              {/* Section 2: Address & Location */}
+              <div className="border border-slate-100 rounded-2xl p-4 bg-white space-y-3">
+                <h4 className="text-xs font-black text-[#15803d] uppercase tracking-wider border-b border-slate-100 pb-2 m-0">
+                  2. Address & Emergency Details
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-slate-700">
+                  <div className="sm:col-span-2"><span className="text-slate-400 font-medium block text-[10px]">Current Address:</span> <span className="font-semibold text-slate-800">{selectedCaptain.raw?.currentAddress || selectedCaptain.address || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Emergency Contact:</span> <span className="font-bold text-rose-600">{selectedCaptain.raw?.emergencyContact || 'N/A'}</span></div>
+                  <div className="sm:col-span-2"><span className="text-slate-400 font-medium block text-[10px]">Permanent Address:</span> <span className="font-semibold text-slate-800">{selectedCaptain.raw?.permanentAddress || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">City / State / PIN:</span> <span className="font-semibold text-slate-800">{`${selectedCaptain.raw?.city || selectedCaptain.city || 'N/A'}, ${selectedCaptain.raw?.state || ''} ${selectedCaptain.raw?.pinCode || ''}`}</span></div>
+                </div>
+              </div>
+
+              {/* Section 3: Identity & Vehicle Details */}
+              <div className="border border-slate-100 rounded-2xl p-4 bg-white space-y-3">
+                <h4 className="text-xs font-black text-[#15803d] uppercase tracking-wider border-b border-slate-100 pb-2 m-0">
+                  3. Identity & Vehicle Details
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-slate-700">
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Vehicle Type:</span> <span className="font-bold text-[#ff5500]">{selectedCaptain.raw?.vehicleType || selectedCaptain.vehicle || 'Two Wheeler'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Driving License No:</span> <span className="font-bold font-mono text-slate-900">{selectedCaptain.raw?.drivingLicenseNumber || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Aadhaar Number:</span> <span className="font-bold font-mono text-slate-900">{selectedCaptain.raw?.aadhaarNumber || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">RC Number:</span> <span className="font-semibold font-mono text-slate-800">{selectedCaptain.raw?.rcNumber || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Insurance Number:</span> <span className="font-semibold text-slate-800">{selectedCaptain.raw?.vehicleInsuranceNumber || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Insurance Valid Till:</span> <span className="font-semibold text-slate-800">{selectedCaptain.raw?.insuranceValidTill || 'N/A'}</span></div>
+                </div>
+              </div>
+
+              {/* Section 4: Bank Details */}
+              <div className="border border-slate-100 rounded-2xl p-4 bg-white space-y-3">
+                <h4 className="text-xs font-black text-[#15803d] uppercase tracking-wider border-b border-slate-100 pb-2 m-0">
+                  4. Bank & Payout Information
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-slate-700">
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Bank Name:</span> <span className="font-bold text-slate-900">{selectedCaptain.raw?.bankDetails?.bankName || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Account Holder:</span> <span className="font-semibold text-slate-800">{selectedCaptain.raw?.bankDetails?.accountHolderName || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Account Number:</span> <span className="font-mono font-bold text-slate-900">{selectedCaptain.raw?.bankDetails?.accountNumber || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">IFSC Code:</span> <span className="font-mono font-bold text-slate-900">{selectedCaptain.raw?.bankDetails?.ifscCode || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Branch Name:</span> <span className="font-semibold text-slate-800">{selectedCaptain.raw?.bankDetails?.branchName || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">UPI ID:</span> <span className="font-semibold text-[#15803d]">{selectedCaptain.raw?.bankDetails?.upiId || 'N/A'}</span></div>
+                </div>
+              </div>
+
+              {/* Section 5: Uploaded KYC Documents & Photos */}
+              <div className="border border-slate-100 rounded-2xl p-4 bg-white space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h4 className="text-xs font-black text-[#15803d] uppercase tracking-wider m-0">
+                    5. Uploaded Documents & Real Scans
+                  </h4>
+                  <span className="text-[10px] text-slate-400 font-semibold">Click any image to view in full resolution</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                  {/* Driving License */}
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-slate-700 uppercase">Driving License</span>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                          selectedCaptain.raw?.documents?.drivingLicense ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {selectedCaptain.raw?.documents?.drivingLicense ? 'Attached' : 'Pending'}
+                        </span>
+                      </div>
+                      <p className="font-mono text-[10px] text-slate-500 truncate mt-0.5">
+                        {selectedCaptain.raw?.drivingLicenseNumber || 'No DL No.'}
+                      </p>
+                    </div>
+
+                    {selectedCaptain.raw?.documents?.drivingLicense ? (
+                      <div 
+                        onClick={() => setPreviewDocImage({ title: 'Driving License', src: selectedCaptain.raw.documents.drivingLicense })}
+                        className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-black aspect-video flex items-center justify-center"
+                      >
+                        <img 
+                          src={selectedCaptain.raw.documents.drivingLicense} 
+                          alt="Driving License" 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-[10px] gap-1">
+                          <Eye size={14} /> View Full
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-20 bg-slate-100 border border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-400 text-[10px] font-medium">
+                        <span>No image uploaded</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* RC Document */}
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-slate-700 uppercase">Vehicle RC</span>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                          selectedCaptain.raw?.documents?.rcDocument ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {selectedCaptain.raw?.documents?.rcDocument ? 'Attached' : 'Pending'}
+                        </span>
+                      </div>
+                      <p className="font-mono text-[10px] text-slate-500 truncate mt-0.5">
+                        {selectedCaptain.raw?.rcNumber || 'No RC No.'}
+                      </p>
+                    </div>
+
+                    {selectedCaptain.raw?.documents?.rcDocument ? (
+                      <div 
+                        onClick={() => setPreviewDocImage({ title: 'Vehicle RC Document', src: selectedCaptain.raw.documents.rcDocument })}
+                        className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-black aspect-video flex items-center justify-center"
+                      >
+                        <img 
+                          src={selectedCaptain.raw.documents.rcDocument} 
+                          alt="RC Document" 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-[10px] gap-1">
+                          <Eye size={14} /> View Full
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-20 bg-slate-100 border border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-400 text-[10px] font-medium">
+                        <span>No image uploaded</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Aadhaar Card */}
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-slate-700 uppercase">Aadhaar Card</span>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                          selectedCaptain.raw?.documents?.aadhaarFront ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {selectedCaptain.raw?.documents?.aadhaarFront ? 'Attached' : 'Pending'}
+                        </span>
+                      </div>
+                      <p className="font-mono text-[10px] text-slate-500 truncate mt-0.5">
+                        {selectedCaptain.raw?.aadhaarNumber || 'No Aadhaar No.'}
+                      </p>
+                    </div>
+
+                    {selectedCaptain.raw?.documents?.aadhaarFront || selectedCaptain.raw?.documents?.aadhaarBack ? (
+                      <div 
+                        onClick={() => setPreviewDocImage({ title: 'Aadhaar Card', src: selectedCaptain.raw.documents.aadhaarFront || selectedCaptain.raw.documents.aadhaarBack })}
+                        className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-black aspect-video flex items-center justify-center"
+                      >
+                        <img 
+                          src={selectedCaptain.raw.documents.aadhaarFront || selectedCaptain.raw.documents.aadhaarBack} 
+                          alt="Aadhaar Card" 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-[10px] gap-1">
+                          <Eye size={14} /> View Full
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-20 bg-slate-100 border border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-400 text-[10px] font-medium">
+                        <span>No image uploaded</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Vehicle Insurance */}
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-slate-700 uppercase">Insurance Policy</span>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                          selectedCaptain.raw?.documents?.insuranceDoc ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {selectedCaptain.raw?.documents?.insuranceDoc ? 'Attached' : 'Pending'}
+                        </span>
+                      </div>
+                      <p className="font-mono text-[10px] text-slate-500 truncate mt-0.5">
+                        {selectedCaptain.raw?.vehicleInsuranceNumber || 'No Policy No.'}
+                      </p>
+                    </div>
+
+                    {selectedCaptain.raw?.documents?.insuranceDoc ? (
+                      <div 
+                        onClick={() => setPreviewDocImage({ title: 'Vehicle Insurance Policy', src: selectedCaptain.raw.documents.insuranceDoc })}
+                        className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-black aspect-video flex items-center justify-center"
+                      >
+                        <img 
+                          src={selectedCaptain.raw.documents.insuranceDoc} 
+                          alt="Insurance Policy" 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-[10px] gap-1">
+                          <Eye size={14} /> View Full
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-20 bg-slate-100 border border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-400 text-[10px] font-medium">
+                        <span>No image uploaded</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400 font-medium">Shippnex Captain Command Center</span>
               <button 
                 onClick={() => setSelectedCaptain(null)}
-                className="text-slate-400 hover:text-slate-900 border-none bg-transparent cursor-pointer text-xl font-bold"
+                className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl border-none cursor-pointer transition-colors shadow-sm"
+              >
+                Close Modal
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN LIGHTBOX DOCUMENT IMAGE PREVIEW */}
+      {previewDocImage && (
+        <div 
+          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setPreviewDocImage(null)}
+        >
+          <div 
+            className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-3.5 bg-slate-900 text-white flex justify-between items-center">
+              <h4 className="text-xs font-bold text-white m-0 flex items-center gap-2">
+                <FileText size={16} className="text-[#97fc43]" />
+                {previewDocImage.title}
+              </h4>
+              <button 
+                onClick={() => setPreviewDocImage(null)} 
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center border-none cursor-pointer"
               >
                 ×
               </button>
             </div>
-            
-            <div className="p-6 space-y-4 text-xs flex-1">
-              <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-100">
-                <div className="flex justify-between"><span className="text-slate-500 font-semibold">Mobile:</span> <span className="font-bold text-slate-900">{selectedCaptain.mobile}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500 font-semibold">Email:</span> <span className="font-bold text-slate-900">{selectedCaptain.email}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500 font-semibold">Vehicle:</span> <span className="font-bold text-[#ff5500]">{selectedCaptain.vehicle}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500 font-semibold">City:</span> <span className="font-bold text-slate-900">{selectedCaptain.city}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500 font-semibold">Address:</span> <span className="font-medium text-slate-700">{selectedCaptain.address}</span></div>
-              </div>
-
-              <div className="bg-orange-50/40 p-4 rounded-xl space-y-2 border border-orange-100">
-                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Commission:</span> <span className="font-bold text-slate-900">{selectedCaptain.commission}</span></div>
-                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Wallet Balance:</span> <span className="font-bold text-emerald-600">{selectedCaptain.balance}</span></div>
-                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Cash Collected:</span> <span className="font-bold text-[#ff5500]">{selectedCaptain.cashCollected}</span></div>
-                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Account Status:</span> <span className="font-bold text-emerald-700">{selectedCaptain.status}</span></div>
-                <div className="flex justify-between"><span className="text-slate-600 font-semibold">Duty Availability:</span> <span className="font-bold text-emerald-700">{selectedCaptain.available}</span></div>
-              </div>
+            <div className="p-4 bg-slate-950 flex items-center justify-center overflow-auto max-h-[75vh]">
+              <img 
+                src={previewDocImage.src} 
+                alt={previewDocImage.title} 
+                className="max-h-[70vh] w-auto object-contain rounded-xl shadow-lg" 
+              />
             </div>
-
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex justify-end">
               <button 
-                onClick={() => setSelectedCaptain(null)}
-                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl border-none cursor-pointer"
+                onClick={() => setPreviewDocImage(null)}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl border-none cursor-pointer"
               >
-                Close Drawer
+                Close Viewer
               </button>
             </div>
           </div>
@@ -3830,157 +4188,246 @@ export const AdminWalletFinance = () => {
   const [userFilter, setUserFilter] = React.useState('All Users');
   const [typeFilter, setTypeFilter] = React.useState('All Types');
   const [search, setSearch] = React.useState('');
+  const [loading, setLoading] = React.useState(true);
 
-  // Transactions State
-  const [transactions, setTransactions] = React.useState([
-    { id: 'TXN-901', dateTime: '22/7/2026, 8:28:44 pm', user: 'Cakes n bakes', userRole: 'Seller', type: 'Credit', description: 'Sale proceeds from Order #ORD1784732281209325', amount: '+₹108.00' },
-    { id: 'TXN-902', dateTime: '11/7/2026, 12:40:38 pm', user: 'Deepak kumar', userRole: 'Captain', type: 'Credit', description: 'Delivery earning for COD order ORD1783753725052987', amount: '+₹7.50' },
-    { id: 'TXN-903', dateTime: '6/7/2026, 4:12:19 pm', user: 'Harshvardhan', userRole: 'Seller', type: 'Credit', description: 'Sale proceeds from Order #ORD1783334491042306', amount: '+₹90.00' },
-    { id: 'TXN-904', dateTime: '6/7/2026, 4:10:10 pm', user: 'Harshvardhan', userRole: 'Seller', type: 'Credit', description: 'Sale proceeds from Order #ORD1783334383313326', amount: '+₹90.00' },
-    { id: 'TXN-905', dateTime: '5/7/2026, 2:15:20 pm', user: 'Vishal Patel', userRole: 'Captain', type: 'Debit', description: 'Cash collected payout settlement', amount: '-₹450.00' },
-  ]);
+  // Dynamic Data States
+  const [summary, setSummary] = React.useState({
+    totalCommissionEarned: 0,
+    totalSettledAmount: 0,
+    totalTransactions: 0,
+  });
+  const [settlements, setSettlements] = React.useState([]);
+  const [withdrawals, setWithdrawals] = React.useState([]);
 
-  // Withdrawal Requests State
-  const [withdrawals, setWithdrawals] = React.useState([
-    { id: 'WD-501', user: 'Apex Wholesale Grocery', userRole: 'Seller', amount: '₹12,450.00', bankDetails: 'HDFC Bank • A/C 9876543210 • IFSC HDFC0001234', requestedDate: '28/7/2026', status: 'Pending' }
-  ]);
+  // Fetch Live Data from Backend API
+  const fetchData = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [settlementsRes, withdrawalsRes] = await Promise.all([
+        walletService.getAdminSettlements().catch(err => {
+          console.warn('Failed to fetch settlements:', err.message);
+          return { summary: {}, settlements: [] };
+        }),
+        walletService.getAdminWithdrawals().catch(err => {
+          console.warn('Failed to fetch withdrawals:', err.message);
+          return { withdrawals: [] };
+        }),
+      ]);
 
-  // Action Handlers
-  const handleApproveWithdrawal = (id) => {
-    if (window.confirm('Approve and process this withdrawal payout?')) {
-      setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, status: 'Approved' } : w));
+      if (settlementsRes.success !== false) {
+        setSummary(settlementsRes.summary || { totalCommissionEarned: 0, totalSettledAmount: 0, totalTransactions: 0 });
+        setSettlements(settlementsRes.settlements || []);
+      }
+
+      if (withdrawalsRes.success !== false) {
+        setWithdrawals(withdrawalsRes.withdrawals || []);
+      }
+    } catch (err) {
+      console.error('Error fetching admin wallet data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Action Handler: Update Withdrawal Status (Approve / Reject / Complete)
+  const handleUpdateWithdrawalStatus = async (id, newStatus) => {
+    const remarkPrompt = newStatus === 'REJECTED' 
+      ? prompt('Enter rejection reason / remark (Seller will be refunded automatically):', 'Rejected by Admin')
+      : prompt('Enter optional admin remark / payment reference:', 'Processed by Admin');
+
+    if (remarkPrompt === null) return; // User cancelled prompt
+
+    try {
+      const res = await walletService.updateWithdrawalStatus(id, newStatus, remarkPrompt);
+      if (res.success) {
+        alert(res.message || `Withdrawal request status updated to ${newStatus}`);
+        fetchData(); // Refresh live data
+      } else {
+        alert(res.message || 'Failed to update withdrawal status');
+      }
+    } catch (err) {
+      alert(`Error updating status: ${err.message}`);
     }
   };
 
-  const handleRejectWithdrawal = (id) => {
-    if (window.confirm('Reject this withdrawal request?')) {
-      setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, status: 'Rejected' } : w));
-    }
-  };
+  // Calculate dynamic metrics
+  const totalPendingWithdrawalsAmt = withdrawals
+    .filter(w => (w.status || '').toUpperCase() === 'PENDING')
+    .reduce((acc, w) => acc + (w.amount || 0), 0);
 
-  const filteredTransactions = transactions.filter(t => {
-    const matchesUser = userFilter === 'All Users' || t.userRole === userFilter;
-    const matchesType = typeFilter === 'All Types' || t.type === typeFilter;
+  const totalCompletedWithdrawalsAmt = withdrawals
+    .filter(w => ['APPROVED', 'COMPLETED', 'Approved', 'Completed'].includes(w.status))
+    .reduce((acc, w) => acc + (w.amount || 0), 0);
+
+  const pendingWithdrawalsCount = withdrawals.filter(w => (w.status || '').toUpperCase() === 'PENDING').length;
+
+  // Filtered Transactions List
+  const filteredSettlements = settlements.filter(s => {
     const matchesSearch = 
-      t.user.toLowerCase().includes(search.toLowerCase()) ||
-      t.description.toLowerCase().includes(search.toLowerCase()) ||
-      t.id.toLowerCase().includes(search.toLowerCase());
-    return matchesUser && matchesType && matchesSearch;
+      (s.sellerName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (s.orderId || '').toLowerCase().includes(search.toLowerCase()) ||
+      (s.paymentMethod || '').toLowerCase().includes(search.toLowerCase());
+    return matchesSearch;
+  });
+
+  // Filtered Withdrawals List
+  const filteredWithdrawals = withdrawals.filter(w => {
+    const statusUpper = (w.status || '').toUpperCase();
+    const filterUpper = typeFilter.toUpperCase();
+    
+    const matchesStatus = 
+      typeFilter === 'All Types' || 
+      typeFilter === 'All' || 
+      statusUpper === filterUpper;
+
+    const matchesSearch = 
+      (w.sellerName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (w.withdrawalId || '').toLowerCase().includes(search.toLowerCase()) ||
+      (w.bankDetails?.bankName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (w.bankDetails?.accountNumber || '').toLowerCase().includes(search.toLowerCase());
+
+    return matchesStatus && matchesSearch;
   });
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
-      {/* Page Title & Subtitle */}
-      <div>
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight m-0">Admin Wallet & Finance</h1>
-        <p className="text-xs text-slate-500 font-medium mt-1 m-0">
-          Manage transactions, track earnings, and process withdrawals.
-        </p>
+      {/* Page Title & Refresh */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight m-0">Admin Wallet & Finance</h1>
+          <p className="text-xs text-slate-500 font-medium mt-1 m-0">
+            Manage settlements, track commission earnings, and process seller withdrawal payouts.
+          </p>
+        </div>
+        <button
+          onClick={fetchData}
+          disabled={loading}
+          className="px-3.5 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-xl cursor-pointer transition-all flex items-center gap-1.5 shadow-2xs"
+        >
+          <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6"/><path d="M2 11.5a10 10 0 0 1 18.8-4.3L21.5 8M22 12.5a10 10 0 0 1-18.8 4.2L2.5 16"/></svg>
+          {loading ? 'Refreshing...' : 'Refresh Data'}
+        </button>
       </div>
 
-      {/* Compact Top Metrics Grid (6 Sleek Cards) */}
+      {/* Top Metrics Grid (Dynamic Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
         
-        {/* Card 1: Total Platform Earning */}
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:shadow-xs transition-all space-y-1.5 relative">
-          <div className="flex justify-between items-center">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-            </div>
-            <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-              LIVE STATUS <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            </div>
-          </div>
-          <div>
-            <span className="text-[11px] font-medium text-slate-500 block leading-none">Total Platform Earning</span>
-            <h2 className="text-lg font-extrabold text-slate-900 tracking-tight m-0 mt-1">₹65,973.7</h2>
-          </div>
-          <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Total money collected</p>
-        </div>
-
-        {/* Card 2: Total Admin Earning */}
+        {/* Card 1: Settled Admin Commission */}
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:shadow-xs transition-all space-y-1.5 relative">
           <div className="flex justify-between items-center">
             <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-sm">
-              $
+              ₹
             </div>
             <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-              LIVE STATUS <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              LIVE DATA <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             </div>
           </div>
           <div>
-            <span className="text-[11px] font-medium text-slate-500 block leading-none">Total Admin Earning</span>
-            <h2 className="text-lg font-extrabold text-slate-900 tracking-tight m-0 mt-1">₹3,991.4</h2>
+            <span className="text-[11px] font-medium text-slate-500 block leading-none">Settled Admin Commission</span>
+            <h2 className="text-lg font-extrabold text-purple-600 tracking-tight m-0 mt-1">
+              ₹{Number(summary.settledCommissionEarned || 0).toFixed(2)}
+            </h2>
           </div>
-          <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Net profit for platform</p>
+          <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Finalized revenue from delivered orders</p>
         </div>
 
-        {/* Card 3: Current Platform Balance */}
+        {/* Card 2: Pending Admin Commission */}
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:shadow-xs transition-all space-y-1.5 relative">
+          <div className="flex justify-between items-center">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-sm">
+              ₹
+            </div>
+            <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+              LIVE DATA <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+            </div>
+          </div>
+          <div>
+            <span className="text-[11px] font-medium text-slate-500 block leading-none">Pending Admin Commission</span>
+            <h2 className="text-lg font-extrabold text-amber-600 tracking-tight m-0 mt-1">
+              ₹{Number(summary.pendingAdminCommission || 0).toFixed(2)}
+            </h2>
+          </div>
+          <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Projected revenue from in-transit orders</p>
+        </div>
+
+        {/* Card 3: Total Settled to Sellers */}
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:shadow-xs transition-all space-y-1.5 relative">
           <div className="flex justify-between items-center">
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
             </div>
             <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-              LIVE STATUS <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              LIVE DATA <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             </div>
           </div>
           <div>
-            <span className="text-[11px] font-medium text-slate-500 block leading-none">Current Platform Balance</span>
-            <h2 className="text-lg font-extrabold text-slate-900 tracking-tight m-0 mt-1">₹65,873.7</h2>
+            <span className="text-[11px] font-medium text-slate-500 block leading-none">Total Net Settled to Sellers</span>
+            <h2 className="text-lg font-extrabold text-emerald-600 tracking-tight m-0 mt-1">
+              ₹{Number(summary.totalSettledAmount || 0).toFixed(2)}
+            </h2>
           </div>
-          <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Available for business</p>
+          <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Credited into seller available wallets</p>
         </div>
 
-        {/* Card 4: Pending from Captains */}
+        {/* Card 4: Pending Seller Amount */}
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:shadow-xs transition-all space-y-1.5 relative">
           <div className="flex justify-between items-center">
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
               <Clock size={16} />
             </div>
             <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-              LIVE STATUS <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              LIVE DATA <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
             </div>
           </div>
           <div>
-            <span className="text-[11px] font-medium text-slate-500 block leading-none">Pending from Captains</span>
-            <h2 className="text-lg font-extrabold text-slate-900 tracking-tight m-0 mt-1">₹3,190</h2>
+            <span className="text-[11px] font-medium text-slate-500 block leading-none">Pending Seller Balances</span>
+            <h2 className="text-lg font-extrabold text-blue-600 tracking-tight m-0 mt-1">
+              ₹{Number(summary.pendingSellerAmount || 0).toFixed(2)}
+            </h2>
           </div>
-          <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">COD cash to be collected</p>
+          <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Owed to sellers upon delivery</p>
         </div>
 
-        {/* Card 5: Seller Pending Payouts */}
+        {/* Card 5: Pending Withdrawal Requests */}
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:shadow-xs transition-all space-y-1.5 relative">
           <div className="flex justify-between items-center">
             <div className="w-8 h-8 rounded-lg bg-[#fff4ed] text-[#ff5500] flex items-center justify-center">
               <Store size={16} />
             </div>
             <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-              LIVE STATUS <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              LIVE DATA <span className="w-1.5 h-1.5 rounded-full bg-[#ff5500] animate-pulse"></span>
             </div>
           </div>
           <div>
-            <span className="text-[11px] font-medium text-slate-500 block leading-none">Seller Pending Payouts</span>
-            <h2 className="text-lg font-extrabold text-slate-900 tracking-tight m-0 mt-1">₹67,724.9</h2>
+            <span className="text-[11px] font-medium text-slate-500 block leading-none">Pending Withdrawal Requests</span>
+            <h2 className="text-lg font-extrabold text-[#ff5500] tracking-tight m-0 mt-1">
+              ₹{totalPendingWithdrawalsAmt.toFixed(2)}
+            </h2>
           </div>
-          <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Owed to sellers</p>
+          <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">{pendingWithdrawalsCount} pending payout request(s)</p>
         </div>
 
-        {/* Card 6: Captain Pending Payouts */}
+        {/* Card 6: Total Completed Bank Payouts */}
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:shadow-xs transition-all space-y-1.5 relative">
           <div className="flex justify-between items-center">
             <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <Truck size={16} />
+              <FileText size={16} />
             </div>
             <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-              LIVE STATUS <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              LIVE DATA <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             </div>
           </div>
           <div>
-            <span className="text-[11px] font-medium text-slate-500 block leading-none">Captain Pending Payouts</span>
-            <h2 className="text-lg font-extrabold text-slate-900 tracking-tight m-0 mt-1">₹1,793.2</h2>
+            <span className="text-[11px] font-medium text-slate-500 block leading-none">Completed Bank Payouts</span>
+            <h2 className="text-lg font-extrabold text-indigo-600 tracking-tight m-0 mt-1">
+              ₹{totalCompletedWithdrawalsAmt.toFixed(2)}
+            </h2>
           </div>
-          <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Owed to delivery partners</p>
+          <p className="text-[10px] text-slate-400 font-medium pt-1 border-t border-slate-100 m-0 leading-none">Total processed bank transfers</p>
         </div>
 
       </div>
@@ -3999,19 +4446,7 @@ export const AdminWalletFinance = () => {
             }`}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
-            All Transactions
-          </button>
-
-          <button 
-            onClick={() => setActiveTab('admin_earnings')}
-            className={`pb-3 text-xs font-bold border-b-2 cursor-pointer transition-all flex items-center gap-2 ${
-              activeTab === 'admin_earnings'
-                ? 'border-[#ff5500] text-[#ff5500]'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
-            Admin Earnings
+            Seller Settlement Records ({settlements.length})
           </button>
 
           <button 
@@ -4024,122 +4459,94 @@ export const AdminWalletFinance = () => {
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             Withdrawal Requests
-            <span className="w-5 h-5 rounded-full bg-rose-500 text-white font-extrabold text-[10px] flex items-center justify-center">
-              {withdrawals.filter(w => w.status === 'Pending').length}
-            </span>
+            {pendingWithdrawalsCount > 0 && (
+              <span className="w-5 h-5 rounded-full bg-rose-500 text-white font-extrabold text-[10px] flex items-center justify-center">
+                {pendingWithdrawalsCount}
+              </span>
+            )}
           </button>
         </div>
 
         {/* Tab Content Section */}
         <div className="p-6 space-y-5">
           
-          {/* Filters Bar */}
+          {/* Search & Filters */}
           <div className="flex flex-wrap items-center justify-between gap-4 text-xs">
-            <div className="flex flex-wrap items-center gap-3">
-              <select 
-                value={userFilter}
-                onChange={(e) => setUserFilter(e.target.value)}
-                className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-[#ff5500] cursor-pointer font-medium"
-              >
-                <option value="All Users">All Users</option>
-                <option value="Seller">Sellers Only</option>
-                <option value="Captain">Captains Only</option>
-              </select>
-
-              <select 
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-[#ff5500] cursor-pointer font-medium"
-              >
-                <option value="All Types">All Types</option>
-                <option value="Credit">Credit</option>
-                <option value="Debit">Debit</option>
-              </select>
-            </div>
-
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input 
                 type="text" 
-                placeholder="Search transactions..."
+                placeholder="Search by order ID, seller, bank..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-52 bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-[#ff5500]"
+                className="w-64 bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-[#ff5500]"
               />
             </div>
           </div>
 
-          {/* Tab 1: All Transactions Table */}
+          {/* Tab 1: Settlements Table */}
           {activeTab === 'all_transactions' && (
             <div className="overflow-x-auto border border-slate-200 rounded-xl">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium">
                     <th className="py-3.5 px-4">Date & Time</th>
-                    <th className="py-3.5 px-4">User</th>
-                    <th className="py-3.5 px-4">Type</th>
-                    <th className="py-3.5 px-4">Description</th>
-                    <th className="py-3.5 px-4 text-right">Amount</th>
+                    <th className="py-3.5 px-4">Order ID</th>
+                    <th className="py-3.5 px-4">Seller Store</th>
+                    <th className="py-3.5 px-4">Gross Amount</th>
+                    <th className="py-3.5 px-4">Comm. Rate</th>
+                    <th className="py-3.5 px-4 text-purple-700">Admin Comm. (₹)</th>
+                    <th className="py-3.5 px-4 text-emerald-700">Net Seller Amount</th>
+                    <th className="py-3.5 px-4">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
-                  {filteredTransactions.map((t) => (
-                    <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-mono text-slate-500 text-[11px]">{t.dateTime}</td>
-                      <td className="py-3.5 px-4 space-y-0.5">
-                        <p className="font-bold text-slate-900 text-xs m-0">{t.user}</p>
-                        <p className="text-[10px] text-slate-400 font-semibold m-0 uppercase tracking-wider">{t.userRole}</p>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          t.type === 'Credit' 
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}>
-                          {t.type}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-600 max-w-md truncate" title={t.description}>{t.description}</td>
-                      <td className={`py-3.5 px-4 text-right font-mono font-bold ${
-                        t.amount.startsWith('+') ? 'text-emerald-600' : 'text-rose-600'
-                      }`}>
-                        {t.amount}
+                  {filteredSettlements.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="py-8 text-center text-slate-400">
+                        No settlement records found.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredSettlements.map((s) => (
+                      <tr key={s._id || s.orderId} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3.5 px-4 font-mono text-slate-500 text-[11px]">
+                          {s.createdAt ? new Date(s.createdAt).toLocaleString() : 'N/A'}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{s.orderId}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-800">{s.sellerName || 'Seller'}</td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-900">₹{Number(s.totalAmount || 0).toFixed(2)}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-600">{s.commissionRate || 10}%</td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-purple-700">₹{Number(s.commissionAmount || 0).toFixed(2)}</td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-emerald-600">₹{Number(s.netSellerAmount || 0).toFixed(2)}</td>
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            s.settlementStatus === 'SETTLED' 
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}>
+                            {s.settlementStatus || 'PENDING'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           )}
 
-          {/* Tab 2: Admin Earnings View */}
-          {activeTab === 'admin_earnings' && (
-            <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-4">
-              <h3 className="text-sm font-bold text-slate-900 m-0">Net Platform Profit Overview</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div className="bg-white p-4 rounded-xl border border-slate-200">
-                  <span className="text-slate-400 font-semibold block mb-1">Commission Profit Rate</span>
-                  <span className="text-lg font-black text-[#ff5500]">5.0% Fixed Platform Fee</span>
-                </div>
-                <div className="bg-white p-4 rounded-xl border border-slate-200">
-                  <span className="text-slate-400 font-semibold block mb-1">Total Admin Earnings</span>
-                  <span className="text-lg font-black text-emerald-600">₹3,991.40</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Tab 3: Withdrawal Requests View matching user reference design */}
+          {/* Tab 2: Withdrawal Requests View */}
           {activeTab === 'withdrawals' && (
             <div className="space-y-4">
-              {/* Status Filter Pill Buttons (All, Pending, Approved, Completed, Rejected) */}
+              {/* Status Filter Pill Buttons */}
               <div className="flex flex-wrap items-center gap-2 pb-2">
-                {['All', 'Pending', 'Approved', 'Completed', 'Rejected'].map((status) => (
+                {['All', 'PENDING', 'APPROVED', 'COMPLETED', 'REJECTED'].map((status) => (
                   <button
                     key={status}
                     onClick={() => setTypeFilter(status === 'All' ? 'All Types' : status)}
                     className={`px-4 py-1.5 rounded-xl text-xs font-bold border cursor-pointer transition-all ${
-                      (typeFilter === 'All Types' && status === 'All') || typeFilter === status
+                      (typeFilter === 'All Types' && status === 'All') || typeFilter.toUpperCase() === status
                         ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                     }`}
@@ -4151,82 +4558,110 @@ export const AdminWalletFinance = () => {
 
               {/* Withdrawal Card List */}
               <div className="space-y-4">
-                {[
-                  { id: 'WD-501', title: 'Seller Withdrawal', role: 'SELLER', user: 'appzeto', date: 'Requested: 27/1/2026, 10:38:58 pm', amount: '₹510.00', status: 'Completed', method: 'Bank Transfer', bankDetails: 'IDFC - 54684651684651 (undefined)', reference: 'hjhbjh' },
-                  { id: 'WD-502', title: 'Captain Withdrawal', role: 'captain', user: 'N/A', date: 'Requested: 7/1/2026, 3:22:40 pm', amount: '₹40.00', status: 'Pending', method: 'UPI', bankDetails: 'UPI ID: slovevanshi666@gmail.com', reference: null },
-                  { id: 'WD-503', title: 'Seller Withdrawal', role: 'SELLER', user: 'Deepak Kumar', date: 'Requested: 28/5/2026, 2:52:17 pm', amount: '₹500.00', status: 'Completed', method: 'UPI', bankDetails: 'Airtel payment bank - 9031275861 (AIRP0000001)', reference: '9031275861' },
-                  { id: 'WD-504', title: 'Seller Withdrawal', role: 'SELLER', user: 'Harsh shop', date: 'Requested: 30/4/2026, 12:19:51 pm', amount: '₹100.00', status: 'Completed', method: 'Bank Transfer', bankDetails: 'HDFC - 9877898789898998888898 (undefined)', reference: 'cydf' },
-                ]
-                .filter(item => typeFilter === 'All Types' || typeFilter === 'All' || item.status === typeFilter)
-                .map((w) => (
-                  <div key={w.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all p-5 space-y-4">
-                    {/* Top Row: Title, Role Badge, User, Date, Amount & Status */}
-                    <div className="flex justify-between items-start gap-4">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-bold text-slate-900 m-0">{w.title}</h3>
-                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider ${
-                            w.role === 'SELLER' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            {w.role}
-                          </span>
-                        </div>
-                        <p className="text-xs font-semibold text-slate-700 m-0">{w.user}</p>
-                        <p className="text-[11px] text-slate-400 font-mono m-0">{w.date}</p>
-                      </div>
-
-                      <div className="text-right space-y-1">
-                        <h2 className="text-lg font-black text-slate-900 tracking-tight m-0">{w.amount}</h2>
-                        <span className={`inline-block px-3 py-0.5 rounded-full text-[10px] font-bold ${
-                          w.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
-                          w.status === 'Pending' ? 'bg-amber-100 text-amber-700' :
-                          w.status === 'Approved' ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'
-                        }`}>
-                          {w.status}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Middle Grey Details Container */}
-                    <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-100 space-y-3 text-xs">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">PAYMENT METHOD</span>
-                          <span className="font-bold text-slate-900">{w.method}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">BANK DETAILS</span>
-                          <span className="font-bold text-slate-900 font-mono">{w.bankDetails}</span>
-                        </div>
-                      </div>
-
-                      {w.reference && (
-                        <div className="pt-2 border-t border-slate-200/50">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">TRANSACTION REFERENCE</span>
-                          <span className="font-mono text-slate-800 font-semibold">{w.reference}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Approve / Reject Buttons if Pending */}
-                    {w.status === 'Pending' && (
-                      <div className="grid grid-cols-2 gap-3 pt-1">
-                        <button 
-                          onClick={() => alert(`Approved withdrawal ${w.id}`)}
-                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-2xs transition-all active:scale-95 text-center"
-                        >
-                          Approve
-                        </button>
-                        <button 
-                          onClick={() => alert(`Rejected withdrawal ${w.id}`)}
-                          className="w-full py-2.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold rounded-xl cursor-pointer transition-all active:scale-95 text-center"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    )}
+                {filteredWithdrawals.length === 0 ? (
+                  <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400">
+                    No withdrawal requests found for this filter.
                   </div>
-                ))}
+                ) : (
+                  filteredWithdrawals.map((w) => {
+                    const statusUpper = (w.status || 'PENDING').toUpperCase();
+                    return (
+                      <div key={w._id || w.withdrawalId} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all p-5 space-y-4">
+                        {/* Top Row */}
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-bold text-slate-900 m-0">Withdrawal Request #{w.withdrawalId}</h3>
+                              <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider bg-purple-100 text-purple-700">
+                                SELLER
+                              </span>
+                            </div>
+                            <p className="text-xs font-semibold text-slate-700 m-0">{w.sellerName || 'Seller Store'}</p>
+                            <p className="text-[11px] text-slate-400 font-mono m-0">
+                              Requested: {w.createdAt ? new Date(w.createdAt).toLocaleString() : 'N/A'}
+                            </p>
+                          </div>
+
+                          <div className="text-right space-y-1">
+                            <h2 className="text-lg font-black text-slate-900 tracking-tight m-0">₹{Number(w.amount || 0).toFixed(2)}</h2>
+                            <span className={`inline-block px-3 py-0.5 rounded-full text-[10px] font-bold ${
+                              ['COMPLETED', 'Completed'].includes(statusUpper) ? 'bg-emerald-100 text-emerald-700' :
+                              ['PENDING', 'Pending'].includes(statusUpper) ? 'bg-amber-100 text-amber-700' :
+                              ['APPROVED', 'Approved'].includes(statusUpper) ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'
+                            }`}>
+                              {statusUpper}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Middle Details Container */}
+                        <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-100 space-y-3 text-xs">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">BANK NAME</span>
+                              <span className="font-bold text-slate-900">{w.bankDetails?.bankName || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">ACCOUNT NUMBER & IFSC</span>
+                              <span className="font-bold text-slate-900 font-mono">
+                                A/C: {w.bankDetails?.accountNumber || 'N/A'} | IFSC: {w.bankDetails?.ifscCode || 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {w.bankDetails?.accountHolderName && (
+                            <div className="pt-2 border-t border-slate-200/50">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">ACCOUNT HOLDER</span>
+                              <span className="font-mono text-slate-800 font-semibold">{w.bankDetails.accountHolderName}</span>
+                            </div>
+                          )}
+
+                          {w.adminRemark && (
+                            <div className="pt-2 border-t border-slate-200/50">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">ADMIN REMARK</span>
+                              <span className="text-slate-800 italic">{w.adminRemark}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Approve / Complete / Reject Buttons if Pending */}
+                        {statusUpper === 'PENDING' && (
+                          <div className="grid grid-cols-3 gap-3 pt-1">
+                            <button 
+                              onClick={() => handleUpdateWithdrawalStatus(w._id, 'APPROVED')}
+                              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-2xs transition-all active:scale-95 text-center"
+                            >
+                              Approve Request
+                            </button>
+                            <button 
+                              onClick={() => handleUpdateWithdrawalStatus(w._id, 'COMPLETED')}
+                              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-2xs transition-all active:scale-95 text-center"
+                            >
+                              Complete Payout
+                            </button>
+                            <button 
+                              onClick={() => handleUpdateWithdrawalStatus(w._id, 'REJECTED')}
+                              className="w-full py-2.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold rounded-xl cursor-pointer transition-all active:scale-95 text-center"
+                            >
+                              Reject & Refund
+                            </button>
+                          </div>
+                        )}
+
+                        {statusUpper === 'APPROVED' && (
+                          <div className="pt-1">
+                            <button 
+                              onClick={() => handleUpdateWithdrawalStatus(w._id, 'COMPLETED')}
+                              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-2xs transition-all active:scale-95 text-center"
+                            >
+                              Mark Bank Transfer Completed
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}

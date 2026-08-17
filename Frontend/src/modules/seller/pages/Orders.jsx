@@ -21,6 +21,7 @@ const Orders = () => {
   // Active Order Modal State
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [modalMode, setModalMode] = useState('BIG'); // 'SMALL' for auto new order popup, 'BIG' for view details
+  const [viewingProofUrl, setViewingProofUrl] = useState(null);
 
   // Rejection Modal State
   const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
@@ -492,7 +493,21 @@ const Orders = () => {
                     <span className="font-semibold">{n.paymentMethod}</span> ({n.paymentStatus})
                   </td>
                   <td className="px-5 py-4">
-                    <NotificationStatusBadge status={n.status} />
+                    <div className="flex flex-col gap-1 items-start">
+                      <NotificationStatusBadge status={n.status} />
+                      {n.proofOfDeliveryUrl && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewingProofUrl(n.proofOfDeliveryUrl);
+                          }}
+                          className="text-[10.5px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200 cursor-pointer flex items-center gap-1 transition-all"
+                        >
+                          📸 View Proof
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td className="px-5 py-4 text-right">
                     <button 
@@ -898,6 +913,56 @@ const Orders = () => {
                 </div>
               </div>
 
+              {/* Proof of Delivery Photo (Uploaded by Captain upon delivery) */}
+              {selectedNotification.proofOfDeliveryUrl ? (
+                <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200/90 space-y-3 shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-emerald-200/60 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-emerald-800 text-lg font-bold">photo_camera</span>
+                      <span className="text-xs font-black uppercase text-emerald-900 tracking-wider">Proof of Delivery (Uploaded by Captain)</span>
+                    </div>
+                    <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full">
+                      ✓ Verified Drop-off
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div 
+                      onClick={() => setViewingProofUrl(selectedNotification.proofOfDeliveryUrl)}
+                      className="w-full sm:w-44 h-36 rounded-xl overflow-hidden border-2 border-emerald-400 shadow-sm cursor-pointer group relative bg-white shrink-0"
+                    >
+                      <img 
+                        src={selectedNotification.proofOfDeliveryUrl} 
+                        alt="Delivery Proof" 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white font-bold text-xs gap-1 transition-opacity">
+                        <Eye size={16} /> Click to Enlarge
+                      </div>
+                    </div>
+
+                    <div className="flex-1 space-y-1.5 text-xs">
+                      <p className="font-bold text-slate-800 m-0">Real Delivery Photo Evidence</p>
+                      <p className="text-slate-600 text-[11.5px] m-0 leading-relaxed">
+                        This real package drop-off photo was captured and uploaded by the delivery captain upon OTP confirmation at the customer doorstep.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setViewingProofUrl(selectedNotification.proofOfDeliveryUrl)}
+                        className="mt-1 px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] rounded-lg border-none cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <Eye size={13} /> View Full-Size Proof
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (selectedNotification.status === 'DELIVERED' || selectedNotification.status === 'Delivered') ? (
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs text-slate-500 flex items-center gap-2.5">
+                  <span className="material-symbols-outlined text-slate-400 text-lg">info</span>
+                  <span>Delivered with OTP verification. No photo proof uploaded by captain.</span>
+                </div>
+              ) : null}
+
               {/* Payment Details & Total Seller Amount */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -1029,6 +1094,48 @@ const Orders = () => {
         </div>
       )}
 
+      {/* 5. FULL-SIZE PROOF OF DELIVERY LIGHTBOX MODAL */}
+      {viewingProofUrl && (
+        <div 
+          onClick={() => setViewingProofUrl(null)}
+          className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[92vh] border border-slate-200"
+          >
+            <div className="px-5 py-3.5 bg-white border-b border-slate-100 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-emerald-700 text-lg font-bold">photo_camera</span>
+                <h3 className="text-sm font-extrabold text-slate-900 m-0">Proof of Delivery (Real Drop-off Photo)</h3>
+              </div>
+              <button 
+                onClick={() => setViewingProofUrl(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer border-none"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 bg-slate-100 flex items-center justify-center overflow-auto max-h-[70vh]">
+              <img 
+                src={viewingProofUrl} 
+                alt="Full Delivery Proof" 
+                className="w-auto max-w-full h-auto max-h-[66vh] object-contain rounded-xl shadow-md"
+              />
+            </div>
+            <div className="p-3.5 bg-white border-t border-slate-100 flex justify-between items-center shrink-0">
+              <span className="text-xs text-slate-500 font-medium">Uploaded by Delivery Captain upon OTP delivery</span>
+              <button
+                onClick={() => setViewingProofUrl(null)}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl border-none cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
@@ -1046,11 +1153,14 @@ const NotificationStatusBadge = ({ status }) => {
   } else if (status === 'ACCEPTED' || status === 'Accepted') {
     style = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
     label = 'ACCEPTED';
-  } else if (status === 'OUT_FOR_DELIVERY' || status === 'Out for Delivery') {
-    style = 'bg-blue-50 text-blue-700 border border-blue-200';
+  } else if (status === 'Reached Store' || status === 'At Pickup' || status === 'Reached Store / Pickup') {
+    style = 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-extrabold';
+    label = 'CAPTAIN AT STORE';
+  } else if (status === 'OUT_FOR_DELIVERY' || status === 'Out for Delivery' || status === 'In Transit') {
+    style = 'bg-blue-50 text-blue-700 border border-blue-200 font-extrabold';
     label = 'OUT FOR DELIVERY';
   } else if (status === 'DELIVERED' || status === 'Delivered') {
-    style = 'bg-green-100 text-green-800 border border-green-300';
+    style = 'bg-green-100 text-green-800 border border-green-300 font-extrabold';
     label = 'DELIVERED';
   } else if (status === 'REJECTED' || status === 'Rejected') {
     style = 'bg-red-50 text-red-700 border border-red-200';

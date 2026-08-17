@@ -91,6 +91,10 @@ const sellerNotificationSchema = new mongoose.Schema(
       enum: ['PENDING', 'SETTLED', 'FAILED', 'REVERSED'],
       default: 'PENDING',
     },
+    proofOfDeliveryUrl: {
+      type: String,
+      default: '',
+    },
     viewedAt: { type: Date },
     acceptedAt: { type: Date },
     rejectedAt: { type: Date },

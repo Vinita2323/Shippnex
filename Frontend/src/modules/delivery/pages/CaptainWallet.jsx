@@ -1,76 +1,114 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CaptainBottomNav from '../components/CaptainBottomNav';
+import { captainService } from '../../../services/authService';
 
 const CaptainWallet = () => {
   const navigate = useNavigate();
+  const [walletData, setWalletData] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showCashoutModal, setShowCashoutModal] = useState(false);
+  const [cashoutAmount, setCashoutAmount] = useState('');
   const [cashoutStatus, setCashoutStatus] = useState('idle'); // 'idle' | 'transferring' | 'done'
   const [filterType, setFilterType] = useState('All');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [txnLoading, setTxnLoading] = useState(false);
 
-  const handleCashout = () => {
+  useEffect(() => {
+    fetchWallet();
+    fetchTransactions('All');
+  }, []);
+
+  const fetchWallet = async () => {
+    try {
+      const res = await captainService.getWallet();
+      if (res.success) setWalletData(res.wallet);
+    } catch (err) {
+      console.error('Fetch wallet error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTransactions = async (type) => {
+    setTxnLoading(true);
+    try {
+      const res = await captainService.getTransactions(type);
+      setTransactions(res.transactions || []);
+    } catch (err) {
+      console.error('Fetch transactions error:', err);
+    } finally {
+      setTxnLoading(false);
+    }
+  };
+
+  const handleFilterChange = (type) => {
+    setFilterType(type);
+    setShowFilterDropdown(false);
+    fetchTransactions(type);
+  };
+
+  const handleCashout = async () => {
+    const amount = parseFloat(cashoutAmount) || walletData?.balance || 0;
+    if (amount <= 0) return;
     setCashoutStatus('transferring');
-    setTimeout(() => {
+    try {
+      await captainService.requestWithdrawal(amount);
       setCashoutStatus('done');
       setTimeout(() => {
         setShowCashoutModal(false);
         setCashoutStatus('idle');
-      }, 1200);
-    }, 1500);
+        setCashoutAmount('');
+        fetchWallet();
+        fetchTransactions(filterType);
+      }, 1500);
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Withdrawal failed. Try again.');
+      setCashoutStatus('idle');
+    }
   };
-
-  const transactions = [
-    { id: 'TRX-9481', date: 'Today, 10:42 AM', amount: '+₹840.00', type: 'Delivery Fare (#JOB-5412)', status: 'Completed' },
-    { id: 'TRX-9420', date: 'Today, 09:15 AM', amount: '+₹1,105.50', type: 'Express Cargo Fare (#JOB-5390)', status: 'Completed' },
-    { id: 'TRX-9302', date: 'Yesterday', amount: '+₹2,400.00', type: 'Weekly Performance Bonus', status: 'Completed' },
-    { id: 'TRX-8910', date: 'Jul 21, 2026', amount: '-₹12,500.00', type: 'Direct Deposit Transfer (HDFC ****4821)', status: 'Transferred' },
-  ];
-
-  const filteredTransactions = transactions.filter(trx => {
-    if (filterType === 'All') return true;
-    if (filterType === 'Earnings') return trx.amount.startsWith('+');
-    if (filterType === 'Withdrawals') return trx.amount.startsWith('-');
-    return true;
-  });
 
   const handleExport = () => {
     const headers = ['Transaction ID', 'Date & Time', 'Amount', 'Description', 'Status'];
     const csvRows = [headers.join(',')];
-    
-    filteredTransactions.forEach(trx => {
+    transactions.forEach(trx => {
+      const sign = trx.type === 'CREDIT' ? '+' : '-';
       const row = [
-        `"${trx.id}"`,
-        `"${trx.date}"`,
-        `"${trx.amount}"`,
-        `"${trx.type}"`,
-        `"${trx.status}"`
+        `"${trx.transactionId}"`,
+        `"${new Date(trx.createdAt).toLocaleString('en-IN')}"`,
+        `"${sign}₹${trx.amount.toFixed(2)}"`,
+        `"${trx.description}"`,
+        `"${trx.status}"`,
       ];
       csvRows.push(row.join(','));
     });
-    
-    // Adding BOM (\uFEFF) ensures Excel reads the UTF-8 character (₹) correctly
     const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `shippnex_wallet_transactions.csv`);
+    link.setAttribute('download', `shippnex_captain_wallet.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
+  const formatDate = (dateStr) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 86400000) return `Today, ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+    if (diff < 172800000) return `Yesterday`;
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
   return (
     <div className="bg-surface font-body-md text-on-surface min-h-screen pb-28">
-      {/* Top Header */}
+      {/* Header */}
       <header className="fixed top-0 left-0 w-full z-40 bg-gradient-to-r from-[#002625] to-[#0a3d16] shadow-md rounded-b-2xl px-3.5 py-2.5 border-b border-white/10">
         <div className="max-w-7xl mx-auto flex justify-between items-center gap-2">
           <div className="flex items-center gap-2.5">
-            <button
-              onClick={() => navigate(-1)}
-              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-xs"
-              title="Go Back"
-            >
+            <button onClick={() => navigate(-1)} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center cursor-pointer shrink-0">
               <span className="material-symbols-outlined text-lg">arrow_back</span>
             </button>
             <div>
@@ -78,140 +116,152 @@ const CaptainWallet = () => {
               <p className="text-[9.5px] text-[#97fc43] font-medium uppercase tracking-wider mt-0.5">Real-time Payouts</p>
             </div>
           </div>
-          <button
-            onClick={handleExport}
-            className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white rounded-lg px-2.5 py-1 transition-colors cursor-pointer flex items-center gap-1 text-xs font-semibold shadow-xs shrink-0"
-          >
+          <button onClick={handleExport} className="bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-lg px-2.5 py-1 cursor-pointer flex items-center gap-1 text-xs font-semibold">
             <span className="material-symbols-outlined text-[14px]">download</span>
             Export
           </button>
         </div>
       </header>
 
-      {/* Main Container */}
       <main className="pt-16 px-4 max-w-7xl mx-auto space-y-4">
-        {/* Main Wallet Balance Card - High Contrast Visibility */}
-        <div className="p-5 rounded-3xl relative overflow-hidden bg-[#002625] shadow-xl border border-emerald-900/40 text-white max-w-sm mx-auto w-full">
-          <div className="absolute top-2 right-2 opacity-15">
-            <span className="material-symbols-outlined text-[80px] text-[#97fc43]">account_balance_wallet</span>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <span className="material-symbols-outlined text-5xl text-secondary animate-spin">sync</span>
+            <p className="text-sm text-on-surface-variant font-semibold">Loading wallet…</p>
           </div>
-
-          <div className="relative z-10 space-y-3">
-            <div>
-              <p className="text-[10px] font-label-sm text-[#97fc43] uppercase tracking-widest font-black">Available Balance</p>
-              <h2 className="text-3xl font-extrabold text-white mt-0.5 tracking-tight">₹14,825.00</h2>
-            </div>
-
-            <div className="flex flex-col gap-3 border-t border-white/10 pt-3">
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-200 font-medium">
-                <span className="material-symbols-outlined text-[14px] text-[#97fc43]">check_circle</span>
-                Next auto-payout: Tuesday, Jul 28
+        ) : (
+          <>
+            {/* Balance Card */}
+            <div className="p-5 rounded-3xl relative overflow-hidden bg-[#002625] shadow-xl border border-emerald-900/40 text-white max-w-sm mx-auto w-full">
+              <div className="absolute top-2 right-2 opacity-15">
+                <span className="material-symbols-outlined text-[80px] text-[#97fc43]">account_balance_wallet</span>
               </div>
-
-              <button
-                onClick={() => setShowCashoutModal(true)}
-                className="w-full bg-[#97fc43] hover:bg-[#86e835] text-[#002625] font-black py-2.5 rounded-xl text-xs shadow-lg transition-all transform active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <span className="material-symbols-outlined text-base">bolt</span>
-                Instant Cashout
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Weekly Breakdown Grid */}
-        <section className="grid grid-cols-2 gap-4">
-          <div className="glass-panel p-4 rounded-2xl">
-            <p className="text-[11px] font-label-sm text-on-surface-variant uppercase tracking-wider">From Transport</p>
-            <p className="text-xl font-bold text-primary mt-1">₹9,400.00</p>
-          </div>
-          <div className="glass-panel p-4 rounded-2xl">
-            <p className="text-[11px] font-label-sm text-on-surface-variant uppercase tracking-wider">From Deliveries</p>
-            <p className="text-xl font-bold text-secondary mt-1">₹5,425.00</p>
-          </div>
-        </section>
-
-
-
-        {/* Bank Account & Payment Methods Card */}
-        <div className="glass-panel p-5 rounded-2xl space-y-3">
-          <div className="flex justify-between items-center">
-            <h3 className="font-bold text-sm text-primary">Payout Account</h3>
-            <button
-              onClick={() => alert('Managing payout methods...')}
-              className="text-xs font-bold text-secondary hover:underline cursor-pointer"
-            >
-              Edit Method
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/20">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center">
-                <span className="material-symbols-outlined">account_balance</span>
-              </div>
-              <div>
-                <p className="font-bold text-xs text-primary">HDFC Bank</p>
-                <p className="text-[11px] text-on-surface-variant">Checking account •••• 4821</p>
+              <div className="relative z-10 space-y-3">
+                <div>
+                  <p className="text-[10px] font-label-sm text-[#97fc43] uppercase tracking-widest font-black">Available Balance</p>
+                  <h2 className="text-3xl font-extrabold text-white mt-0.5 tracking-tight">
+                    ₹{(walletData?.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </h2>
+                </div>
+                <div className="flex flex-col gap-3 border-t border-white/10 pt-3">
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-200 font-medium">
+                    <span className="material-symbols-outlined text-[14px] text-[#97fc43]">schedule</span>
+                    Next auto-payout: {walletData?.nextPayoutDate || 'Tuesday'}
+                  </div>
+                  <button
+                    onClick={() => { setShowCashoutModal(true); setCashoutAmount(String(walletData?.balance || '')); }}
+                    disabled={(walletData?.balance || 0) <= 0}
+                    className="w-full bg-[#97fc43] hover:bg-[#86e835] text-[#002625] font-black py-2.5 rounded-xl text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="material-symbols-outlined text-base">bolt</span>
+                    Instant Cashout
+                  </button>
+                </div>
               </div>
             </div>
-            <span className="text-xs font-bold px-2.5 py-1 bg-secondary-container text-on-secondary-container rounded-full">
-              PRIMARY
-            </span>
-          </div>
-        </div>
 
-        {/* Transaction History */}
-        <div className="glass-panel p-5 rounded-2xl space-y-4">
-          <div className="flex justify-between items-center relative">
-            <h3 className="font-bold text-sm text-primary">Recent Transactions {filterType !== 'All' && <span className="text-[#15803d]">({filterType})</span>}</h3>
-            
-            <div className="relative">
-              <button
-                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                className={`text-xs font-bold cursor-pointer flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors ${showFilterDropdown ? 'bg-[#366b00] text-white' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}
-              >
-                <span className="material-symbols-outlined text-sm">tune</span>
-                Filter
-              </button>
-              
-              {showFilterDropdown && (
-                <div className="absolute right-0 top-full mt-2 w-36 bg-white shadow-xl border border-slate-200 rounded-xl overflow-hidden z-20">
-                  {['All', 'Earnings', 'Withdrawals'].map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => { setFilterType(type); setShowFilterDropdown(false); }}
-                      className={`w-full text-left px-4 py-2.5 text-xs font-bold transition-colors cursor-pointer ${filterType === type ? 'text-[#15803d] bg-emerald-50' : 'text-slate-700 hover:bg-slate-50'}`}
-                    >
-                      {type}
-                    </button>
+            {/* Weekly Breakdown */}
+            <section className="grid grid-cols-2 gap-4">
+              <div className="glass-panel p-4 rounded-2xl">
+                <p className="text-[11px] font-label-sm text-on-surface-variant uppercase tracking-wider">From Transport</p>
+                <p className="text-xl font-bold text-primary mt-1">₹{(walletData?.fromTransport || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="glass-panel p-4 rounded-2xl">
+                <p className="text-[11px] font-label-sm text-on-surface-variant uppercase tracking-wider">From Deliveries</p>
+                <p className="text-xl font-bold text-secondary mt-1">₹{(walletData?.fromDeliveries || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              </div>
+            </section>
+
+            {/* Payout Account */}
+            {walletData?.bankDetails?.bankName && (
+              <div className="glass-panel p-5 rounded-2xl space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold text-sm text-primary">Payout Account</h3>
+                </div>
+                <div className="flex items-center justify-between p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/20">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center">
+                      <span className="material-symbols-outlined">account_balance</span>
+                    </div>
+                    <div>
+                      <p className="font-bold text-xs text-primary">{walletData.bankDetails.bankName}</p>
+                      <p className="text-[11px] text-on-surface-variant">
+                        {walletData.bankDetails.upiId
+                          ? `UPI: ${walletData.bankDetails.upiId}`
+                          : `A/C •••• ${(walletData.bankDetails.accountNumber || '').slice(-4)}`}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold px-2.5 py-1 bg-secondary-container text-on-secondary-container rounded-full">PRIMARY</span>
+                </div>
+              </div>
+            )}
+
+            {/* Transaction History */}
+            <div className="glass-panel p-5 rounded-2xl space-y-4">
+              <div className="flex justify-between items-center relative">
+                <h3 className="font-bold text-sm text-primary">
+                  Recent Transactions {filterType !== 'All' && <span className="text-[#15803d]">({filterType})</span>}
+                </h3>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                    className={`text-xs font-bold cursor-pointer flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors ${showFilterDropdown ? 'bg-[#366b00] text-white' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}
+                  >
+                    <span className="material-symbols-outlined text-sm">tune</span>
+                    Filter
+                  </button>
+                  {showFilterDropdown && (
+                    <div className="absolute right-0 top-full mt-2 w-36 bg-white shadow-xl border border-slate-200 rounded-xl overflow-hidden z-20">
+                      {['All', 'Earnings', 'Withdrawals'].map((type) => (
+                        <button
+                          key={type}
+                          onClick={() => handleFilterChange(type)}
+                          className={`w-full text-left px-4 py-2.5 text-xs font-bold cursor-pointer ${filterType === type ? 'text-[#15803d] bg-emerald-50' : 'text-slate-700 hover:bg-slate-50'}`}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {txnLoading ? (
+                <div className="flex justify-center py-8">
+                  <span className="material-symbols-outlined text-3xl text-secondary animate-spin">sync</span>
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="text-center py-8 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-4xl mb-2 block">receipt_long</span>
+                  <p className="text-sm font-semibold">No transactions yet</p>
+                  <p className="text-xs mt-1">Earnings from deliveries will appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {transactions.map((trx) => (
+                    <div key={trx._id || trx.transactionId} className="flex justify-between items-center p-3 bg-surface-container-low/70 rounded-xl">
+                      <div>
+                        <p className="font-bold text-xs text-primary">{trx.description || trx.type}</p>
+                        <p className="text-[11px] text-on-surface-variant">{formatDate(trx.createdAt)} • {trx.transactionId}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`font-bold text-xs ${trx.type === 'CREDIT' ? 'text-secondary' : 'text-error'}`}>
+                          {trx.type === 'CREDIT' ? '+' : '-'}₹{trx.amount.toFixed(2)}
+                        </p>
+                        <span className="text-[10px] font-semibold text-outline-variant">{trx.status}</span>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
             </div>
-          </div>
-
-          <div className="space-y-3">
-            {filteredTransactions.map((trx) => (
-              <div key={trx.id} className="flex justify-between items-center p-3 bg-surface-container-low/70 rounded-xl">
-                <div>
-                  <p className="font-bold text-xs text-primary">{trx.type}</p>
-                  <p className="text-[11px] text-on-surface-variant">{trx.date} • {trx.id}</p>
-                </div>
-                <div className="text-right">
-                  <p className={`font-bold text-xs ${trx.amount.startsWith('+') ? 'text-secondary' : 'text-primary'}`}>
-                    {trx.amount}
-                  </p>
-                  <span className="text-[10px] font-semibold text-outline-variant">{trx.status}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+          </>
+        )}
       </main>
 
       {/* Cashout Modal */}
-      {showCashoutModal && (
+      {showCashoutModal && walletData && (
         <div className="fixed inset-0 z-50 bg-primary/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-3xl max-w-md w-full border-white shadow-2xl space-y-4">
             <div className="w-12 h-12 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center mx-auto">
@@ -219,54 +269,53 @@ const CaptainWallet = () => {
             </div>
             <div className="text-center space-y-1">
               <h3 className="font-bold text-xl text-primary">Instant Cashout</h3>
-              <p className="text-xs text-on-surface-variant">Transfer ₹14,825.00 immediately to HDFC ****4821</p>
+              <p className="text-xs text-on-surface-variant">Transfer to {walletData.bankDetails?.bankName || 'your bank'}</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-on-surface-variant block">Amount to Withdraw</label>
+              <input
+                type="number"
+                value={cashoutAmount}
+                onChange={(e) => setCashoutAmount(e.target.value)}
+                max={walletData.balance}
+                min={1}
+                className="w-full border border-outline-variant rounded-xl px-4 py-3 text-base font-bold text-primary focus:outline-none focus:border-secondary"
+              />
+              <p className="text-xs text-on-surface-variant">Available: ₹{(walletData.balance || 0).toFixed(2)}</p>
             </div>
 
             <div className="bg-surface-container p-3.5 rounded-xl space-y-2 text-xs border border-outline-variant/30">
               <div className="flex justify-between">
                 <span className="text-on-surface-variant">Transfer Amount</span>
-                <span className="font-bold text-primary">₹14,825.00</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-on-surface-variant">Instant Fee (1.5%)</span>
-                <span className="font-bold text-primary">₹0.00 (Waived)</span>
+                <span className="font-bold text-primary">₹{parseFloat(cashoutAmount || 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between border-t border-outline-variant/20 pt-2 font-bold text-sm">
                 <span>Net Transfer</span>
-                <span className="text-secondary">₹14,825.00</span>
+                <span className="text-secondary">₹{parseFloat(cashoutAmount || 0).toFixed(2)}</span>
               </div>
             </div>
 
             <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setShowCashoutModal(false)}
-                className="flex-1 py-3 rounded-xl border border-outline-variant text-xs font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
-              >
+              <button onClick={() => setShowCashoutModal(false)} className="flex-1 py-3 rounded-xl border border-outline-variant text-xs font-bold text-on-surface-variant hover:bg-surface-container-high cursor-pointer">
                 Cancel
               </button>
               <button
                 onClick={handleCashout}
-                className="flex-1 py-3 rounded-xl bg-secondary hover:bg-secondary/90 text-white text-xs font-bold shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                disabled={cashoutStatus !== 'idle' || parseFloat(cashoutAmount || 0) <= 0 || parseFloat(cashoutAmount || 0) > walletData.balance}
+                className="flex-1 py-3 rounded-xl bg-secondary hover:bg-secondary/90 text-white text-xs font-bold shadow-lg cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
               >
                 {cashoutStatus === 'transferring' ? (
-                  <>
-                    <span className="material-symbols-outlined animate-spin text-sm">sync</span>
-                    Transferring...
-                  </>
+                  <><span className="material-symbols-outlined animate-spin text-sm">sync</span> Transferring...</>
                 ) : cashoutStatus === 'done' ? (
-                  <>
-                    Transferred! <span className="material-symbols-outlined text-sm">check</span>
-                  </>
-                ) : (
-                  'Confirm Transfer'
-                )}
+                  <>Transferred! <span className="material-symbols-outlined text-sm">check</span></>
+                ) : 'Confirm Transfer'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Captain Bottom Navigation */}
       <CaptainBottomNav />
     </div>
   );

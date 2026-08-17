@@ -33,8 +33,8 @@ const productSchema = new mongoose.Schema(
       default: '1 kg'
     },
     seller: {
-      type: String,
-      default: 'ShippNex Official Store'
+      type: mongoose.Schema.Types.Mixed,
+      default: 'ShippNex Official Store',
     },
     description: {
       type: String,

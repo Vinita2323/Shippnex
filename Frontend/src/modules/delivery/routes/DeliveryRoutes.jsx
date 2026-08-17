@@ -8,6 +8,7 @@ import ActiveDelivery from '../pages/ActiveDelivery';
 import CaptainJobs from '../pages/CaptainJobs';
 import CaptainWallet from '../pages/CaptainWallet';
 import CaptainProfile from '../pages/CaptainProfile';
+import CaptainPersonalDetails from '../pages/CaptainPersonalDetails';
 import LogisticsNavigation from '../pages/LogisticsNavigation';
 import FinalVerification from '../pages/FinalVerification';
 import NewJobRequest from '../pages/NewJobRequest';
@@ -32,6 +33,7 @@ const DeliveryRoutes = () => {
         <Route path="/navigate" element={<LogisticsNavigation />} />
         <Route path="/wallet" element={<CaptainWallet />} />
         <Route path="/profile" element={<CaptainProfile />} />
+        <Route path="/personal-details" element={<CaptainPersonalDetails />} />
         <Route path="/notifications" element={<CaptainNotifications />} />
         <Route path="/service-areas" element={<CaptainServiceAreas />} />
       </Route>
