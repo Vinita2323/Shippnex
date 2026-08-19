@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Seller from '../models/Seller.model.js';
 import Captain from '../models/Captain.model.js';
 import Order from '../models/Order.model.js';
@@ -175,12 +176,10 @@ export const assignCaptainToOrder = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Captain not found' });
     }
 
-    const order = await Order.findOne({
-      $or: [
-        { _id: orderId },
-        { orderId },
-      ],
-    });
+    const isMongoId = mongoose.Types.ObjectId.isValid(orderId);
+    const order = await Order.findOne(
+      isMongoId ? { $or: [{ _id: orderId }, { orderId }] } : { orderId }
+    );
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
@@ -189,15 +188,22 @@ export const assignCaptainToOrder = async (req, res, next) => {
     // Generate 4-digit delivery OTP
     const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
-    order.captainId = captainId;
-    order.captainStatus = 'Assigned';
-    order.deliveryOtp = deliveryOtp;
-    order.captainEarnings = Number(captainEarnings);
-    order.captainAssignedAt = new Date();
+    const updates = {
+      captainId,
+      captainStatus: 'Assigned',
+      deliveryOtp,
+      captainEarnings: Number(captainEarnings),
+      captainAssignedAt: new Date(),
+    };
     if (order.orderStatus === 'Processing') {
-      order.orderStatus = 'Out for Delivery';
+      updates.orderStatus = 'Out for Delivery';
     }
-    await order.save();
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      order._id,
+      { $set: updates },
+      { new: true }
+    );
 
     // Notify the captain
     await CaptainNotification.create({

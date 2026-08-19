@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Truck, Clock, IndianRupee, Check } from 'lucide-react';
+import { ChevronLeft, Truck, Bike, Clock, IndianRupee, Check } from 'lucide-react';
 import { useTransport } from '../../context/TransportContext';
 
 const VehicleSelection = () => {
@@ -10,10 +10,11 @@ const VehicleSelection = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState(activeBooking.vehicle?.id || null);
 
   const availableVehicles = [
-    { id: 1, name: '3 Wheeler', capacity: '500 kg', price: 350, eta: '3 mins', icon: <Truck size={32} /> },
-    { id: 2, name: 'Mini Truck', capacity: '750 kg', price: 450, eta: '5 mins', icon: <Truck size={32} /> },
-    { id: 3, name: 'Pickup 8ft', capacity: '1200 kg', price: 800, eta: '8 mins', icon: <Truck size={32} /> },
-    { id: 4, name: 'Truck 14ft', capacity: '2000 kg', price: 1500, eta: '15 mins', icon: <Truck size={32} /> }
+    { id: 1, name: 'Motorcycle', capacity: '20 kg', price: 80, eta: '2 mins', icon: <Bike size={32} /> },
+    { id: 2, name: '3 Wheeler', capacity: '500 kg', price: 350, eta: '3 mins', icon: <Truck size={32} /> },
+    { id: 3, name: 'Mini Truck', capacity: '750 kg', price: 450, eta: '5 mins', icon: <Truck size={32} /> },
+    { id: 4, name: 'Pickup 8ft', capacity: '1200 kg', price: 800, eta: '8 mins', icon: <Truck size={32} /> },
+    { id: 5, name: 'Truck 14ft', capacity: '2000 kg', price: 1500, eta: '15 mins', icon: <Truck size={32} /> }
   ];
 
   const handleNext = () => {

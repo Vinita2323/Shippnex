@@ -28,12 +28,22 @@ const captainSchema = new mongoose.Schema(
     emergencyContact: { type: String },
     aadhaarNumber: { type: String, trim: true },
 
-    // Vehicle Details
+    // Vehicle Details & Permits
     vehicleType: { type: String, default: 'Two Wheeler' },
     drivingLicenseNumber: { type: String, trim: true },
     rcNumber: { type: String, trim: true },
     vehicleInsuranceNumber: { type: String, trim: true },
     insuranceValidTill: { type: String },
+    pucNumber: { type: String, trim: true },
+    pucValidTill: { type: String },
+    permitNumber: { type: String, trim: true },
+    permitValidTill: { type: String },
+    fitnessCertNumber: { type: String, trim: true },
+    fitnessValidTill: { type: String },
+    roadTaxNumber: { type: String, trim: true },
+    roadTaxValidTill: { type: String },
+    gpsEnabled: { type: Boolean, default: true },
+    gpsDeviceId: { type: String, trim: true },
 
     // Uploaded Documents
     documents: {
@@ -42,6 +52,11 @@ const captainSchema = new mongoose.Schema(
       aadhaarFront: { type: String, default: '' },
       aadhaarBack: { type: String, default: '' },
       insuranceDoc: { type: String, default: '' },
+      pucDocument: { type: String, default: '' },
+      permitDocument: { type: String, default: '' },
+      fitnessDocument: { type: String, default: '' },
+      roadTaxDocument: { type: String, default: '' },
+      form21Document: { type: String, default: '' },
       profilePhoto: { type: String, default: '' },
     },
 

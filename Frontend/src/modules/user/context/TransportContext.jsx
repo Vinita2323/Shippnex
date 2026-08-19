@@ -17,6 +17,7 @@ export const TransportProvider = ({ children }) => {
   // Active booking draft (cleared after checkout)
   const [activeBooking, setActiveBooking] = useState({
     pickup: null, // string address
+    stops: [], // array of string addresses for intermediate stops
     drop: null, // string address
     goods: {
       category: '',
@@ -55,6 +56,7 @@ export const TransportProvider = ({ children }) => {
   const clearActiveBooking = () => {
     setActiveBooking({
       pickup: null,
+      stops: [],
       drop: null,
       goods: { category: '', weight: '', packages: '', instructions: '' },
       vehicle: null,

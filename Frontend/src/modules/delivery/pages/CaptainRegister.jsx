@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Bike, Truck, Check } from 'lucide-react';
 import { authService } from '../../../services/authService';
 
 const CaptainRegister = () => {
@@ -24,10 +25,21 @@ const CaptainRegister = () => {
     aadhaarNumber: '',
 
     // Vehicle Details
+    vehicleType: 'Motorcycle',
     drivingLicenseNumber: '',
     rcNumber: '',
     vehicleInsuranceNumber: '',
     insuranceValidTill: '',
+    pucNumber: '',
+    pucValidTill: '',
+    permitNumber: '',
+    permitValidTill: '',
+    fitnessCertNumber: '',
+    fitnessValidTill: '',
+    roadTaxNumber: '',
+    roadTaxValidTill: '',
+    gpsEnabled: true,
+    gpsDeviceId: '',
 
     // Bank Details
     bankName: '',
@@ -43,6 +55,11 @@ const CaptainRegister = () => {
     rcDocument: null,
     aadhaarFront: null,
     aadhaarBack: null,
+    pucDocument: null,
+    permitDocument: null,
+    fitnessDocument: null,
+    roadTaxDocument: null,
+    form21Document: null,
     profilePhoto: null,
   });
 
@@ -51,8 +68,11 @@ const CaptainRegister = () => {
   const [errorMsg, setErrorMsg] = useState('');
 
   const handleTextChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
   };
 
   const handleFileChange = (e, field) => {
@@ -84,12 +104,28 @@ const CaptainRegister = () => {
     setIsSubmitting(true);
     try {
       // Convert all uploaded documents to base64
-      const [dl, rc, aFront, aBack, pPhoto] = await Promise.all([
+      const [
+        dl,
+        rc,
+        aFront,
+        aBack,
+        pPhoto,
+        pucDoc,
+        permitDoc,
+        fitnessDoc,
+        taxDoc,
+        form21Doc
+      ] = await Promise.all([
         fileToBase64(files.drivingLicense),
         fileToBase64(files.rcDocument),
         fileToBase64(files.aadhaarFront),
         fileToBase64(files.aadhaarBack),
         fileToBase64(files.profilePhoto),
+        fileToBase64(files.pucDocument),
+        fileToBase64(files.permitDocument),
+        fileToBase64(files.fitnessDocument),
+        fileToBase64(files.roadTaxDocument),
+        fileToBase64(files.form21Document),
       ]);
 
       const payload = {
@@ -99,6 +135,11 @@ const CaptainRegister = () => {
           rcDocument: rc,
           aadhaarFront: aFront,
           aadhaarBack: aBack,
+          pucDocument: pucDoc,
+          permitDocument: permitDoc,
+          fitnessDocument: fitnessDoc,
+          roadTaxDocument: taxDoc,
+          form21Document: form21Doc,
           profilePhoto: pPhoto,
         },
       };
@@ -348,6 +389,52 @@ const CaptainRegister = () => {
                 Vehicle & Driving Details
               </h2>
 
+              {/* Vehicle Type Selection */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <span>Select Vehicle Type <span className="text-red-500">*</span></span>
+                  <span className="text-[11px] font-bold text-[#15803d]">{formData.vehicleType || 'Motorcycle'}</span>
+                </label>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { name: 'Motorcycle', capacity: 'Up to 20 kg', icon: <Bike size={18} /> },
+                    { name: '3 Wheeler', capacity: 'Up to 500 kg', icon: <Truck size={18} /> },
+                    { name: 'Mini Truck', capacity: 'Up to 750 kg', icon: <Truck size={18} /> },
+                    { name: 'Pickup 8ft', capacity: 'Up to 1200 kg', icon: <Truck size={18} /> },
+                  ].map((v) => {
+                    const isSelected = formData.vehicleType === v.name;
+                    return (
+                      <div
+                        key={v.name}
+                        onClick={() => setFormData((prev) => ({ ...prev, vehicleType: v.name }))}
+                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                          isSelected
+                            ? 'border-[#15803d] bg-emerald-50/40 shadow-xs'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-emerald-100 text-[#15803d]' : 'bg-slate-100 text-slate-600'}`}>
+                            {v.icon}
+                          </div>
+                          {isSelected && (
+                            <div className="w-5 h-5 rounded-full bg-[#15803d] text-white flex items-center justify-center">
+                              <Check size={12} strokeWidth={3} />
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-800 m-0">{v.name}</h4>
+                          <p className="text-[10.5px] font-medium text-slate-500 m-0 mt-0.5">{v.capacity}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700">Driving License Number</label>
                 <input
@@ -396,6 +483,148 @@ const CaptainRegister = () => {
                   />
                 </div>
               </div>
+
+              {/* 1. Pollution (PUC) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Pollution (PUC) Certificate No.</label>
+                  <input
+                    type="text"
+                    name="pucNumber"
+                    value={formData.pucNumber}
+                    onChange={handleTextChange}
+                    placeholder="Enter PUC number"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">PUC Valid Till</label>
+                  <input
+                    type="date"
+                    name="pucValidTill"
+                    value={formData.pucValidTill}
+                    onChange={handleTextChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                  />
+                </div>
+              </div>
+
+              {/* 2. Vehicle Permit */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Commercial / Goods Permit No.</label>
+                  <input
+                    type="text"
+                    name="permitNumber"
+                    value={formData.permitNumber}
+                    onChange={handleTextChange}
+                    placeholder="Enter permit number"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Permit Valid Till</label>
+                  <input
+                    type="date"
+                    name="permitValidTill"
+                    value={formData.permitValidTill}
+                    onChange={handleTextChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                  />
+                </div>
+              </div>
+
+              {/* 3. Fitness Certificate */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Fitness Certificate Number</label>
+                  <input
+                    type="text"
+                    name="fitnessCertNumber"
+                    value={formData.fitnessCertNumber}
+                    onChange={handleTextChange}
+                    placeholder="Enter fitness certificate number"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Fitness Valid Till</label>
+                  <input
+                    type="date"
+                    name="fitnessValidTill"
+                    value={formData.fitnessValidTill}
+                    onChange={handleTextChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                  />
+                </div>
+              </div>
+
+              {/* 4. Road Tax Receipt */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Road Tax Receipt / Challan No.</label>
+                  <input
+                    type="text"
+                    name="roadTaxNumber"
+                    value={formData.roadTaxNumber}
+                    onChange={handleTextChange}
+                    placeholder="Enter road tax receipt number"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Road Tax Valid Till</label>
+                  <input
+                    type="date"
+                    name="roadTaxValidTill"
+                    value={formData.roadTaxValidTill}
+                    onChange={handleTextChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                  />
+                </div>
+              </div>
+
+              {/* 📍 GPS Tracking Device */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">📍</span>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 m-0">Vehicle GPS Tracking System</h4>
+                      <p className="text-[11px] text-slate-500 m-0">Is your vehicle equipped with active GPS tracking?</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="gpsEnabled"
+                      checked={formData.gpsEnabled}
+                      onChange={handleTextChange}
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#15803d]"></div>
+                  </label>
+                </div>
+
+                {formData.gpsEnabled && (
+                  <div className="space-y-1 pt-1">
+                    <label className="text-xs font-bold text-slate-700">GPS Device ID / IMEI Number (Optional)</label>
+                    <input
+                      type="text"
+                      name="gpsDeviceId"
+                      value={formData.gpsDeviceId}
+                      onChange={handleTextChange}
+                      placeholder="e.g. GPS-8829103984 or IMEI"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                    />
+                  </div>
+                )}
+              </div>
+
             </div>
 
 
@@ -410,8 +639,8 @@ const CaptainRegister = () => {
                 <label className="text-xs font-bold text-slate-700">Upload Driving License</label>
                 <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
                   <span className="material-symbols-outlined text-slate-400">upload</span>
-                  <span className="text-xs font-bold text-slate-600">
-                    {files.drivingLicense ? files.drivingLicense.name : 'TAP TO UPLOAD'}
+                  <span className="text-xs font-bold text-slate-600 truncate">
+                    {files.drivingLicense ? files.drivingLicense.name : 'TAP TO UPLOAD DRIVING LICENSE'}
                   </span>
                   <input
                     type="file"
@@ -459,11 +688,11 @@ const CaptainRegister = () => {
 
               {/* RC Document Upload */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">RC Document (Optional)</label>
+                <label className="text-xs font-bold text-slate-700">RC Document (Registration Certificate)</label>
                 <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
                   <span className="material-symbols-outlined text-slate-400">upload</span>
-                  <span className="text-xs font-bold text-slate-600">
-                    {files.rcDocument ? files.rcDocument.name : 'TAP TO UPLOAD'}
+                  <span className="text-xs font-bold text-slate-600 truncate">
+                    {files.rcDocument ? files.rcDocument.name : 'TAP TO UPLOAD RC'}
                   </span>
                   <input
                     type="file"
@@ -473,6 +702,94 @@ const CaptainRegister = () => {
                   />
                 </label>
               </div>
+
+              {/* 1. Pollution (PUC) & 2. Vehicle Permit Upload */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Pollution (PUC) Certificate</label>
+                  <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
+                    <span className="material-symbols-outlined text-slate-400">upload</span>
+                    <span className="text-xs font-bold text-slate-600 truncate">
+                      {files.pucDocument ? files.pucDocument.name : 'TAP TO UPLOAD PUC'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => handleFileChange(e, 'pucDocument')}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Commercial Vehicle Permit</label>
+                  <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
+                    <span className="material-symbols-outlined text-slate-400">upload</span>
+                    <span className="text-xs font-bold text-slate-600 truncate">
+                      {files.permitDocument ? files.permitDocument.name : 'TAP TO UPLOAD PERMIT'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => handleFileChange(e, 'permitDocument')}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* 3. Fitness Certificate & 4. Road Tax Receipt Upload */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Fitness Certificate</label>
+                  <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
+                    <span className="material-symbols-outlined text-slate-400">upload</span>
+                    <span className="text-xs font-bold text-slate-600 truncate">
+                      {files.fitnessDocument ? files.fitnessDocument.name : 'TAP TO UPLOAD FITNESS'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => handleFileChange(e, 'fitnessDocument')}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Road Tax Receipt</label>
+                  <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
+                    <span className="material-symbols-outlined text-slate-400">upload</span>
+                    <span className="text-xs font-bold text-slate-600 truncate">
+                      {files.roadTaxDocument ? files.roadTaxDocument.name : 'TAP TO UPLOAD ROAD TAX'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => handleFileChange(e, 'roadTaxDocument')}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* 5. Form-21 (Sale Certificate) Upload */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Form-21 (Sale / Manufacturer Certificate)</label>
+                <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
+                  <span className="material-symbols-outlined text-slate-400">upload</span>
+                  <span className="text-xs font-bold text-slate-600 truncate">
+                    {files.form21Document ? files.form21Document.name : 'TAP TO UPLOAD FORM-21'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => handleFileChange(e, 'form21Document')}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
             </div>
 
 

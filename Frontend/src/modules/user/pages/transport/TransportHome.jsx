@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, Package, Clock, MapPin, ChevronRight, Settings, Smartphone, Home } from 'lucide-react';
+import { Truck, Bike, Package, Clock, MapPin, ChevronRight, Settings, Smartphone, Home } from 'lucide-react';
 
 const TransportHome = () => {
   const navigate = useNavigate();
@@ -13,9 +13,11 @@ const TransportHome = () => {
   ];
 
   const popularVehicles = [
-    { id: 1, name: 'Mini Truck', capacity: '750 kg', time: '5 mins away', icon: <Truck size={32} className="text-slate-700" /> },
-    { id: 2, name: 'Pickup 8ft', capacity: '1200 kg', time: '8 mins away', icon: <Truck size={32} className="text-slate-700" /> },
-    { id: 3, name: '3 Wheeler', capacity: '500 kg', time: '3 mins away', icon: <Truck size={32} className="text-slate-700" /> }
+    { id: 1, name: 'Motorcycle', capacity: '20 kg', time: '2 mins away', icon: <Bike size={20} className="text-slate-700" /> },
+    { id: 2, name: '3 Wheeler', capacity: '500 kg', time: '3 mins away', icon: <Truck size={20} className="text-slate-700" /> },
+    { id: 3, name: 'Mini Truck', capacity: '750 kg', time: '5 mins away', icon: <Truck size={20} className="text-slate-700" /> },
+    { id: 4, name: 'Pickup 8ft', capacity: '1200 kg', time: '8 mins away', icon: <Truck size={20} className="text-slate-700" /> },
+    { id: 5, name: 'Truck 14ft', capacity: '2000 kg', time: '15 mins away', icon: <Truck size={20} className="text-slate-700" /> }
   ];
 
   return (
@@ -55,7 +57,10 @@ const TransportHome = () => {
 
         {/* Quick Location Input (Floating Card) */}
         <div className="px-5 mb-6 -mt-2 relative z-20">
-          <div className="bg-white rounded-2xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-slate-100 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-transform">
+          <div 
+            className="bg-white rounded-2xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-slate-100 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-transform"
+            onClick={() => navigate('/transport/location')}
+          >
              <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center">
                   <MapPin size={20} className="text-[#ff5500]" />
@@ -74,7 +79,11 @@ const TransportHome = () => {
           <h3 className="text-[15px] font-bold text-slate-800 mb-4">What are you sending?</h3>
           <div className="grid grid-cols-4 gap-3">
             {quickCategories.map((category) => (
-              <div key={category.id} className="flex flex-col items-center gap-2 cursor-pointer group">
+              <div 
+                key={category.id} 
+                className="flex flex-col items-center gap-2 cursor-pointer group"
+                onClick={() => navigate('/transport/location')}
+              >
                 <div className={`w-14 h-14 rounded-[16px] ${category.bg} flex items-center justify-center transition-transform group-active:scale-95 group-hover:-translate-y-1`}>
                   {category.icon}
                 </div>
@@ -86,24 +95,30 @@ const TransportHome = () => {
 
         {/* Popular Vehicles */}
         <div className="px-5 mb-6">
-          <div className="flex justify-between items-center mb-4">
-             <h3 className="text-[15px] font-bold text-slate-800">Popular Vehicles</h3>
-             <span className="text-[12px] font-bold text-[#ff5500] cursor-pointer">View All</span>
+          <div className="mb-3">
+             <h3 className="text-[15px] font-bold text-slate-800 m-0">Popular Vehicles</h3>
           </div>
           
-          <div className="flex gap-3 overflow-x-auto pb-4 [&::-webkit-scrollbar]:hidden -mx-5 px-5">
-            {popularVehicles.map((vehicle) => (
-              <div key={vehicle.id} className="min-w-[140px] bg-white rounded-2xl p-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col cursor-pointer hover:border-slate-200 transition-colors">
-                <div className="w-full h-12 flex items-center justify-center mb-3">
-                   {vehicle.icon}
+          <div className="grid grid-cols-2 gap-2.5">
+            {popularVehicles.slice(0, 4).map((vehicle) => (
+              <div 
+                key={vehicle.id} 
+                className="bg-white rounded-xl p-3 shadow-2xs border border-slate-100 flex flex-col cursor-pointer hover:border-slate-200 hover:shadow-xs transition-all active:scale-[0.98]"
+                onClick={() => navigate('/transport/location')}
+              >
+                <div className="w-full flex items-center justify-between mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-700 shrink-0">
+                    {vehicle.icon}
+                  </div>
+                  <span className="bg-green-50 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                    {vehicle.time}
+                  </span>
                 </div>
-                <h4 className="text-[14px] font-bold text-slate-800 m-0 mb-1">{vehicle.name}</h4>
-                <div className="flex items-center gap-1.5 mb-2 text-slate-500">
-                  <Package size={12} />
-                  <span className="text-[11px] font-medium">Up to {vehicle.capacity}</span>
-                </div>
-                <div className="bg-green-50 rounded text-green-700 text-[10px] font-bold py-1 px-2 w-fit">
-                  {vehicle.time}
+
+                <h4 className="text-[13px] font-bold text-slate-800 m-0 mb-0.5">{vehicle.name}</h4>
+                <div className="flex items-center gap-1 text-slate-500">
+                  <Package size={11} className="text-slate-400 shrink-0" />
+                  <span className="text-[10.5px] font-medium text-slate-500">Up to {vehicle.capacity}</span>
                 </div>
               </div>
             ))}

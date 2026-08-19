@@ -36,6 +36,7 @@ import groceryImg from '../../../assets/user/categories/Grocery-removebg-preview
 import readyCookImg from '../../../assets/user/categories/readyfoot-removebg-preview.png';
 import homeCareImg from '../../../assets/user/categories/homecare-removebg-preview.png';
 import personalCareImg from '../../../assets/user/categories/personalcare-removebg-preview.png';
+import { getImageUrl } from '../../../utils/imageUtils';
 
 const allProducts = [
   { id: 'p1', name: 'Basmati Rice', price: 75, originalPrice: 95, discount: '21% OFF', image: grainsImg, unit: '1kg' },
@@ -331,14 +332,18 @@ const Home = () => {
         {banners.length > 0 ? (
           <div className="mb-5">
             <div
-              className="rounded-2xl relative overflow-hidden shadow-md cursor-pointer w-full h-[140px]"
+              className="rounded-2xl relative overflow-hidden shadow-md cursor-pointer w-full h-[140px] bg-slate-100"
               style={{ transition: 'opacity 0.3s ease, transform 0.3s ease', opacity: bannerVisible ? 1 : 0, transform: bannerVisible ? 'translateY(0)' : 'translateY(6px)' }}
-              onClick={() => navigate(banners[currentBannerIndex].redirectUrl || '/categories')}
+              onClick={() => navigate(banners[currentBannerIndex]?.redirectUrl || '/categories')}
             >
               <img
-                src={banners[currentBannerIndex].imageUrl || "/promo_banner_bg.png"}
-                alt={banners[currentBannerIndex].title}
+                src={getImageUrl(banners[currentBannerIndex]?.imageUrl, "/promo_banner_bg.png")}
+                alt={banners[currentBannerIndex]?.title || "Promotional Banner"}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = "/promo_banner_bg.png";
+                }}
               />
             </div>
             {/* Dot Indicators */}
@@ -357,10 +362,18 @@ const Home = () => {
           </div>
         ) : (
           <div 
-            className="rounded-2xl relative overflow-hidden mb-5 shadow-md cursor-pointer w-full h-[140px]"
+            className="rounded-2xl relative overflow-hidden mb-5 shadow-md cursor-pointer w-full h-[140px] bg-slate-100"
             onClick={() => navigate('/categories')}
           >
-            <img src="/promo_banner_bg.png" alt="Promo Boxes" className="w-full h-full object-cover" />
+            <img 
+              src="/promo_banner_bg.png" 
+              alt="Promo Boxes" 
+              className="w-full h-full object-cover" 
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = "/promo_banner_bg.png";
+              }}
+            />
           </div>
         )}
 
@@ -379,9 +392,13 @@ const Home = () => {
               >
                 <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)] overflow-hidden p-1.5">
                   <img 
-                    src={cat.image || grainsImg} 
+                    src={getImageUrl(cat.image, grainsImg)} 
                     alt={cat.name} 
                     className="w-10 h-10 object-contain" 
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = grainsImg;
+                    }}
                   />
                 </div>
                 <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">
@@ -428,7 +445,15 @@ const Home = () => {
           {flashDeals.map((prod) => (
             <div key={prod.id} className="min-w-[155px] max-w-[155px] bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between">
               <div className="h-[125px] w-full overflow-hidden bg-slate-50 relative cursor-pointer" onClick={() => navigate(`/product/${prod.id}`)}>
-                <img src={prod.image} alt={prod.name} className="w-full h-full object-cover" />
+                <img 
+                  src={getImageUrl(prod.image, grainsImg)} 
+                  alt={prod.name} 
+                  className="w-full h-full object-cover" 
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = grainsImg;
+                  }}
+                />
               </div>
               <div className="flex flex-col p-2.5 flex-1 justify-between gap-2">
                 <div>
@@ -485,7 +510,15 @@ const Home = () => {
           {bestsellerProducts.map((prod) => (
             <div key={prod.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between">
               <div className="h-[125px] w-full overflow-hidden bg-slate-50 relative cursor-pointer" onClick={() => navigate(`/product/${prod.id}`)}>
-                <img src={prod.image} alt={prod.name} className="w-full h-full object-cover" />
+                <img 
+                  src={getImageUrl(prod.image, grainsImg)} 
+                  alt={prod.name} 
+                  className="w-full h-full object-cover" 
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = grainsImg;
+                  }}
+                />
               </div>
               <div className="flex flex-col p-2.5 flex-1 justify-between gap-2">
                 <div>

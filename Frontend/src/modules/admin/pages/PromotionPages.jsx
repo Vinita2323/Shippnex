@@ -31,6 +31,7 @@ import {
   Tag
 } from 'lucide-react';
 import { bannerService, productService } from '../../../services/authService';
+import { getImageUrl } from '../../../utils/imageUtils';
 import { 
   initialPromotionStats, 
   initialHomeSections, 
@@ -1155,11 +1156,15 @@ export const PromoHomeBanners = () => {
               </div>
 
               {/* Live Preview Card */}
-              <div className="rounded-xl overflow-hidden shadow-sm relative h-[90px] w-full border border-slate-200">
+              <div className="rounded-xl overflow-hidden shadow-sm relative h-[90px] w-full border border-slate-200 bg-slate-100">
                 <img 
-                  src={b.imageUrl || '/promo_banner_bg.png'} 
+                  src={getImageUrl(b.imageUrl, '/promo_banner_bg.png')} 
                   alt={b.title} 
                   className="w-full h-full object-cover" 
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = '/promo_banner_bg.png';
+                  }}
                 />
               </div>
 
@@ -1207,9 +1212,13 @@ export const PromoHomeBanners = () => {
                 <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
                   {imageUrl && (
                     <img 
-                      src={imageUrl} 
+                      src={getImageUrl(imageUrl, '/promo_banner_bg.png')} 
                       alt="Banner Preview" 
                       className="w-12 h-12 object-cover rounded-lg border border-slate-300 shrink-0" 
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = '/promo_banner_bg.png';
+                      }}
                     />
                   )}
                   <div className="flex-1 overflow-hidden">

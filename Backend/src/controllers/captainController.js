@@ -9,10 +9,18 @@ import CaptainNotification from '../models/CaptainNotification.model.js';
 import SellerNotification from '../models/SellerNotification.model.js';
 
 // ──────────────────────────────────────────────
-// Helper: Generate unique IDs
+// Helper: Generate unique IDs & query builder
 // ──────────────────────────────────────────────
 const generateTxnId = () => `CTX-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
 const generateDeliveryOtp = () => Math.floor(1000 + Math.random() * 9000).toString();
+
+const buildOrderQuery = (orderId, extra = {}) => {
+  const isMongoId = mongoose.Types.ObjectId.isValid(orderId);
+  return {
+    ...(isMongoId ? { $or: [{ _id: orderId }, { orderId }] } : { orderId }),
+    ...extra,
+  };
+};
 
 // ──────────────────────────────────────────────
 // GET /api/captain/profile
@@ -258,24 +266,43 @@ export const acceptJob = async (req, res, next) => {
     const { orderId } = req.params;
     const captainId = req.user.id;
 
-    const order = await Order.findOne({
-      $or: [
-        { _id: mongoose.Types.ObjectId.isValid(orderId) ? orderId : null },
-        { orderId },
-      ],
+    // Find and update order assigned to captain
+    const query = buildOrderQuery(orderId, {
       captainId,
-      captainStatus: 'Assigned',
+      captainStatus: { $in: ['Assigned', 'Accepted'] },
     });
 
+    const order = await Order.findOneAndUpdate(
+      query,
+      {
+        $set: {
+          captainStatus: 'Accepted',
+        },
+      },
+      { new: true }
+    );
+
     if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found or not assigned to you' });
+      const existing = await Order.findOne(buildOrderQuery(orderId));
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Order not found' });
+      }
+      return res.status(400).json({ success: false, message: 'Order is not assigned to you or cannot be accepted' });
     }
 
-    order.captainStatus = 'Accepted';
-    await order.save();
+    try {
+      await SellerNotification.updateMany(
+        { order: order._id },
+        { $set: { status: 'Captain Accepted' } }
+      );
+    } catch (notifErr) {
+      console.warn('[acceptJob] SellerNotification update error:', notifErr.message);
+    }
 
+    console.log(`[Captain acceptJob] Captain ${captainId} accepted Order #${order.orderId}`);
     res.json({ success: true, message: 'Job accepted', order });
   } catch (error) {
+    console.error('[acceptJob ERROR]', error);
     next(error);
   }
 };
@@ -288,25 +315,27 @@ export const rejectJob = async (req, res, next) => {
     const { orderId } = req.params;
     const captainId = req.user.id;
 
-    const order = await Order.findOne({
-      $or: [
-        { _id: mongoose.Types.ObjectId.isValid(orderId) ? orderId : null },
-        { orderId },
-      ],
-      captainId,
-      captainStatus: { $in: ['Assigned', 'Accepted'] },
-    });
+    const query = buildOrderQuery(orderId, { captainId });
+
+    const order = await Order.findOneAndUpdate(
+      query,
+      {
+        $set: {
+          captainStatus: 'Rejected',
+          captainId: null,
+        },
+      },
+      { new: true }
+    );
 
     if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
+      return res.status(404).json({ success: false, message: 'Order not found or not assigned to you' });
     }
 
-    // Unassign captain, keep order in system for reassignment
-    order.captainStatus = 'Rejected';
-    await order.save();
-
+    console.log(`[Captain rejectJob] Captain ${captainId} rejected Order #${order.orderId}`);
     res.json({ success: true, message: 'Job rejected', order });
   } catch (error) {
+    console.error('[rejectJob ERROR]', error);
     next(error);
   }
 };
@@ -326,66 +355,73 @@ export const updateDeliveryStatus = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Invalid status value' });
     }
 
-    const order = await Order.findOne({
-      $or: [
-        { _id: mongoose.Types.ObjectId.isValid(orderId) ? orderId : null },
-        { orderId },
-      ],
-      captainId,
-    });
+    const query = buildOrderQuery(orderId, { captainId });
+    const order = await Order.findOne(query);
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    order.captainStatus = status;
+    const updates = { captainStatus: status };
 
     if (status === 'At Pickup') {
-      order.orderStatus = 'Reached Store / Pickup';
-      await SellerNotification.updateMany(
-        { order: order._id },
-        { $set: { status: 'Reached Store' } }
-      );
+      updates.orderStatus = 'Reached Store / Pickup';
+      try {
+        await SellerNotification.updateMany(
+          { order: order._id },
+          { $set: { status: 'Reached Store' } }
+        );
+      } catch (err) {
+        console.warn('[updateDeliveryStatus] Notification update error:', err.message);
+      }
     }
 
     if (status === 'Picked Up' || status === 'In Transit') {
-      order.captainStatus = 'In Transit';
-      order.captainPickedUpAt = order.captainPickedUpAt || new Date();
-      order.orderStatus = 'Out for Delivery';
-      await SellerNotification.updateMany(
-        { order: order._id },
-        { $set: { status: 'OUT_FOR_DELIVERY' } }
-      );
+      updates.captainStatus = 'In Transit';
+      updates.captainPickedUpAt = order.captainPickedUpAt || new Date();
+      updates.orderStatus = 'Out for Delivery';
+      try {
+        await SellerNotification.updateMany(
+          { order: order._id },
+          { $set: { status: 'OUT_FOR_DELIVERY' } }
+        );
+      } catch (err) {
+        console.warn('[updateDeliveryStatus] Notification update error:', err.message);
+      }
     }
 
     if (status === 'Delivered') {
-      order.captainDeliveredAt = new Date();
-      order.orderStatus = 'Delivered';
-      order.status = 'Delivered';
-      order.isDelivered = true;
-      order.deliveredAt = new Date();
+      updates.captainDeliveredAt = new Date();
+      updates.orderStatus = 'Delivered';
+      updates.status = 'Delivered';
+      updates.isDelivered = true;
+      updates.deliveredAt = new Date();
 
       if (req.body.proofUrl || req.body.proofOfDeliveryUrl) {
-        order.proofOfDeliveryUrl = req.body.proofUrl || req.body.proofOfDeliveryUrl;
+        updates.proofOfDeliveryUrl = req.body.proofUrl || req.body.proofOfDeliveryUrl;
       }
 
-      await SellerNotification.updateMany(
-        { order: order._id },
-        { 
-          $set: { 
-            status: 'DELIVERED',
-            ...(order.proofOfDeliveryUrl ? { proofOfDeliveryUrl: order.proofOfDeliveryUrl } : {})
-          } 
-        }
-      );
+      try {
+        await SellerNotification.updateMany(
+          { order: order._id },
+          {
+            $set: {
+              status: 'DELIVERED',
+              ...(updates.proofOfDeliveryUrl ? { proofOfDeliveryUrl: updates.proofOfDeliveryUrl } : {}),
+            },
+          }
+        );
+      } catch (err) {
+        console.warn('[updateDeliveryStatus] Notification update error:', err.message);
+      }
 
       // Credit captain wallet
       const captain = await Captain.findById(captainId);
       if (captain) {
         const earnings = order.captainEarnings || 0;
         if (earnings > 0) {
-          const balBefore = captain.walletBalance;
-          captain.walletBalance += earnings;
+          const balBefore = captain.walletBalance || 0;
+          captain.walletBalance = balBefore + earnings;
           await captain.save();
 
           await CaptainTransaction.create({
@@ -415,12 +451,17 @@ export const updateDeliveryStatus = async (req, res, next) => {
       }
     }
 
-    await order.save();
+    const updatedOrder = await Order.findByIdAndUpdate(
+      order._id,
+      { $set: updates },
+      { new: true }
+    );
 
-    console.log(`[Captain updateDeliveryStatus] Order #${order.orderId} updated to captainStatus="${order.captainStatus}", orderStatus="${order.orderStatus}"`);
+    console.log(`[Captain updateDeliveryStatus] Order #${order.orderId} updated to captainStatus="${updates.captainStatus}", orderStatus="${updates.orderStatus || order.orderStatus}"`);
 
-    res.json({ success: true, message: `Status updated to ${status}`, order });
+    res.json({ success: true, message: `Status updated to ${status}`, order: updatedOrder });
   } catch (error) {
+    console.error('[updateDeliveryStatus ERROR]', error);
     next(error);
   }
 };
@@ -435,13 +476,8 @@ export const verifyDeliveryOtp = async (req, res, next) => {
     const { otp } = req.body;
     const captainId = req.user.id;
 
-    const order = await Order.findOne({
-      $or: [
-        { _id: mongoose.Types.ObjectId.isValid(orderId) ? orderId : null },
-        { orderId },
-      ],
-      captainId,
-    }).populate('user', 'name phone').populate('items.product', 'name');
+    const query = buildOrderQuery(orderId, { captainId });
+    const order = await Order.findOne(query).populate('user', 'name phone').populate('items.product', 'name');
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
@@ -454,6 +490,7 @@ export const verifyDeliveryOtp = async (req, res, next) => {
 
     res.json({ success: true, message: 'OTP verified successfully', order });
   } catch (error) {
+    console.error('[verifyDeliveryOtp ERROR]', error);
     next(error);
   }
 };
@@ -468,30 +505,31 @@ export const submitProofOfDelivery = async (req, res, next) => {
     const { proofUrl } = req.body;
     const captainId = req.user.id;
 
-    const order = await Order.findOne({
-      $or: [
-        { _id: mongoose.Types.ObjectId.isValid(orderId) ? orderId : null },
-        { orderId },
-      ],
-      captainId,
-    });
+    const query = buildOrderQuery(orderId, { captainId });
+    const order = await Order.findOneAndUpdate(
+      query,
+      { $set: { proofOfDeliveryUrl: proofUrl } },
+      { new: true }
+    );
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    order.proofOfDeliveryUrl = proofUrl;
-    await order.save();
-
-    await SellerNotification.updateMany(
-      { order: order._id },
-      { $set: { proofOfDeliveryUrl: proofUrl } }
-    );
+    try {
+      await SellerNotification.updateMany(
+        { order: order._id },
+        { $set: { proofOfDeliveryUrl: proofUrl } }
+      );
+    } catch (err) {
+      console.warn('[submitProofOfDelivery] Notification update error:', err.message);
+    }
 
     console.log(`[Captain submitProofOfDelivery] Saved proof of delivery for Order #${order.orderId}`);
 
     res.json({ success: true, message: 'Proof submitted', proofUrl });
   } catch (error) {
+    console.error('[submitProofOfDelivery ERROR]', error);
     next(error);
   }
 };

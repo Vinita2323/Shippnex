@@ -5,6 +5,7 @@ import connectDB from './config/db.js';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import healthRoutes from './routes/healthRoutes.js';
 import path from 'path';
+import fs from 'fs';
 import userAuthRoutes from './routes/userAuthRoutes.js';
 import sellerAuthRoutes from './routes/sellerAuthRoutes.js';
 import captainAuthRoutes from './routes/captainAuthRoutes.js';
@@ -21,7 +22,12 @@ import orderRoutes from './routes/orderRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
 
+import { fileURLToPath } from 'url';
+
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -30,9 +36,11 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Serve static uploads folder
-const __dirname = path.resolve();
-app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
+// Serve static uploads folder (check both relative to file and cwd)
+const uploadsDir = fs.existsSync(path.join(__dirname, '../uploads')) 
+  ? path.join(__dirname, '../uploads') 
+  : path.join(process.cwd(), 'uploads');
+app.use('/uploads', express.static(uploadsDir));
 
 // Core API Routes
 app.use('/api', healthRoutes);

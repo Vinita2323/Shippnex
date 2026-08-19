@@ -53,16 +53,28 @@ const FareSummary = () => {
         
         {/* Locations */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex gap-4">
-          <div className="flex flex-col items-center mt-1.5 mb-1.5">
-             <div className="w-2.5 h-2.5 rounded-full bg-[#047857]"></div>
-             <div className="w-0.5 flex-1 bg-slate-200 my-1"></div>
-             <div className="w-2.5 h-2.5 rounded-sm bg-[#ff5500]"></div>
+          <div className="flex flex-col items-center mt-1.5 mb-1.5 shrink-0">
+             <div className="w-2.5 h-2.5 rounded-full bg-[#047857] shrink-0"></div>
+             {activeBooking.stops && activeBooking.stops.map((_, sIdx) => (
+               <React.Fragment key={`dot_${sIdx}`}>
+                 <div className="w-0.5 flex-1 min-h-[14px] bg-slate-200 my-0.5"></div>
+                 <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></div>
+               </React.Fragment>
+             ))}
+             <div className="w-0.5 flex-1 min-h-[14px] bg-slate-200 my-0.5"></div>
+             <div className="w-2.5 h-2.5 rounded-sm bg-[#ff5500] shrink-0"></div>
           </div>
-          <div className="flex-1 flex flex-col justify-between gap-4 py-0.5">
+          <div className="flex-1 flex flex-col justify-between gap-3 py-0.5">
              <div className="flex flex-col">
                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pickup</span>
                <span className="text-[14px] font-semibold text-slate-800">{activeBooking.pickup}</span>
              </div>
+             {activeBooking.stops && activeBooking.stops.map((stopAddr, sIdx) => (
+               <div key={`stop_${sIdx}`} className="flex flex-col">
+                 <span className="text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-0.5">Stop {sIdx + 1}</span>
+                 <span className="text-[14px] font-semibold text-slate-800">{stopAddr}</span>
+               </div>
+             ))}
              <div className="flex flex-col">
                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Drop</span>
                <span className="text-[14px] font-semibold text-slate-800">{activeBooking.drop}</span>

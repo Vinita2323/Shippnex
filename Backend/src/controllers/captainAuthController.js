@@ -20,10 +20,21 @@ export const registerCaptain = async (req, res, next) => {
       pinCode,
       emergencyContact,
       aadhaarNumber,
+      vehicleType,
       drivingLicenseNumber,
       rcNumber,
       vehicleInsuranceNumber,
       insuranceValidTill,
+      pucNumber,
+      pucValidTill,
+      permitNumber,
+      permitValidTill,
+      fitnessCertNumber,
+      fitnessValidTill,
+      roadTaxNumber,
+      roadTaxValidTill,
+      gpsEnabled,
+      gpsDeviceId,
       bankName,
       accountHolderName,
       accountNumber,
@@ -63,10 +74,21 @@ export const registerCaptain = async (req, res, next) => {
       captain.pinCode = pinCode;
       captain.emergencyContact = emergencyContact;
       captain.aadhaarNumber = aadhaarNumber;
+      if (vehicleType) captain.vehicleType = vehicleType;
       captain.drivingLicenseNumber = drivingLicenseNumber;
       captain.rcNumber = rcNumber;
       captain.vehicleInsuranceNumber = vehicleInsuranceNumber;
       captain.insuranceValidTill = insuranceValidTill;
+      captain.pucNumber = pucNumber;
+      captain.pucValidTill = pucValidTill;
+      captain.permitNumber = permitNumber;
+      captain.permitValidTill = permitValidTill;
+      captain.fitnessCertNumber = fitnessCertNumber;
+      captain.fitnessValidTill = fitnessValidTill;
+      captain.roadTaxNumber = roadTaxNumber;
+      captain.roadTaxValidTill = roadTaxValidTill;
+      if (gpsEnabled !== undefined) captain.gpsEnabled = gpsEnabled;
+      captain.gpsDeviceId = gpsDeviceId;
       if (req.body.documents) {
         captain.documents = { ...(captain.documents || {}), ...req.body.documents };
       }
@@ -96,10 +118,21 @@ export const registerCaptain = async (req, res, next) => {
         pinCode,
         emergencyContact,
         aadhaarNumber,
+        vehicleType: vehicleType || 'Motorcycle',
         drivingLicenseNumber,
         rcNumber,
         vehicleInsuranceNumber,
         insuranceValidTill,
+        pucNumber,
+        pucValidTill,
+        permitNumber,
+        permitValidTill,
+        fitnessCertNumber,
+        fitnessValidTill,
+        roadTaxNumber,
+        roadTaxValidTill,
+        gpsEnabled: gpsEnabled !== undefined ? gpsEnabled : true,
+        gpsDeviceId,
         documents: req.body.documents || {},
         bankDetails: {
           bankName,
