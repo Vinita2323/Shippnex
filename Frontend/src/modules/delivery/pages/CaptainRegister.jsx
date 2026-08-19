@@ -42,6 +42,7 @@ const CaptainRegister = () => {
     gpsDeviceId: '',
 
     // Bank Details
+    panCardNumber: '',
     bankName: '',
     accountHolderName: '',
     accountNumber: '',
@@ -60,6 +61,7 @@ const CaptainRegister = () => {
     fitnessDocument: null,
     roadTaxDocument: null,
     form21Document: null,
+    panCardDocument: null,
     profilePhoto: null,
   });
 
@@ -114,7 +116,8 @@ const CaptainRegister = () => {
         permitDoc,
         fitnessDoc,
         taxDoc,
-        form21Doc
+        form21Doc,
+        panDoc
       ] = await Promise.all([
         fileToBase64(files.drivingLicense),
         fileToBase64(files.rcDocument),
@@ -126,6 +129,7 @@ const CaptainRegister = () => {
         fileToBase64(files.fitnessDocument),
         fileToBase64(files.roadTaxDocument),
         fileToBase64(files.form21Document),
+        fileToBase64(files.panCardDocument),
       ]);
 
       const payload = {
@@ -140,6 +144,7 @@ const CaptainRegister = () => {
           fitnessDocument: fitnessDoc,
           roadTaxDocument: taxDoc,
           form21Document: form21Doc,
+          panCard: panDoc,
           profilePhoto: pPhoto,
         },
       };
@@ -790,6 +795,23 @@ const CaptainRegister = () => {
                 </label>
               </div>
 
+              {/* PAN Card Document Upload */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Upload PAN Card Document (Optional)</label>
+                <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
+                  <span className="material-symbols-outlined text-slate-400">upload</span>
+                  <span className="text-xs font-bold text-slate-600 truncate">
+                    {files.panCardDocument ? files.panCardDocument.name : 'TAP TO UPLOAD PAN CARD'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => handleFileChange(e, 'panCardDocument')}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
             </div>
 
 
@@ -798,6 +820,19 @@ const CaptainRegister = () => {
               <h2 className="text-xs font-black text-[#15803d] uppercase tracking-wider border-b pb-2 border-slate-100">
                 Bank Details
               </h2>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">PAN Card Number</label>
+                <input
+                  type="text"
+                  name="panCardNumber"
+                  value={formData.panCardNumber}
+                  onChange={(e) => setFormData(prev => ({ ...prev, panCardNumber: e.target.value.toUpperCase() }))}
+                  placeholder="Enter 10-digit PAN card number (e.g. ABCDE1234F)"
+                  maxLength={10}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 uppercase outline-none focus:border-[#15803d]"
+                />
+              </div>
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700">Bank Name</label>

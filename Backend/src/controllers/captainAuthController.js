@@ -74,6 +74,7 @@ export const registerCaptain = async (req, res, next) => {
       captain.pinCode = pinCode;
       captain.emergencyContact = emergencyContact;
       captain.aadhaarNumber = aadhaarNumber;
+      if (panCardNumber) captain.panCardNumber = panCardNumber.toUpperCase();
       if (vehicleType) captain.vehicleType = vehicleType;
       captain.drivingLicenseNumber = drivingLicenseNumber;
       captain.rcNumber = rcNumber;
@@ -99,6 +100,7 @@ export const registerCaptain = async (req, res, next) => {
         ifscCode,
         branchName,
         upiId,
+        panCardNumber: panCardNumber ? panCardNumber.toUpperCase() : captain.bankDetails?.panCardNumber,
       };
       captain.status = 'pending'; // Re-submit for review
       await captain.save();
@@ -118,6 +120,7 @@ export const registerCaptain = async (req, res, next) => {
         pinCode,
         emergencyContact,
         aadhaarNumber,
+        panCardNumber: panCardNumber ? panCardNumber.toUpperCase() : '',
         vehicleType: vehicleType || 'Motorcycle',
         drivingLicenseNumber,
         rcNumber,
@@ -141,6 +144,7 @@ export const registerCaptain = async (req, res, next) => {
           ifscCode,
           branchName,
           upiId,
+          panCardNumber: panCardNumber ? panCardNumber.toUpperCase() : '',
         },
         status: 'pending',
       });

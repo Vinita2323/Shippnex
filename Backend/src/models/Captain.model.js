@@ -27,6 +27,7 @@ const captainSchema = new mongoose.Schema(
     pinCode: { type: String, trim: true },
     emergencyContact: { type: String },
     aadhaarNumber: { type: String, trim: true },
+    panCardNumber: { type: String, trim: true, uppercase: true },
 
     // Vehicle Details & Permits
     vehicleType: { type: String, default: 'Two Wheeler' },
@@ -57,6 +58,7 @@ const captainSchema = new mongoose.Schema(
       fitnessDocument: { type: String, default: '' },
       roadTaxDocument: { type: String, default: '' },
       form21Document: { type: String, default: '' },
+      panCard: { type: String, default: '' },
       profilePhoto: { type: String, default: '' },
     },
 
@@ -68,6 +70,7 @@ const captainSchema = new mongoose.Schema(
       ifscCode: { type: String, trim: true },
       branchName: { type: String, trim: true },
       upiId: { type: String, trim: true },
+      panCardNumber: { type: String, trim: true },
     },
 
     status: {
