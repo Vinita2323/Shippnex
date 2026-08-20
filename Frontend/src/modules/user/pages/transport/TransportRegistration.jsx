@@ -6,12 +6,19 @@ const TransportRegistration = () => {
   const [formData, setFormData] = useState({
     fullName: '',
     mobile: '',
-    city: 'Chicago, IL',
+    city: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === 'mobile') {
+      // Keep only numbers and limit to 10 digits
+      const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
+      setFormData({ ...formData, [name]: digitsOnly });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   const handleSubmit = (e) => {
@@ -62,7 +69,7 @@ const TransportRegistration = () => {
               required
               value={formData.fullName}
               onChange={handleChange}
-              placeholder="e.g. Sarah Jenkins"
+              placeholder="e.g. Rajesh Kumar"
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-[#1e2b4f] focus:outline-none focus:border-[#ff6000] focus:ring-1 focus:ring-[#ff6000] transition-all"
             />
           </div>
@@ -72,7 +79,7 @@ const TransportRegistration = () => {
               Mobile Number
             </label>
             <div className="relative flex items-center">
-              <span className="absolute left-4 text-xs font-semibold text-slate-400">+1</span>
+              <span className="absolute left-4 text-xs font-semibold text-slate-500 select-none">+91</span>
               <input
                 type="tel"
                 name="mobile"
@@ -80,8 +87,8 @@ const TransportRegistration = () => {
                 maxLength={10}
                 value={formData.mobile}
                 onChange={handleChange}
-                placeholder="555 012 3456"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm text-[#1e2b4f] focus:outline-none focus:border-[#ff6000] focus:ring-1 focus:ring-[#ff6000] transition-all"
+                placeholder="98765 43210"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-12 pr-4 py-3 text-sm text-[#1e2b4f] focus:outline-none focus:border-[#ff6000] focus:ring-1 focus:ring-[#ff6000] transition-all"
               />
             </div>
           </div>
@@ -96,7 +103,7 @@ const TransportRegistration = () => {
               required
               value={formData.city}
               onChange={handleChange}
-              placeholder="e.g. Chicago, IL"
+              placeholder="e.g. Mumbai, Maharashtra"
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-[#1e2b4f] focus:outline-none focus:border-[#ff6000] focus:ring-1 focus:ring-[#ff6000] transition-all"
             />
           </div>

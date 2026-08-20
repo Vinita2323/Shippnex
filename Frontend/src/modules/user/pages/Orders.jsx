@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, Package, CreditCard, PackageOpen, ArrowLeft, SlidersHorizontal, X, Check, Box, Truck } from 'lucide-react';
+import { Search, Package, ArrowLeft, SlidersHorizontal, Check, Box, Truck, Loader2 } from 'lucide-react';
 import { useOrder } from '../context/OrderContext';
-import { useTransport } from '../context/TransportContext';
 import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
-
 import { orderService } from '../../../services/authService';
+import { transportService } from '../../../services/transportService';
 
 const Orders = () => {
   const navigate = useNavigate();
@@ -25,11 +24,12 @@ const Orders = () => {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [serverOrders, setServerOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [transportBookings, setTransportBookings] = useState([]);
+  const [transportLoading, setTransportLoading] = useState(false);
 
   const filterOptions = ['All', 'Placed', 'Processing', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
   const { orders: contextOrders } = useOrder();
-  const { transportBookings } = useTransport();
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -58,6 +58,23 @@ const Orders = () => {
     fetchOrders();
   }, []);
 
+  // Fetch real transport bookings when tab is active
+  useEffect(() => {
+    if (activeTab !== 'transport') return;
+    const fetchTransport = async () => {
+      try {
+        setTransportLoading(true);
+        const res = await transportService.getUserBookings({ limit: 50 });
+        setTransportBookings(res.bookings || []);
+      } catch (err) {
+        console.error('Failed to fetch transport bookings:', err);
+      } finally {
+        setTransportLoading(false);
+      }
+    };
+    fetchTransport();
+  }, [activeTab]);
+
   const allOrders = serverOrders.length > 0 ? serverOrders : contextOrders;
 
   const getStatusColor = (status) => {
@@ -80,7 +97,7 @@ const Orders = () => {
   });
 
   const filteredTransport = transportBookings.filter(booking => {
-    return booking.id.toLowerCase().includes(searchTerm.toLowerCase());
+    return (booking.bookingId || '').toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   return (
@@ -218,58 +235,73 @@ const Orders = () => {
           </div>
         )
         ) : (
-          filteredTransport.length > 0 ? (
-            filteredTransport.map((booking, index) => (
-              <div key={index} className="bg-white rounded-[16px] p-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col gap-3">
-                
-                {/* Top Row */}
-                <div className="flex items-start justify-between">
-                  <div className="flex gap-3 items-center">
-                    <div className="w-[44px] h-[44px] rounded-[12px] bg-green-50 flex items-center justify-center shrink-0 border border-green-100 text-green-700">
-                      <Truck size={24} strokeWidth={1.5} />
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[14px] font-extrabold text-slate-900 tracking-tight">{booking.id}</span>
-                      <span className="text-[12px] font-medium text-slate-500">{booking.date}</span>
-                    </div>
-                  </div>
-                  <span className={`text-[12px] font-bold ${booking.status === 'Pending' ? 'text-orange-500' : 'text-blue-600'}`}>
-                    {booking.status}
-                  </span>
-                </div>
-  
-                <div className="w-full h-px bg-slate-100 my-0.5"></div>
-  
-                {/* Locations Row */}
-                <div className="flex flex-col gap-1.5 px-1">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-[#047857]"></div>
-                    <span className="text-[12px] font-medium text-slate-700 truncate">{booking.pickup}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-sm bg-[#ff5500]"></div>
-                    <span className="text-[12px] font-medium text-slate-700 truncate">{booking.drop}</span>
-                  </div>
-                </div>
+          transportLoading ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
+              <Loader2 size={32} className="animate-spin text-[#047857]" />
+              <span className="text-[14px]">Loading transport bookings...</span>
+            </div>
+          ) : filteredTransport.length > 0 ? (
+            filteredTransport.map((booking, index) => {
+              const bId = booking.bookingId || booking._id;
+              const bDate = booking.createdAt
+                ? new Date(booking.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                : '—';
+              const bPickup = booking.pickupLocation?.address || '—';
+              const bDrop = booking.dropLocation?.address || '—';
+              const bVehicle = booking.vehicleSnapshot?.name || '—';
+              const bFare = booking.fareBreakdown?.totalFare ?? 0;
+              const bStatus = booking.status || 'SEARCHING_CAPTAIN';
+              const statusLabel = {
+                SEARCHING_CAPTAIN: 'Searching', CAPTAIN_ASSIGNED: 'Assigned',
+                RIDE_STARTED: 'In Progress', RIDE_COMPLETED: 'Delivered', CANCELLED: 'Cancelled'
+              }[bStatus] || bStatus;
+              const statusColor = bStatus === 'CANCELLED' ? 'text-red-500' : bStatus === 'RIDE_COMPLETED' ? 'text-green-600' : bStatus === 'SEARCHING_CAPTAIN' ? 'text-orange-500' : 'text-blue-600';
 
-                <div className="w-full h-px bg-slate-100 my-0.5"></div>
-  
-                {/* Bottom Row */}
-                <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-bold text-slate-500">{booking.vehicle.name}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[14px] font-extrabold text-slate-900">₹{booking.fare}</span>
-                    <button 
-                      onClick={() => navigate('/transport/booking-details', { state: { bookingId: booking.id } })}
-                      className="bg-[#047857] text-white border-none rounded-lg px-3 py-1.5 text-[11px] font-bold cursor-pointer hover:bg-emerald-800 transition-colors"
-                    >
-                      View Details
-                    </button>
+              return (
+                <div key={index} className="bg-white rounded-[16px] p-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col gap-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex gap-3 items-center">
+                      <div className="w-[44px] h-[44px] rounded-[12px] bg-green-50 flex items-center justify-center shrink-0 border border-green-100 text-green-700">
+                        <Truck size={24} strokeWidth={1.5} />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[14px] font-extrabold text-slate-900 tracking-tight">{bId}</span>
+                        <span className="text-[12px] font-medium text-slate-500">{bDate}</span>
+                      </div>
+                    </div>
+                    <span className={`text-[12px] font-bold ${statusColor}`}>{statusLabel}</span>
+                  </div>
+
+                  <div className="w-full h-px bg-slate-100 my-0.5"></div>
+
+                  <div className="flex flex-col gap-1.5 px-1">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-[#047857]"></div>
+                      <span className="text-[12px] font-medium text-slate-700 truncate">{bPickup}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-sm bg-[#ff5500]"></div>
+                      <span className="text-[12px] font-medium text-slate-700 truncate">{bDrop}</span>
+                    </div>
+                  </div>
+
+                  <div className="w-full h-px bg-slate-100 my-0.5"></div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] font-bold text-slate-500">{bVehicle}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[14px] font-extrabold text-slate-900">₹{bFare}</span>
+                      <button
+                        onClick={() => navigate('/transport/booking-details', { state: { bookingId: bId } })}
+                        className="bg-[#047857] text-white border-none rounded-lg px-3 py-1.5 text-[11px] font-bold cursor-pointer hover:bg-emerald-800 transition-colors"
+                      >
+                        View Details
+                      </button>
+                    </div>
                   </div>
                 </div>
-  
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="bg-white rounded-[20px] flex flex-col items-center justify-center py-16 shadow-[0_4px_24px_rgba(0,0,0,0.03)] border border-slate-100 mt-2">
               <Truck size={48} className="text-slate-300 mb-4" strokeWidth={1.5} />

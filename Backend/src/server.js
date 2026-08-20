@@ -21,6 +21,8 @@ import addressRoutes from './routes/addressRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
+import vehicleTypeRoutes from './routes/vehicleTypeRoutes.js';
+import transportBookingRoutes from './routes/transportBookingRoutes.js';
 
 import { fileURLToPath } from 'url';
 
@@ -59,6 +61,10 @@ app.use('/api/user/addresses', addressRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/wallet', walletRoutes);
+
+// Transport Module Routes
+app.use('/api/transport/vehicles', vehicleTypeRoutes);
+app.use('/api/transport/bookings', transportBookingRoutes);
 
 // Base route
 app.get('/', (req, res) => {

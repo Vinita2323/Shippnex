@@ -21,6 +21,16 @@ import {
   markAllNotificationsRead,
   getServiceAreas,
 } from '../controllers/captainController.js';
+import {
+  getTransportRequests,
+  acceptTransportRequest,
+  rejectTransportRequest,
+  getActiveTransportDelivery,
+  updateTransportStatus,
+  verifyPickupOtp,
+  verifyDropOtp,
+  submitTransportProof,
+} from '../controllers/captainTransportController.js';
 
 const router = express.Router();
 
@@ -38,11 +48,21 @@ router.put('/location', captainAuth, updateLocation);
 // Dashboard
 router.get('/dashboard', captainAuth, getDashboardStats);
 
-// Jobs
+// Jobs (E-Commerce Delivery)
 router.get('/jobs', captainAuth, getJobs);
 router.put('/jobs/:orderId/accept', captainAuth, acceptJob);
 router.put('/jobs/:orderId/reject', captainAuth, rejectJob);
 router.put('/jobs/:orderId/status', captainAuth, updateDeliveryStatus);
+
+// Transport Requests & Rides (Goods Transport)
+router.get('/transport/requests', captainAuth, getTransportRequests);
+router.put('/transport/requests/:bookingId/accept', captainAuth, acceptTransportRequest);
+router.put('/transport/requests/:bookingId/reject', captainAuth, rejectTransportRequest);
+router.get('/transport/active', captainAuth, getActiveTransportDelivery);
+router.put('/transport/active/:bookingId/status', captainAuth, updateTransportStatus);
+router.post('/transport/active/:bookingId/verify-pickup-otp', captainAuth, verifyPickupOtp);
+router.post('/transport/active/:bookingId/verify-drop-otp', captainAuth, verifyDropOtp);
+router.post('/transport/active/:bookingId/proof', captainAuth, submitTransportProof);
 
 // Delivery Actions
 router.get('/active-delivery', captainAuth, getActiveDelivery);

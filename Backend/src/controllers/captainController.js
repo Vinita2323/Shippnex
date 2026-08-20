@@ -153,6 +153,7 @@ export const updateLocation = async (req, res, next) => {
 // ──────────────────────────────────────────────
 // GET /api/captain/dashboard
 // ──────────────────────────────────────────────
+// ──────────────────────────────────────────────
 export const getDashboardStats = async (req, res, next) => {
   try {
     const captainId = req.user.id;
@@ -165,7 +166,7 @@ export const getDashboardStats = async (req, res, next) => {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    // Today's completed deliveries (earning transactions)
+    // Today's completed transactions (both e-commerce and transport)
     const todayTransactions = await CaptainTransaction.find({
       captainId,
       type: 'CREDIT',
@@ -174,7 +175,7 @@ export const getDashboardStats = async (req, res, next) => {
 
     const todayEarnings = todayTransactions.reduce((sum, t) => sum + t.amount, 0);
 
-    // Today's assigned orders
+    // Today's assigned orders (E-Commerce)
     const todayOrders = await Order.find({
       captainId,
       captainAssignedAt: { $gte: startOfDay, $lte: endOfDay },
@@ -185,6 +186,54 @@ export const getDashboardStats = async (req, res, next) => {
       captainId,
       captainStatus: { $in: ['Assigned', 'Accepted', 'Picked Up', 'In Transit'] },
     }).populate('user', 'name phone').select('orderId shippingAddress captainStatus captainEarnings deliverySlot items createdAt');
+
+    // ── Transport Bookings Integration ──
+    const { default: TransportBooking } = await import('../models/TransportBooking.model.js');
+    const { getVehicleMatchPattern } = await import('./transportBookingController.js');
+
+    const vehiclePattern = getVehicleMatchPattern(captain.vehicleType);
+
+    const transportQuery = {
+      status: 'SEARCHING_CAPTAIN',
+      captainRequests: {
+        $not: {
+          $elemMatch: {
+            captainId: new mongoose.Types.ObjectId(captainId),
+            status: 'REJECTED',
+          },
+        },
+      },
+    };
+
+    if (vehiclePattern) {
+      transportQuery.$or = [
+        { 'vehicleSnapshot.name': { $regex: vehiclePattern, $options: 'i' } },
+        { 'vehicleSnapshot.slug': { $regex: vehiclePattern, $options: 'i' } },
+      ];
+    }
+
+    // Pending Transport Requests matching captain vehicle
+    const transportRequests = await TransportBooking.find(transportQuery)
+      .populate('user', 'name phone')
+      .populate('vehicleTypeId', 'name slug icon')
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    // Active Transport Ride assigned to this captain
+    const activeTransport = await TransportBooking.findOne({
+      captainId,
+      status: {
+        $in: [
+          'CAPTAIN_ASSIGNED',
+          'CAPTAIN_ARRIVING',
+          'CAPTAIN_REACHED_PICKUP',
+          'RIDE_STARTED',
+          'CAPTAIN_REACHED_DROP',
+        ],
+      },
+    })
+      .populate('user', 'name phone')
+      .populate('vehicleTypeId', 'name slug icon');
 
     // Weekly earnings (last 7 days)
     const weeklyData = [];
@@ -206,8 +255,32 @@ export const getDashboardStats = async (req, res, next) => {
       weeklyData.push({ day: days[day.getDay()], value: dayTotal });
     }
 
-    // Total bookings (all time assigned)
-    const totalBookings = await Order.countDocuments({ captainId });
+    // Total bookings (both Orders & Transport Bookings)
+    const totalOrderBookings = await Order.countDocuments({ captainId });
+    const totalTransportBookings = await TransportBooking.countDocuments({ captainId });
+    const totalBookings = totalOrderBookings + totalTransportBookings;
+
+    const formattedTransportRequests = transportRequests.map((b) => {
+      const myReq = b.captainRequests?.find((r) => r.captainId.toString() === captainId);
+      return {
+        _id: b._id,
+        bookingId: b.bookingId,
+        pickupLocation: b.pickupLocation,
+        dropLocation: b.dropLocation,
+        goods: b.goods,
+        vehicleSnapshot: b.vehicleSnapshot,
+        distanceKm: b.distanceKm,
+        estimatedDurationMin: b.estimatedDurationMin,
+        paymentMethod: b.paymentMethod,
+        captainEarnings: myReq?.earnings || b.captainEarnings || Math.round(b.fareBreakdown.totalFare * 0.8),
+        customerName: b.user?.name || 'Customer',
+        customerPhone: b.user?.phone || '',
+        createdAt: b.createdAt,
+        isTransport: true,
+      };
+    });
+
+    const totalPending = pendingOrders.length + formattedTransportRequests.length + (activeTransport ? 1 : 0);
 
     res.json({
       success: true,
@@ -218,10 +291,12 @@ export const getDashboardStats = async (req, res, next) => {
         todayEarnings,
         totalBookings,
         deliveredToday,
-        pendingCount: pendingOrders.length,
+        pendingCount: totalPending,
         totalAssignedToday: todayOrders.length,
       },
       pendingOrders: pendingOrders.slice(0, 5),
+      transportRequests: formattedTransportRequests,
+      activeTransport: activeTransport || null,
       weeklyEarnings: weeklyData,
     });
   } catch (error) {

@@ -56,7 +56,7 @@ const TransportHome = () => {
         </div>
 
         {/* Quick Location Input (Floating Card) */}
-        <div className="px-5 mb-6 -mt-2 relative z-20">
+        <div className="px-5 mb-6 mt-4 relative z-20">
           <div 
             className="bg-white rounded-2xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-slate-100 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-transform"
             onClick={() => navigate('/transport/location')}
