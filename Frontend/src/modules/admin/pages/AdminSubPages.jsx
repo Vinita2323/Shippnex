@@ -1433,9 +1433,18 @@ export const CaptainManagement = () => {
             {/* Modal Header */}
             <div className="bg-white border-b border-slate-100 p-6 flex items-center justify-between sticky top-0 z-10">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-[#15803d] flex items-center justify-center font-black text-xl border border-emerald-100">
-                  {selectedCaptain.name.charAt(0).toUpperCase()}
-                </div>
+                {selectedCaptain.raw?.documents?.profilePhoto ? (
+                  <img
+                    src={selectedCaptain.raw.documents.profilePhoto}
+                    alt={selectedCaptain.name}
+                    onClick={() => setPreviewDocImage({ title: 'Captain Live Selfie', src: selectedCaptain.raw.documents.profilePhoto })}
+                    className="w-12 h-12 rounded-2xl object-cover border-2 border-emerald-500 shadow-sm cursor-pointer hover:scale-105 transition-transform shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-[#15803d] flex items-center justify-center font-black text-xl border border-emerald-100 shrink-0">
+                    {selectedCaptain.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-lg font-extrabold text-[#002625] m-0">{selectedCaptain.name}</h3>
@@ -1568,7 +1577,44 @@ export const CaptainManagement = () => {
                   <span className="text-[10px] text-slate-400 font-semibold">Click any image to view in full resolution</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
+                  {/* Captain Live Selfie */}
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-slate-700 uppercase">Live Selfie</span>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                          selectedCaptain.raw?.documents?.profilePhoto ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {selectedCaptain.raw?.documents?.profilePhoto ? 'Attached' : 'Pending'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                        Captain Photo Verification
+                      </p>
+                    </div>
+
+                    {selectedCaptain.raw?.documents?.profilePhoto ? (
+                      <div 
+                        onClick={() => setPreviewDocImage({ title: 'Captain Live Selfie', src: selectedCaptain.raw.documents.profilePhoto })}
+                        className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-black aspect-video flex items-center justify-center"
+                      >
+                        <img 
+                          src={selectedCaptain.raw.documents.profilePhoto} 
+                          alt="Captain Live Selfie" 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-[10px] gap-1">
+                          <Eye size={14} /> View Full
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-20 bg-slate-100 border border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-400 text-[10px] font-medium">
+                        <span>No selfie uploaded</span>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Driving License */}
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
                     <div>

@@ -4,6 +4,7 @@ import CaptainBottomNav from '../components/CaptainBottomNav';
 import IncomingGigModal from '../components/IncomingGigModal';
 import { captainService } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
+import { markJobAsDismissed, isJobDismissed } from '../utils/jobDismissal';
 
 const CaptainDashboard = () => {
   const navigate = useNavigate();
@@ -21,12 +22,15 @@ const CaptainDashboard = () => {
   });
   const [pendingOrders, setPendingOrders] = useState([]);
   const [transportRequests, setTransportRequests] = useState([]);
+  const [activeTransport, setActiveTransport] = useState(null);
+  const [taskFilter, setTaskFilter] = useState('all');
+  const [cardActionLoading, setCardActionLoading] = useState(null);
   const [weeklyEarnings, setWeeklyEarnings] = useState([]);
+  const [selectedDetailTask, setSelectedDetailTask] = useState(null);
 
   // ── Incoming Gig Overlay Modal State (Queue + Dismiss tracking) ──
   const [incomingJob, setIncomingJob] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [dismissedJobIds, setDismissedJobIds] = useState(new Set());
 
   // Location modal state
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -39,6 +43,20 @@ const CaptainDashboard = () => {
   const manualInputRef = useRef(null);
   const watchIdRef = useRef(null);
 
+  // ── Body Scroll Lock when Modals are Open ─────────────────────
+  useEffect(() => {
+    if (selectedDetailTask || incomingJob || showLocationModal) {
+      const originalOverflow = document.body.style.overflow;
+      const originalTouchAction = document.body.style.touchAction;
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+      return () => {
+        document.body.style.overflow = originalOverflow || '';
+        document.body.style.touchAction = originalTouchAction || '';
+      };
+    }
+  }, [selectedDetailTask, incomingJob, showLocationModal]);
+
   // ── Fetch Dashboard Stats & Incoming Requests ─────────────────
   const fetchDashboard = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true);
@@ -50,13 +68,14 @@ const CaptainDashboard = () => {
         const tRequests = res.transportRequests || [];
         setPendingOrders(orders);
         setTransportRequests(tRequests);
+        setActiveTransport(res.activeTransport || null);
 
         const wData = res.weeklyEarnings || [];
-        const maxVal = Math.max(...wData.map((d) => d.value), 1);
+        const maxVal = Math.max(...wData.map((d) => d.value), 500);
         setWeeklyEarnings(
           wData.map((d, i) => ({
             ...d,
-            height: `${Math.max(Math.round((d.value / maxVal) * 95), 5)}%`,
+            fillPercent: d.value > 0 ? Math.max(Math.round((d.value / maxVal) * 100), 16) : 10,
             current: i === wData.length - 1,
           }))
         );
@@ -70,21 +89,16 @@ const CaptainDashboard = () => {
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         setActiveDay(days[today.getDay()]);
 
-        // Auto-popup white modal for incoming transport requests matching this captain
-        const newTransport = tRequests.find(
-          (t) => !dismissedJobIds.has(t._id) && !dismissedJobIds.has(t.bookingId)
-        );
+        // Auto-popup white modal for incoming transport requests matching this captain (never repeats if dismissed)
+        const newTransport = tRequests.find((t) => !isJobDismissed(t));
         if (newTransport && !incomingJob) {
           setIncomingJob({ ...newTransport, isTransport: true });
           return;
         }
 
-        // Auto-popup white modal for newly assigned e-commerce orders
+        // Auto-popup white modal for newly assigned e-commerce orders (never repeats if dismissed)
         const newAssignedOrder = orders.find(
-          (o) =>
-            o.captainStatus === 'Assigned' &&
-            !dismissedJobIds.has(o._id) &&
-            !dismissedJobIds.has(o.orderId)
+          (o) => o.captainStatus === 'Assigned' && !isJobDismissed(o)
         );
         if (newAssignedOrder && !incomingJob) {
           setIncomingJob({ ...newAssignedOrder, isTransport: false });
@@ -95,7 +109,7 @@ const CaptainDashboard = () => {
     } finally {
       if (!isBackground) setLoading(false);
     }
-  }, [dismissedJobIds, incomingJob]);
+  }, [incomingJob]);
 
   // Initial fetch
   useEffect(() => {
@@ -150,6 +164,7 @@ const CaptainDashboard = () => {
     if (!job) return;
     setActionLoading(true);
     try {
+      markJobAsDismissed(job);
       if (job.isTransport) {
         const bookingId = job.bookingId || job._id;
         await transportService.captainAcceptRequest(bookingId);
@@ -168,18 +183,18 @@ const CaptainDashboard = () => {
     }
   };
 
-  // ── Reject Job (Hides Modal & Never Reappears) ─────────────────
+  // ── Reject Job (Hides Modal & Never Reappears on Any Screen) ────
   const handleRejectJob = async (job) => {
     if (!job) return;
     setActionLoading(true);
     try {
+      markJobAsDismissed(job);
       const id = job.bookingId || job.orderId || job._id;
       if (job.isTransport) {
         await transportService.captainRejectRequest(id);
       } else {
         await captainService.rejectJob(id);
       }
-      setDismissedJobIds((prev) => new Set([...prev, job._id, id]));
       setIncomingJob(null); // Modal closes immediately
       await fetchDashboard(true);
     } catch (err) {
@@ -192,10 +207,102 @@ const CaptainDashboard = () => {
   // ── Dismiss Modal ───────────────────────────────────────────────
   const handleDismissModal = (job) => {
     if (job) {
-      const id = job.bookingId || job.orderId || job._id;
-      setDismissedJobIds((prev) => new Set([...prev, job._id, id]));
+      markJobAsDismissed(job);
     }
     setIncomingJob(null);
+  };
+
+  // ── Card Actions for Today's Incomplete / In-Process Section ──────
+  const handleCardAcceptOrder = async (order) => {
+    setCardActionLoading(order._id);
+    try {
+      markJobAsDismissed(order);
+      await captainService.acceptJob(order.orderId || order._id);
+      await fetchDashboard(true);
+      navigate('/captain/active-delivery');
+    } catch (err) {
+      console.error('Accept order error:', err);
+      alert(err?.response?.data?.message || 'Failed to accept order.');
+    } finally {
+      setCardActionLoading(null);
+    }
+  };
+
+  const handleCardRejectOrder = async (order) => {
+    setCardActionLoading(order._id);
+    try {
+      markJobAsDismissed(order);
+      const id = order.orderId || order._id;
+      await captainService.rejectJob(id);
+      await fetchDashboard(true);
+    } catch (err) {
+      console.error('Reject order error:', err);
+    } finally {
+      setCardActionLoading(null);
+    }
+  };
+
+  const handleCardAcceptTransport = async (request) => {
+    setCardActionLoading(request._id);
+    try {
+      markJobAsDismissed(request);
+      const id = request.bookingId || request._id;
+      await transportService.captainAcceptRequest(id);
+      await fetchDashboard(true);
+      navigate('/captain/active-delivery');
+    } catch (err) {
+      console.error('Accept transport error:', err);
+      alert(err?.response?.data?.message || err?.message || 'Failed to accept request.');
+    } finally {
+      setCardActionLoading(null);
+    }
+  };
+
+  const handleCardRejectTransport = async (request) => {
+    setCardActionLoading(request._id);
+    try {
+      markJobAsDismissed(request);
+      const id = request.bookingId || request._id;
+      await transportService.captainRejectRequest(id);
+      await fetchDashboard(true);
+    } catch (err) {
+      console.error('Reject transport error:', err);
+    } finally {
+      setCardActionLoading(null);
+    }
+  };
+
+  const getDeliveryStatusBadge = (status) => {
+    switch (status) {
+      case 'In Transit':
+        return { label: 'In Transit', bg: 'bg-orange-100 text-orange-800 border-orange-200', icon: 'local_shipping' };
+      case 'Picked Up':
+        return { label: 'Picked Up', bg: 'bg-amber-100 text-amber-800 border-amber-200', icon: 'inventory_2' };
+      case 'At Pickup':
+        return { label: 'At Pickup / Store', bg: 'bg-blue-100 text-blue-800 border-blue-200', icon: 'storefront' };
+      case 'Accepted':
+        return { label: 'Accepted / Head to Store', bg: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: 'task_alt' };
+      case 'Assigned':
+        return { label: 'Assigned (Pending Accept)', bg: 'bg-purple-100 text-purple-800 border-purple-200', icon: 'schedule' };
+      default:
+        return { label: status || 'Pending', bg: 'bg-slate-100 text-slate-700 border-slate-200', icon: 'info' };
+    }
+  };
+
+  const getTransportStatusBadge = (status) => {
+    switch (status) {
+      case 'CAPTAIN_ASSIGNED':
+      case 'CAPTAIN_ARRIVING':
+        return { label: 'Captain Arriving', bg: 'bg-sky-100 text-sky-800 border-sky-200', icon: 'near_me' };
+      case 'CAPTAIN_REACHED_PICKUP':
+        return { label: 'At Pickup Point', bg: 'bg-amber-100 text-amber-800 border-amber-200', icon: 'location_on' };
+      case 'RIDE_STARTED':
+        return { label: 'In Transit / Haulage Started', bg: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: 'local_shipping' };
+      case 'CAPTAIN_REACHED_DROP':
+        return { label: 'At Drop Point', bg: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: 'where_to_vote' };
+      default:
+        return { label: 'Live Trip Active', bg: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: 'navigation' };
+    }
   };
 
   // ── Location Modal Helpers ─────────────────────────────────────
@@ -260,58 +367,62 @@ const CaptainDashboard = () => {
 
   return (
     <div className="bg-[#f8fafc] font-body-md text-slate-800 min-h-screen pb-24 select-none">
-      {/* Compact TopAppBar */}
-      <header className="fixed top-0 left-0 w-full z-40 flex justify-between items-center px-4 py-2.5 bg-white/95 backdrop-blur-md shadow-xs border-b border-slate-100">
-        <div className="flex items-center gap-2">
-          <img src="/DeliveryLogo.png" alt="Delivery Logo" className="h-12 object-contain" />
-        </div>
+      {/* Spacious, Modern Glass Header */}
+      <header className="fixed top-0 left-0 w-full z-40 bg-white/90 backdrop-blur-xl border-b border-slate-100/90 shadow-[0_1px_15px_rgba(0,0,0,0.02)] px-4 py-2.5">
+        <div className="max-w-2xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <img src="/DeliveryLogo.png" alt="Delivery Logo" className="h-8 object-contain" />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded-full">
+              Captain
+            </span>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <label className="relative inline-flex items-center cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={isOnline}
-              onChange={handleOnlineToggle}
-              className="sr-only peer"
-            />
-            <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#366b00]"></div>
-            <span
-              className={`ms-1.5 font-label-sm text-[10px] font-bold tracking-wider ${
-                isOnline ? 'text-[#366b00]' : 'text-slate-400'
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleOnlineToggle}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-xs transition-all cursor-pointer border ${
+                isOnline
+                  ? 'bg-emerald-50 text-[#15803d] border-emerald-200 shadow-2xs'
+                  : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200/70'
               }`}
             >
-              {isOnline ? 'ONLINE' : 'OFFLINE'}
-            </span>
-          </label>
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isOnline ? 'bg-[#15803d] animate-pulse' : 'bg-slate-400'
+                }`}
+              />
+              <span className="tracking-tight">{isOnline ? 'Online' : 'Offline'}</span>
+            </button>
 
-          <button
-            onClick={openLocationModal}
-            title={savedLocation || 'Set Location'}
-            className="relative p-1.5 text-slate-600 hover:opacity-80 transition-opacity cursor-pointer"
-          >
-            <span
-              className="material-symbols-outlined text-xl"
-              style={{ color: savedLocation ? '#366b00' : undefined }}
+            <button
+              onClick={openLocationModal}
+              title={savedLocation || 'Set Location'}
+              className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-100 flex items-center justify-center text-slate-600 transition-all cursor-pointer relative"
             >
-              location_on
-            </span>
-            {savedLocation && (
-              <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-[#366b00] rounded-full border border-white"></span>
-            )}
-          </button>
+              <span
+                className="material-symbols-outlined text-lg"
+                style={{ color: savedLocation ? '#15803d' : undefined }}
+              >
+                location_on
+              </span>
+              {savedLocation && (
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-[#15803d] rounded-full ring-2 ring-white"></span>
+              )}
+            </button>
 
-          <button
-            onClick={() => navigate('/captain/notifications')}
-            className="relative p-1.5 text-slate-600 hover:opacity-80 transition-opacity cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-xl">notifications</span>
-            {stats.pendingCount > 0 && (
-              <>
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </>
-            )}
-          </button>
+            <button
+              onClick={() => navigate('/captain/notifications')}
+              className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-100 flex items-center justify-center text-slate-600 transition-all cursor-pointer relative"
+            >
+              <span className="material-symbols-outlined text-lg">notifications</span>
+              {stats.pendingCount > 0 && (
+                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white animate-ping"></span>
+              )}
+              {stats.pendingCount > 0 && (
+                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -444,135 +555,846 @@ const CaptainDashboard = () => {
         </div>
       )}
 
-      {/* Main Container */}
-      <main className="pt-20 md:pt-24 px-3.5 max-w-7xl mx-auto space-y-3.5 mt-2">
+      {/* Spacious Main Container */}
+      <main className="pt-18 md:pt-20 px-4 max-w-2xl mx-auto space-y-4">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <span className="material-symbols-outlined text-5xl text-[#366b00] animate-spin">sync</span>
+            <span className="material-symbols-outlined text-5xl text-[#15803d] animate-spin">sync</span>
             <p className="text-sm text-slate-500 font-semibold">Loading dashboard…</p>
           </div>
         ) : (
           <>
-            {/* 4 Metric Cards */}
-            <section className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs hover:shadow-md transition-all">
-                <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider truncate">
-                  Today's Earning
-                </p>
-                <div className="flex items-baseline gap-0.5 mt-1.5">
-                  <span className="text-[#15803d] font-semibold text-xs">₹</span>
-                  <span className="text-slate-900 font-black text-lg md:text-xl leading-none">
-                    {stats.todayEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
+            {/* Unified Spacious Partner Financial Card */}
+            <section className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-[0_4px_25px_rgba(0,0,0,0.03)] space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today's Net Earnings</p>
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-[#15803d] font-bold text-lg">₹</span>
+                    <span className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-none">
+                      {stats.todayEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
                 </div>
+                <button
+                  onClick={() => navigate('/captain/wallet')}
+                  className="px-3.5 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100/80 text-[#15803d] text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-sm">account_balance_wallet</span>
+                  <span>Wallet</span>
+                  <span className="material-symbols-outlined text-xs">chevron_right</span>
+                </button>
               </div>
 
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs hover:shadow-md transition-all">
-                <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider truncate">
-                  Total Bookings
-                </p>
-                <div className="flex items-baseline gap-1 mt-1.5">
-                  <span className="text-slate-900 font-black text-lg md:text-xl leading-none">
-                    {stats.totalBookings}
-                  </span>
-                  <span className="text-slate-500 font-medium text-[10px]">Bookings</span>
+              <div className="pt-3 border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100 text-center">
+                <div className="px-2">
+                  <p className="text-base md:text-lg font-black text-slate-800 leading-none">{stats.totalBookings}</p>
+                  <p className="text-[10px] font-semibold text-slate-400 mt-1">Total Bookings</p>
                 </div>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs hover:shadow-md transition-all">
-                <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider truncate">Deliveries</p>
-                <div className="flex items-baseline gap-1 mt-1.5">
-                  <span className="text-slate-900 font-black text-lg md:text-xl leading-none">
-                    {stats.deliveredToday}
-                  </span>
-                  <span className="text-slate-500 font-medium text-[10px]">Today</span>
+                <div className="px-2">
+                  <p className="text-base md:text-lg font-black text-slate-800 leading-none">{stats.deliveredToday}</p>
+                  <p className="text-[10px] font-semibold text-slate-400 mt-1">Delivered Today</p>
                 </div>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs hover:shadow-md transition-all">
-                <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider truncate">Pending</p>
-                <div className="flex items-baseline gap-1 mt-1.5">
-                  <span className="text-slate-900 font-black text-lg md:text-xl leading-none">
+                <div className="px-2">
+                  <p className="text-base md:text-lg font-black text-[#15803d] leading-none">
                     {String(stats.pendingCount).padStart(2, '0')}
-                  </span>
-                  <span className="text-slate-500 font-medium text-[10px]">Tasks</span>
+                  </p>
+                  <p className="text-[10px] font-semibold text-slate-400 mt-1">Pending Tasks</p>
                 </div>
               </div>
             </section>
 
-            {/* Weekly Earnings Chart */}
+            {/* Weekly Activity & Earnings Chart */}
             {weeklyEarnings.length > 0 && (
-              <section className="bg-white p-4 rounded-3xl border border-slate-100 shadow-2xs space-y-2">
-                <p className="text-xs font-black text-slate-800 uppercase tracking-wider">Weekly Earnings</p>
-                <div className="flex items-end gap-1.5 h-16">
-                  {weeklyEarnings.map((d) => (
-                    <div key={d.day} className="flex-1 flex flex-col items-center gap-1">
-                      <div
-                        className={`w-full rounded-md transition-all ${
-                          d.current ? 'bg-[#366b00]' : 'bg-emerald-100'
-                        }`}
-                        style={{ height: d.height }}
-                      />
-                      <span
+              <section className="bg-white p-4 rounded-2xl border border-slate-100 shadow-[0_4px_25px_rgba(0,0,0,0.03)] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-emerald-50 text-[#15803d] flex items-center justify-center">
+                      <span className="material-symbols-outlined text-sm font-bold">bar_chart</span>
+                    </div>
+                    <span className="text-xs font-bold text-slate-800 tracking-tight">Weekly Activity</span>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-400">
+                    7-Day Total: <span className="font-black text-[#15803d]">₹{weeklyEarnings.reduce((acc, curr) => acc + (curr.value || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-7 gap-2 pt-1">
+                  {weeklyEarnings.map((d) => {
+                    const isSelected = activeDay === d.day;
+                    const hasEarnings = d.value > 0;
+                    return (
+                      <button
+                        key={d.day}
                         onClick={() => setActiveDay(d.day)}
-                        className={`text-[9px] font-bold cursor-pointer ${
-                          activeDay === d.day ? 'text-[#366b00]' : 'text-slate-400'
+                        className={`flex flex-col items-center gap-1.5 p-1 rounded-xl transition-all cursor-pointer ${
+                          isSelected ? 'bg-emerald-50/80 ring-1 ring-[#15803d]/30' : 'hover:bg-slate-50'
                         }`}
                       >
-                        {d.day}
-                      </span>
-                    </div>
-                  ))}
+                        {/* Bar Track & Fill */}
+                        <div className="w-full h-13 bg-slate-100 rounded-lg flex flex-col justify-end p-0.5 overflow-hidden">
+                          <div
+                            className={`w-full rounded-md transition-all duration-300 ${
+                              isSelected
+                                ? 'bg-[#15803d]'
+                                : hasEarnings
+                                ? 'bg-emerald-500'
+                                : d.current
+                                ? 'bg-emerald-300'
+                                : 'bg-slate-200'
+                            }`}
+                            style={{ height: `${d.fillPercent || 10}%` }}
+                          />
+                        </div>
+                        {/* Day Label */}
+                        <span
+                          className={`text-[10px] font-bold leading-none ${
+                            isSelected
+                              ? 'text-[#15803d] font-black'
+                              : d.current
+                              ? 'text-slate-800 font-bold'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {d.day}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
+
+                {/* Selected Day Footer */}
                 {activeDay && weeklyEarnings.find((d) => d.day === activeDay) && (
-                  <p className="text-xs text-center text-[#15803d] font-semibold">
-                    {activeDay}: ₹
-                    {(
-                      weeklyEarnings.find((d) => d.day === activeDay)?.value || 0
-                    ).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </p>
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                    <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#15803d]"></span>
+                      <span>{activeDay} Earnings</span>
+                    </span>
+                    <span className="font-black text-[#15803d]">
+                      ₹{(weeklyEarnings.find((d) => d.day === activeDay)?.value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
                 )}
               </section>
             )}
 
-            {/* Active Service Areas */}
+            {/* Active Service Areas Utility Card */}
             <section
               onClick={() => navigate('/captain/service-areas')}
-              className="bg-white rounded-3xl p-4 flex items-center gap-4 border border-slate-100 shadow-2xs cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+              className="bg-white rounded-2xl p-3.5 flex items-center gap-3.5 border border-slate-100 shadow-[0_4px_25px_rgba(0,0,0,0.03)] cursor-pointer hover:border-emerald-200 hover:shadow-md transition-all active:scale-[0.99]"
             >
-              <div className="w-11 h-11 shrink-0 rounded-2xl bg-emerald-50 flex items-center justify-center text-[#047857]">
-                <span className="material-symbols-outlined text-2xl">location_on</span>
+              <div className="w-10 h-10 shrink-0 rounded-xl bg-emerald-50 text-[#15803d] flex items-center justify-center">
+                <span className="material-symbols-outlined text-xl font-bold">radar</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm text-slate-800 leading-tight">Active Service Areas</p>
+                <p className="font-bold text-xs text-slate-800 leading-tight">Service Coverage Area</p>
                 {savedLocation ? (
-                  <p className="text-[11px] text-[#047857] font-semibold mt-0.5 leading-snug truncate flex items-center gap-1">
+                  <p className="text-[11px] text-[#15803d] font-medium mt-0.5 leading-snug truncate flex items-center gap-1">
                     <span>📍 {savedLocation}</span>
                   </p>
                 ) : (
                   <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                    Tap to view sellers in your range
+                    Tap to view active sellers in your range
                   </p>
                 )}
               </div>
-              <span className="material-symbols-outlined text-slate-400 text-xl shrink-0">chevron_right</span>
+              <span className="material-symbols-outlined text-slate-400 text-lg shrink-0">chevron_right</span>
             </section>
 
-            {/* Empty state when no pending */}
-            {pendingOrders.length === 0 && transportRequests.length === 0 && !loading && (
-              <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-2xs flex flex-col items-center gap-3 text-center">
-                <span className="material-symbols-outlined text-4xl text-slate-300">
-                  local_shipping
-                </span>
-                <p className="text-sm font-bold text-slate-700">No Active Requests</p>
-                <p className="text-xs text-slate-400">
-                  When a ride request matching your vehicle arrives, the request modal will pop up on your screen.
-                </p>
-              </div>
-            )}
+            {/* ────────────────────────────────────────────────────────── */}
+            {/* TODAY'S PENDING & IN-PROCESS ORDERS / TASKS SECTION       */}
+            {/* ────────────────────────────────────────────────────────── */}
+            {(() => {
+              const inProgressOrders = pendingOrders.filter((o) =>
+                ['Accepted', 'At Pickup', 'Picked Up', 'In Transit'].includes(o.captainStatus)
+              );
+              const assignedPending = pendingOrders.filter((o) => o.captainStatus === 'Assigned');
+              const activeCount = (activeTransport ? 1 : 0) + inProgressOrders.length;
+              const totalCount = activeCount + assignedPending.length + transportRequests.length;
+
+              // Build prioritized list of all matching items based on current taskFilter
+              const allMatchingTasks = [];
+              if (activeTransport && (taskFilter === 'all' || taskFilter === 'active' || taskFilter === 'requests')) {
+                allMatchingTasks.push({ type: 'activeTransport', data: activeTransport });
+              }
+              if (taskFilter === 'all' || taskFilter === 'active') {
+                inProgressOrders.forEach((order) => allMatchingTasks.push({ type: 'inProgressOrder', data: order }));
+              }
+              if (taskFilter === 'all' || taskFilter === 'assigned') {
+                assignedPending.forEach((order) => allMatchingTasks.push({ type: 'assignedPending', data: order }));
+              }
+              if (taskFilter === 'all' || taskFilter === 'requests') {
+                transportRequests.forEach((req) => allMatchingTasks.push({ type: 'transportRequest', data: req }));
+              }
+
+              // Show ONLY 3 order cards on this dashboard page as requested
+              const visibleTasks = allMatchingTasks.slice(0, 3);
+
+              return (
+                <section className="space-y-3 pt-1">
+                  {/* Clean & Simple Header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-bold text-sm text-slate-900 tracking-tight">
+                        Today's Pending Orders
+                      </h2>
+                      {totalCount > 0 && (
+                        <span className="px-2 py-0.5 bg-emerald-50 text-[#15803d] border border-emerald-200/60 text-[10px] font-black rounded-full">
+                          {totalCount}
+                        </span>
+                      )}
+                    </div>
+                    {totalCount > 0 && (
+                      <button
+                        onClick={() => navigate('/captain/jobs')}
+                        className="text-xs text-[#15803d] font-bold flex items-center gap-0.5 hover:underline cursor-pointer"
+                      >
+                        View All
+                        <span className="material-symbols-outlined text-sm">chevron_right</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filter Pills */}
+                  {totalCount > 0 && (
+                    <div className="flex gap-2 overflow-x-auto hide-scrollbar py-0.5">
+                      <button
+                        onClick={() => setTaskFilter('all')}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                          taskFilter === 'all'
+                            ? 'bg-[#15803d] text-white shadow-2xs'
+                            : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                        }`}
+                      >
+                        All ({totalCount})
+                      </button>
+                      {activeCount > 0 && (
+                        <button
+                          onClick={() => setTaskFilter('active')}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                            taskFilter === 'active'
+                              ? 'bg-[#15803d] text-white shadow-2xs'
+                              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                          }`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                          In Process ({activeCount})
+                        </button>
+                      )}
+                      {assignedPending.length > 0 && (
+                        <button
+                          onClick={() => setTaskFilter('assigned')}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                            taskFilter === 'assigned'
+                              ? 'bg-[#15803d] text-white shadow-2xs'
+                              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                          }`}
+                        >
+                          Pending ({assignedPending.length})
+                        </button>
+                      )}
+                      {transportRequests.length > 0 && (
+                        <button
+                          onClick={() => setTaskFilter('requests')}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                            taskFilter === 'requests'
+                              ? 'bg-[#15803d] text-white shadow-2xs'
+                              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                          }`}
+                        >
+                          Requests ({transportRequests.length})
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Empty State */}
+                  {totalCount === 0 ? (
+                    <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-2xs flex flex-col items-center gap-2.5 text-center">
+                      <div className="w-12 h-12 rounded-xl bg-emerald-50 text-[#15803d] flex items-center justify-center">
+                        <span className="material-symbols-outlined text-2xl font-bold">check_circle</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-bold text-slate-800">All Orders Completed</p>
+                        <p className="text-[11px] text-slate-400">
+                          You have no pending or in-process orders right now.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {visibleTasks.map((item) => {
+                        if (item.type === 'activeTransport') {
+                          const activeTransport = item.data;
+                          return (
+                            <div
+                              key={activeTransport._id || activeTransport.bookingId}
+                              className="bg-white p-3.5 sm:p-4 rounded-xl border border-emerald-200/80 shadow-2xs hover:shadow-md transition-all space-y-2.5 overflow-hidden"
+                            >
+                              {/* Top Row: ID & Earnings */}
+                              <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                                  <span className="font-mono text-xs font-bold text-slate-800 truncate">
+                                    #{activeTransport.bookingId}
+                                  </span>
+                                </div>
+                                <span className="text-sm sm:text-base font-black text-[#15803d] shrink-0">
+                                  ₹{(activeTransport.captainEarnings || 0).toFixed(2)}
+                                </span>
+                              </div>
+
+                              {/* Sub-Header: Badges */}
+                              <div className="flex items-center justify-between gap-2 text-xs">
+                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 shrink-0 flex items-center gap-1">
+                                    <span>🚚</span> Transport
+                                  </span>
+                                  {(() => {
+                                    const badge = getTransportStatusBadge(activeTransport.status);
+                                    return (
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shrink-0 ${badge.bg}`}>
+                                        {badge.label}
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
+                                <span className="text-xs font-medium text-slate-500 truncate">
+                                  {activeTransport.goods?.category} • {activeTransport.goods?.weightKg}kg
+                                </span>
+                              </div>
+
+                              {/* Route Timeline */}
+                              <div className="bg-slate-50/80 p-2.5 sm:p-3 rounded-lg border border-slate-100 text-xs space-y-2">
+                                <div className="flex items-start gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1 shrink-0"></span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-wider block">Pickup</span>
+                                    <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">
+                                      {(typeof activeTransport.pickupLocation === 'string' ? activeTransport.pickupLocation : activeTransport.pickupLocation?.address) || 'Pickup Location'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-orange-500 mt-1 shrink-0"></span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-[8px] font-bold text-orange-700 uppercase tracking-wider block">Drop</span>
+                                    <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">
+                                      {(typeof activeTransport.dropLocation === 'string' ? activeTransport.dropLocation : activeTransport.dropLocation?.address) || 'Drop Destination'}
+                                    </p>
+                                  </div>
+                                </div>
+                                {activeTransport.distanceKm && (
+                                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-200/50">
+                                    <span>📍 {activeTransport.distanceKm} km</span>
+                                    <span>📦 {activeTransport.goods?.packages || 1} package(s)</span>
+                                    <span>💳 {activeTransport.paymentMethod || 'CASH'}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Action Buttons: View Details & Start Ride */}
+                              <div className="flex items-center gap-2 pt-0.5">
+                                <button
+                                  onClick={() => setSelectedDetailTask({ ...activeTransport, isTransport: true })}
+                                  className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 text-slate-700 font-bold text-xs rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                                >
+                                  <span className="material-symbols-outlined text-base">info</span>
+                                  <span>View Details</span>
+                                </button>
+                                <button
+                                  onClick={() => navigate('/captain/active-delivery')}
+                                  className="flex-1 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-lg shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
+                                >
+                                  <span className="material-symbols-outlined text-base">navigation</span>
+                                  <span>Start Ride</span>
+                                  <span className="material-symbols-outlined text-base">chevron_right</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (item.type === 'inProgressOrder') {
+                          const order = item.data;
+                          const badge = getDeliveryStatusBadge(order.captainStatus);
+                          return (
+                            <div
+                              key={order._id}
+                              className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:shadow-md transition-all space-y-2.5 overflow-hidden"
+                            >
+                              <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse shrink-0"></span>
+                                  <span className="font-mono text-xs font-bold text-slate-800 truncate">
+                                    #{order.orderId}
+                                  </span>
+                                </div>
+                                <span className="text-sm sm:text-base font-black text-[#15803d] shrink-0">
+                                  ₹{(order.captainEarnings || 0).toFixed(2)}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 text-xs">
+                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 shrink-0 flex items-center gap-1">
+                                    <span>📦</span> Delivery
+                                  </span>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shrink-0 ${badge.bg}`}>
+                                    {badge.label}
+                                  </span>
+                                </div>
+                                <span className="text-xs font-medium text-slate-500 truncate">
+                                  {order.items?.length || 1} Item(s)
+                                </span>
+                              </div>
+
+                              <div className="bg-slate-50/80 p-2.5 sm:p-3 rounded-lg border border-slate-100 text-xs space-y-1.5">
+                                <div className="flex items-start gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-orange-500 mt-1 shrink-0"></span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-[8px] font-bold text-orange-700 uppercase tracking-wider block">Drop Address</span>
+                                    <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">
+                                      {order.shippingAddress?.addressLine1}
+                                      {order.shippingAddress?.city ? `, ${order.shippingAddress?.city}` : ''}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-200/50">
+                                  <span className="truncate">
+                                    👤 {order.user?.name || order.shippingAddress?.fullName || 'Customer'}
+                                  </span>
+                                  {order.deliverySlot?.time && (
+                                    <span className="font-semibold text-slate-700 shrink-0">{order.deliverySlot.time}</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Action Buttons: View Details & Start Ride */}
+                              <div className="flex items-center gap-2 pt-0.5">
+                                <button
+                                  onClick={() => setSelectedDetailTask(order)}
+                                  className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 text-slate-700 font-bold text-xs rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                                >
+                                  <span className="material-symbols-outlined text-base">info</span>
+                                  <span>View Details</span>
+                                </button>
+                                <button
+                                  onClick={() => navigate('/captain/active-delivery')}
+                                  className="flex-1 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-lg shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
+                                >
+                                  <span className="material-symbols-outlined text-base">navigation</span>
+                                  <span>Start Ride</span>
+                                  <span className="material-symbols-outlined text-base">chevron_right</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (item.type === 'assignedPending') {
+                          const order = item.data;
+                          const isActing = cardActionLoading === order._id;
+                          return (
+                            <div
+                              key={order._id}
+                              className="bg-white p-3.5 sm:p-4 rounded-xl border border-purple-200/90 shadow-2xs hover:shadow-md transition-all space-y-2.5 overflow-hidden"
+                            >
+                              <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0"></span>
+                                  <span className="font-mono text-xs font-bold text-slate-800 truncate">
+                                    #{order.orderId}
+                                  </span>
+                                </div>
+                                <span className="text-sm sm:text-base font-black text-[#15803d] shrink-0">
+                                  ₹{(order.captainEarnings || 0).toFixed(2)}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 text-xs">
+                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 shrink-0 flex items-center gap-1">
+                                    <span>📦</span> Delivery
+                                  </span>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 border border-purple-200 shrink-0">
+                                    Assigned
+                                  </span>
+                                </div>
+                                <span className="text-xs font-medium text-slate-500 truncate">
+                                  {order.items?.length || 1} Item(s)
+                                </span>
+                              </div>
+
+                              <div className="bg-slate-50/80 p-2.5 sm:p-3 rounded-lg border border-slate-100 text-xs space-y-1.5">
+                                <div className="flex items-start gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-purple-500 mt-1 shrink-0"></span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-[8px] font-bold text-purple-700 uppercase tracking-wider block">Drop Address</span>
+                                    <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">
+                                      {order.shippingAddress?.addressLine1}
+                                      {order.shippingAddress?.city ? `, ${order.shippingAddress?.city}` : ''}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-200/50">
+                                  <span className="truncate">
+                                    👤 {order.user?.name || order.shippingAddress?.fullName || 'Customer'}
+                                  </span>
+                                  {order.deliverySlot?.time && (
+                                    <span className="font-semibold text-slate-700 shrink-0">{order.deliverySlot.time}</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Action Buttons: View Details & Start Ride */}
+                              <div className="flex gap-2 pt-0.5">
+                                <button
+                                  onClick={() => setSelectedDetailTask(order)}
+                                  className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 text-slate-700 font-bold text-xs rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                                >
+                                  <span className="material-symbols-outlined text-base">info</span>
+                                  <span>View Details</span>
+                                </button>
+                                <button
+                                  onClick={() => handleCardAcceptOrder(order)}
+                                  disabled={isActing}
+                                  className="flex-1 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-lg shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
+                                >
+                                  {isActing ? (
+                                    <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+                                  ) : (
+                                    <span className="material-symbols-outlined text-base">navigation</span>
+                                  )}
+                                  {isActing ? 'Starting…' : 'Start Ride'}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (item.type === 'transportRequest') {
+                          const req = item.data;
+                          const isActing = cardActionLoading === req._id;
+                          return (
+                            <div
+                              key={req._id}
+                              className="bg-white p-3.5 sm:p-4 rounded-xl border border-amber-200/90 shadow-2xs hover:shadow-md transition-all space-y-2.5 overflow-hidden"
+                            >
+                              <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                                  <span className="font-mono text-xs font-bold text-slate-800 truncate">
+                                    #{req.bookingId}
+                                  </span>
+                                </div>
+                                <span className="text-sm sm:text-base font-black text-[#15803d] shrink-0">
+                                  ₹{(req.captainEarnings || 0).toFixed(2)}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 text-xs">
+                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 shrink-0 flex items-center gap-1">
+                                    <span>🚚</span> Transport
+                                  </span>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
+                                    Ride Request
+                                  </span>
+                                </div>
+                                <span className="text-xs font-medium text-slate-500 truncate">
+                                  {req.goods?.category} • {req.goods?.weightKg}kg
+                                </span>
+                              </div>
+
+                              <div className="bg-slate-50/80 p-2.5 sm:p-3 rounded-lg border border-slate-100 text-xs space-y-2">
+                                <div className="flex items-start gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1 shrink-0"></span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-wider block">Pickup</span>
+                                    <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">
+                                      {(typeof req.pickupLocation === 'string' ? req.pickupLocation : req.pickupLocation?.address) || 'Pickup Location'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-orange-500 mt-1 shrink-0"></span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-[8px] font-bold text-orange-700 uppercase tracking-wider block">Drop</span>
+                                    <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">
+                                      {(typeof req.dropLocation === 'string' ? req.dropLocation : req.dropLocation?.address) || 'Drop Destination'}
+                                    </p>
+                                  </div>
+                                </div>
+                                {req.distanceKm && (
+                                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-200/50">
+                                    <span>📍 {req.distanceKm} km</span>
+                                    <span>📦 {req.goods?.packages || 1} pkg(s)</span>
+                                    <span>⚡ Request ready</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Action Buttons: View Details & Accept Request (Clean text without icons) */}
+                              <div className="flex gap-2 pt-0.5">
+                                <button
+                                  onClick={() => setSelectedDetailTask({ ...req, isTransport: true })}
+                                  className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 text-slate-700 font-bold text-xs rounded-lg transition-all cursor-pointer flex items-center justify-center"
+                                >
+                                  View Details
+                                </button>
+                                <button
+                                  onClick={() => handleCardAcceptTransport(req)}
+                                  disabled={isActing}
+                                  className="flex-1 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-lg shadow-2xs transition-all cursor-pointer flex items-center justify-center disabled:opacity-60"
+                                >
+                                  {isActing ? 'Claiming…' : 'Accept Request'}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return null;
+                      })}
+
+                      {/* View All Button if more than 3 */}
+                      {allMatchingTasks.length > 3 && (
+                        <button
+                          onClick={() => navigate('/captain/jobs')}
+                          className="w-full py-2.5 bg-white hover:bg-slate-50 border border-slate-200/90 text-[#15803d] font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                        >
+                          <span>View All ({allMatchingTasks.length}) Orders</span>
+                          <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </section>
+              );
+            })()}
           </>
         )}
       </main>
+
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* 📋 VIEW DETAILS MODAL (Sticky Frame, Scroll Lock & Minimized Radius) */}
+      {/* ────────────────────────────────────────────────────────── */}
+      {selectedDetailTask && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-hidden touch-none"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedDetailTask(null);
+          }}
+        >
+          <div
+            className="w-full sm:max-w-lg bg-white rounded-xl shadow-2xl flex flex-col max-h-[86vh] overflow-hidden border border-slate-100"
+            style={{ animation: 'slideUpModal 0.28s cubic-bezier(.4,0,.2,1)' }}
+          >
+            {/* Sticky Top Header */}
+            <div className="sticky top-0 z-10 bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-black text-slate-900">
+                  #{selectedDetailTask.bookingId || selectedDetailTask.orderId}
+                </span>
+                {selectedDetailTask.isTransport ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
+                    <span>🚚</span> Transport
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 flex items-center gap-1">
+                    <span>📦</span> Delivery
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setSelectedDetailTask(null)}
+                className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer transition-colors"
+                title="Close"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            {/* Scrollable Modal Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 overscroll-contain">
+              {/* Earnings Banner */}
+              <div className="bg-emerald-50/90 p-3 rounded-lg border border-emerald-200/90 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Captain Payout</p>
+                  <p className="text-xl font-black text-[#15803d]">
+                    ₹{(selectedDetailTask.captainEarnings || selectedDetailTask.estimatedEarnings || 0).toFixed(2)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white text-emerald-800 border border-emerald-200 block mb-0.5">
+                    {selectedDetailTask.paymentMethod || 'CASH'} • {selectedDetailTask.paymentStatus || 'Pending'}
+                  </span>
+                  <span className="text-[9px] text-emerald-700 font-medium">Guaranteed Earnings</span>
+                </div>
+              </div>
+
+              {/* Customer & Contact Details Card */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/80 space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-200/60 pb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-base text-[#15803d]">person</span>
+                    <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">Customer Contact Details</span>
+                  </div>
+                  {(() => {
+                    const phone =
+                      selectedDetailTask.customerPhone ||
+                      selectedDetailTask.user?.phone ||
+                      selectedDetailTask.shippingAddress?.phone;
+                    return phone ? (
+                      <a
+                        href={`tel:${phone}`}
+                        className="px-2.5 py-1 rounded-md bg-[#15803d] hover:bg-[#166534] text-white text-[11px] font-bold flex items-center gap-1 transition-colors shadow-2xs"
+                      >
+                        <span className="material-symbols-outlined text-xs">call</span>
+                        <span>Call Customer</span>
+                      </a>
+                    ) : null;
+                  })()}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Customer Name</span>
+                    <p className="font-bold text-slate-800 text-xs mt-0.5">
+                      {selectedDetailTask.customerName ||
+                        selectedDetailTask.user?.name ||
+                        selectedDetailTask.shippingAddress?.fullName ||
+                        'Customer'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Contact Number</span>
+                    {(() => {
+                      const phone =
+                        selectedDetailTask.customerPhone ||
+                        selectedDetailTask.user?.phone ||
+                        selectedDetailTask.shippingAddress?.phone;
+                      return phone ? (
+                        <a href={`tel:${phone}`} className="font-bold text-[#15803d] text-xs mt-0.5 hover:underline flex items-center gap-0.5">
+                          <span>📞 {phone}</span>
+                        </a>
+                      ) : (
+                        <p className="text-slate-400 font-medium text-xs mt-0.5">Not provided</p>
+                      );
+                    })()}
+                  </div>
+
+                  {(selectedDetailTask.customerEmail || selectedDetailTask.user?.email || selectedDetailTask.shippingAddress?.email) && (
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Email Address</span>
+                      <p className="font-semibold text-slate-700 text-xs mt-0.5 truncate">
+                        {selectedDetailTask.customerEmail || selectedDetailTask.user?.email || selectedDetailTask.shippingAddress?.email}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedDetailTask.shippingAddress?.altPhone && (
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Alternate Phone</span>
+                      <a href={`tel:${selectedDetailTask.shippingAddress.altPhone}`} className="font-bold text-slate-700 text-xs mt-0.5 hover:underline">
+                        📞 {selectedDetailTask.shippingAddress.altPhone}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Route Timeline */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/80 text-xs space-y-2.5">
+                <div className="flex items-start gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 mt-1 shrink-0"></span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Pickup Location</span>
+                    <p className="font-bold text-slate-900 text-xs mt-0.5">
+                      {selectedDetailTask.pickupLocation?.address || 'Seller / Store Location'}
+                    </p>
+                    {selectedDetailTask.pickupLocation?.landmark && (
+                      <p className="text-[10px] text-slate-500">Landmark: {selectedDetailTask.pickupLocation.landmark}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-orange-500 mt-1 shrink-0"></span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Drop Location</span>
+                    <p className="font-bold text-slate-900 text-xs mt-0.5">
+                      {selectedDetailTask.dropLocation?.address ||
+                        selectedDetailTask.shippingAddress?.addressLine1 ||
+                        selectedDetailTask.shippingAddress?.city ||
+                        'Customer Address'}
+                    </p>
+                    {selectedDetailTask.shippingAddress?.addressLine2 && (
+                      <p className="text-[10px] text-slate-500">{selectedDetailTask.shippingAddress.addressLine2}</p>
+                    )}
+                    {selectedDetailTask.dropLocation?.landmark && (
+                      <p className="text-[10px] text-slate-500">Landmark: {selectedDetailTask.dropLocation.landmark}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Cargo / Items & Distance Specifications */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Items / Cargo</span>
+                  <p className="font-bold text-slate-800 text-xs mt-0.5 truncate">
+                    {selectedDetailTask.goods?.category || `${selectedDetailTask.items?.length || 1} Item(s)`}
+                  </p>
+                  {selectedDetailTask.goods?.packages && (
+                    <p className="text-[10px] text-slate-500">{selectedDetailTask.goods.packages} package(s)</p>
+                  )}
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Weight & Distance</span>
+                  <p className="font-bold text-slate-800 text-xs mt-0.5">
+                    {selectedDetailTask.goods?.weightKg ? `${selectedDetailTask.goods.weightKg} kg` : 'Standard Weight'}{' '}
+                    {selectedDetailTask.distanceKm ? `• 📍 ${selectedDetailTask.distanceKm} km` : ''}
+                  </p>
+                  {selectedDetailTask.deliverySlot?.time && (
+                    <p className="text-[10px] text-slate-500">Slot: {selectedDetailTask.deliverySlot.time}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Special Instructions (if any) */}
+              {(selectedDetailTask.deliveryInstructions || selectedDetailTask.goods?.instructions) && (
+                <div className="bg-amber-50/70 p-2.5 rounded-lg border border-amber-200/80 text-xs">
+                  <span className="text-[9px] font-bold text-amber-800 uppercase tracking-wider block">Delivery Instructions</span>
+                  <p className="text-[11px] text-amber-900 font-medium mt-0.5">
+                    {selectedDetailTask.deliveryInstructions || selectedDetailTask.goods?.instructions}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Sticky Bottom Action Buttons */}
+            <div className="sticky bottom-0 z-10 bg-white px-4 py-3 border-t border-slate-100 flex gap-2 shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
+              <button
+                onClick={() => setSelectedDetailTask(null)}
+                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedDetailTask(null);
+                  navigate('/captain/active-delivery');
+                }}
+                className="flex-2 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-lg shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]"
+              >
+                <span className="material-symbols-outlined text-base">navigation</span>
+                <span>Start Ride</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes modalSlideUp {

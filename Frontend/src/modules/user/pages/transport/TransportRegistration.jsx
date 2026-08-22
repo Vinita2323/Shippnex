@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { userService } from '../../../../services/authService';
 
 const TransportRegistration = () => {
   const navigate = useNavigate();
@@ -9,11 +10,33 @@ const TransportRegistration = () => {
     city: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Fetch logged in user profile on mount
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const res = await userService.getProfile();
+        if (res.user) {
+          setFormData({
+            fullName: res.user.name && res.user.name !== 'User' ? res.user.name : '',
+            mobile: res.user.phone || '',
+            city: res.user.addresses?.[0]?.city || '',
+          });
+        }
+      } catch (e) {
+        // If not logged in or token expired, fallback gracefully
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUserProfile();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'mobile') {
-      // Keep only numbers and limit to 10 digits
       const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
       setFormData({ ...formData, [name]: digitsOnly });
     } else {
@@ -21,18 +44,31 @@ const TransportRegistration = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsSubmitting(true);
+    setErrorMsg('');
 
-    setTimeout(() => {
-      // Save registration state to localStorage for seamless booking
+    if (!formData.fullName.trim() || !formData.mobile.trim()) {
+      setErrorMsg('Full Name and Mobile Number are required.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Save profile updates to backend MongoDB
+      await userService.updateProfile({
+        name: formData.fullName.trim(),
+        phone: formData.mobile.trim(),
+        city: formData.city.trim(),
+      });
       localStorage.setItem('shippnex_transport_registered', 'true');
-      localStorage.setItem('shippnex_transport_user', JSON.stringify(formData));
-      setIsSubmitting(false);
-      // Redirect directly to Transport Home Page
       navigate('/transport');
-    }, 1000);
+    } catch (err) {
+      console.error('Registration save error:', err);
+      setErrorMsg(err?.message || 'Failed to update profile. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -51,11 +87,17 @@ const TransportRegistration = () => {
               <circle cx="18.5" cy="18.5" r="2.5"/>
             </svg>
           </div>
-          <h1 className="text-xl font-extrabold text-[#1e2b4f] tracking-tight">Vehicle Booking Registration</h1>
+          <h1 className="text-xl font-extrabold text-[#1e2b4f] tracking-tight">Vehicle Booking Profile</h1>
           <p className="text-xs text-slate-500 mt-1 font-medium">
-            Register your profile to unlock instant vehicle dispatch & freight tracking.
+            Confirm your contact details for live freight booking & instant captain dispatch.
           </p>
         </div>
+
+        {errorMsg && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
+            {errorMsg}
+          </div>
+        )}
 
         {/* Registration Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -123,7 +165,7 @@ const TransportRegistration = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-gradient-to-r from-[#ff6000] to-[#ff4500] hover:from-[#e55600] hover:to-[#e53e00] text-white font-bold py-3.5 rounded-2xl text-sm shadow-[0_6px_18px_rgba(255,69,0,0.3)] transition-all transform active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+            className="w-full bg-gradient-to-r from-[#ff6000] to-[#ff4500] hover:from-[#e55600] hover:to-[#e53e00] text-white font-bold py-3.5 rounded-2xl text-sm shadow-[0_6px_18px_rgba(255,69,0,0.3)] transition-all transform active:scale-98 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {isSubmitting ? (
               <>
@@ -131,11 +173,11 @@ const TransportRegistration = () => {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
-                Registering Profile...
+                Saving Profile…
               </>
             ) : (
               <>
-                Register & Continue to Booking
+                Save & Continue to Transport
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                   <polyline points="9 18 15 12 9 6"/>
                 </svg>
@@ -147,9 +189,9 @@ const TransportRegistration = () => {
         <div className="mt-4 text-center">
           <button
             onClick={() => navigate('/transport')}
-            className="text-xs font-semibold text-slate-400 hover:text-[#1e2b4f] transition-colors cursor-pointer"
+            className="text-xs font-semibold text-slate-400 hover:text-[#1e2b4f] transition-colors cursor-pointer bg-transparent border-none"
           >
-            Already registered? Skip to Transport Home ➔
+            Skip to Transport Home ➔
           </button>
         </div>
       </div>

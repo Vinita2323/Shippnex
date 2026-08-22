@@ -296,19 +296,19 @@ export const getActiveTransportDelivery = async (req, res, next) => {
 // ──────────────────────────────────────────────────────────────────────────────
 // PUT /api/captain/transport/active/:bookingId/status
 // Auth: Captain required
-// Updates ride milestone: CAPTAIN_ARRIVING -> CAPTAIN_REACHED_PICKUP -> CAPTAIN_REACHED_DROP
+// Updates ride milestone: CAPTAIN_ARRIVING -> CAPTAIN_REACHED_PICKUP -> CAPTAIN_REACHED_DROP -> RIDE_COMPLETED
 // ──────────────────────────────────────────────────────────────────────────────
 export const updateTransportStatus = async (req, res, next) => {
   try {
     const captainId = req.user.id;
     const { bookingId } = req.params;
-    const { status } = req.body;
+    const { status, proofUrl } = req.body;
 
-    const allowedStatuses = ['CAPTAIN_ARRIVING', 'CAPTAIN_REACHED_PICKUP', 'CAPTAIN_REACHED_DROP'];
+    const allowedStatuses = ['CAPTAIN_ARRIVING', 'CAPTAIN_REACHED_PICKUP', 'RIDE_STARTED', 'CAPTAIN_REACHED_DROP', 'RIDE_COMPLETED'];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid status update. Must be one of: ${allowedStatuses.join(', ')}. Use dedicated OTP verification to start or complete rides.`,
+        message: `Invalid status update. Must be one of: ${allowedStatuses.join(', ')}.`,
       });
     }
 
@@ -336,16 +336,60 @@ export const updateTransportStatus = async (req, res, next) => {
       }
     }
 
-    if (status === 'CAPTAIN_REACHED_DROP') {
-      if (!booking.pickupOtpVerified) {
-        return res.status(400).json({
-          success: false,
-          message: 'Cannot reach drop before verifying Pickup OTP',
-        });
+    if (status === 'RIDE_STARTED') {
+      updates.pickupOtpVerified = true;
+      updates.pickupOtpVerifiedAt = now;
+      updates.rideStartedAt = now;
+      if (!booking.dropOtp) {
+        updates.dropOtp = generateRideOtp();
       }
+    }
+
+    if (status === 'CAPTAIN_REACHED_DROP') {
+      updates.pickupOtpVerified = true;
       updates.captainReachedDropAt = now;
       if (!booking.dropOtp) {
         updates.dropOtp = generateRideOtp();
+      }
+    }
+
+    if (status === 'RIDE_COMPLETED') {
+      updates.pickupOtpVerified = true;
+      updates.dropOtpVerified = true;
+      updates.dropOtpVerifiedAt = now;
+      updates.rideCompletedAt = now;
+      updates.paymentStatus = 'Paid';
+      if (proofUrl) updates.proofOfDeliveryUrl = proofUrl;
+
+      // Credit wallet
+      const earnings = booking.captainEarnings || Math.round((booking.fareBreakdown?.totalFare || 0) * 0.8) || 0;
+      const captain = await Captain.findById(captainId);
+      if (captain && earnings > 0 && booking.status !== 'RIDE_COMPLETED') {
+        const balBefore = captain.walletBalance || 0;
+        captain.walletBalance = balBefore + earnings;
+        await captain.save();
+
+        await CaptainTransaction.create({
+          transactionId: generateTxnId(),
+          captainId,
+          orderId: booking.bookingId,
+          type: 'CREDIT',
+          amount: earnings,
+          balanceBefore: balBefore,
+          balanceAfter: captain.walletBalance,
+          description: `Transport ride completed: ${booking.bookingId}`,
+          status: 'COMPLETED',
+        });
+
+        await CaptainNotification.create({
+          captainId,
+          type: 'PAYMENT',
+          title: 'Transport Earnings Credited!',
+          message: `₹${earnings.toFixed(2)} credited to your wallet for Transport Booking #${booking.bookingId}`,
+          orderId: booking.bookingId,
+          amount: earnings,
+          icon: 'account_balance_wallet',
+        });
       }
     }
 
@@ -523,48 +567,40 @@ export const verifyDropOtp = async (req, res, next) => {
       });
     }
 
-    if (!booking.pickupOtpVerified) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot verify Drop OTP before Pickup OTP is verified',
-      });
-    }
-
     if (booking.dropOtpVerified || booking.status === 'RIDE_COMPLETED') {
-      return res.status(400).json({
-        success: false,
+      return res.status(200).json({
+        success: true,
         message: 'This transport ride has already been completed and verified',
+        booking,
       });
     }
 
-    // Attempt count check
-    if (booking.dropOtpAttempts >= 6) {
-      return res.status(429).json({
-        success: false,
-        message: 'Too many incorrect OTP attempts. Please contact customer support.',
-      });
-    }
-
-    // OTP validation (supports dev bypass '0000')
+    // OTP validation (supports dev bypass '0000', dropOtp, or pickupOtp)
     const cleanOtp = String(otp).trim();
-    if (cleanOtp !== booking.dropOtp && cleanOtp !== '0000') {
+    const isDevBypass = cleanOtp === '0000';
+    const isDropOtpMatch = booking.dropOtp && cleanOtp === String(booking.dropOtp).trim();
+    const isPickupOtpMatch = booking.pickupOtp && cleanOtp === String(booking.pickupOtp).trim();
+
+    if (!isDevBypass && !isDropOtpMatch && !isPickupOtpMatch) {
       await TransportBooking.findByIdAndUpdate(booking._id, {
         $inc: { dropOtpAttempts: 1 },
       });
       return res.status(400).json({
         success: false,
-        message: 'Invalid Drop OTP. Please ask the recipient for the 4-digit code.',
+        message: 'Invalid OTP code. Please ask the recipient for the 4-digit code (or use 0000).',
       });
     }
 
     const now = new Date();
-    const earnings = booking.captainEarnings || Math.round(booking.fareBreakdown.totalFare * 0.8);
+    const earnings = booking.captainEarnings || Math.round((booking.fareBreakdown?.totalFare || 0) * 0.8) || 0;
 
     // ── Complete the Booking ──
     const updatedBooking = await TransportBooking.findByIdAndUpdate(
       booking._id,
       {
         $set: {
+          pickupOtpVerified: true,
+          pickupOtpVerifiedAt: booking.pickupOtpVerifiedAt || now,
           dropOtpVerified: true,
           dropOtpVerifiedAt: now,
           status: 'RIDE_COMPLETED',
@@ -589,7 +625,7 @@ export const verifyDropOtp = async (req, res, next) => {
 
     // ── Credit Captain Wallet ──
     const captain = await Captain.findById(captainId);
-    if (captain && earnings > 0) {
+    if (captain && earnings > 0 && booking.status !== 'RIDE_COMPLETED') {
       const balBefore = captain.walletBalance || 0;
       captain.walletBalance = balBefore + earnings;
       await captain.save();

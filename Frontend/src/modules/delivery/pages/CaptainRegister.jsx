@@ -1,6 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bike, Truck, Check } from 'lucide-react';
+import { 
+  Bike, 
+  Truck, 
+  Check, 
+  Camera, 
+  RefreshCw, 
+  Upload, 
+  X, 
+  Trash2, 
+  UserCheck, 
+  RotateCcw, 
+  AlertCircle, 
+  Sparkles 
+} from 'lucide-react';
 import { authService } from '../../../services/authService';
 
 const CaptainRegister = () => {
@@ -65,9 +78,129 @@ const CaptainRegister = () => {
     profilePhoto: null,
   });
 
+  // Live Selfie & Camera States
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
+  const [cameraFacingMode, setCameraFacingMode] = useState('user'); // 'user' (front) or 'environment' (back)
+  const [cameraError, setCameraError] = useState('');
+  const [capturedSelfiePreview, setCapturedSelfiePreview] = useState('');
+  const [tempCapturedImage, setTempCapturedImage] = useState('');
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Stop camera tracks helper
+  const stopTracks = (stream) => {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      stopTracks(cameraStream);
+    };
+  }, [cameraStream]);
+
+  // Attach video stream whenever camera modal opens or stream changes
+  useEffect(() => {
+    if (isCameraModalOpen && cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+      videoRef.current.play().catch((err) => console.error('Video play error:', err));
+    }
+  }, [isCameraModalOpen, cameraStream, tempCapturedImage]);
+
+  const startCamera = async (facing = cameraFacingMode) => {
+    setCameraError('');
+    setIsCameraModalOpen(true);
+    setTempCapturedImage('');
+
+    if (cameraStream) {
+      stopTracks(cameraStream);
+      setCameraStream(null);
+    }
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera API not available');
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: facing,
+          width: { ideal: 640 },
+          height: { ideal: 640 },
+        },
+        audio: false,
+      });
+
+      setCameraStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch((err) => console.error('Video play error:', err));
+      }
+    } catch (err) {
+      console.error('Camera access error:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setCameraError('Camera access was denied. Please allow camera permissions in your browser.');
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setCameraError('No camera device found on your device.');
+      } else {
+        setCameraError('Could not start camera. Please check your camera permissions.');
+      }
+    }
+  };
+
+  const stopCamera = () => {
+    stopTracks(cameraStream);
+    setCameraStream(null);
+    setIsCameraModalOpen(false);
+    setTempCapturedImage('');
+    setCameraError('');
+  };
+
+  const switchCamera = () => {
+    const nextMode = cameraFacingMode === 'user' ? 'environment' : 'user';
+    setCameraFacingMode(nextMode);
+    startCamera(nextMode);
+  };
+
+  const snapSelfie = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current || document.createElement('canvas');
+    const width = video.videoWidth || 640;
+    const height = video.videoHeight || 480;
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
+    // Mirror horizontal if user-facing for natural selfie
+    if (cameraFacingMode === 'user') {
+      ctx.translate(width, 0);
+      ctx.scale(-1, 1);
+    }
+
+    ctx.drawImage(video, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+    setTempCapturedImage(dataUrl);
+  };
+
+  const confirmSelfie = () => {
+    if (tempCapturedImage) {
+      setFiles((prev) => ({ ...prev, profilePhoto: tempCapturedImage }));
+      setCapturedSelfiePreview(tempCapturedImage);
+    }
+    stopCamera();
+  };
+
+  const removeSelfie = () => {
+    setFiles((prev) => ({ ...prev, profilePhoto: null }));
+    setCapturedSelfiePreview('');
+  };
 
   const handleTextChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -87,6 +220,7 @@ const CaptainRegister = () => {
   const fileToBase64 = (file) => {
     return new Promise((resolve) => {
       if (!file) return resolve('');
+      if (typeof file === 'string') return resolve(file); // Already a base64 / data URL string
       const reader = new FileReader();
       reader.onload = (e) => resolve(e.target.result);
       reader.onerror = () => resolve('');
@@ -633,11 +767,105 @@ const CaptainRegister = () => {
             </div>
 
 
-            {/* 4. DOCUMENT UPLOADS */}
+            {/* 4. DOCUMENT UPLOADS & IDENTITY VERIFICATION */}
             <div className="space-y-4 pt-2">
-              <h2 className="text-xs font-black text-[#15803d] uppercase tracking-wider border-b pb-2 border-slate-100">
-                Document Uploads
+              <h2 className="text-xs font-black text-[#15803d] uppercase tracking-wider border-b pb-2 border-slate-100 flex items-center justify-between">
+                <span>Document Uploads & Verification</span>
+                <span className="text-[10px] font-semibold text-slate-400 capitalize">Identity & Permits</span>
               </h2>
+
+              {/* 📸 LIVE CAPTAIN SELFIE VERIFICATION */}
+              <div className="bg-gradient-to-br from-emerald-50/70 via-slate-50 to-emerald-50/40 border-2 border-emerald-500/30 rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#15803d] text-white flex items-center justify-center shadow-sm shrink-0">
+                      <Camera size={20} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider m-0">
+                          Live Captain Selfie
+                        </h3>
+                        <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                          Required for KYC
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5 m-0">
+                        Take a clear live front-facing photo of yourself for identity verification.
+                      </p>
+                    </div>
+                  </div>
+
+                  {capturedSelfiePreview && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-100/90 px-2.5 py-1 rounded-full border border-emerald-200 shadow-2xs">
+                      <Check size={12} strokeWidth={3} /> Attached
+                    </span>
+                  )}
+                </div>
+
+                {/* Selfie Preview or Camera/Upload Trigger */}
+                {capturedSelfiePreview ? (
+                  <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3.5 rounded-2xl border border-emerald-200/90 shadow-2xs">
+                    <div className="relative group shrink-0">
+                      <img
+                        src={capturedSelfiePreview}
+                        alt="Captain Live Selfie"
+                        className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-2 border-emerald-500 shadow-sm"
+                      />
+                      <div className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-[#15803d] text-white rounded-full flex items-center justify-center shadow-sm">
+                        <Check size={13} strokeWidth={3} />
+                      </div>
+                    </div>
+
+                    <div className="flex-1 text-center sm:text-left space-y-2">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-800 flex items-center justify-center sm:justify-start gap-1.5 m-0">
+                          <UserCheck size={15} className="text-[#15803d]" />
+                          Live Selfie Photo Ready
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5 m-0">
+                          Your photo has been captured and attached to your onboarding application.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => startCamera()}
+                          className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-[#15803d] text-xs font-bold rounded-xl border border-emerald-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <RotateCcw size={13} /> Retake Selfie
+                        </button>
+                        <button
+                          type="button"
+                          onClick={removeSelfie}
+                          className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold rounded-xl border border-rose-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={13} /> Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Live Camera Action Button Only */}
+                    <button
+                      type="button"
+                      onClick={() => startCamera()}
+                      className="w-full py-3.5 px-4 bg-[#15803d] hover:bg-[#166534] text-white font-extrabold text-xs rounded-2xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer transform active:scale-98"
+                    >
+                      <Camera size={18} />
+                      <span>Take Live Selfie (Camera)</span>
+                    </button>
+
+                    {/* Guidelines */}
+                    <div className="bg-white/80 border border-slate-200/80 rounded-2xl p-2.5 flex items-center gap-2.5 text-[11px] text-slate-600">
+                      <Sparkles size={15} className="text-emerald-600 shrink-0" />
+                      <span>Look directly at the camera in good lighting. Please avoid wearing masks or sunglasses.</span>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Driving License Upload */}
               <div className="space-y-1.5">
@@ -909,8 +1137,16 @@ const CaptainRegister = () => {
               </div>
             </div>
 
+            {/* Error Message Display */}
+            {errorMsg && (
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-600 flex items-center gap-2.5">
+                <AlertCircle size={18} className="shrink-0 text-rose-500" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
             {/* Submit Button */}
-            <div className="pt-4">
+            <div className="pt-2">
               <button
                 type="submit"
                 disabled={isSubmitting}
@@ -941,6 +1177,143 @@ const CaptainRegister = () => {
           </form>
         )}
       </div>
+
+      {/* 📷 LIVE SELFIE CAMERA MODAL */}
+      {isCameraModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700/70 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in duration-200">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-white">
+                <Camera size={18} className="text-emerald-400" />
+                <span className="font-bold text-xs">Live Captain Selfie Capture</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {!tempCapturedImage && !cameraError && (
+                  <button
+                    type="button"
+                    onClick={switchCamera}
+                    title="Switch Camera (Front/Back)"
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+                  >
+                    <RefreshCw size={14} />
+                    <span className="hidden sm:inline">Flip</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Viewfinder / Preview Area */}
+            <div className="relative bg-black flex items-center justify-center min-h-[340px] max-h-[420px] overflow-hidden">
+              {cameraError ? (
+                <div className="p-6 text-center space-y-3 max-w-xs">
+                  <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+                    <AlertCircle size={24} />
+                  </div>
+                  <p className="text-xs font-bold text-slate-200">{cameraError}</p>
+                  <button
+                    type="button"
+                    onClick={() => startCamera()}
+                    className="inline-flex items-center gap-1.5 mt-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors shadow-md mx-auto"
+                  >
+                    <RotateCcw size={14} /> Try Again
+                  </button>
+                </div>
+              ) : tempCapturedImage ? (
+                /* Snapped Photo Preview */
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <img
+                    src={tempCapturedImage}
+                    alt="Captured Selfie"
+                    className="w-full h-auto max-h-[380px] object-cover"
+                  />
+                  <div className="absolute top-3 left-3 bg-emerald-600/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1">
+                    <Check size={12} strokeWidth={3} /> Photo Captured
+                  </div>
+                </div>
+              ) : (
+                /* Live Camera Stream with Face Oval Guide */
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`w-full h-auto max-h-[380px] object-cover ${cameraFacingMode === 'user' ? '-scale-x-100' : ''}`}
+                  />
+
+                  {/* Oval Face Guide Overlay */}
+                  <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-4">
+                    <div className="w-48 h-60 sm:w-56 sm:h-72 border-2 border-dashed border-emerald-400/80 rounded-[50%] shadow-[0_0_0_9999px_rgba(0,0,0,0.35)] flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-emerald-300/90 bg-black/60 px-2 py-0.5 rounded-full">
+                        Fit Face Here
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-slate-300 font-medium whitespace-nowrap">
+                    Keep your head centered & look at camera
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Controls / Footer */}
+            <div className="p-4 bg-slate-900 border-t border-slate-800">
+              {tempCapturedImage ? (
+                /* Confirm / Retake Controls */
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setTempCapturedImage('')}
+                    className="flex-1 py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <RotateCcw size={14} /> Retake
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmSelfie}
+                    className="flex-1 py-3 px-4 bg-[#15803d] hover:bg-[#166534] text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-md"
+                  >
+                    <Check size={15} strokeWidth={3} /> Use This Photo
+                  </button>
+                </div>
+              ) : !cameraError ? (
+                /* Shutter Button */
+                <div className="flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={snapSelfie}
+                    className="w-16 h-16 rounded-full bg-white hover:bg-slate-100 p-1 flex items-center justify-center shadow-lg transition-transform transform active:scale-90 cursor-pointer"
+                  >
+                    <div className="w-13 h-13 rounded-full border-2 border-slate-900 bg-[#15803d] flex items-center justify-center text-white">
+                      <Camera size={22} />
+                    </div>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl cursor-pointer"
+                >
+                  Close
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden Canvas for Frame Capture */}
+      <canvas ref={canvasRef} className="hidden" />
     </main>
   );
 };

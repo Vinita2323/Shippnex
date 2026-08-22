@@ -88,3 +88,41 @@ export const verifyOtp = async (req, res, next) => {
     next(error);
   }
 };
+
+// Get User Profile
+export const getProfile = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select('-otp -otpExpiry');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    res.status(200).json({ success: true, user });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Update User Profile
+export const updateProfile = async (req, res, next) => {
+  try {
+    const { name, email, phone, city } = req.body;
+    const updateFields = {};
+    if (name !== undefined) updateFields.name = name;
+    if (email !== undefined) updateFields.email = email;
+    if (phone !== undefined) updateFields.phone = phone;
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: updateFields },
+      { new: true, runValidators: false }
+    ).select('-otp -otpExpiry');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.status(200).json({ success: true, message: 'Profile updated successfully', user });
+  } catch (error) {
+    next(error);
+  }
+};

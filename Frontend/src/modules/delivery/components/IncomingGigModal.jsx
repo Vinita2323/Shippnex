@@ -124,27 +124,21 @@ const IncomingGigModal = ({
           )}
         </div>
 
-        {/* Action Buttons: REJECT & ACCEPT */}
+        {/* Action Buttons: REJECT & ACCEPT (Text Only) */}
         <div className="p-3 bg-white border-t border-slate-100 flex gap-2">
           <button
             onClick={() => onReject(job)}
             disabled={actionLoading}
-            className="flex-1 py-2.5 px-3 rounded-xl border border-red-200 bg-white hover:bg-red-50 text-red-600 font-bold text-xs transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs"
+            className="flex-1 py-2.5 px-3 rounded-xl border border-red-200 bg-white hover:bg-red-50 text-red-600 font-bold text-xs transition-all flex items-center justify-center cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs"
           >
-            <span className="material-symbols-outlined text-sm">close</span>
             REJECT
           </button>
 
           <button
             onClick={() => onAccept(job)}
             disabled={actionLoading}
-            className="flex-1 py-2.5 px-3 rounded-xl bg-[#2e7d32] hover:bg-[#1b5e20] text-white font-black text-xs shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1 cursor-pointer disabled:opacity-60"
+            className="flex-1 py-2.5 px-3 rounded-xl bg-[#2e7d32] hover:bg-[#1b5e20] text-white font-black text-xs shadow-sm transition-all active:scale-95 flex items-center justify-center cursor-pointer disabled:opacity-60"
           >
-            {actionLoading ? (
-              <span className="material-symbols-outlined animate-spin text-sm">sync</span>
-            ) : (
-              <span className="material-symbols-outlined text-sm font-bold">check_circle</span>
-            )}
             {actionLoading ? 'ACCEPTING…' : 'ACCEPT'}
           </button>
         </div>

@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import { captainService } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
+import { markJobAsDismissed } from '../utils/jobDismissal';
 
 const CaptainJobs = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('transport'); // default to transport requests
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'transport';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
   const [acceptedJob, setAcceptedJob] = useState(null);
   const [selectedDetailJob, setSelectedDetailJob] = useState(null);
@@ -14,16 +17,44 @@ const CaptainJobs = () => {
   const [transportRequests, setTransportRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
+  const [counts, setCounts] = useState({ transport: 0, deliveries: 0, completed: 0 });
+
+  // Sync tab with URL search parameter if changed externally
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
+  const fetchTabCounts = useCallback(async () => {
+    try {
+      const [transRes, delivRes, compRes] = await Promise.allSettled([
+        transportService.captainGetRequests(),
+        captainService.getJobs('deliveries'),
+        captainService.getJobs('completed'),
+      ]);
+      setCounts({
+        transport: transRes.status === 'fulfilled' ? (transRes.value.requests?.length || 0) : 0,
+        deliveries: delivRes.status === 'fulfilled' ? (delivRes.value.orders?.length || 0) : 0,
+        completed: compRes.status === 'fulfilled' ? (compRes.value.orders?.length || 0) : 0,
+      });
+    } catch (e) {}
+  }, []);
 
   const fetchJobs = useCallback(async (tab) => {
     setLoading(true);
     try {
       if (tab === 'transport') {
         const res = await transportService.captainGetRequests();
-        setTransportRequests(res.requests || []);
+        const reqList = res.requests || [];
+        setTransportRequests(reqList);
+        setCounts((prev) => ({ ...prev, transport: reqList.length }));
       } else {
         const res = await captainService.getJobs(tab);
-        setJobs(res.orders || []);
+        const orderList = res.orders || [];
+        setJobs(orderList);
+        setCounts((prev) => ({ ...prev, [tab]: orderList.length }));
       }
     } catch (err) {
       console.error('Fetch jobs error:', err);
@@ -36,10 +67,12 @@ const CaptainJobs = () => {
 
   useEffect(() => {
     fetchJobs(activeTab);
-  }, [activeTab, fetchJobs]);
+    fetchTabCounts();
+  }, [activeTab, fetchJobs, fetchTabCounts]);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
+    setSearchParams({ tab });
     setSearchQuery('');
   };
 
@@ -48,6 +81,7 @@ const CaptainJobs = () => {
     setActionLoading(request._id);
     try {
       const res = await transportService.captainAcceptRequest(request.bookingId || request._id);
+      markJobAsDismissed(request);
       setAcceptedJob({
         ...request,
         orderId: request.bookingId,
@@ -68,6 +102,7 @@ const CaptainJobs = () => {
   const handleRejectTransport = async (request) => {
     setActionLoading(request._id);
     try {
+      markJobAsDismissed(request);
       await transportService.captainRejectRequest(request.bookingId || request._id);
       fetchJobs('transport');
     } catch (err) {
@@ -81,6 +116,7 @@ const CaptainJobs = () => {
   const handleAcceptOrder = async (order) => {
     setActionLoading(order._id);
     try {
+      markJobAsDismissed(order);
       await captainService.acceptJob(order.orderId || order._id);
       setAcceptedJob(order);
       fetchJobs(activeTab);
@@ -96,6 +132,7 @@ const CaptainJobs = () => {
   const handleRejectOrder = async (order) => {
     setActionLoading(order._id);
     try {
+      markJobAsDismissed(order);
       await captainService.rejectJob(order.orderId || order._id);
       fetchJobs(activeTab);
     } catch (err) {
@@ -109,21 +146,26 @@ const CaptainJobs = () => {
     navigate('/captain/active-delivery');
   };
 
-  // Normalize order data for delivery tabs
+  // Normalize order data for delivery and completed tabs
   const normalizeOrder = (order) => ({
     _id: order._id,
-    orderId: order.orderId,
-    captainStatus: order.captainStatus,
-    captainEarnings: order.captainEarnings || 0,
-    itemCount: order.items?.length || 0,
-    customerName: order.user?.name || order.shippingAddress?.fullName || 'Customer',
-    customerPhone: order.user?.phone || order.shippingAddress?.phone || '',
-    dropAddress: order.shippingAddress?.addressLine1 || '',
-    dropCity: order.shippingAddress?.city || '',
-    dropState: order.shippingAddress?.state || '',
+    orderId: order.orderId || order.bookingId,
+    bookingId: order.bookingId,
+    captainStatus: order.captainStatus || (order.status === 'RIDE_COMPLETED' ? 'Delivered' : order.status),
+    captainEarnings: order.captainEarnings || order.estimatedEarnings || 0,
+    itemCount: order.items?.length || order.goods?.packages || 1,
+    customerName: order.user?.name || order.shippingAddress?.fullName || order.customerName || 'Customer',
+    customerPhone: order.user?.phone || order.shippingAddress?.phone || order.customerPhone || '',
+    dropAddress: order.dropLocation?.address || order.shippingAddress?.addressLine1 || '',
+    dropCity: order.dropLocation?.city || order.shippingAddress?.city || '',
+    dropState: order.dropLocation?.state || order.shippingAddress?.state || '',
     items: order.items || [],
     deliverySlot: order.deliverySlot || {},
-    assignedAt: order.captainAssignedAt,
+    assignedAt: order.captainAssignedAt || order.createdAt,
+    goods: order.goods,
+    pickupLocation: order.pickupLocation,
+    dropLocation: order.dropLocation,
+    isTransport: order.isTransport || order.orderId?.startsWith('TRB') || order.bookingId?.startsWith('TRB'),
   });
 
   const filteredJobs = jobs.filter((o) => {
@@ -131,9 +173,15 @@ const CaptainJobs = () => {
     if (!q) return true;
     return (
       o.orderId?.toLowerCase().includes(q) ||
+      o.bookingId?.toLowerCase().includes(q) ||
       o.shippingAddress?.fullName?.toLowerCase().includes(q) ||
       o.shippingAddress?.city?.toLowerCase().includes(q) ||
-      o.user?.name?.toLowerCase().includes(q)
+      o.shippingAddress?.addressLine1?.toLowerCase().includes(q) ||
+      o.user?.name?.toLowerCase().includes(q) ||
+      o.customerName?.toLowerCase().includes(q) ||
+      o.dropLocation?.address?.toLowerCase().includes(q) ||
+      o.pickupLocation?.address?.toLowerCase().includes(q) ||
+      o.goods?.category?.toLowerCase().includes(q)
     );
   });
 
@@ -195,28 +243,37 @@ const CaptainJobs = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search Trip ID, Customer or Location..."
-            className="w-full bg-white border border-slate-200/90 rounded-2xl py-2.5 pl-10 pr-3 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-secondary/40 focus:outline-none placeholder:text-slate-400"
+            className="w-full bg-white border border-slate-200/90 rounded-xl py-2.5 pl-10 pr-3 text-xs font-medium shadow-2xs focus:ring-2 focus:ring-secondary/40 focus:outline-none placeholder:text-slate-400"
           />
         </div>
 
-        {/* Tab Pills */}
+        {/* Tab Pills: 1. Transport Requests, 2. Delivery, 3. Completed (Shows all) */}
         <div className="flex gap-2 overflow-x-auto hide-scrollbar py-0.5">
           {[
             { key: 'transport', label: 'Transport Requests', icon: 'local_shipping', count: transportRequests.length },
-            { key: 'deliveries', label: 'Active Orders', icon: 'package_2', count: jobs.length },
-            { key: 'completed', label: 'Completed', icon: 'check_circle' },
+            { key: 'deliveries', label: 'Delivery', icon: 'package_2', count: activeTab === 'deliveries' ? jobs.length : undefined },
+            { key: 'completed', label: 'Completed', icon: 'check_circle', count: activeTab === 'completed' ? jobs.length : undefined },
           ].map((tab) => (
             <button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
-              className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shadow-2xs ${
                 activeTab === tab.key
-                  ? 'bg-[#366b00] text-white shadow-md'
-                  : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                  ? 'bg-[#15803d] text-white shadow-sm'
+                  : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/90'
               }`}
             >
-              <span className="material-symbols-outlined text-base">{tab.icon}</span>
-              {tab.label} {tab.count !== undefined && !loading && `(${tab.count})`}
+              <span className="material-symbols-outlined text-[17px]">{tab.icon}</span>
+              <span>{tab.label}</span>
+              {tab.count !== undefined && !loading && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                    activeTab === tab.key ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -233,7 +290,7 @@ const CaptainJobs = () => {
         {!loading && activeTab === 'transport' && (
           <>
             {filteredTransport.length === 0 ? (
-              <div className="bg-white rounded-3xl p-8 border border-slate-200/80 flex flex-col items-center gap-3 text-center">
+              <div className="bg-white rounded-xl p-8 border border-slate-200/80 flex flex-col items-center gap-3 text-center">
                 <span className="material-symbols-outlined text-5xl text-slate-300">local_shipping</span>
                 <p className="font-bold text-slate-700">No New Transport Requests</p>
                 <p className="text-xs text-slate-400">
@@ -246,77 +303,84 @@ const CaptainJobs = () => {
                 return (
                   <div
                     key={req._id}
-                    className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-3"
+                    className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:shadow-md transition-all space-y-2.5 overflow-hidden"
                   >
-                    {/* Header: ID, Badge, Payout */}
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-[#15803d] flex items-center justify-center shadow-xs shrink-0">
-                          <span className="material-symbols-outlined text-2xl">local_shipping</span>
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <h3 className="font-mono text-xs font-black text-slate-900 leading-none">
-                              #{req.bookingId}
-                            </h3>
-                            <span className="bg-amber-100 text-amber-800 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
-                              Transport Request
-                            </span>
-                          </div>
-                          <p className="font-bold text-xs text-slate-700 mt-1 truncate">
-                            {req.goods?.category} • {req.goods?.weightKg} KG • {req.goods?.packages} Boxes
-                          </p>
-                        </div>
+                    {/* Header Row 1: ID and Price */}
+                    <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                        <span className="font-mono text-xs font-bold text-slate-800 truncate">
+                          #{req.bookingId}
+                        </span>
                       </div>
-                      <p className="font-headline-md text-xl font-black text-[#15803d] shrink-0">
+                      <span className="text-sm sm:text-base font-black text-[#15803d] shrink-0">
                         ₹{(req.estimatedEarnings || 0).toFixed(2)}
-                      </p>
+                      </span>
                     </div>
 
-                    {/* Route Info */}
-                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-2 text-xs">
-                      <div>
-                        <span className="font-black text-[9px] text-[#047857] uppercase tracking-wider block">
-                          PICKUP
+                    {/* Header Row 2: Badge & Cargo details */}
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 shrink-0 flex items-center gap-1">
+                          <span>🚚</span> Transport
                         </span>
-                        <p className="font-bold text-slate-900 leading-snug">{req.pickupLocation?.address}</p>
+                        <span className="text-xs font-medium text-slate-600 truncate">
+                          {req.goods?.category} • {req.goods?.weightKg}kg ({req.goods?.packages} pkgs)
+                        </span>
                       </div>
-                      <div className="pt-1.5 border-t border-slate-200/60">
-                        <span className="font-black text-[9px] text-[#ff5500] uppercase tracking-wider block">
-                          DROP
+                      {req.paymentMethod && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                          {req.paymentMethod}
                         </span>
-                        <p className="font-bold text-slate-900 leading-snug">{req.dropLocation?.address}</p>
+                      )}
+                    </div>
+
+                    {/* Route Timeline Box */}
+                    <div className="bg-slate-50/80 p-2.5 sm:p-3 rounded-lg border border-slate-100 text-xs space-y-2">
+                      <div className="flex items-start gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1 shrink-0"></span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-wider block">Pickup</span>
+                          <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">{req.pickupLocation?.address}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="w-2 h-2 rounded-full bg-orange-500 mt-1 shrink-0"></span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[8px] font-bold text-orange-700 uppercase tracking-wider block">Drop</span>
+                          <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">{req.dropLocation?.address}</p>
+                        </div>
                       </div>
                       {req.distanceKm && (
-                        <div className="text-[10px] text-slate-500 font-semibold flex items-center gap-2 pt-1">
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-200/50">
                           <span>📍 {req.distanceKm} km</span>
                           <span>⏱ ~{req.estimatedDurationMin || 15} mins</span>
-                          <span>💳 {req.paymentMethod || 'CASH'}</span>
+                          <span>⚡ Ready to pickup</span>
                         </div>
                       )}
                     </div>
 
-                    {/* Actions: Reject & Accept */}
-                    <div className="flex gap-2 pt-1">
+                    {/* Actions: View Details, Reject & Accept (Clean text without icons) */}
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <button
+                        onClick={() => setSelectedDetailJob({ ...req, isTransport: true })}
+                        className="py-2 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 text-slate-700 font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                      >
+                        Details
+                      </button>
                       <button
                         onClick={() => handleRejectTransport(req)}
                         disabled={isActing}
-                        className="flex-1 py-3 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50"
+                        className="py-2 px-4 bg-white hover:bg-red-50 border border-red-200 text-red-600 font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center justify-center disabled:opacity-50 shrink-0"
                       >
-                        <span className="material-symbols-outlined text-sm">close</span>
                         Reject
                       </button>
                       <button
                         onClick={() => handleAcceptTransport(req)}
                         disabled={isActing}
-                        className="flex-2 py-3 bg-[#366b00] hover:bg-[#2d5800] text-white font-bold text-xs rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
+                        className="flex-1 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-lg shadow-2xs transition-all cursor-pointer flex items-center justify-center disabled:opacity-60 truncate"
                       >
-                        {isActing ? (
-                          <span className="material-symbols-outlined text-sm animate-spin">sync</span>
-                        ) : (
-                          <span className="material-symbols-outlined text-base">check_circle</span>
-                        )}
-                        {isActing ? 'Claiming Request…' : 'Accept Request'}
+                        {isActing ? 'Claiming…' : 'Accept Request'}
                       </button>
                     </div>
                   </div>
@@ -330,16 +394,16 @@ const CaptainJobs = () => {
         {!loading && activeTab !== 'transport' && (
           <>
             {filteredJobs.length === 0 ? (
-              <div className="bg-white rounded-3xl p-8 border border-slate-200/80 flex flex-col items-center gap-3 text-center">
+              <div className="bg-white rounded-xl p-8 border border-slate-200/80 flex flex-col items-center gap-3 text-center">
                 <span className="material-symbols-outlined text-5xl text-slate-300">
                   {activeTab === 'completed' ? 'task_alt' : 'package_2'}
                 </span>
                 <p className="font-bold text-slate-700">
-                  {activeTab === 'completed' ? 'No completed deliveries yet' : 'No active orders assigned'}
+                  {activeTab === 'completed' ? 'No completed trips or deliveries yet' : 'No active delivery orders assigned'}
                 </p>
                 <p className="text-xs text-slate-400">
                   {activeTab === 'completed'
-                    ? 'Your trip and delivery history will appear here.'
+                    ? 'All your completed transport rides and product deliveries will appear here.'
                     : 'Assigned e-commerce packages will appear here once online.'}
                 </p>
               </div>
@@ -347,86 +411,118 @@ const CaptainJobs = () => {
               filteredJobs.map((order) => {
                 const job = normalizeOrder(order);
                 const isActing = actionLoading === order._id;
+                const isTransport = order.isTransport || job.orderId?.startsWith('TRB');
                 return (
                   <div
                     key={job._id}
-                    className="bg-white p-3.5 rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-2.5 overflow-hidden"
+                    className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:shadow-md transition-all space-y-2.5 overflow-hidden"
                   >
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-[#d9f99d] text-[#365314] flex items-center justify-center shadow-xs shrink-0">
-                          <span className="material-symbols-outlined text-xl">package_2</span>
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="font-mono text-xs font-black text-slate-900 leading-none">
-                            #{job.orderId}
-                          </h3>
-                          <p className="font-bold text-xs text-slate-700 mt-0.5 truncate">{job.customerName}</p>
-                          <span
-                            className={`text-[8px] font-black px-2 py-0.5 rounded-full ${getStatusBadge(
-                              job.captainStatus
-                            )}`}
-                          >
-                            {job.captainStatus?.toUpperCase() || 'ASSIGNED'}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="font-headline-md text-xl font-black text-[#15803d] shrink-0">
-                        ₹{job.captainEarnings.toFixed(2)}
-                      </p>
-                    </div>
-
-                    <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-100 space-y-1.5 text-xs">
-                      <div>
-                        <span className="font-black text-[8px] text-slate-500 uppercase tracking-widest block">
-                          DROP
+                    {/* Header Row 1: ID and Price */}
+                    <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${isTransport ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                        <span className="font-mono text-xs font-bold text-slate-800 truncate">
+                          #{job.orderId}
                         </span>
-                        <p className="font-bold text-slate-900 text-xs leading-tight truncate">{job.dropAddress}</p>
-                        <p className="text-[10px] text-slate-500 truncate">
-                          {job.dropCity}, {job.dropState}
-                        </p>
                       </div>
-                      <div className="text-[10px] text-slate-500 flex items-center gap-1">
-                        <span className="material-symbols-outlined text-xs">inventory_2</span>
-                        {job.itemCount} item{job.itemCount !== 1 ? 's' : ''}
-                        {job.deliverySlot?.time ? ` • ${job.deliverySlot.time}` : ''}
+                      <span className="text-sm sm:text-base font-black text-[#15803d] shrink-0">
+                        ₹{job.captainEarnings.toFixed(2)}
+                      </span>
+                    </div>
+
+                    {/* Header Row 2: Badge & Status */}
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                        {isTransport ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 shrink-0 flex items-center gap-1">
+                            <span>🚚</span> Transport
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 shrink-0 flex items-center gap-1">
+                            <span>📦</span> Delivery
+                          </span>
+                        )}
+                        <span className="text-xs font-medium text-slate-700 truncate">
+                          {job.customerName}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-[9px] font-bold px-2 py-0.5 rounded-md shrink-0 ${getStatusBadge(
+                          job.captainStatus
+                        )}`}
+                      >
+                        {job.captainStatus?.toUpperCase() || 'ASSIGNED'}
+                      </span>
+                    </div>
+
+                    {/* Route Info */}
+                    <div className="bg-slate-50/80 p-2.5 sm:p-3 rounded-lg border border-slate-100 space-y-1.5 text-xs">
+                      {order.pickupLocation?.address && (
+                        <div className="flex items-start gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1 shrink-0"></span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-wider block">Pickup</span>
+                            <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">{order.pickupLocation.address}</p>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-start gap-2">
+                        <span className="w-2 h-2 rounded-full bg-orange-500 mt-1 shrink-0"></span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[8px] font-bold text-orange-700 uppercase tracking-wider block">Drop</span>
+                          <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">{job.dropAddress}</p>
+                          {job.dropCity && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">{job.dropCity}, {job.dropState}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-1 border-t border-slate-200/50">
+                        <span className="material-symbols-outlined text-[13px]">
+                          {isTransport ? 'scale' : 'inventory_2'}
+                        </span>
+                        {isTransport
+                          ? `${order.goods?.category || 'Transport'} • ${order.goods?.weightKg || ''}kg`
+                          : `${job.itemCount} item${job.itemCount !== 1 ? 's' : ''}${job.deliverySlot?.time ? ` • ${job.deliverySlot.time}` : ''}`}
                       </div>
                     </div>
 
-                    {activeTab !== 'completed' && (
-                      <div className="flex gap-2 pt-0.5">
-                        <button
-                          onClick={() => setSelectedDetailJob(order)}
-                          className="w-1/2 bg-white border border-slate-200/90 py-2.5 rounded-2xl text-xs font-bold text-slate-800 flex items-center justify-center gap-1 hover:bg-slate-50 transition-colors cursor-pointer"
-                        >
-                          <span className="material-symbols-outlined text-base">description</span>
-                          View Details
-                        </button>
+                    {/* Actions */}
+                    <div className="flex gap-2 pt-0.5">
+                      <button
+                        onClick={() => setSelectedDetailJob(order)}
+                        className={`${activeTab === 'completed' ? 'w-full' : 'w-1/2'} bg-slate-50 hover:bg-slate-100 border border-slate-200/90 py-2 rounded-lg text-xs font-bold text-slate-800 flex items-center justify-center gap-1 transition-colors cursor-pointer`}
+                      >
+                        <span className="material-symbols-outlined text-[16px]">info</span>
+                        <span>View Details</span>
+                      </button>
 
-                        {job.captainStatus === 'Assigned' ? (
-                          <button
-                            onClick={() => handleAcceptOrder(order)}
-                            disabled={isActing}
-                            className="w-1/2 bg-[#366b00] hover:bg-[#2d5800] py-2.5 rounded-2xl text-xs font-bold text-white flex items-center justify-center gap-1 shadow-md transition-all cursor-pointer disabled:opacity-60"
-                          >
-                            {isActing ? (
-                              <span className="material-symbols-outlined text-sm animate-spin">sync</span>
-                            ) : (
-                              'Accept Job'
-                            )}
-                            {!isActing && <span className="material-symbols-outlined text-base">arrow_forward</span>}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => navigate('/captain/active-delivery')}
-                            className="w-1/2 bg-secondary hover:bg-secondary/90 py-2.5 rounded-2xl text-xs font-bold text-white flex items-center justify-center gap-1 shadow-md transition-all cursor-pointer"
-                          >
-                            Continue
-                            <span className="material-symbols-outlined text-base">arrow_forward</span>
-                          </button>
-                        )}
-                      </div>
-                    )}
+                      {activeTab !== 'completed' && (
+                        <>
+                          {job.captainStatus === 'Assigned' ? (
+                            <button
+                              onClick={() => handleAcceptOrder(order)}
+                              disabled={isActing}
+                              className="w-1/2 bg-[#15803d] hover:bg-[#166534] py-2 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1 shadow-2xs transition-all cursor-pointer disabled:opacity-60"
+                            >
+                              {isActing ? (
+                                <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+                              ) : (
+                                'Accept Job'
+                              )}
+                              {!isActing && <span className="material-symbols-outlined text-base">arrow_forward</span>}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => navigate('/captain/active-delivery')}
+                              className="w-1/2 bg-[#15803d] hover:bg-[#166534] py-2 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1 shadow-2xs transition-all cursor-pointer"
+                            >
+                              Continue
+                              <span className="material-symbols-outlined text-base">arrow_forward</span>
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 );
               })
@@ -438,17 +534,17 @@ const CaptainJobs = () => {
       {/* Accept Confirmation Modal */}
       {acceptedJob && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white p-5 rounded-3xl max-w-md w-full border border-slate-100 shadow-2xl space-y-3">
+          <div className="bg-white p-5 rounded-xl max-w-md w-full border border-slate-100 shadow-2xl space-y-3">
             <div className="w-10 h-10 bg-emerald-100 text-[#15803d] rounded-full flex items-center justify-center mx-auto">
               <span className="material-symbols-outlined text-xl font-bold">check_circle</span>
             </div>
             <div className="text-center space-y-0.5">
-              <h3 className="font-bold text-lg text-slate-900">Job Accepted!</h3>
+              <h3 className="font-bold text-base text-slate-900">Job Accepted!</h3>
               <p className="text-xs text-slate-500">
                 Payout: <span className="font-bold text-[#15803d]">₹{(acceptedJob.captainEarnings || 0).toFixed(2)}</span>
               </p>
             </div>
-            <div className="bg-slate-50 p-3 rounded-2xl text-xs space-y-1 border border-slate-100">
+            <div className="bg-slate-50 p-3 rounded-lg text-xs space-y-1 border border-slate-100">
               <p className="font-bold text-slate-900">Trip #{acceptedJob.orderId || acceptedJob.bookingId}</p>
               <p className="text-slate-500">
                 Destination: {acceptedJob.shippingAddress?.city || acceptedJob.dropLocation?.address}
@@ -457,15 +553,181 @@ const CaptainJobs = () => {
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setAcceptedJob(null)}
-                className="flex-1 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="flex-1 py-2 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 Stay Here
               </button>
               <button
                 onClick={confirmJobAcceptance}
-                className="flex-1 py-2.5 rounded-2xl bg-[#366b00] hover:bg-[#2d5800] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
+                className="flex-1 py-2 rounded-lg bg-[#15803d] hover:bg-[#166534] text-white text-xs font-bold shadow-2xs transition-all cursor-pointer"
               >
                 Start Navigation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* 📋 VIEW DETAILS MODAL                                     */}
+      {/* ────────────────────────────────────────────────────────── */}
+      {selectedDetailJob && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-hidden touch-none"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedDetailJob(null);
+          }}
+        >
+          <div
+            className="w-full sm:max-w-lg bg-white rounded-xl shadow-2xl flex flex-col max-h-[86vh] overflow-hidden border border-slate-100"
+            style={{ animation: 'slideUpModal 0.28s cubic-bezier(.4,0,.2,1)' }}
+          >
+            {/* Sticky Top Header */}
+            <div className="sticky top-0 z-10 bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-black text-slate-900">
+                  #{selectedDetailJob.bookingId || selectedDetailJob.orderId}
+                </span>
+                {selectedDetailJob.isTransport || selectedDetailJob.orderId?.startsWith('TRB') ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
+                    <span>🚚</span> Transport
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 flex items-center gap-1">
+                    <span>📦</span> Delivery
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setSelectedDetailJob(null)}
+                className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer transition-colors"
+                title="Close"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            {/* Scrollable Modal Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 overscroll-contain">
+              {/* Earnings Banner */}
+              <div className="bg-emerald-50/90 p-3 rounded-lg border border-emerald-200/90 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Captain Payout</p>
+                  <p className="text-xl font-black text-[#15803d]">
+                    ₹{(selectedDetailJob.captainEarnings || selectedDetailJob.estimatedEarnings || 0).toFixed(2)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white text-emerald-800 border border-emerald-200 block mb-0.5">
+                    {selectedDetailJob.paymentMethod || 'CASH'} • {selectedDetailJob.captainStatus || 'Completed'}
+                  </span>
+                  <span className="text-[9px] text-emerald-700 font-medium">Guaranteed Earnings</span>
+                </div>
+              </div>
+
+              {/* Customer & Contact Details Card */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/80 space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-200/60 pb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-base text-[#15803d]">person</span>
+                    <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">Customer Contact Details</span>
+                  </div>
+                  {(() => {
+                    const phone =
+                      selectedDetailJob.customerPhone ||
+                      selectedDetailJob.user?.phone ||
+                      selectedDetailJob.shippingAddress?.phone;
+                    return phone ? (
+                      <a
+                        href={`tel:${phone}`}
+                        className="px-2.5 py-1 rounded-md bg-[#15803d] hover:bg-[#166534] text-white text-[11px] font-bold flex items-center gap-1 transition-colors shadow-2xs"
+                      >
+                        <span className="material-symbols-outlined text-xs">call</span>
+                        <span>Call Customer</span>
+                      </a>
+                    ) : null;
+                  })()}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Customer Name</span>
+                    <p className="font-bold text-slate-800 text-xs mt-0.5">
+                      {selectedDetailJob.customerName ||
+                        selectedDetailJob.user?.name ||
+                        selectedDetailJob.shippingAddress?.fullName ||
+                        'Customer'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Contact Number</span>
+                    {(() => {
+                      const phone =
+                        selectedDetailJob.customerPhone ||
+                        selectedDetailJob.user?.phone ||
+                        selectedDetailJob.shippingAddress?.phone;
+                      return phone ? (
+                        <a href={`tel:${phone}`} className="font-bold text-[#15803d] text-xs mt-0.5 hover:underline flex items-center gap-0.5">
+                          <span>📞 {phone}</span>
+                        </a>
+                      ) : (
+                        <p className="text-slate-400 font-medium text-xs mt-0.5">Not provided</p>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Route Timeline */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/80 text-xs space-y-2.5">
+                <div className="flex items-start gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 mt-1 shrink-0"></span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Pickup Location</span>
+                    <p className="font-bold text-slate-900 text-xs mt-0.5">
+                      {selectedDetailJob.pickupLocation?.address || 'Store / Warehouse'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-orange-500 mt-1 shrink-0"></span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Drop Location</span>
+                    <p className="font-bold text-slate-900 text-xs mt-0.5">
+                      {selectedDetailJob.dropLocation?.address ||
+                        selectedDetailJob.shippingAddress?.addressLine1 ||
+                        selectedDetailJob.shippingAddress?.city ||
+                        'Customer Address'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items / Goods Info */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Items / Cargo</span>
+                  <p className="font-bold text-slate-800 text-xs mt-0.5 truncate">
+                    {selectedDetailJob.goods?.category || `${selectedDetailJob.items?.length || 1} Item(s)`}
+                  </p>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Weight / Distance</span>
+                  <p className="font-bold text-slate-800 text-xs mt-0.5">
+                    {selectedDetailJob.goods?.weightKg ? `${selectedDetailJob.goods.weightKg} kg` : ''}{' '}
+                    {selectedDetailJob.distanceKm ? `• 📍 ${selectedDetailJob.distanceKm} km` : ''}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Sticky Bottom Action Buttons */}
+            <div className="sticky bottom-0 z-10 bg-white px-4 py-3 border-t border-slate-100 flex gap-2 shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
+              <button
+                onClick={() => setSelectedDetailJob(null)}
+                className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>

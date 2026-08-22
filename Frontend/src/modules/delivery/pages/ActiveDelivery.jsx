@@ -520,6 +520,18 @@ const ActiveDelivery = () => {
               </button>
             )}
 
+            {/* Quick Complete / Bypass Button for Captains */}
+            {isTransport && activeItem.status !== 'RIDE_COMPLETED' && (
+              <button
+                onClick={() => handleUpdateTransportStatus('RIDE_COMPLETED')}
+                disabled={statusUpdating}
+                className="w-full py-2 bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-[#15803d] border border-slate-200 rounded-xl font-bold text-[11px] transition-all cursor-pointer flex items-center justify-center gap-1.5 mt-2"
+              >
+                <span className="material-symbols-outlined text-sm">task_alt</span>
+                Complete Ride & Credit Wallet (₹{payout.toFixed(2)})
+              </button>
+            )}
+
             {/* Standard Delivery Actions */}
             {!isTransport && activeItem.captainStatus === 'Accepted' && (
               <button
@@ -712,12 +724,22 @@ const ActiveDelivery = () => {
               Transport verified and finished. Your payout of{' '}
               <span className="font-bold text-[#15803d]">₹{payout.toFixed(2)}</span> has been credited to your wallet.
             </p>
-            <button
-              onClick={() => navigate('/captain/dashboard')}
-              className="w-full py-3.5 bg-[#366b00] hover:bg-[#2d5800] text-white font-bold rounded-2xl shadow-md cursor-pointer transition-all"
-            >
-              Back to Dashboard
-            </button>
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={() => navigate('/captain/dashboard')}
+                className="w-full py-3 bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-xl shadow-md cursor-pointer transition-all text-xs flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-base">home</span>
+                <span>Back to Dashboard</span>
+              </button>
+              <button
+                onClick={() => navigate('/captain/jobs?tab=completed')}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer transition-colors text-xs flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-base">history</span>
+                <span>View in Completed Trips</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

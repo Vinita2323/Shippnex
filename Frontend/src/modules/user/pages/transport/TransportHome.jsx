@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, Bike, Package, Clock, MapPin, ChevronRight, Settings, Smartphone, Home } from 'lucide-react';
+import { Truck, Bike, Package, Clock, MapPin, ChevronRight, Settings, Smartphone, Home, Loader2, IndianRupee } from 'lucide-react';
+import { useTransport } from '../../context/TransportContext';
+import { transportService } from '../../../../services/transportService';
 
 const TransportHome = () => {
   const navigate = useNavigate();
+  const { updateActiveBooking } = useTransport();
+  const [vehicles, setVehicles] = useState([]);
+  const [loadingVehicles, setLoadingVehicles] = useState(true);
 
   const quickCategories = [
     { id: 1, name: 'Furniture', icon: <Home size={24} className="text-blue-500" />, bg: 'bg-blue-50' },
@@ -12,13 +17,33 @@ const TransportHome = () => {
     { id: 4, name: 'Hardware', icon: <Settings size={24} className="text-orange-500" />, bg: 'bg-orange-50' }
   ];
 
-  const popularVehicles = [
-    { id: 1, name: 'Motorcycle', capacity: '20 kg', time: '2 mins away', icon: <Bike size={20} className="text-slate-700" /> },
-    { id: 2, name: '3 Wheeler', capacity: '500 kg', time: '3 mins away', icon: <Truck size={20} className="text-slate-700" /> },
-    { id: 3, name: 'Mini Truck', capacity: '750 kg', time: '5 mins away', icon: <Truck size={20} className="text-slate-700" /> },
-    { id: 4, name: 'Pickup 8ft', capacity: '1200 kg', time: '8 mins away', icon: <Truck size={20} className="text-slate-700" /> },
-    { id: 5, name: 'Truck 14ft', capacity: '2000 kg', time: '15 mins away', icon: <Truck size={20} className="text-slate-700" /> }
-  ];
+  // Fetch active vehicles dynamically from backend
+  useEffect(() => {
+    const fetchActiveVehicles = async () => {
+      try {
+        setLoadingVehicles(true);
+        const data = await transportService.getVehicles();
+        if (data.vehicles && data.vehicles.length > 0) {
+          setVehicles(data.vehicles);
+        }
+      } catch (err) {
+        console.error('Failed to fetch dynamic transport vehicles:', err);
+      } finally {
+        setLoadingVehicles(false);
+      }
+    };
+    fetchActiveVehicles();
+  }, []);
+
+  const handleCategorySelect = (categoryName) => {
+    updateActiveBooking('goods', { category: categoryName, weight: '', packages: '', instructions: '' });
+    navigate('/transport/location');
+  };
+
+  const handleVehicleSelect = (vehicle) => {
+    updateActiveBooking('vehicle', vehicle);
+    navigate('/transport/location');
+  };
 
   return (
     <div className="h-[100dvh] bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
@@ -26,9 +51,13 @@ const TransportHome = () => {
       {/* Header */}
       <header className="flex justify-between items-center py-4 px-5 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)] z-10 sticky top-0">
         <h2 className="text-[18px] font-bold tracking-tight m-0 text-slate-900">Transport</h2>
-        <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
-          <Clock size={18} className="text-slate-600" />
-        </div>
+        <button
+          onClick={() => navigate('/orders', { state: { tab: 'transport' } })}
+          title="Past Transport Bookings"
+          className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer transition-colors border-none"
+        >
+          <Clock size={18} />
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto pb-[100px] [&::-webkit-scrollbar]:hidden">
@@ -82,7 +111,7 @@ const TransportHome = () => {
               <div 
                 key={category.id} 
                 className="flex flex-col items-center gap-2 cursor-pointer group"
-                onClick={() => navigate('/transport/location')}
+                onClick={() => handleCategorySelect(category.name)}
               >
                 <div className={`w-14 h-14 rounded-[16px] ${category.bg} flex items-center justify-center transition-transform group-active:scale-95 group-hover:-translate-y-1`}>
                   {category.icon}
@@ -93,36 +122,49 @@ const TransportHome = () => {
           </div>
         </div>
 
-        {/* Popular Vehicles */}
+        {/* Dynamic Popular Vehicles from Backend */}
         <div className="px-5 mb-6">
-          <div className="mb-3">
-             <h3 className="text-[15px] font-bold text-slate-800 m-0">Popular Vehicles</h3>
+          <div className="mb-3 flex items-center justify-between">
+             <h3 className="text-[15px] font-bold text-slate-800 m-0">Available Vehicles</h3>
+             <span className="text-[11px] font-bold text-[#047857]">Live Fleet</span>
           </div>
           
-          <div className="grid grid-cols-2 gap-2.5">
-            {popularVehicles.slice(0, 4).map((vehicle) => (
-              <div 
-                key={vehicle.id} 
-                className="bg-white rounded-xl p-3 shadow-2xs border border-slate-100 flex flex-col cursor-pointer hover:border-slate-200 hover:shadow-xs transition-all active:scale-[0.98]"
-                onClick={() => navigate('/transport/location')}
-              >
-                <div className="w-full flex items-center justify-between mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-700 shrink-0">
-                    {vehicle.icon}
+          {loadingVehicles ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-slate-400">
+              <Loader2 size={20} className="animate-spin text-[#047857]" />
+              <span className="text-[13px]">Loading fleet types…</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5">
+              {vehicles.slice(0, 4).map((vehicle) => (
+                <div 
+                  key={vehicle._id} 
+                  className="bg-white rounded-xl p-3 shadow-2xs border border-slate-100 flex flex-col cursor-pointer hover:border-slate-200 hover:shadow-xs transition-all active:scale-[0.98]"
+                  onClick={() => handleVehicleSelect(vehicle)}
+                >
+                  <div className="w-full flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-[#047857] shrink-0 font-bold">
+                      {vehicle.icon === 'bike' ? <Bike size={18} /> : <Truck size={18} />}
+                    </div>
+                    <span className="bg-emerald-50 text-[#047857] text-[10px] font-bold px-1.5 py-0.5 rounded">
+                      ₹{vehicle.perKmFare}/km
+                    </span>
                   </div>
-                  <span className="bg-green-50 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                    {vehicle.time}
-                  </span>
-                </div>
 
-                <h4 className="text-[13px] font-bold text-slate-800 m-0 mb-0.5">{vehicle.name}</h4>
-                <div className="flex items-center gap-1 text-slate-500">
-                  <Package size={11} className="text-slate-400 shrink-0" />
-                  <span className="text-[10.5px] font-medium text-slate-500">Up to {vehicle.capacity}</span>
+                  <h4 className="text-[13px] font-bold text-slate-800 m-0 mb-0.5">{vehicle.name}</h4>
+                  <div className="flex items-center justify-between text-slate-500 mt-1">
+                    <div className="flex items-center gap-1">
+                      <Package size={11} className="text-slate-400 shrink-0" />
+                      <span className="text-[10.5px] font-medium text-slate-500">Up to {vehicle.capacityKg} kg</span>
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-800">
+                      ₹{vehicle.minimumFare}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
       </div>

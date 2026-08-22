@@ -41,6 +41,7 @@ export const registerCaptain = async (req, res, next) => {
       ifscCode,
       branchName,
       upiId,
+      panCardNumber,
     } = req.body;
 
     const phone = mobileNumber || req.body.phone;

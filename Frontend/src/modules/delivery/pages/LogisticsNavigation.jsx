@@ -1,195 +1,252 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { transportService } from '../../../services/transportService';
+import { captainService } from '../../../services/authService';
 
 const LogisticsNavigation = () => {
   const navigate = useNavigate();
-  const [speed, setSpeed] = useState(55);
-  const [isMuted, setIsMuted] = useState(false);
+  const [activeItem, setActiveItem] = useState(null);
+  const [isTransport, setIsTransport] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Live speed simulation
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const variance = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
-      setSpeed((prev) => Math.min(Math.max(prev + variance, 52), 58));
-    }, 3000);
-    return () => clearInterval(interval);
+  const fetchActiveMission = useCallback(async () => {
+    setLoading(true);
+    try {
+      // 1. Check for active transport haulage ride
+      const transportRes = await transportService.captainGetActiveRide();
+      if (transportRes.success && transportRes.booking) {
+        setActiveItem(transportRes.booking);
+        setIsTransport(true);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Check for active standard delivery order
+      const orderRes = await captainService.getActiveDelivery();
+      if (orderRes.success && orderRes.order) {
+        setActiveItem(orderRes.order);
+        setIsTransport(false);
+      } else {
+        setActiveItem(null);
+      }
+    } catch (err) {
+      console.error('Fetch navigation mission error:', err);
+      setActiveItem(null);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return (
-    <div className="bg-surface font-body-md text-on-surface overflow-hidden h-screen w-full select-none relative">
-      {/* Map Canvas Background */}
-      <div className="absolute inset-0 z-0 bg-[#E5E9EC]">
-        <div
-          className="w-full h-full grayscale-[0.2] contrast-[0.9] bg-cover bg-center"
-          style={{
-            backgroundImage: `url('${localStorage.getItem('shippnex_captain_avatar') || 'https://lh3.googleusercontent.com/aida-public/AB6AXuDBMY_u_VgnDQcYP9Ujq5FQV8jWvhDDWs5l8S3hLa1aS4-6-0CgPnl6C2VqY7hbSlqJY5sq2QnqmNe1UQXbP5T082lmhyI66mAizahgkEY1XtS78XQADAXCPQmWBRIypSG6cJmrQk0w2vTy4VUaC8PdqkJw4qxRqDR3tAK6UEP6KUEK2Dcab2X9H83PZAVp4i1-kwL_pcimy4rA0zFxZedA8Zar4751l0-niA08rGw4brevuod93iZVp22_MElsUjWy7BsAgj9BFUY'}')`,
-          }}
-        ></div>
-        {/* Animated Route SVG Overlay */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-90" preserveAspectRatio="none" viewBox="0 0 1000 1000">
-          <path
-            className="route-glow"
-            d="M 200,800 L 400,600 L 450,400 L 700,250 L 850,100"
-            fill="none"
-            stroke="#3b82f6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="8"
-          ></path>
-          <circle cx="200" cy="800" fill="#002625" r="10"></circle>
-          <circle cx="850" cy="100" fill="#ba1a1a" r="12"></circle>
-        </svg>
-      </div>
+  useEffect(() => {
+    fetchActiveMission();
+  }, [fetchActiveMission]);
 
-      {/* Top AppBar */}
-      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-3 bg-surface/80 backdrop-blur-md shadow-sm border-b border-outline-variant/10">
+  if (loading) {
+    return (
+      <div className="bg-[#002625] min-h-screen flex flex-col items-center justify-center gap-3 text-white">
+        <span className="material-symbols-outlined text-4xl text-[#97fc43] animate-spin">sync</span>
+        <p className="text-xs font-bold text-slate-300">Loading Navigation Telemetry…</p>
+      </div>
+    );
+  }
+
+  if (!activeItem) {
+    return (
+      <div className="bg-slate-50 min-h-screen flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 rounded-3xl bg-slate-100 flex items-center justify-center text-slate-400 mb-4">
+          <span className="material-symbols-outlined text-3xl">navigation</span>
+        </div>
+        <h2 className="text-lg font-black text-slate-800 mb-1">No Active Navigation Mission</h2>
+        <p className="text-xs text-slate-500 max-w-xs mb-6">
+          You don't have an active transport trip or delivery assigned right now.
+        </p>
+        <button
+          onClick={() => navigate('/captain/jobs')}
+          className="px-6 py-3 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-colors"
+        >
+          View Job Queue
+        </button>
+      </div>
+    );
+  }
+
+  const tripId = isTransport ? activeItem.bookingId : activeItem.orderId;
+  const customerName = isTransport
+    ? activeItem.user?.name || 'Transport Customer'
+    : activeItem.shippingAddress?.fullName || activeItem.user?.name || 'Customer';
+  const customerPhone = isTransport
+    ? activeItem.user?.phone || ''
+    : activeItem.shippingAddress?.phone || activeItem.user?.phone || '';
+  const pickupAddress = isTransport
+    ? (typeof activeItem.pickupLocation === 'string' ? activeItem.pickupLocation : activeItem.pickupLocation?.address) || 'Pickup Location'
+    : 'Seller Warehouse Hub';
+  const dropAddress = isTransport
+    ? (typeof activeItem.dropLocation === 'string' ? activeItem.dropLocation : activeItem.dropLocation?.address) || 'Drop Destination'
+    : `${activeItem.shippingAddress?.addressLine1 || ''}, ${activeItem.shippingAddress?.city || ''}`;
+  const distanceKm = activeItem.distanceKm ? `${activeItem.distanceKm} km` : 'Live Route';
+  const estTime = activeItem.estimatedDurationMin ? `${activeItem.estimatedDurationMin} mins` : '15-25 mins';
+  const payout = activeItem.captainEarnings || 0;
+
+  const handleOpenGoogleMaps = () => {
+    const destinationQuery = encodeURIComponent(dropAddress);
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}`, '_blank');
+  };
+
+  const handleCallCustomer = () => {
+    if (customerPhone) window.location.href = `tel:${customerPhone}`;
+  };
+
+  return (
+    <div className="bg-[#f8fafc] font-sans min-h-screen text-slate-800 flex flex-col justify-between">
+      {/* Header */}
+      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-3 bg-[#002625] text-white shadow-md">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary-container overflow-hidden border border-secondary-fixed">
-            <img
-              className="w-full h-full object-cover"
-              alt="Captain Profile"
-              src={localStorage.getItem('shippnex_captain_avatar') || "https://lh3.googleusercontent.com/aida-public/AB6AXuDAEyDGAdscDL39_nY8qtEE-EKlU5Yzk_5V2Bvr4oyNFSQ0-NKqS_mB8Ctb3CailKWrz62e_BqwhwUC5a7n6ME8bwodDsrgNk4u1PptFSTpqJw_gjaHtJVHg8aIo1ja01ccSyQdNnd9fPpR8Fu0wVk5cCXsQfHSD3wBx7p9NYmyy1g7EIElxHr5imZB2Cs0EQFmKMUxvRpnAteLivauhVxVdaROob09JTJvuPNNgJemX0X8bWDfK95iSBeRwaAskoAdLyA6jSco9m0"}
-            />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-headline-md text-primary font-bold leading-tight">ShippNex</span>
-            <span className="font-label-sm text-xs text-outline tracking-wider uppercase font-bold">NAVIGATING</span>
+          <button
+            onClick={() => navigate('/captain/active-delivery')}
+            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer border-none"
+          >
+            <span className="material-symbols-outlined text-lg">arrow_back</span>
+          </button>
+          <div>
+            <span className="text-[9px] font-black uppercase text-[#97fc43] tracking-wider block leading-none">
+              ACTIVE NAVIGATION
+            </span>
+            <span className="text-xs font-mono font-bold text-white block mt-0.5">
+              #{tripId}
+            </span>
           </div>
         </div>
+
         <button
-          onClick={() => navigate('/captain/notifications')}
-          className="w-10 h-10 flex items-center justify-center rounded-full text-primary hover:opacity-80 transition-opacity active:scale-95 cursor-pointer"
+          onClick={handleCallCustomer}
+          className="px-3 py-1.5 rounded-lg bg-[#97fc43] text-[#002625] text-xs font-black flex items-center gap-1 cursor-pointer border-none"
         >
-          <span className="material-symbols-outlined">notifications</span>
+          <span className="material-symbols-outlined text-sm">call</span>
+          Call
         </button>
       </header>
 
-      {/* Floating Search/Address Bar */}
-      <div className="fixed top-20 left-1/2 -translate-x-1/2 w-[90%] md:w-[600px] z-40">
-        <div className="glass-panel rounded-2xl shadow-lg border border-outline-variant/40 p-3 flex items-center gap-3">
-          <div className="w-10 h-10 flex items-center justify-center text-secondary bg-secondary-container/20 rounded-xl">
-            <span className="material-symbols-outlined">explore</span>
+      {/* Main Content Area */}
+      <main className="pt-16 pb-28 px-4 max-w-md mx-auto w-full space-y-4 flex-1">
+        {/* Real Dynamic Route Card */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3 mt-2">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+              TRIP ROUTE
+            </span>
+            <span className="text-xs font-bold text-[#15803d] bg-emerald-50 px-2 py-0.5 rounded-md">
+              Payout: ₹{Number(payout).toFixed(2)}
+            </span>
           </div>
-          <div className="flex-1">
-            <h2 className="font-headline-md font-bold text-on-surface text-base md:text-lg">1422 North Wacker Drive</h2>
-            <p className="font-label-sm text-xs text-outline-variant">Destination • Chicago, IL</p>
-          </div>
-          <div className="h-8 w-[1px] bg-outline-variant/30 mx-1"></div>
-          <button
-            onClick={() => alert('Route options: Avoid tolls, Prefer highways')}
-            className="w-10 h-10 flex items-center justify-center text-primary hover:bg-surface-variant/50 rounded-xl transition-colors cursor-pointer"
-          >
-            <span className="material-symbols-outlined">more_vert</span>
-          </button>
-        </div>
-      </div>
 
-      {/* Main Content Layout */}
-      <main className="relative z-10 h-full flex flex-col justify-end pb-32 px-4 md:px-8">
-        {/* Navigation Intelligence Bento Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full max-w-4xl mx-auto">
-          {/* Primary ETA Card */}
-          <div className="col-span-2 glass-panel p-5 rounded-2xl shadow-xl border border-white/50 flex flex-col justify-between h-40">
-            <div className="flex justify-between items-start">
-              <span className="font-label-sm text-xs font-bold text-secondary uppercase tracking-widest">ETA</span>
-              <span className="material-symbols-outlined text-secondary animate-pulse">schedule</span>
+          {/* Timeline */}
+          <div className="space-y-3">
+            {/* Pickup */}
+            <div className="flex items-start gap-2.5">
+              <div className="w-5 h-5 rounded-full bg-emerald-100 text-[#047857] flex items-center justify-center shrink-0 mt-0.5">
+                <span className="material-symbols-outlined text-xs">storefront</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[9px] font-black text-[#047857] uppercase tracking-wider block">
+                  PICKUP
+                </span>
+                <p className="font-bold text-xs text-slate-900 leading-snug">
+                  {pickupAddress}
+                </p>
+              </div>
+            </div>
+
+            {/* Connecting dot */}
+            <div className="pl-2.5 my-0">
+              <div className="w-0.5 h-3 bg-slate-200"></div>
+            </div>
+
+            {/* Drop */}
+            <div className="flex items-start gap-2.5">
+              <div className="w-5 h-5 rounded-full bg-orange-100 text-[#ff5500] flex items-center justify-center shrink-0 mt-0.5">
+                <span className="material-symbols-outlined text-xs">location_on</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[9px] font-black text-[#ff5500] uppercase tracking-wider block">
+                  DROP DESTINATION
+                </span>
+                <p className="font-bold text-xs text-slate-900 leading-snug">
+                  {dropAddress}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic Telemetry Stats Grid */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">
+              DISTANCE
+            </span>
+            <span className="text-xl font-black text-slate-900 block mt-0.5">
+              {distanceKm}
+            </span>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">
+              EST. TIME
+            </span>
+            <span className="text-xl font-black text-[#15803d] block mt-0.5">
+              {estTime}
+            </span>
+          </div>
+        </div>
+
+        {/* Customer Details */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-slate-700">
+              {customerName.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h3 className="font-display-lg text-4xl md:text-5xl font-extrabold text-primary leading-none">14:45</h3>
-              <p className="font-body-md text-xs text-on-surface-variant mt-1 font-medium">Arrival in 24 mins</p>
+              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">
+                CUSTOMER
+              </span>
+              <p className="font-bold text-xs text-slate-900">
+                {customerName}
+              </p>
+              {customerPhone && (
+                <p className="text-[11px] text-slate-500 font-medium">
+                  {customerPhone}
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Distance & Traffic Status */}
-          <div className="glass-panel p-4 rounded-2xl shadow-md border border-white/50 flex flex-col justify-center gap-2">
-            <span className="font-label-sm text-xs font-bold text-outline tracking-wider uppercase">REMAINING</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold text-primary">12.4</span>
-              <span className="text-xs font-bold text-outline">mi</span>
-            </div>
-            <div className="mt-2 flex items-center gap-2 px-2.5 py-1 rounded-full bg-secondary-container/30 w-fit">
-              <div className="w-2 h-2 rounded-full bg-secondary"></div>
-              <span className="text-[10px] font-bold text-secondary uppercase">Light Traffic</span>
-            </div>
-          </div>
-
-          {/* Current Speed */}
-          <div className="glass-panel p-4 rounded-2xl shadow-md border border-white/50 flex flex-col justify-center gap-2">
-            <span className="font-label-sm text-xs font-bold text-outline tracking-wider uppercase">SPEED</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold text-primary transition-all duration-300">{speed}</span>
-              <span className="text-xs font-bold text-outline">mph</span>
-            </div>
-            <div className="mt-2 h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden">
-              <div className="h-full bg-secondary w-[85%] rounded-full transition-all duration-500"></div>
-            </div>
-          </div>
+          <button
+            onClick={handleOpenGoogleMaps}
+            className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer border border-blue-200 transition-colors"
+          >
+            <span className="material-symbols-outlined text-base">directions</span>
+            Maps
+          </button>
         </div>
       </main>
 
-      {/* Bottom Controls Shell */}
-      <footer className="fixed bottom-0 left-0 w-full z-50">
-        {/* Floating Action Controls */}
-        <div className="absolute bottom-24 right-4 flex flex-col gap-3">
+      {/* Bottom Action Bar */}
+      <footer className="fixed bottom-0 left-0 w-full z-40 bg-white border-t border-slate-200/80 p-3.5 shadow-lg">
+        <div className="max-w-md mx-auto flex gap-2.5">
           <button
-            onClick={() => alert('Recalculating best route avoiding congestion...')}
-            className="w-14 h-14 rounded-full bg-primary shadow-2xl flex items-center justify-center text-secondary-fixed hover:scale-105 active:scale-95 transition-all cursor-pointer"
-            title="Recalculate Route"
+            onClick={handleOpenGoogleMaps}
+            className="flex-1 py-3 bg-[#002625] hover:bg-[#0a3d16] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-sm"
           >
-            <span className="material-symbols-outlined text-3xl">navigation</span>
+            <span className="material-symbols-outlined text-base text-[#97fc43]">navigation</span>
+            Open Turn-by-Turn Maps
           </button>
+
           <button
-            onClick={() => alert('Map View Toggled')}
-            className="w-12 h-12 rounded-full glass-panel shadow-lg flex items-center justify-center text-primary border border-white/50 hover:bg-surface transition-all cursor-pointer"
-            title="Layers"
+            onClick={() => navigate('/captain/active-delivery')}
+            className="py-3 px-4 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 cursor-pointer transition-colors"
           >
-            <span className="material-symbols-outlined">layers</span>
+            Verify Arrival
           </button>
-        </div>
-
-        {/* Action Bar */}
-        <div className="glass-panel flex justify-between items-center px-6 py-4 rounded-t-3xl shadow-2xl border-t border-white/50">
-          <div className="flex gap-4">
-            <button
-              onClick={() => setIsMuted(!isMuted)}
-              className="flex flex-col items-center gap-1 group cursor-pointer"
-            >
-              <div className="w-12 h-12 flex items-center justify-center rounded-full bg-surface-container-high group-hover:bg-surface-container-highest transition-colors">
-                <span className="material-symbols-outlined text-on-surface-variant">
-                  {isMuted ? 'volume_off' : 'volume_up'}
-                </span>
-              </div>
-              <span className="font-label-sm text-xs text-on-surface-variant">{isMuted ? 'Muted' : 'Voice'}</span>
-            </button>
-
-            <button
-              onClick={() => alert('Sharing live route tracking link with dispatcher...')}
-              className="flex flex-col items-center gap-1 group cursor-pointer"
-            >
-              <div className="w-12 h-12 flex items-center justify-center rounded-full bg-surface-container-high group-hover:bg-surface-container-highest transition-colors">
-                <span className="material-symbols-outlined text-on-surface-variant">share</span>
-              </div>
-              <span className="font-label-sm text-xs text-on-surface-variant">Share</span>
-            </button>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => navigate('/captain/delivery-verification')}
-              className="bg-secondary text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-lg hover:opacity-90 active:scale-95 transition-all cursor-pointer flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">assignment_turned_in</span>
-              Verify Arrival
-            </button>
-
-            <button
-              onClick={() => navigate('/captain/dashboard')}
-              className="bg-error text-on-error px-6 py-3 rounded-2xl font-bold text-sm shadow-lg shadow-error/20 flex items-center gap-2 hover:opacity-90 active:scale-95 transition-all cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-sm">close</span>
-              Exit Trip
-            </button>
-          </div>
         </div>
       </footer>
     </div>

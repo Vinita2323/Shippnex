@@ -440,4 +440,23 @@ export const captainService = {
   },
 };
 
+export const userService = {
+  getProfile: async () => {
+    try {
+      const response = await API.get('/auth/user/profile');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+  updateProfile: async (data) => {
+    try {
+      const response = await API.put('/auth/user/profile', data);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+};
+
 

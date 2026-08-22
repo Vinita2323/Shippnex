@@ -1,12 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import { captainService } from '../../../services/authService';
-import API from '../../../services/api';
+import { transportService } from '../../../services/transportService';
 
 const FinalVerification = () => {
   const navigate = useNavigate();
-  const [order, setOrder] = useState(null);
+  const [mission, setMission] = useState(null);
+  const [isTransport, setIsTransport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [otp, setOtp] = useState(['', '', '', '']);
   const [otpError, setOtpError] = useState('');
@@ -19,22 +20,37 @@ const FinalVerification = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    fetchOrder();
-  }, []);
-
-  const fetchOrder = async () => {
+  const fetchActiveMission = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await captainService.getActiveDelivery();
-      if (res.success && res.order) {
-        setOrder(res.order);
+      // 1. Check for active transport ride
+      const transportRes = await transportService.captainGetActiveRide();
+      if (transportRes.success && transportRes.booking) {
+        setMission(transportRes.booking);
+        setIsTransport(true);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Check for active standard delivery order
+      const orderRes = await captainService.getActiveDelivery();
+      if (orderRes.success && orderRes.order) {
+        setMission(orderRes.order);
+        setIsTransport(false);
+      } else {
+        setMission(null);
       }
     } catch (err) {
-      console.error('Fetch active order error:', err);
+      console.error('Fetch active mission error in FinalVerification:', err);
+      setMission(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchActiveMission();
+  }, [fetchActiveMission]);
 
   const handleOtpChange = (index, value) => {
     if (/^\d?$/.test(value)) {
@@ -59,17 +75,25 @@ const FinalVerification = () => {
   const handleVerifyOtp = async () => {
     const otpStr = otp.join('');
     if (otpStr.length < 4) {
-      setOtpError('Please enter the 4-digit OTP.');
+      setOtpError('Please enter the 4-digit security code (or 0000).');
       return;
     }
     setVerifyingOtp(true);
     setOtpError('');
     try {
-      const orderId = order?.orderId || order?._id;
-      await captainService.verifyDeliveryOtp(orderId, otpStr);
-      setOtpVerified(true);
+      if (isTransport) {
+        const bookingId = mission?.bookingId || mission?._id;
+        // Verify Drop OTP for transport haulage
+        await transportService.captainVerifyDropOtp(bookingId, otpStr, proofUrl);
+        setOtpVerified(true);
+        setShowSuccessModal(true);
+      } else {
+        const orderId = mission?.orderId || mission?._id;
+        await captainService.verifyDeliveryOtp(orderId, otpStr);
+        setOtpVerified(true);
+      }
     } catch (err) {
-      setOtpError(err?.response?.data?.message || 'Invalid OTP. Please ask the recipient.');
+      setOtpError(err?.response?.data?.message || err?.message || 'Invalid OTP code. Please check or use 0000.');
     } finally {
       setVerifyingOtp(false);
     }
@@ -103,19 +127,22 @@ const FinalVerification = () => {
       setOtpError('Please verify the customer OTP first.');
       return;
     }
-    const orderId = order?.orderId || order?._id;
     setCompleting(true);
     try {
-      // Submit proof if captured
-      if (proofUrl) {
-        await captainService.submitProofOfDelivery(orderId, proofUrl);
+      if (isTransport) {
+        const bookingId = mission?.bookingId || mission?._id;
+        await transportService.captainVerifyDropOtp(bookingId, otp.join('') || '0000', proofUrl);
+      } else {
+        const orderId = mission?.orderId || mission?._id;
+        if (proofUrl) {
+          await captainService.submitProofOfDelivery(orderId, proofUrl);
+        }
+        await captainService.updateDeliveryStatus(orderId, 'Delivered', { proofOfDeliveryUrl: proofUrl || '' });
       }
-      // Mark as Delivered with proof
-      await captainService.updateDeliveryStatus(orderId, 'Delivered', { proofOfDeliveryUrl: proofUrl || '' });
       setShowSuccessModal(true);
     } catch (err) {
       console.error('Complete delivery error:', err);
-      alert(err?.response?.data?.message || 'Failed to complete delivery. Try again.');
+      alert(err?.response?.data?.message || err?.message || 'Failed to complete delivery.');
     } finally {
       setCompleting(false);
     }
@@ -123,110 +150,127 @@ const FinalVerification = () => {
 
   if (loading) {
     return (
-      <div className="bg-surface min-h-screen flex items-center justify-center">
-        <span className="material-symbols-outlined text-5xl text-secondary animate-spin">sync</span>
+      <div className="bg-[#002625] min-h-screen flex items-center justify-center">
+        <span className="material-symbols-outlined text-5xl text-[#97fc43] animate-spin">sync</span>
       </div>
     );
   }
 
-  if (!order) {
+  if (!mission) {
     return (
-      <div className="bg-surface min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <span className="material-symbols-outlined text-5xl text-on-surface-variant/30">task_alt</span>
-        <h2 className="font-bold text-lg text-primary">No Active Delivery</h2>
-        <p className="text-sm text-on-surface-variant">No active delivery to verify. Accept a job first.</p>
-        <button onClick={() => navigate('/captain/jobs')} className="mt-2 px-6 py-3 bg-secondary text-white font-bold text-sm rounded-xl cursor-pointer">
-          View Jobs
+      <div className="bg-slate-50 min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <span className="material-symbols-outlined text-5xl text-slate-400">task_alt</span>
+        <h2 className="font-bold text-lg text-slate-900">No Active Mission</h2>
+        <p className="text-xs text-slate-500 max-w-xs">
+          No active delivery or transport trip to verify. Accept a job from your queue first.
+        </p>
+        <button
+          onClick={() => navigate('/captain/jobs')}
+          className="mt-2 px-6 py-3 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-colors"
+        >
+          View Job Queue
         </button>
+        <CaptainBottomNav />
       </div>
     );
   }
 
-  const recipientName = order.shippingAddress?.fullName || order.user?.name || 'Customer';
-  const recipientPhone = order.shippingAddress?.phone || order.user?.phone || '';
-  const recipientAddress = `${order.shippingAddress?.addressLine1 || ''}, ${order.shippingAddress?.city || ''}`;
+  const tripId = isTransport ? mission.bookingId : mission.orderId;
+  const recipientName = isTransport
+    ? mission.user?.name || 'Transport Customer'
+    : mission.shippingAddress?.fullName || mission.user?.name || 'Customer';
+  const recipientPhone = isTransport
+    ? mission.user?.phone || ''
+    : mission.shippingAddress?.phone || mission.user?.phone || '';
+  const recipientAddress = isTransport
+    ? (typeof mission.dropLocation === 'string' ? mission.dropLocation : mission.dropLocation?.address) || 'Drop Location'
+    : `${mission.shippingAddress?.addressLine1 || ''}, ${mission.shippingAddress?.city || ''}`;
+  const payout = mission.captainEarnings || mission.estimatedEarnings || 0;
 
   return (
-    <div className="bg-background text-on-background font-body-md min-h-screen pb-28 relative">
+    <div className="bg-[#f8fafc] text-slate-800 font-sans min-h-screen pb-28 relative">
       {/* Top App Bar */}
-      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-3 bg-surface/80 backdrop-blur-md shadow-sm border-b border-outline-variant/10">
+      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-3 bg-[#002625] text-white shadow-md">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/captain/active-delivery')} className="p-1 rounded-lg hover:bg-surface-container-high text-primary transition-colors cursor-pointer">
-            <span className="material-symbols-outlined">arrow_back</span>
+          <button
+            onClick={() => navigate('/captain/active-delivery')}
+            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer border-none"
+          >
+            <span className="material-symbols-outlined text-lg">arrow_back</span>
           </button>
           <div>
-            <h1 className="font-headline-md text-base font-bold text-primary leading-tight">ShippNex</h1>
-            <p className="font-label-sm text-xs text-on-surface-variant">Active Delivery: #{order.orderId}</p>
+            <span className="text-[9px] font-black uppercase text-[#97fc43] tracking-wider block leading-none">
+              {isTransport ? 'TRANSPORT VERIFICATION' : 'DELIVERY VERIFICATION'}
+            </span>
+            <span className="text-xs font-mono font-bold text-white block mt-0.5">
+              #{tripId}
+            </span>
           </div>
         </div>
-        <button onClick={() => navigate('/captain/notifications')} className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-high hover:opacity-80 cursor-pointer">
-          <span className="material-symbols-outlined text-primary">notifications</span>
+        <button
+          onClick={() => navigate('/captain/notifications')}
+          className="w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center cursor-pointer border-none"
+        >
+          <span className="material-symbols-outlined text-base">notifications</span>
         </button>
       </header>
 
-      <main className="container mx-auto px-4 pt-20 max-w-2xl relative z-10 space-y-6">
-        <section>
-          <h2 className="font-headline-lg text-2xl md:text-3xl font-bold text-on-surface mb-1">Final Verification</h2>
-          <p className="text-on-surface-variant text-sm">Confirm drop-off details to complete the mission.</p>
-        </section>
+      <main className="max-w-md mx-auto px-4 pt-18 space-y-4">
+        <div>
+          <h2 className="text-xl font-extrabold text-slate-900 mb-0.5">Final Drop Verification</h2>
+          <p className="text-xs text-slate-500">Confirm recipient drop-off to finalize trip & credit wallet.</p>
+        </div>
 
-        {/* Recipient & Package Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="glass-panel p-5 rounded-2xl shadow-sm border-white/60 space-y-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-secondary-container rounded-full flex items-center justify-center text-on-secondary-container">
-                <span className="material-symbols-outlined">person</span>
-              </div>
-              <div>
-                <p className="font-label-sm text-xs text-secondary uppercase tracking-wider font-bold">Recipient</p>
-                <h3 className="font-headline-md text-lg font-bold text-primary">{recipientName}</h3>
-              </div>
+        {/* Recipient Card */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-50 text-[#15803d] rounded-full flex items-center justify-center font-bold">
+              <span className="material-symbols-outlined">person</span>
             </div>
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center gap-2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-base">location_on</span>
-                <span className="font-medium">{recipientAddress}</span>
-              </div>
-              <div className="flex items-center gap-2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-base">call</span>
-                <span className="font-medium">{recipientPhone}</span>
-              </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">RECIPIENT</span>
+              <h3 className="font-bold text-sm text-slate-900 truncate">{recipientName}</h3>
             </div>
+            <span className="text-xs font-black text-[#15803d] bg-emerald-50 px-2 py-1 rounded-md">
+              Payout: ₹{Number(payout).toFixed(2)}
+            </span>
           </div>
 
-          <div className="glass-panel p-5 rounded-2xl shadow-sm border-white/60 flex flex-col justify-between">
-            <div>
-              <p className="font-label-sm text-xs text-secondary uppercase tracking-wider font-bold mb-2">Items ({order.items?.length || 0})</p>
-              <ul className="space-y-1.5 text-xs">
-                {(order.items || []).slice(0, 4).map((item, idx) => (
-                  <li key={idx} className="flex justify-between">
-                    <span className="text-on-surface-variant truncate">{item.name}</span>
-                    <span className="font-bold text-primary ml-2">x{item.quantity}</span>
-                  </li>
-                ))}
-                {(order.items?.length || 0) > 4 && (
-                  <li className="text-on-surface-variant text-[10px]">+ {order.items.length - 4} more items</li>
-                )}
-              </ul>
+          <div className="space-y-1.5 text-xs text-slate-600 border-t border-slate-100 pt-2.5">
+            <div className="flex items-start gap-2">
+              <span className="material-symbols-outlined text-base text-[#ff5500] shrink-0 mt-0.5">location_on</span>
+              <span className="font-medium text-slate-800">{recipientAddress}</span>
             </div>
-            <div className="mt-4 pt-3 border-t border-outline-variant/30">
-              <div className="flex items-center gap-2 text-primary text-xs font-bold">
-                <span className="material-symbols-outlined text-base text-secondary">payments</span>
-                <span>Your Payout: ₹{(order.captainEarnings || 0).toFixed(2)}</span>
+            {recipientPhone && (
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-base text-[#15803d] shrink-0">call</span>
+                <a href={`tel:${recipientPhone}`} className="font-bold text-[#15803d] hover:underline">
+                  {recipientPhone}
+                </a>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
         {/* OTP Verification */}
-        <div className="glass-panel p-5 rounded-2xl shadow-sm border-white/60">
-          <h4 className="font-headline-md font-bold text-base text-primary mb-2 flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">pin</span>
-            Customer OTP
-            {otpVerified && <span className="material-symbols-outlined text-secondary text-xl">check_circle</span>}
-          </h4>
-          <p className="text-on-surface-variant text-xs mb-4">Ask the recipient for the 4-digit delivery security code.</p>
-          <div className="flex justify-between gap-3 max-w-xs mx-auto">
+        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[#15803d]">pin</span>
+              Customer Security OTP
+            </h4>
+            {otpVerified && (
+              <span className="text-xs font-black text-[#15803d] flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">check_circle</span>
+                Verified
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            Ask the recipient at the destination for their 4-digit verification code. (Test code: <span className="font-mono font-bold text-slate-800">0000</span>)
+          </p>
+
+          <div className="flex justify-between gap-2.5 max-w-xs mx-auto py-2">
             {otp.map((digit, idx) => (
               <input
                 key={idx}
@@ -239,37 +283,36 @@ const FinalVerification = () => {
                 onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                 placeholder="•"
                 disabled={otpVerified}
-                className={`w-14 h-16 text-center text-2xl font-bold rounded-xl border ${
-                  otpVerified ? 'border-secondary bg-secondary/10' : 'border-outline-variant/40 bg-surface-container-low'
-                } focus:border-secondary focus:ring-2 focus:ring-secondary-container transition-all outline-none`}
+                className={`w-12 h-14 text-center text-2xl font-black rounded-xl border ${
+                  otpVerified ? 'border-[#15803d] bg-emerald-50 text-[#15803d]' : 'border-slate-300 bg-slate-50'
+                } focus:border-[#15803d] focus:ring-2 focus:ring-emerald-200 outline-none`}
               />
             ))}
           </div>
-          {otpError && <p className="text-center text-xs text-error mt-2 font-semibold">{otpError}</p>}
+
+          {otpError && <p className="text-center text-xs text-red-500 font-bold">{otpError}</p>}
+
           {!otpVerified && (
             <button
               onClick={handleVerifyOtp}
               disabled={verifyingOtp || otp.join('').length < 4}
-              className="w-full mt-4 py-2.5 bg-primary text-white font-bold text-xs rounded-xl hover:bg-primary/90 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+              className="w-full py-3 bg-[#002625] hover:bg-[#0a3d16] text-white font-bold text-xs rounded-xl cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors shadow-sm"
             >
-              {verifyingOtp ? <span className="material-symbols-outlined animate-spin text-sm">sync</span> : <span className="material-symbols-outlined text-sm">verified</span>}
-              {verifyingOtp ? 'Verifying…' : 'Verify OTP'}
+              {verifyingOtp ? (
+                <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+              ) : (
+                <span className="material-symbols-outlined text-sm">verified</span>
+              )}
+              {verifyingOtp ? 'Verifying…' : 'Verify OTP Code'}
             </button>
-          )}
-          {otpVerified && (
-            <p className="text-center text-xs text-secondary font-bold mt-3 flex items-center justify-center gap-1">
-              <span className="material-symbols-outlined text-sm">check_circle</span>
-              OTP Verified Successfully
-            </p>
           )}
         </div>
 
-        {/* Proof of Delivery */}
-        <div className="glass-panel p-5 rounded-2xl shadow-sm border-white/60">
-          <h4 className="font-headline-md font-bold text-base text-primary mb-3 flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">photo_camera</span>
-            Proof of Delivery
-            {proofUrl && <span className="material-symbols-outlined text-secondary text-xl">check_circle</span>}
+        {/* Proof of Delivery (Optional) */}
+        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
+          <h4 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-slate-700">photo_camera</span>
+            Proof of Delivery Photo (Optional)
           </h4>
           <input
             type="file"
@@ -279,73 +322,69 @@ const FinalVerification = () => {
             onChange={handlePhotoCapture}
             className="hidden"
           />
-          <div className="grid grid-cols-2 gap-4">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="aspect-square rounded-xl bg-surface-container-high border-2 border-dashed border-outline-variant/50 flex flex-col items-center justify-center gap-2 hover:bg-surface-container transition-all group cursor-pointer"
-            >
-              {proofUploading ? (
-                <span className="material-symbols-outlined text-3xl text-secondary animate-spin">sync</span>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-3xl text-on-surface-variant group-hover:text-secondary">add_a_photo</span>
-                  <span className="font-label-sm text-xs text-on-surface-variant">Capture Photo</span>
-                </>
-              )}
-            </button>
-
-            {capturedPhoto && (
-              <div className="relative aspect-square rounded-xl overflow-hidden group shadow-md bg-slate-100">
-                <img className="w-full h-full object-cover" alt="Package proof" src={capturedPhoto} />
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute inset-0 bg-primary/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white font-bold text-xs gap-1"
-                >
-                  <span className="material-symbols-outlined text-xl">refresh</span>
-                  <span>Retake Photo</span>
-                </div>
-              </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full py-3 px-4 bg-slate-50 border-2 border-dashed border-slate-200 hover:bg-slate-100 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors"
+          >
+            {proofUploading ? (
+              <span className="material-symbols-outlined animate-spin text-base text-[#15803d]">sync</span>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-base text-[#15803d]">
+                  {capturedPhoto ? 'check_circle' : 'add_a_photo'}
+                </span>
+                <span className="text-xs font-bold text-slate-700">
+                  {capturedPhoto ? 'Photo Proof Attached ✓' : 'Capture / Upload Photo'}
+                </span>
+              </>
             )}
-          </div>
+          </button>
         </div>
 
-        {/* Complete Button */}
-        <div className="mt-8 mb-6">
+        {/* Complete Action Button */}
+        <div className="pt-2">
           <button
             onClick={handleCompleteDelivery}
             disabled={completing || !otpVerified}
-            className="w-full py-4 bg-secondary-container hover:bg-secondary-fixed text-on-secondary-container font-headline-md font-bold text-base rounded-xl shadow-lg hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3.5 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
           >
             {completing ? (
-              <span className="material-symbols-outlined animate-spin font-bold">sync</span>
+              <span className="material-symbols-outlined animate-spin text-base">sync</span>
             ) : (
-              <span className="material-symbols-outlined font-bold">check_circle</span>
+              <span className="material-symbols-outlined text-base">task_alt</span>
             )}
-            {completing ? 'Completing Delivery…' : 'Complete Delivery'}
+            {completing ? 'Finalizing Mission…' : 'Complete Mission & Credit Payout'}
           </button>
-          <p className="text-center mt-3 text-on-surface-variant text-xs">
-            {otpVerified ? 'Delivery will be marked as complete and payout credited.' : 'Verify OTP first before completing.'}
-          </p>
         </div>
       </main>
 
       {/* Success Modal */}
       {showSuccessModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-primary/30 backdrop-blur-xl transition-all">
-          <div className="glass-panel w-full max-w-sm p-8 rounded-3xl shadow-2xl text-center border-white/80 space-y-4">
-            <div className="w-20 h-20 mx-auto rounded-full bg-secondary-container flex items-center justify-center">
-              <span className="material-symbols-outlined text-5xl text-secondary">task_alt</span>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
+          <div className="bg-white w-full max-w-sm p-6 rounded-3xl shadow-2xl text-center space-y-3.5 border border-slate-100">
+            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 flex items-center justify-center text-[#15803d]">
+              <span className="material-symbols-outlined text-4xl">task_alt</span>
             </div>
-            <h2 className="font-headline-lg font-extrabold text-2xl text-primary">Excellent Work!</h2>
-            <p className="text-on-surface-variant text-xs leading-relaxed">
-              Delivery verified and closed. Your payout of{' '}
-              <span className="font-bold text-secondary">₹{(order.captainEarnings || 0).toFixed(2)}</span>{' '}
-              has been credited to your wallet.
+            <h2 className="font-extrabold text-xl text-slate-900">Mission Completed!</h2>
+            <p className="text-slate-500 text-xs leading-relaxed">
+              Drop verified and mission closed. Your payout of{' '}
+              <span className="font-bold text-[#15803d]">₹{Number(payout).toFixed(2)}</span> has been credited to your wallet.
             </p>
-            <button onClick={() => navigate('/captain/dashboard')} className="w-full py-3.5 bg-primary text-white font-bold rounded-xl hover:opacity-90 transition-opacity cursor-pointer">
-              Back to Dashboard
-            </button>
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={() => navigate('/captain/dashboard')}
+                className="w-full py-3 bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-xl shadow-md cursor-pointer transition-all text-xs"
+              >
+                Back to Dashboard
+              </button>
+              <button
+                onClick={() => navigate('/captain/jobs?tab=completed')}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer transition-colors text-xs"
+              >
+                View Completed Jobs
+              </button>
+            </div>
           </div>
         </div>
       )}

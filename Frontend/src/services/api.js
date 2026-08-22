@@ -14,22 +14,26 @@ API.interceptors.request.use(
     const currentPath = window.location.pathname;
     const requestUrl = config.url || '';
 
-    if (currentPath.startsWith('/seller') || requestUrl.includes('/seller')) {
-      token =
-        localStorage.getItem('shippnex_seller_token') ||
-        localStorage.getItem('shippnex_user_token');
-    } else if (currentPath.startsWith('/admin') || requestUrl.includes('/admin')) {
-      token =
-        localStorage.getItem('shippnex_admin_token') ||
-        localStorage.getItem('shippnex_user_token');
+    // Route-specific or endpoint-specific token resolution
+    if (requestUrl.includes('/captain')) {
+      token = localStorage.getItem('shippnex_captain_token');
+    } else if (requestUrl.includes('/seller')) {
+      token = localStorage.getItem('shippnex_seller_token');
+    } else if (requestUrl.includes('/admin')) {
+      token = localStorage.getItem('shippnex_admin_token');
     } else if (
-      currentPath.startsWith('/captain') ||
-      currentPath.startsWith('/delivery') ||
-      requestUrl.includes('/captain')
+      requestUrl.includes('/cart') ||
+      requestUrl.includes('/wishlist') ||
+      requestUrl.includes('/user/') ||
+      requestUrl.includes('/auth/user')
     ) {
-      token =
-        localStorage.getItem('shippnex_captain_token') ||
-        localStorage.getItem('shippnex_user_token');
+      token = localStorage.getItem('shippnex_user_token');
+    } else if (currentPath.startsWith('/seller')) {
+      token = localStorage.getItem('shippnex_seller_token');
+    } else if (currentPath.startsWith('/admin')) {
+      token = localStorage.getItem('shippnex_admin_token');
+    } else if (currentPath.startsWith('/captain') || currentPath.startsWith('/delivery')) {
+      token = localStorage.getItem('shippnex_captain_token');
     } else {
       token =
         localStorage.getItem('shippnex_user_token') ||
