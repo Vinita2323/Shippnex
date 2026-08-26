@@ -1,10 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { transportService } from '../../../services/transportService';
 import { captainService } from '../../../services/authService';
 
 const LogisticsNavigation = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  const requestedType = searchParams.get('type') || location.state?.type; // 'order' | 'transport'
+  const requestedOrderId = searchParams.get('orderId') || location.state?.orderId;
+  const requestedBookingId = searchParams.get('bookingId') || location.state?.bookingId;
+
   const [activeItem, setActiveItem] = useState(null);
   const [isTransport, setIsTransport] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -12,19 +19,47 @@ const LogisticsNavigation = () => {
   const fetchActiveMission = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Check for active transport haulage ride
-      const transportRes = await transportService.captainGetActiveRide();
-      if (transportRes.success && transportRes.booking) {
-        setActiveItem(transportRes.booking);
-        setIsTransport(true);
+      if (requestedType === 'order' || requestedOrderId) {
+        const orderRes = await captainService.getActiveDelivery();
+        if (orderRes.success && orderRes.order) {
+          setActiveItem(orderRes.order);
+          setIsTransport(false);
+        } else {
+          setActiveItem(null);
+        }
         setLoading(false);
         return;
       }
 
-      // 2. Check for active standard delivery order
-      const orderRes = await captainService.getActiveDelivery();
-      if (orderRes.success && orderRes.order) {
-        setActiveItem(orderRes.order);
+      if (requestedType === 'transport' || requestedBookingId) {
+        const transportRes = await transportService.captainGetActiveRide();
+        if (transportRes.success && transportRes.booking) {
+          setActiveItem(transportRes.booking);
+          setIsTransport(true);
+        } else {
+          setActiveItem(null);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Check both concurrently
+      const [orderRes, transportRes] = await Promise.allSettled([
+        captainService.getActiveDelivery(),
+        transportService.captainGetActiveRide(),
+      ]);
+
+      const foundOrder = orderRes.status === 'fulfilled' && orderRes.value?.success ? orderRes.value.order : null;
+      const foundTransport = transportRes.status === 'fulfilled' && transportRes.value?.success ? transportRes.value.booking : null;
+
+      if (foundOrder && !foundTransport) {
+        setActiveItem(foundOrder);
+        setIsTransport(false);
+      } else if (foundTransport && !foundOrder) {
+        setActiveItem(foundTransport);
+        setIsTransport(true);
+      } else if (foundOrder && foundTransport) {
+        setActiveItem(foundOrder);
         setIsTransport(false);
       } else {
         setActiveItem(null);
@@ -35,7 +70,7 @@ const LogisticsNavigation = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [requestedType, requestedOrderId, requestedBookingId]);
 
   useEffect(() => {
     fetchActiveMission();
@@ -87,6 +122,10 @@ const LogisticsNavigation = () => {
   const estTime = activeItem.estimatedDurationMin ? `${activeItem.estimatedDurationMin} mins` : '15-25 mins';
   const payout = activeItem.captainEarnings || 0;
 
+  const returnUrl = isTransport
+    ? `/captain/active-delivery?type=transport&bookingId=${activeItem.bookingId || activeItem._id}`
+    : `/captain/active-delivery?type=order&orderId=${activeItem.orderId || activeItem._id}`;
+
   const handleOpenGoogleMaps = () => {
     const destinationQuery = encodeURIComponent(dropAddress);
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}`, '_blank');
@@ -102,7 +141,7 @@ const LogisticsNavigation = () => {
       <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 py-3 bg-[#002625] text-white shadow-md">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate('/captain/active-delivery')}
+            onClick={() => navigate(returnUrl)}
             className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer border-none"
           >
             <span className="material-symbols-outlined text-lg">arrow_back</span>
@@ -242,7 +281,7 @@ const LogisticsNavigation = () => {
           </button>
 
           <button
-            onClick={() => navigate('/captain/active-delivery')}
+            onClick={() => navigate(returnUrl)}
             className="py-3 px-4 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 cursor-pointer transition-colors"
           >
             Verify Arrival

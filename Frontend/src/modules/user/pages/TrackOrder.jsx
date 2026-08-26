@@ -133,24 +133,6 @@ const TrackOrder = () => {
             </span>
           </div>
 
-          {/* Delivery OTP Box for Customer */}
-          {deliveryOtp && orderStatus !== 'Delivered' && (
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
-                  <KeyRound size={16} />
-                </div>
-                <div>
-                  <span className="text-[10px] font-black uppercase text-emerald-900 tracking-wider block">Delivery Verification OTP</span>
-                  <span className="text-[11px] text-emerald-700">Share this code with the delivery partner upon arrival</span>
-                </div>
-              </div>
-              <div className="bg-white px-3 py-1.5 rounded-lg border border-emerald-300 shadow-xs font-mono font-black text-base text-emerald-900 tracking-widest">
-                {deliveryOtp}
-              </div>
-            </div>
-          )}
-
           {/* Rejection Alert Box */}
           {orderStatus === 'Rejected' && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-xs mt-1">

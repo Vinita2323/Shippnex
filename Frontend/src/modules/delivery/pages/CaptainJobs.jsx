@@ -143,7 +143,15 @@ const CaptainJobs = () => {
   };
 
   const confirmJobAcceptance = () => {
-    navigate('/captain/active-delivery');
+    if (!acceptedJob) {
+      navigate('/captain/active-delivery');
+      return;
+    }
+    const isTrp = acceptedJob.isTransport || acceptedJob.bookingId;
+    const url = isTrp
+      ? `/captain/active-delivery?type=transport&bookingId=${acceptedJob.bookingId || acceptedJob._id}`
+      : `/captain/active-delivery?type=order&orderId=${acceptedJob.orderId || acceptedJob._id}`;
+    navigate(url);
   };
 
   // Normalize order data for delivery and completed tabs
@@ -513,7 +521,13 @@ const CaptainJobs = () => {
                             </button>
                           ) : (
                             <button
-                              onClick={() => navigate('/captain/active-delivery')}
+                              onClick={() => {
+                                const isTrp = isTransport || order?.bookingId;
+                                const url = isTrp
+                                  ? `/captain/active-delivery?type=transport&bookingId=${order.bookingId || order._id}`
+                                  : `/captain/active-delivery?type=order&orderId=${order.orderId || order._id}`;
+                                navigate(url);
+                              }}
                               className="w-1/2 bg-[#15803d] hover:bg-[#166534] py-2 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1 shadow-2xs transition-all cursor-pointer"
                             >
                               Continue

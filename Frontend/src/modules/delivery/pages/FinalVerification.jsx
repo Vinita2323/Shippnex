@@ -1,11 +1,18 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import { captainService } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
 
 const FinalVerification = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  const requestedType = searchParams.get('type') || location.state?.type; // 'order' | 'transport'
+  const requestedOrderId = searchParams.get('orderId') || location.state?.orderId;
+  const requestedBookingId = searchParams.get('bookingId') || location.state?.bookingId;
+
   const [mission, setMission] = useState(null);
   const [isTransport, setIsTransport] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -23,20 +30,53 @@ const FinalVerification = () => {
   const fetchActiveMission = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Check for active transport ride
-      const transportRes = await transportService.captainGetActiveRide();
-      if (transportRes.success && transportRes.booking) {
-        setMission(transportRes.booking);
-        setIsTransport(true);
+      if (requestedType === 'order' || requestedOrderId) {
+        const orderRes = await captainService.getActiveDelivery();
+        if (orderRes.success && orderRes.order) {
+          setMission(orderRes.order);
+          setIsTransport(false);
+          setOtpVerified(true); // No OTP required for product delivery
+        } else {
+          setMission(null);
+        }
         setLoading(false);
         return;
       }
 
-      // 2. Check for active standard delivery order
-      const orderRes = await captainService.getActiveDelivery();
-      if (orderRes.success && orderRes.order) {
-        setMission(orderRes.order);
+      if (requestedType === 'transport' || requestedBookingId) {
+        const transportRes = await transportService.captainGetActiveRide();
+        if (transportRes.success && transportRes.booking) {
+          setMission(transportRes.booking);
+          setIsTransport(true);
+          setOtpVerified(false);
+        } else {
+          setMission(null);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // If no param, check both
+      const [orderRes, transportRes] = await Promise.allSettled([
+        captainService.getActiveDelivery(),
+        transportService.captainGetActiveRide(),
+      ]);
+
+      const foundOrder = orderRes.status === 'fulfilled' && orderRes.value?.success ? orderRes.value.order : null;
+      const foundTransport = transportRes.status === 'fulfilled' && transportRes.value?.success ? transportRes.value.booking : null;
+
+      if (foundOrder && !foundTransport) {
+        setMission(foundOrder);
         setIsTransport(false);
+        setOtpVerified(true);
+      } else if (foundTransport && !foundOrder) {
+        setMission(foundTransport);
+        setIsTransport(true);
+        setOtpVerified(false);
+      } else if (foundOrder && foundTransport) {
+        setMission(foundOrder);
+        setIsTransport(false);
+        setOtpVerified(true);
       } else {
         setMission(null);
       }
@@ -46,7 +86,7 @@ const FinalVerification = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [requestedType, requestedOrderId, requestedBookingId]);
 
   useEffect(() => {
     fetchActiveMission();
@@ -123,8 +163,8 @@ const FinalVerification = () => {
   };
 
   const handleCompleteDelivery = async () => {
-    if (!otpVerified) {
-      setOtpError('Please verify the customer OTP first.');
+    if (isTransport && !otpVerified) {
+      setOtpError('Please verify the customer Drop OTP first.');
       return;
     }
     setCompleting(true);
@@ -252,61 +292,73 @@ const FinalVerification = () => {
           </div>
         </div>
 
-        {/* OTP Verification */}
-        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[#15803d]">pin</span>
-              Customer Security OTP
-            </h4>
-            {otpVerified && (
-              <span className="text-xs font-black text-[#15803d] flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
-                Verified
-              </span>
+        {/* OTP Verification (Transport Only) */}
+        {isTransport ? (
+          <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[#15803d]">pin</span>
+                Transport Drop Security OTP
+              </h4>
+              {otpVerified && (
+                <span className="text-xs font-black text-[#15803d] flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">check_circle</span>
+                  Verified
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500">
+              Ask the recipient at the destination for their 4-digit Drop OTP code. (Test code: <span className="font-mono font-bold text-slate-800">0000</span>)
+            </p>
+
+            <div className="flex justify-between gap-2.5 max-w-xs mx-auto py-2">
+              {otp.map((digit, idx) => (
+                <input
+                  key={idx}
+                  id={`otp-input-${idx}`}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                  placeholder="•"
+                  disabled={otpVerified}
+                  className={`w-12 h-14 text-center text-2xl font-black rounded-xl border ${
+                    otpVerified ? 'border-[#15803d] bg-emerald-50 text-[#15803d]' : 'border-slate-300 bg-slate-50'
+                  } focus:border-[#15803d] focus:ring-2 focus:ring-emerald-200 outline-none`}
+                />
+              ))}
+            </div>
+
+            {otpError && <p className="text-center text-xs text-red-500 font-bold">{otpError}</p>}
+
+            {!otpVerified && (
+              <button
+                onClick={handleVerifyOtp}
+                disabled={verifyingOtp || otp.join('').length < 4}
+                className="w-full py-3 bg-[#002625] hover:bg-[#0a3d16] text-white font-bold text-xs rounded-xl cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors shadow-sm"
+              >
+                {verifyingOtp ? (
+                  <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+                ) : (
+                  <span className="material-symbols-outlined text-sm">verified</span>
+                )}
+                {verifyingOtp ? 'Verifying…' : 'Verify Transport Drop OTP'}
+              </button>
             )}
           </div>
-          <p className="text-xs text-slate-500">
-            Ask the recipient at the destination for their 4-digit verification code. (Test code: <span className="font-mono font-bold text-slate-800">0000</span>)
-          </p>
-
-          <div className="flex justify-between gap-2.5 max-w-xs mx-auto py-2">
-            {otp.map((digit, idx) => (
-              <input
-                key={idx}
-                id={`otp-input-${idx}`}
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                value={digit}
-                onChange={(e) => handleOtpChange(idx, e.target.value)}
-                onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                placeholder="•"
-                disabled={otpVerified}
-                className={`w-12 h-14 text-center text-2xl font-black rounded-xl border ${
-                  otpVerified ? 'border-[#15803d] bg-emerald-50 text-[#15803d]' : 'border-slate-300 bg-slate-50'
-                } focus:border-[#15803d] focus:ring-2 focus:ring-emerald-200 outline-none`}
-              />
-            ))}
+        ) : (
+          <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200/80 shadow-2xs space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#15803d] text-lg">check_circle</span>
+              <h4 className="font-bold text-xs text-[#15803d] uppercase tracking-wider">Direct Product Delivery</h4>
+            </div>
+            <p className="text-xs text-slate-600">
+              Hand over the package to the customer. No OTP code is required for product delivery.
+            </p>
           </div>
-
-          {otpError && <p className="text-center text-xs text-red-500 font-bold">{otpError}</p>}
-
-          {!otpVerified && (
-            <button
-              onClick={handleVerifyOtp}
-              disabled={verifyingOtp || otp.join('').length < 4}
-              className="w-full py-3 bg-[#002625] hover:bg-[#0a3d16] text-white font-bold text-xs rounded-xl cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors shadow-sm"
-            >
-              {verifyingOtp ? (
-                <span className="material-symbols-outlined animate-spin text-sm">sync</span>
-              ) : (
-                <span className="material-symbols-outlined text-sm">verified</span>
-              )}
-              {verifyingOtp ? 'Verifying…' : 'Verify OTP Code'}
-            </button>
-          )}
-        </div>
+        )}
 
         {/* Proof of Delivery (Optional) */}
         <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
@@ -346,7 +398,7 @@ const FinalVerification = () => {
         <div className="pt-2">
           <button
             onClick={handleCompleteDelivery}
-            disabled={completing || !otpVerified}
+            disabled={completing || (isTransport && !otpVerified)}
             className="w-full py-3.5 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
           >
             {completing ? (
@@ -354,7 +406,7 @@ const FinalVerification = () => {
             ) : (
               <span className="material-symbols-outlined text-base">task_alt</span>
             )}
-            {completing ? 'Finalizing Mission…' : 'Complete Mission & Credit Payout'}
+            {completing ? 'Finalizing Delivery…' : isTransport ? 'Complete Transport Ride & Credit Payout' : 'Complete Delivery & Credit Payout'}
           </button>
         </div>
       </main>

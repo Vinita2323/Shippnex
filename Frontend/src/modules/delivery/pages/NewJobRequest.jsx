@@ -48,7 +48,7 @@ const NewJobRequest = () => {
       const bookingId = job.bookingId || job._id;
       await transportService.captainAcceptRequest(bookingId);
       markJobAsDismissed(job);
-      navigate('/captain/active-delivery');
+      navigate(`/captain/active-delivery?type=transport&bookingId=${bookingId}`);
     } catch (err) {
       console.error('Accept job error:', err);
       alert(err?.response?.data?.message || err?.message || 'Failed to accept shipment.');

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import { captainService } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
@@ -25,8 +25,17 @@ const ORDER_STEP_MAP = {
 
 const ActiveDelivery = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  const requestedType = searchParams.get('type') || location.state?.type; // 'order' | 'transport'
+  const requestedOrderId = searchParams.get('orderId') || location.state?.orderId;
+  const requestedBookingId = searchParams.get('bookingId') || location.state?.bookingId;
+
   const [activeItem, setActiveItem] = useState(null);
   const [isTransport, setIsTransport] = useState(false);
+  const [activeOrder, setActiveOrder] = useState(null);
+  const [activeTransport, setActiveTransport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentStep, setCurrentStep] = useState(1);
   const [showCallingModal, setShowCallingModal] = useState(false);
@@ -41,7 +50,7 @@ const ActiveDelivery = () => {
   const [newMessage, setNewMessage] = useState('');
   const [statusUpdating, setStatusUpdating] = useState(false);
 
-  // OTP Verification Modals
+  // OTP Verification Modals (Used ONLY for Transport Delivery)
   const [showPickupOtpModal, setShowPickupOtpModal] = useState(false);
   const [showDropOtpModal, setShowDropOtpModal] = useState(false);
   const [otpDigits, setOtpDigits] = useState(['', '', '', '']);
@@ -58,22 +67,59 @@ const ActiveDelivery = () => {
   const fetchActiveDelivery = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Check for active transport haulage ride first
-      const transportRes = await transportService.captainGetActiveRide();
-      if (transportRes.success && transportRes.booking) {
-        setActiveItem(transportRes.booking);
-        setIsTransport(true);
-        setCurrentStep(TRANSPORT_STEP_MAP[transportRes.booking.status] || 1);
+      if (requestedType === 'order' || requestedOrderId) {
+        const orderRes = await captainService.getActiveDelivery();
+        if (orderRes.success && orderRes.order) {
+          setActiveItem(orderRes.order);
+          setActiveOrder(orderRes.order);
+          setIsTransport(false);
+          setCurrentStep(ORDER_STEP_MAP[orderRes.order.captainStatus] || 1);
+        } else {
+          setActiveItem(null);
+        }
         setLoading(false);
         return;
       }
 
-      // 2. Check for active standard delivery order
-      const orderRes = await captainService.getActiveDelivery();
-      if (orderRes.success && orderRes.order) {
-        setActiveItem(orderRes.order);
+      if (requestedType === 'transport' || requestedBookingId) {
+        const transportRes = await transportService.captainGetActiveRide();
+        if (transportRes.success && transportRes.booking) {
+          setActiveItem(transportRes.booking);
+          setActiveTransport(transportRes.booking);
+          setIsTransport(true);
+          setCurrentStep(TRANSPORT_STEP_MAP[transportRes.booking.status] || 1);
+        } else {
+          setActiveItem(null);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // If no explicit preference passed, check both concurrently
+      const [orderRes, transportRes] = await Promise.allSettled([
+        captainService.getActiveDelivery(),
+        transportService.captainGetActiveRide(),
+      ]);
+
+      const foundOrder = orderRes.status === 'fulfilled' && orderRes.value?.success ? orderRes.value.order : null;
+      const foundTransport = transportRes.status === 'fulfilled' && transportRes.value?.success ? transportRes.value.booking : null;
+
+      setActiveOrder(foundOrder);
+      setActiveTransport(foundTransport);
+
+      if (foundOrder && !foundTransport) {
+        setActiveItem(foundOrder);
         setIsTransport(false);
-        setCurrentStep(ORDER_STEP_MAP[orderRes.order.captainStatus] || 1);
+        setCurrentStep(ORDER_STEP_MAP[foundOrder.captainStatus] || 1);
+      } else if (foundTransport && !foundOrder) {
+        setActiveItem(foundTransport);
+        setIsTransport(true);
+        setCurrentStep(TRANSPORT_STEP_MAP[foundTransport.status] || 1);
+      } else if (foundOrder && foundTransport) {
+        // Default to order
+        setActiveItem(foundOrder);
+        setIsTransport(false);
+        setCurrentStep(ORDER_STEP_MAP[foundOrder.captainStatus] || 1);
       } else {
         setActiveItem(null);
       }
@@ -83,23 +129,27 @@ const ActiveDelivery = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [requestedType, requestedOrderId, requestedBookingId]);
 
   useEffect(() => {
     fetchActiveDelivery();
   }, [fetchActiveDelivery]);
 
-  // ── Status Updates for Standard Order ──
+  // ── Status Updates for Standard Order (No OTP Required) ──
   const handleUpdateOrderStatus = async (newStatus) => {
     if (!activeItem) return;
     setStatusUpdating(true);
     try {
-      await captainService.updateDeliveryStatus(activeItem.orderId || activeItem._id, newStatus);
+      await captainService.updateDeliveryStatus(activeItem.orderId || activeItem._id, newStatus, { proofUrl });
       setCurrentStep(ORDER_STEP_MAP[newStatus] || 1);
-      setActiveItem((prev) => ({ ...prev, captainStatus: newStatus }));
+      setActiveItem((prev) => ({
+        ...prev,
+        captainStatus: newStatus,
+        orderStatus: newStatus === 'Delivered' ? 'Delivered' : prev?.orderStatus,
+      }));
 
       if (newStatus === 'Delivered') {
-        navigate('/captain/delivery-verification');
+        setShowSuccessModal(true);
       }
     } catch (err) {
       console.error('Status update error:', err);
@@ -312,11 +362,43 @@ const ActiveDelivery = () => {
       </header>
 
       <main className="pt-20 md:pt-24 px-3.5 max-w-3xl mx-auto space-y-3 mt-2.5">
+        {/* Dual-Mission Switcher if both order and transport are active */}
+        {activeOrder && activeTransport && (
+          <div className="bg-white/80 backdrop-blur-sm p-1 rounded-2xl border border-slate-200 shadow-xs flex gap-1 mb-1">
+            <button
+              onClick={() => {
+                setActiveItem(activeOrder);
+                setIsTransport(false);
+                setCurrentStep(ORDER_STEP_MAP[activeOrder.captainStatus] || 1);
+              }}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                !isTransport ? 'bg-[#366b00] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>📦</span>
+              <span>Product Delivery (#{activeOrder.orderId})</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveItem(activeTransport);
+                setIsTransport(true);
+                setCurrentStep(TRANSPORT_STEP_MAP[activeTransport.status] || 1);
+              }}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                isTransport ? 'bg-[#366b00] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>🚚</span>
+              <span>Transport Haulage (#{activeTransport.bookingId})</span>
+            </button>
+          </div>
+        )}
+
         {/* Active Card Header */}
         <div className="glass-panel p-3.5 rounded-2xl shadow-xs border-white/60 flex justify-between items-center gap-2">
           <div className="min-w-0">
             <span className="font-label-sm text-[10px] text-[#366b00] tracking-widest uppercase font-black block">
-              {isTransport ? 'Active Transport Ride' : 'Active Delivery'}
+              {isTransport ? 'Active Transport Ride' : 'Active Product Delivery'}
             </span>
             <h2 className="font-headline-md text-base md:text-lg font-black text-primary truncate mt-0.5">
               #{tripId}
@@ -398,7 +480,7 @@ const ActiveDelivery = () => {
         {/* ── PROGRESS & ACTION BUTTONS ── */}
         <div className="glass-panel p-4 rounded-2xl shadow-xs border-white/60 space-y-3.5">
           <h3 className="font-label-sm text-xs text-outline tracking-widest uppercase font-black">
-            {isTransport ? 'Ride Progress & Verification' : 'Delivery Progress'}
+            {isTransport ? 'Transport Ride Milestones' : 'Product Delivery Progress'}
           </h3>
 
           {/* Transport Milestones */}
@@ -434,10 +516,10 @@ const ActiveDelivery = () => {
             // Standard Delivery Milestones
             <div className="space-y-3.5 relative before:absolute before:left-[9px] before:top-1.5 before:bottom-1.5 before:w-[2px] before:bg-outline-variant/40">
               {[
-                { step: 1, label: 'Order Accepted', sub: 'Proceed to store' },
-                { step: 2, label: 'Reached Store', sub: 'Collecting packages' },
-                { step: 3, label: 'Out for Delivery', sub: 'En route to customer' },
-                { step: 4, label: 'Delivered', sub: 'OTP verified' },
+                { step: 1, label: 'Order Accepted', sub: 'Proceed to store / seller' },
+                { step: 2, label: 'Reached Store', sub: 'Collecting packages from seller (No OTP needed)' },
+                { step: 3, label: 'Out for Delivery', sub: 'En route to customer drop location' },
+                { step: 4, label: 'Delivered', sub: 'Package handed over & payout credited' },
               ].map(({ step, label, sub }) => (
                 <div key={step} className="flex gap-3 relative z-10 items-start">
                   <div
@@ -532,33 +614,73 @@ const ActiveDelivery = () => {
               </button>
             )}
 
-            {/* Standard Delivery Actions */}
+            {/* ── Standard Product Delivery Actions (NO OTP REQUIRED) ── */}
             {!isTransport && activeItem.captainStatus === 'Accepted' && (
               <button
                 onClick={() => handleUpdateOrderStatus('At Pickup')}
                 disabled={statusUpdating}
-                className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl font-bold text-xs shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl font-bold text-xs shadow-md cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
               >
+                {statusUpdating ? (
+                  <span className="material-symbols-outlined animate-spin text-base">sync</span>
+                ) : (
+                  <span className="material-symbols-outlined text-base">store</span>
+                )}
                 Arrived at Store / Pickup
               </button>
             )}
+
             {!isTransport && activeItem.captainStatus === 'At Pickup' && (
               <button
                 onClick={() => handleUpdateOrderStatus('In Transit')}
                 disabled={statusUpdating}
-                className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-bold text-xs shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-bold text-xs shadow-md cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
               >
-                Pick Up & Start Delivery
+                {statusUpdating ? (
+                  <span className="material-symbols-outlined animate-spin text-base">sync</span>
+                ) : (
+                  <span className="material-symbols-outlined text-base">local_shipping</span>
+                )}
+                Pick Up Package & Start Delivery
               </button>
             )}
+
             {!isTransport &&
               (activeItem.captainStatus === 'In Transit' || activeItem.captainStatus === 'Picked Up') && (
-                <button
-                  onClick={() => navigate('/captain/delivery-verification')}
-                  className="w-full py-3.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-2xl font-bold text-xs shadow-lg cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  Complete Drop-off (Verify OTP)
-                </button>
+                <div className="space-y-2">
+                  {/* Optional Photo Proof for standard order */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handlePhotoCapture}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full py-2.5 px-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-xs font-bold text-slate-700 flex items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-100"
+                  >
+                    <span className="material-symbols-outlined text-base text-[#366b00]">
+                      {capturedPhoto ? 'check_circle' : 'photo_camera'}
+                    </span>
+                    {capturedPhoto ? 'Delivery Photo Attached ✓' : 'Attach Delivery Photo (Optional)'}
+                  </button>
+
+                  <button
+                    onClick={() => handleUpdateOrderStatus('Delivered')}
+                    disabled={statusUpdating}
+                    className="w-full py-3.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-2xl font-bold text-xs shadow-lg cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
+                  >
+                    {statusUpdating ? (
+                      <span className="material-symbols-outlined animate-spin text-base">sync</span>
+                    ) : (
+                      <span className="material-symbols-outlined text-base">task_alt</span>
+                    )}
+                    Complete Delivery & Mark Delivered
+                  </button>
+                </div>
               )}
           </div>
         </div>
@@ -576,14 +698,14 @@ const ActiveDelivery = () => {
         </div>
       </main>
 
-      {/* ── MODAL 1: PICKUP OTP VERIFICATION ── */}
+      {/* ── MODAL 1: PICKUP OTP VERIFICATION (Transport Only) ── */}
       {showPickupOtpModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-2">
               <h3 className="font-bold text-base text-slate-900 flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[#366b00]">pin</span>
-                Enter Pickup OTP
+                Enter Transport Pickup OTP
               </h3>
               <button
                 onClick={() => setShowPickupOtpModal(false)}
@@ -633,14 +755,14 @@ const ActiveDelivery = () => {
         </div>
       )}
 
-      {/* ── MODAL 2: DROP OTP VERIFICATION ── */}
+      {/* ── MODAL 2: DROP OTP VERIFICATION (Transport Only) ── */}
       {showDropOtpModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-2">
               <h3 className="font-bold text-base text-slate-900 flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[#ff5500]">verified</span>
-                Enter Drop OTP
+                Enter Transport Drop OTP
               </h3>
               <button
                 onClick={() => setShowDropOtpModal(false)}
@@ -719,9 +841,11 @@ const ActiveDelivery = () => {
             <div className="w-20 h-20 mx-auto rounded-full bg-emerald-100 flex items-center justify-center">
               <span className="material-symbols-outlined text-5xl text-[#15803d]">task_alt</span>
             </div>
-            <h2 className="font-headline-lg font-extrabold text-2xl text-slate-900">Ride Completed!</h2>
+            <h2 className="font-headline-lg font-extrabold text-2xl text-slate-900">
+              {isTransport ? 'Ride Completed!' : 'Order Delivered!'}
+            </h2>
             <p className="text-slate-500 text-xs leading-relaxed">
-              Transport verified and finished. Your payout of{' '}
+              {isTransport ? 'Transport verified and finished.' : 'Product order successfully delivered.'} Your payout of{' '}
               <span className="font-bold text-[#15803d]">₹{payout.toFixed(2)}</span> has been credited to your wallet.
             </p>
             <div className="space-y-2 pt-2">

@@ -278,13 +278,42 @@ export const updateSellerProfile = async (req, res, next) => {
     if (ifscCode !== undefined) seller.ifscCode = ifscCode;
     if (categories !== undefined) seller.categories = categories;
 
-    if (storeAddress !== undefined || city !== undefined || state !== undefined || pincode !== undefined) {
+    const {
+      lat,
+      lng,
+      area,
+      latitude,
+      longitude,
+    } = req.body;
+
+    const finalLat = lat !== undefined ? lat : latitude;
+    const finalLng = lng !== undefined ? lng : longitude;
+
+    if (
+      storeAddress !== undefined ||
+      city !== undefined ||
+      state !== undefined ||
+      pincode !== undefined ||
+      area !== undefined ||
+      finalLat !== undefined ||
+      finalLng !== undefined
+    ) {
+      const currentCoords = seller.warehouseLocation?.location?.coordinates || [0, 0];
+      const newCoords = (finalLat != null && finalLng != null)
+        ? [parseFloat(finalLng), parseFloat(finalLat)]
+        : currentCoords;
+
       seller.warehouseLocation = {
         ...seller.warehouseLocation,
         storeAddress: storeAddress !== undefined ? storeAddress : seller.warehouseLocation?.storeAddress,
         city: city !== undefined ? city : seller.warehouseLocation?.city,
         state: state !== undefined ? state : seller.warehouseLocation?.state,
         pincode: pincode !== undefined ? pincode : seller.warehouseLocation?.pincode,
+        area: area !== undefined ? area : seller.warehouseLocation?.area,
+        location: {
+          type: 'Point',
+          coordinates: newCoords,
+        },
       };
     }
 

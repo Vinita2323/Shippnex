@@ -5,6 +5,7 @@ import IncomingGigModal from '../components/IncomingGigModal';
 import { captainService } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
 import { markJobAsDismissed, isJobDismissed } from '../utils/jobDismissal';
+import { MapService } from '../../../services/MapService';
 
 const CaptainDashboard = () => {
   const navigate = useNavigate();
@@ -36,11 +37,16 @@ const CaptainDashboard = () => {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [locationMode, setLocationMode] = useState(null);
   const [manualAddress, setManualAddress] = useState('');
+  const [manualPredictions, setManualPredictions] = useState([]);
+  const [manualSearching, setManualSearching] = useState(false);
   const [detectedLocation, setDetectedLocation] = useState(null);
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [locationError, setLocationError] = useState('');
-  const [savedLocation, setSavedLocation] = useState(null);
+  const [savedLocation, setSavedLocation] = useState(() => {
+    return localStorage.getItem('shippnex_captain_location') || null;
+  });
   const manualInputRef = useRef(null);
+  const manualDebounceRef = useRef(null);
   const watchIdRef = useRef(null);
 
   // ── Body Scroll Lock when Modals are Open ─────────────────────
@@ -174,7 +180,11 @@ const CaptainDashboard = () => {
       }
       setIncomingJob(null); // Modal closes immediately
       await fetchDashboard(true);
-      navigate('/captain/active-delivery');
+      if (job.isTransport) {
+        navigate(`/captain/active-delivery?type=transport&bookingId=${job.bookingId || job._id}`);
+      } else {
+        navigate(`/captain/active-delivery?type=order&orderId=${job.orderId || job._id}`);
+      }
     } catch (err) {
       console.error('Accept job error:', err);
       alert(err?.response?.data?.message || err?.message || 'Failed to accept job.');
@@ -219,7 +229,7 @@ const CaptainDashboard = () => {
       markJobAsDismissed(order);
       await captainService.acceptJob(order.orderId || order._id);
       await fetchDashboard(true);
-      navigate('/captain/active-delivery');
+      navigate(`/captain/active-delivery?type=order&orderId=${order.orderId || order._id}`);
     } catch (err) {
       console.error('Accept order error:', err);
       alert(err?.response?.data?.message || 'Failed to accept order.');
@@ -249,7 +259,7 @@ const CaptainDashboard = () => {
       const id = request.bookingId || request._id;
       await transportService.captainAcceptRequest(id);
       await fetchDashboard(true);
-      navigate('/captain/active-delivery');
+      navigate(`/captain/active-delivery?type=transport&bookingId=${request.bookingId || request._id}`);
     } catch (err) {
       console.error('Accept transport error:', err);
       alert(err?.response?.data?.message || err?.message || 'Failed to accept request.');
@@ -305,55 +315,97 @@ const CaptainDashboard = () => {
     }
   };
 
-  // ── Location Modal Helpers ─────────────────────────────────────
-  const handleAutoDetect = () => {
+  // ── Location Modal Helpers (Google Maps Integrated) ───────────
+  const handleAutoDetect = async () => {
     setLocationMode('auto');
     setLocationError('');
     setDetectingLocation(true);
     setDetectedLocation(null);
-    if (!navigator.geolocation) {
-      setLocationError('Geolocation is not supported by your browser.');
+
+    try {
+      const coords = await MapService.getCurrentCoordinates();
+      const detailed = await MapService.reverseGeocode(coords.lat, coords.lng);
+      setDetectedLocation({
+        lat: detailed.latitude || detailed.lat,
+        lng: detailed.longitude || detailed.lng,
+        address: detailed.formattedAddress || detailed.address,
+        detailed,
+      });
+    } catch (err) {
+      console.error('Captain auto-detect error:', err);
+      setLocationError(err.message || 'Unable to retrieve your GPS location. Please allow location permissions.');
+    } finally {
       setDetectingLocation(false);
+    }
+  };
+
+  // Live typing debouncer for manual Google Places suggestions
+  const handleManualInputChange = (e) => {
+    const val = e.target.value;
+    setManualAddress(val);
+    setLocationError('');
+
+    if (manualDebounceRef.current) {
+      clearTimeout(manualDebounceRef.current);
+    }
+
+    if (!val.trim()) {
+      setManualPredictions([]);
+      setManualSearching(false);
       return;
     }
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-          );
-          const data = await res.json();
-          const address = data.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-          setDetectedLocation({ lat: latitude, lng: longitude, address });
-        } catch {
-          setDetectedLocation({
-            lat: latitude,
-            lng: longitude,
-            address: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
-          });
-        }
-        setDetectingLocation(false);
-      },
-      () => {
-        setLocationError('Unable to retrieve your location. Please allow location access.');
-        setDetectingLocation(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+
+    setManualSearching(true);
+    manualDebounceRef.current = setTimeout(async () => {
+      try {
+        const results = await MapService.getPlacePredictions(val);
+        setManualPredictions(results);
+      } catch (err) {
+        console.error('Captain manual place predictions error:', err);
+      } finally {
+        setManualSearching(false);
+      }
+    }, 280);
+  };
+
+  // Selecting a suggested location from Google Places
+  const handleSelectManualPrediction = async (p) => {
+    setManualSearching(true);
+    try {
+      const fullDetails = await MapService.getPlaceDetails(p.placeId);
+      setManualAddress(fullDetails.formattedAddress);
+      setDetectedLocation({
+        lat: fullDetails.latitude || fullDetails.lat,
+        lng: fullDetails.longitude || fullDetails.lng,
+        address: fullDetails.formattedAddress,
+        detailed: fullDetails,
+      });
+      setManualPredictions([]);
+    } catch (err) {
+      console.error('Failed to resolve manual place:', err);
+      setLocationError('Could not fetch complete address details for this location.');
+    } finally {
+      setManualSearching(false);
+    }
   };
 
   const handleSaveLocation = async () => {
-    if (locationMode === 'auto' && detectedLocation) {
-      setSavedLocation(detectedLocation.address);
+    const finalLocation = detectedLocation;
+    const finalAddress = finalLocation?.address || manualAddress.trim();
+
+    if (!finalAddress) return;
+
+    setSavedLocation(finalAddress);
+    localStorage.setItem('shippnex_captain_location', finalAddress);
+
+    if (finalLocation?.lat && finalLocation?.lng) {
       try {
-        await captainService.updateLocation(detectedLocation.lat, detectedLocation.lng);
-      } catch (e) {}
-      setShowLocationModal(false);
-    } else if (locationMode === 'manual' && manualAddress.trim()) {
-      setSavedLocation(manualAddress.trim());
-      setShowLocationModal(false);
+        await captainService.updateLocation(finalLocation.lat, finalLocation.lng);
+      } catch (e) {
+        console.warn('Backend location update notification failed:', e?.message);
+      }
     }
+    setShowLocationModal(false);
   };
 
   const openLocationModal = () => {
@@ -363,6 +415,8 @@ const CaptainDashboard = () => {
     setDetectingLocation(false);
     setLocationError('');
     setManualAddress('');
+    setManualPredictions([]);
+    setManualSearching(false);
   };
 
   return (
@@ -448,96 +502,148 @@ const CaptainDashboard = () => {
           }}
         >
           <div
-            className="w-full sm:max-w-sm bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl p-5 pb-8 sm:pb-5"
+            className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl p-5 pb-8 sm:pb-5 max-h-[85dvh] flex flex-col"
             style={{ animation: 'slideUpModal 0.28s cubic-bezier(.4,0,.2,1)' }}
           >
-            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4 sm:hidden"></div>
-            <div className="flex items-center justify-between mb-4">
+            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4 sm:hidden shrink-0"></div>
+            <div className="flex items-center justify-between mb-4 shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center">
                   <span className="material-symbols-outlined text-[#366b00] text-base">location_on</span>
                 </div>
-                <h3 className="font-bold text-sm text-slate-800">Set Your Location</h3>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 m-0">Set Your Location</h3>
+                  <span className="text-[10px] font-semibold text-slate-400">Powered by Google Maps</span>
+                </div>
               </div>
               <button
                 onClick={() => setShowLocationModal(false)}
-                className="p-1 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+                className="p-1 rounded-full hover:bg-slate-100 transition-colors cursor-pointer border-none bg-transparent"
               >
                 <span className="material-symbols-outlined text-base text-slate-500">close</span>
               </button>
             </div>
 
-            <div className="space-y-3 mb-4">
+            <div className="space-y-3 mb-4 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden pr-0.5">
+              {/* Option 1: Detect Automatically */}
               <button
+                type="button"
                 onClick={handleAutoDetect}
-                className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${
+                className={`w-full flex items-start gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${
                   locationMode === 'auto'
                     ? 'border-[#366b00] bg-emerald-50/50'
                     : 'border-slate-200 bg-slate-50 hover:border-emerald-300'
                 }`}
               >
-                <div className="w-10 h-10 rounded-xl bg-emerald-100/60 flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100/60 flex items-center justify-center shrink-0 mt-0.5">
                   <span className="material-symbols-outlined text-[#366b00] text-xl">my_location</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-xs text-slate-800">Detect Location Automatically</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
-                    Use GPS to detect your current location
+                  <p className="font-bold text-xs text-slate-800 m-0">Detect Location Automatically</p>
+                  <p className="text-[10.5px] text-slate-500 mt-0.5 leading-snug">
+                    Use device GPS + Google Geocoding
                   </p>
                   {locationMode === 'auto' && detectingLocation && (
-                    <p className="text-[10px] text-[#366b00] mt-1 font-semibold animate-pulse">
-                      Detecting location…
+                    <p className="text-[10.5px] text-[#366b00] mt-1.5 font-semibold animate-pulse">
+                      Detecting exact location…
                     </p>
                   )}
                   {locationMode === 'auto' && detectedLocation && !detectingLocation && (
-                    <p className="text-[10px] text-[#366b00] mt-1 font-semibold truncate">
-                      📍 {detectedLocation.address}
-                    </p>
+                    <div className="mt-2 p-2 bg-white rounded-lg border border-emerald-200">
+                      <p className="text-[11px] text-slate-800 font-bold leading-snug m-0">
+                        📍 {detectedLocation.address}
+                      </p>
+                      {detectedLocation.lat && detectedLocation.lng && (
+                        <p className="text-[9.5px] text-emerald-700 font-mono font-semibold mt-1 m-0">
+                          Coords: {detectedLocation.lat.toFixed(4)}, {detectedLocation.lng.toFixed(4)}
+                        </p>
+                      )}
+                    </div>
                   )}
                   {locationMode === 'auto' && locationError && (
-                    <p className="text-[10px] text-red-500 mt-1">{locationError}</p>
+                    <p className="text-[10.5px] text-red-500 mt-1.5 font-semibold">{locationError}</p>
                   )}
                 </div>
-                {locationMode === 'auto' && !detectingLocation && !locationError && (
+                {locationMode === 'auto' && !detectingLocation && detectedLocation && (
                   <span className="material-symbols-outlined text-[#366b00] text-base shrink-0">
                     check_circle
                   </span>
                 )}
               </button>
 
-              <button
+              {/* Option 2: Enter Manually with Google Places Search */}
+              <div
                 onClick={() => {
                   setLocationMode('manual');
                   setLocationError('');
                   setTimeout(() => manualInputRef.current?.focus(), 100);
                 }}
-                className={`w-full flex items-start gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${
+                className={`w-full flex flex-col p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${
                   locationMode === 'manual'
                     ? 'border-[#366b00] bg-emerald-50/50'
                     : 'border-slate-200 bg-slate-50 hover:border-emerald-300'
                 }`}
               >
-                <div className="w-10 h-10 rounded-xl bg-emerald-100/60 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-[#366b00] text-xl">edit_location_alt</span>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100/60 flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="material-symbols-outlined text-[#366b00] text-xl">edit_location_alt</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-xs text-slate-800 m-0">Enter Location Manually</p>
+                    <p className="text-[10.5px] text-slate-500 mt-0.5 leading-snug">
+                      Search building, street, landmark, or city
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-xs text-slate-800">Enter Location Manually</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
-                    Type your address or landmark
-                  </p>
-                  {locationMode === 'manual' && (
-                    <input
-                      ref={manualInputRef}
-                      type="text"
-                      value={manualAddress}
-                      onChange={(e) => setManualAddress(e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      placeholder="e.g. MG Road, Indore…"
-                      className="mt-2 w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#366b00] transition-colors"
-                    />
-                  )}
-                </div>
-              </button>
+
+                {locationMode === 'manual' && (
+                  <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="relative flex items-center bg-white border border-slate-300 rounded-xl overflow-hidden focus-within:border-[#366b00]">
+                      <input
+                        ref={manualInputRef}
+                        type="text"
+                        value={manualAddress}
+                        onChange={handleManualInputChange}
+                        placeholder="Search landmark, hub, or address…"
+                        className="w-full bg-transparent px-3 py-2 text-xs text-slate-800 placeholder-slate-400 outline-none"
+                      />
+                      {manualSearching && (
+                        <span className="material-symbols-outlined text-sm text-slate-400 animate-spin pr-2.5">
+                          progress_activity
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Predictions list */}
+                    {manualPredictions.length > 0 && (
+                      <div className="bg-white border border-slate-200 rounded-xl max-h-36 overflow-y-auto divide-y divide-slate-100 shadow-sm">
+                        {manualPredictions.map((p) => (
+                          <div
+                            key={p.placeId}
+                            onClick={() => handleSelectManualPrediction(p)}
+                            className="p-2 hover:bg-slate-50 cursor-pointer flex items-center gap-2 text-left"
+                          >
+                            <span className="material-symbols-outlined text-xs text-slate-400">location_on</span>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[11px] font-bold text-slate-800 block truncate">{p.mainText}</span>
+                              <span className="text-[9.5px] text-slate-500 block truncate">{p.secondaryText}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Selected manual address preview */}
+                    {detectedLocation && locationMode === 'manual' && manualPredictions.length === 0 && (
+                      <div className="p-2 bg-white rounded-lg border border-emerald-200">
+                        <p className="text-[11px] text-slate-800 font-bold leading-snug m-0">
+                          📍 {detectedLocation.address}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <button
@@ -547,7 +653,7 @@ const CaptainDashboard = () => {
                 (locationMode === 'auto' && (!detectedLocation || detectingLocation)) ||
                 (locationMode === 'manual' && !manualAddress.trim())
               }
-              className="w-full py-3 bg-[#366b00] text-white font-bold text-sm rounded-xl transition-all hover:bg-[#2d5800] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className="w-full py-3 bg-[#366b00] text-white font-bold text-sm rounded-xl transition-all hover:bg-[#2d5800] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0 border-none"
             >
               Confirm Location
             </button>
@@ -903,7 +1009,7 @@ const CaptainDashboard = () => {
                                   <span>View Details</span>
                                 </button>
                                 <button
-                                  onClick={() => navigate('/captain/active-delivery')}
+                                  onClick={() => navigate(`/captain/active-delivery?type=transport&bookingId=${activeTransport.bookingId || activeTransport._id}`)}
                                   className="flex-1 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-lg shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
                                 >
                                   <span className="material-symbols-outlined text-base">navigation</span>
@@ -980,7 +1086,7 @@ const CaptainDashboard = () => {
                                   <span>View Details</span>
                                 </button>
                                 <button
-                                  onClick={() => navigate('/captain/active-delivery')}
+                                  onClick={() => navigate(`/captain/active-delivery?type=order&orderId=${order.orderId || order._id}`)}
                                   className="flex-1 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-lg shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
                                 >
                                   <span className="material-symbols-outlined text-base">navigation</span>
@@ -1383,8 +1489,12 @@ const CaptainDashboard = () => {
               </button>
               <button
                 onClick={() => {
+                  const isTrp = selectedDetailTask?.isTransport || selectedDetailTask?.bookingId;
+                  const targetUrl = isTrp
+                    ? `/captain/active-delivery?type=transport&bookingId=${selectedDetailTask.bookingId || selectedDetailTask._id}`
+                    : `/captain/active-delivery?type=order&orderId=${selectedDetailTask.orderId || selectedDetailTask._id}`;
                   setSelectedDetailTask(null);
-                  navigate('/captain/active-delivery');
+                  navigate(targetUrl);
                 }}
                 className="flex-2 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-lg shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]"
               >

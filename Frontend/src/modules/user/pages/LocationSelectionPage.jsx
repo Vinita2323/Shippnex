@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, Search, Navigation, Check, Plus, Home as HomeIcon, Briefcase, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, MapPin, Search, Navigation, Check, Home as HomeIcon, Briefcase, ChevronDown, ChevronUp, Loader2, Building2 } from 'lucide-react';
 import { useLocationContext } from '../../../context/LocationContext';
 import { addressService } from '../../../services/authService';
+import { MapService } from '../../../services/MapService';
+import LocationSearchModal from '../../../components/LocationSearchModal';
 
 const LocationSelectionPage = () => {
   const navigate = useNavigate();
@@ -11,8 +13,12 @@ const LocationSelectionPage = () => {
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [predictions, setPredictions] = useState([]);
+  const [searching, setSearching] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [showManualForm, setShowManualForm] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const searchDebounceRef = useRef(null);
 
   // Manual Detailed Address Form State
   const [manualForm, setManualForm] = useState({
@@ -47,59 +53,114 @@ const LocationSelectionPage = () => {
     fetchAddresses();
   }, []);
 
-  const handleUseCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported by your browser');
-      return;
-    }
-
+  // GPS Auto-Detection with Google Maps Reverse Geocode
+  const handleUseCurrentLocation = async () => {
     setIsLocating(true);
     setError('');
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
+    try {
+      const coords = await MapService.getCurrentCoordinates();
+      const detailed = await MapService.reverseGeocode(coords.lat, coords.lng);
 
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-          const data = await res.json();
-          if (data && data.address) {
-            const city = data.address.city || data.address.town || data.address.village || 'Noida';
-            const area = data.address.suburb || data.address.neighbourhood || data.address.road || city;
-            const locObj = {
-              lat,
-              lng,
-              city,
-              area,
-              addressLine1: `${area}, ${city}`,
-              addressType: 'GPS',
-            };
-            setLocation(locObj);
-            setIsLocating(false);
-            navigate(-1);
-            return;
-          }
-        } catch (e) {}
+      const locObj = {
+        lat: detailed.latitude || detailed.lat,
+        lng: detailed.longitude || detailed.lng,
+        latitude: detailed.latitude || detailed.lat,
+        longitude: detailed.longitude || detailed.lng,
+        city: detailed.city || 'City',
+        state: detailed.state || '',
+        pincode: detailed.postalCode || detailed.pincode || '',
+        area: detailed.area || detailed.city || 'Current Location',
+        addressLine1: detailed.formattedAddress || detailed.address,
+        formattedAddress: detailed.formattedAddress,
+        addressType: 'GPS',
+      };
 
-        const fallbackLoc = {
-          lat,
-          lng,
-          city: 'Noida',
-          area: 'Current Location',
-          addressLine1: 'Current GPS Location',
-          addressType: 'GPS',
-        };
-        setLocation(fallbackLoc);
-        setIsLocating(false);
-        navigate(-1);
-      },
-      (err) => {
-        setIsLocating(false);
-        setError('Failed to detect GPS location. Please enter location manually below.');
-      },
-      { timeout: 10000, enableHighAccuracy: true }
-    );
+      setLocation(locObj);
+      navigate(-1);
+    } catch (err) {
+      console.error('Google Maps location detection error:', err);
+      setError(err.message || 'Failed to detect GPS location. Please enter location manually below.');
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  // Live Typing in Search Box with Google Places Autocomplete
+  const handleSearchChange = (e) => {
+    const val = e.target.value;
+    setSearchQuery(val);
+    setError('');
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    if (!val.trim()) {
+      setPredictions([]);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const results = await MapService.getPlacePredictions(val);
+        setPredictions(results);
+      } catch (err) {
+        console.error('Google Places predictions error:', err);
+      } finally {
+        setSearching(false);
+      }
+    }, 280);
+  };
+
+  // Select Prediction from dropdown
+  const handleSelectPrediction = async (p) => {
+    setSearching(true);
+    try {
+      const fullDetails = await MapService.getPlaceDetails(p.placeId);
+      const locObj = {
+        lat: fullDetails.latitude || fullDetails.lat,
+        lng: fullDetails.longitude || fullDetails.lng,
+        latitude: fullDetails.latitude || fullDetails.lat,
+        longitude: fullDetails.longitude || fullDetails.lng,
+        city: fullDetails.city || 'City',
+        state: fullDetails.state || '',
+        pincode: fullDetails.postalCode || fullDetails.pincode || '',
+        area: fullDetails.area || fullDetails.city,
+        addressLine1: fullDetails.formattedAddress || fullDetails.address,
+        formattedAddress: fullDetails.formattedAddress,
+        addressType: 'LOCATION',
+      };
+      setLocation(locObj);
+      navigate(-1);
+    } catch (err) {
+      console.error('Place selection failed:', err);
+      setError('Could not resolve selected location.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // Google Maps Modal Callback
+  const handleModalLocationSelect = (loc) => {
+    if (!loc) return;
+    const locObj = {
+      lat: loc.latitude || loc.lat,
+      lng: loc.longitude || loc.lng,
+      latitude: loc.latitude || loc.lat,
+      longitude: loc.longitude || loc.lng,
+      city: loc.city || 'City',
+      state: loc.state || '',
+      pincode: loc.postalCode || loc.pincode || '',
+      area: loc.area || loc.city,
+      addressLine1: loc.formattedAddress || loc.address,
+      formattedAddress: loc.formattedAddress,
+      addressType: 'LOCATION',
+    };
+    setLocation(locObj);
+    navigate(-1);
   };
 
   const handleSelectSavedAddress = (addr) => {
@@ -119,20 +180,6 @@ const LocationSelectionPage = () => {
     };
     setLocation(locObj);
     localStorage.setItem('shippnex_selected_checkout_address', JSON.stringify({ ...addr, fullName: cleanFullName }));
-    navigate(-1);
-  };
-
-  const handleQuickSearchSubmit = (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-    const clean = searchQuery.trim();
-    const locObj = {
-      addressType: 'LOCATION',
-      addressLine1: clean,
-      area: clean,
-      city: 'Noida',
-    };
-    setLocation(locObj);
     navigate(-1);
   };
 
@@ -157,6 +204,7 @@ const LocationSelectionPage = () => {
       state: cleanState,
       pincode: cleanPincode,
       area: `${cleanLine1}, ${cleanCity}`,
+      formattedAddress: `${cleanLine1}, ${cleanLandmark ? cleanLandmark + ', ' : ''}${cleanCity}, ${cleanState} ${cleanPincode}`,
     };
 
     setLocation(locObj);
@@ -186,7 +234,10 @@ const LocationSelectionPage = () => {
         <button onClick={() => navigate(-1)} className="mr-3 p-1 rounded-full hover:bg-slate-100 transition-colors border-none cursor-pointer">
           <ArrowLeft size={22} className="text-slate-800" />
         </button>
-        <h1 className="text-[17px] font-extrabold text-slate-900 m-0">Select Delivery Location</h1>
+        <div>
+          <h1 className="text-[17px] font-extrabold text-slate-900 m-0">Select Delivery Location</h1>
+          <span className="text-[11px] font-semibold text-slate-400">Powered by Google Maps</span>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 [&::-webkit-scrollbar]:hidden pb-10">
@@ -198,40 +249,67 @@ const LocationSelectionPage = () => {
         >
           <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center shrink-0 border border-orange-100">
             {isLocating ? (
-              <div className="w-5 h-5 border-2 border-[#ea580c] border-t-transparent rounded-full animate-spin"></div>
+              <Loader2 size={20} className="text-[#ea580c] animate-spin" />
             ) : (
               <Navigation size={20} className="text-[#ea580c]" />
             )}
           </div>
           <div className="text-left flex-1">
-            <h3 className="text-[14px] font-bold text-slate-900 m-0">Use current location</h3>
-            <p className="text-[12px] font-medium text-slate-500 m-0 mt-0.5">Detect using GPS</p>
+            <h3 className="text-[14px] font-bold text-slate-900 m-0">Use current GPS location</h3>
+            <p className="text-[12px] font-medium text-slate-500 m-0 mt-0.5">Auto-detect complete address</p>
           </div>
         </button>
 
         {error && <p className="text-red-500 text-xs font-semibold text-center m-0 bg-red-50 py-2 px-3 rounded-xl border border-red-200">{error}</p>}
 
-        {/* Quick Search Location */}
-        <form onSubmit={handleQuickSearchSubmit} className="bg-white rounded-2xl p-4 shadow-xs border border-slate-100">
-          <h3 className="text-[12px] font-extrabold text-slate-800 uppercase tracking-wider mb-2.5">Quick Search Location</h3>
+        {/* Quick Search Location with Google Places Autocomplete */}
+        <div className="bg-white rounded-2xl p-4 shadow-xs border border-slate-100 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[12px] font-extrabold text-slate-800 uppercase tracking-wider m-0">Search Location</h3>
+            <button
+              type="button"
+              onClick={() => setIsMapModalOpen(true)}
+              className="text-[11px] font-bold text-[#ea580c] hover:underline bg-transparent border-none cursor-pointer"
+            >
+              Open Full Map Search
+            </button>
+          </div>
+
           <div className="relative flex items-center">
             <Search size={18} className="absolute left-3.5 text-slate-400 pointer-events-none" />
             <input 
               type="text" 
-              placeholder="Enter area, landmark or street name..." 
+              placeholder="Search area, landmark, street or city..." 
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-20 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-all"
+              onChange={handleSearchChange}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-10 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-all"
             />
-            <button
-              type="submit"
-              disabled={!searchQuery.trim()}
-              className="absolute right-2 bg-[#ea580c] disabled:opacity-50 text-white rounded-lg px-3 py-1.5 text-[11px] font-bold border-none cursor-pointer"
-            >
-              Select
-            </button>
+            {searching && (
+              <Loader2 size={16} className="absolute right-3 text-slate-400 animate-spin" />
+            )}
           </div>
-        </form>
+
+          {/* Autocomplete Predictions Dropdown */}
+          {predictions.length > 0 && (
+            <div className="bg-white border border-slate-100 rounded-xl max-h-48 overflow-y-auto divide-y divide-slate-100 shadow-sm mt-1">
+              {predictions.map((p) => (
+                <div
+                  key={p.placeId}
+                  onClick={() => handleSelectPrediction(p)}
+                  className="p-3 hover:bg-slate-50 cursor-pointer flex items-center gap-2.5 text-left transition-colors"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
+                    <Building2 size={14} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[12px] font-bold text-slate-900 block truncate">{p.mainText}</span>
+                    <span className="text-[10.5px] text-slate-500 block truncate">{p.secondaryText}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Enter Detailed Manual Location Form Card */}
         <div className="bg-white rounded-2xl shadow-xs border border-slate-100 overflow-hidden">
@@ -393,6 +471,16 @@ const LocationSelectionPage = () => {
           </div>
         )}
       </div>
+
+      {/* Full Google Maps Location Search Modal */}
+      <LocationSearchModal
+        isOpen={isMapModalOpen}
+        onClose={() => setIsMapModalOpen(false)}
+        onSelect={handleModalLocationSelect}
+        title="Search Delivery Location"
+        placeholder="Search house/flat, street, area, city..."
+        accentColor="#ea580c"
+      />
     </div>
   );
 };

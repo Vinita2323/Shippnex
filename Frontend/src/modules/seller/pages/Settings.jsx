@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { User, Store, Image as ImageIcon, CreditCard, Edit, CheckCircle2, Save, Check, MapPin, Loader2, Upload, AlertCircle } from 'lucide-react';
+import { User, Store, Image as ImageIcon, CreditCard, Edit, CheckCircle2, Save, Check, MapPin, Loader2, Upload, AlertCircle, Search, Navigation } from 'lucide-react';
 import { authService } from '../../../services/authService';
+import { MapService } from '../../../services/MapService';
+import LocationSearchModal from '../../../components/LocationSearchModal';
 
 const allStoreCategories = [
   { id: 'cat-1', label: 'Chinese Fast Food' },
@@ -14,7 +16,6 @@ const allStoreCategories = [
   { id: 'cat-9', label: 'Vagitable' },
   { id: 'cat-10', label: 'Restaurant & Food' },
   { id: 'cat-11', label: 'Fast Food' },
-  { id: 'cat-12', label: 'Nonveg Items' },
   { id: 'cat-13', label: 'Wedding' },
   { id: 'cat-14', label: 'Winter' },
   { id: 'cat-15', label: 'Electronics' },
@@ -32,6 +33,7 @@ const Settings = () => {
   const [errorMsg, setErrorMsg] = useState('');
 
   const [selectedCategories, setSelectedCategories] = useState(['Fruits', 'Fast Food', 'Grocery']);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -40,6 +42,11 @@ const Settings = () => {
     storeName: '',
     storeLocation: '',
     city: '',
+    state: '',
+    pincode: '',
+    area: '',
+    lat: null,
+    lng: null,
     serviceRadius: '5',
     tagline: '',
     gstin: '',
@@ -62,13 +69,19 @@ const Settings = () => {
       const res = await authService.getSellerProfile();
       if (res && res.seller) {
         const s = res.seller;
+        const coords = s.warehouseLocation?.location?.coordinates || [null, null];
         setFormData({
           fullName: s.ownerName || '',
           email: s.email || '',
           mobile: s.phone || '',
           storeName: s.businessName || '',
-          storeLocation: s.warehouseLocation?.storeAddress || '',
-          city: s.warehouseLocation?.city || '',
+          storeLocation: s.warehouseLocation?.storeAddress || s.address?.line1 || '',
+          city: s.warehouseLocation?.city || s.city || '',
+          state: s.warehouseLocation?.state || s.state || '',
+          pincode: s.warehouseLocation?.pincode || s.pincode || '',
+          area: s.warehouseLocation?.area || '',
+          lat: coords[1] != null && coords[1] !== 0 ? coords[1] : null,
+          lng: coords[0] != null && coords[0] !== 0 ? coords[0] : null,
           serviceRadius: String(s.serviceRadius || '5'),
           tagline: s.tagline || '',
           gstin: s.gstNumber || '',
@@ -126,51 +139,44 @@ const Settings = () => {
     }
   };
 
-  const handleFetchLocation = () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
-      return;
-    }
-
+  // Google Maps GPS Geolocation Auto-Detection
+  const handleFetchLocation = async () => {
     setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
-          const data = await res.json();
-          if (data && data.address) {
-            const detectedAddress = data.display_name || `${data.address.road || ''}, ${data.address.suburb || ''}, ${data.address.city || data.address.town || data.address.state || ''}`;
-            const detectedCity = data.address.city || data.address.town || data.address.state_district || 'Indore';
-            
-            setFormData(prev => ({
-              ...prev,
-              storeLocation: detectedAddress,
-              city: detectedCity,
-            }));
-          } else {
-            setFormData(prev => ({
-              ...prev,
-              storeLocation: `Lat: ${latitude.toFixed(4)}, Long: ${longitude.toFixed(4)}, Central Hub`,
-              city: 'Indore'
-            }));
-          }
-        } catch (err) {
-          setFormData(prev => ({
-            ...prev,
-            storeLocation: `Lat: ${latitude.toFixed(4)}, Long: ${longitude.toFixed(4)}`,
-            city: 'Indore'
-          }));
-        } finally {
-          setIsLocating(false);
-        }
-      },
-      (error) => {
-        setIsLocating(false);
-        alert('Could not retrieve location. Please allow location permissions or enter address manually.');
-      },
-      { timeout: 10000, enableHighAccuracy: true }
-    );
+    setErrorMsg('');
+    try {
+      const coords = await MapService.getCurrentCoordinates();
+      const detailed = await MapService.reverseGeocode(coords.lat, coords.lng);
+      setFormData(prev => ({
+        ...prev,
+        storeLocation: detailed.formattedAddress || detailed.address,
+        city: detailed.city || prev.city,
+        state: detailed.state || prev.state,
+        pincode: detailed.postalCode || detailed.pincode || prev.pincode,
+        area: detailed.area || prev.area,
+        lat: detailed.latitude || detailed.lat,
+        lng: detailed.longitude || detailed.lng,
+      }));
+    } catch (err) {
+      console.error('Google Maps location detection error:', err);
+      setErrorMsg(err.message || 'Could not retrieve GPS location. Please allow permissions or search on map.');
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  // Callback when a location is selected from Google Maps modal
+  const handleLocationModalSelect = (locationObj) => {
+    if (!locationObj) return;
+    setFormData(prev => ({
+      ...prev,
+      storeLocation: locationObj.formattedAddress || locationObj.address,
+      city: locationObj.city || prev.city,
+      state: locationObj.state || prev.state,
+      pincode: locationObj.postalCode || locationObj.pincode || prev.pincode,
+      area: locationObj.area || prev.area,
+      lat: locationObj.latitude || locationObj.lat,
+      lng: locationObj.longitude || locationObj.lng,
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -186,6 +192,11 @@ const Settings = () => {
         businessName: formData.storeName,
         storeAddress: formData.storeLocation,
         city: formData.city,
+        state: formData.state,
+        pincode: formData.pincode,
+        area: formData.area,
+        lat: formData.lat,
+        lng: formData.lng,
         serviceRadius: formData.serviceRadius,
         tagline: formData.tagline,
         gstNumber: formData.gstin,
@@ -202,6 +213,7 @@ const Settings = () => {
         setIsEditing(false);
         if (res.seller) {
           const s = res.seller;
+          const coords = s.warehouseLocation?.location?.coordinates || [null, null];
           setFormData(prev => ({
             ...prev,
             fullName: s.ownerName || prev.fullName,
@@ -209,6 +221,11 @@ const Settings = () => {
             storeName: s.businessName || prev.storeName,
             storeLocation: s.warehouseLocation?.storeAddress || prev.storeLocation,
             city: s.warehouseLocation?.city || prev.city,
+            state: s.warehouseLocation?.state || prev.state,
+            pincode: s.warehouseLocation?.pincode || prev.pincode,
+            area: s.warehouseLocation?.area || prev.area,
+            lat: coords[1] != null && coords[1] !== 0 ? coords[1] : prev.lat,
+            lng: coords[0] != null && coords[0] !== 0 ? coords[0] : prev.lng,
             serviceRadius: String(s.serviceRadius || prev.serviceRadius),
             tagline: s.tagline || prev.tagline,
             gstin: s.gstNumber || prev.gstin,
@@ -492,22 +509,32 @@ const Settings = () => {
                     </div>
                   </div>
 
-                  {/* Store Location with Geolocation Fetch Button */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
+                  {/* Store Location with Geolocation Fetch & Map Search Buttons */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <label className="block text-sm font-medium text-slate-700">
                         Store Address Location <span className="text-red-500">*</span>
                       </label>
                       {isEditing && (
-                        <button
-                          type="button"
-                          onClick={handleFetchLocation}
-                          disabled={isLocating}
-                          className="text-xs text-[#ff7526] hover:text-[#e65507] hover:underline flex items-center gap-1 font-semibold bg-transparent border-none cursor-pointer disabled:opacity-50"
-                        >
-                          {isLocating ? <Loader2 size={13} className="animate-spin" /> : <MapPin size={13} />}
-                          {isLocating ? 'Detecting Location...' : 'Fetch Current Location'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsLocationModalOpen(true)}
+                            className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-bold bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-md border border-blue-200 cursor-pointer transition-colors"
+                          >
+                            <Search size={13} />
+                            <span>Search on Map</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleFetchLocation}
+                            disabled={isLocating}
+                            className="text-xs text-[#ff7526] hover:text-[#e65507] flex items-center gap-1 font-bold bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-md border border-orange-200 cursor-pointer transition-colors disabled:opacity-50"
+                          >
+                            {isLocating ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
+                            <span>{isLocating ? 'Detecting...' : 'Use Current GPS'}</span>
+                          </button>
+                        </div>
                       )}
                     </div>
 
@@ -516,13 +543,20 @@ const Settings = () => {
                       disabled={!isEditing}
                       value={formData.storeLocation}
                       onChange={(e) => setFormData({ ...formData, storeLocation: e.target.value })}
-                      placeholder="Enter full complete store address"
+                      placeholder="Enter full complete store address, building, street, area..."
                       className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all leading-relaxed" 
                     />
+
+                    {formData.lat && formData.lng && (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 w-fit">
+                        <Check size={12} strokeWidth={3} />
+                        <span className="font-semibold">GPS Verified: {formData.lat.toFixed(4)}, {formData.lng.toFixed(4)}</span>
+                      </div>
+                    )}
                   </div>
 
-                  {/* City & Service Radius */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {/* City, State, Pincode & Service Radius */}
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                     <div className="space-y-1.5">
                       <label className="block text-sm font-medium text-slate-700">City</label>
                       <input 
@@ -531,6 +565,30 @@ const Settings = () => {
                         value={formData.city}
                         onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                         placeholder="e.g. Indore"
+                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-sm font-medium text-slate-700">State</label>
+                      <input 
+                        type="text" 
+                        disabled={!isEditing}
+                        value={formData.state}
+                        onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                        placeholder="e.g. Madhya Pradesh"
+                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-sm font-medium text-slate-700">Pincode</label>
+                      <input 
+                        type="text" 
+                        disabled={!isEditing}
+                        value={formData.pincode}
+                        onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                        placeholder="e.g. 452001"
                         className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
                       />
                     </div>
@@ -676,6 +734,29 @@ const Settings = () => {
         </div>
 
       </div>
+
+      {/* Google Maps Location Search Modal for Store Address */}
+      <LocationSearchModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+        onSelect={handleLocationModalSelect}
+        title="Set Store & Warehouse Address"
+        placeholder="Search store building, street, area, market, city..."
+        initialLocation={
+          formData.storeLocation
+            ? {
+                formattedAddress: formData.storeLocation,
+                address: formData.storeLocation,
+                city: formData.city,
+                state: formData.state,
+                postalCode: formData.pincode,
+                latitude: formData.lat,
+                longitude: formData.lng,
+              }
+            : null
+        }
+        accentColor="#ff7526"
+      />
     </div>
   );
 };
