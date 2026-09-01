@@ -48,35 +48,35 @@ const uploadsDir = fs.existsSync(path.join(__dirname, '../uploads'))
 app.use('/uploads', express.static(uploadsDir));
 
 // Core API Routes
-app.use('/api', healthRoutes);
-app.use('/api/auth/user', userAuthRoutes);
-app.use('/api/auth/seller', sellerAuthRoutes);
-app.use('/api/auth/captain', captainAuthRoutes);
-app.use('/api/captain', captainRoutes);
-app.use('/api/auth/admin', adminAuthRoutes);
-app.use('/api/banners', bannerRoutes);
-app.use('/api/upload', uploadRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/cart', cartRoutes);
-app.use('/api/wishlist', wishlistRoutes);
-app.use('/api/user/addresses', addressRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/wallet', walletRoutes);
+app.use('', healthRoutes);
+app.use('/auth/user', userAuthRoutes);
+app.use('/auth/seller', sellerAuthRoutes);
+app.use('/auth/captain', captainAuthRoutes);
+app.use('/captain', captainRoutes);
+app.use('/auth/admin', adminAuthRoutes);
+app.use('/banners', bannerRoutes);
+app.use('/upload', uploadRoutes);
+app.use('/categories', categoryRoutes);
+app.use('/products', productRoutes);
+app.use('/cart', cartRoutes);
+app.use('/wishlist', wishlistRoutes);
+app.use('/user/addresses', addressRoutes);
+app.use('/orders', orderRoutes);
+app.use('/admin', adminRoutes);
+app.use('/wallet', walletRoutes);
 
 // Membership Routes
-app.use('/api/membership', membershipRoutes);
+app.use('/membership', membershipRoutes);
 
 // Policy & Terms Routes
-app.use('/api/policies', policyRoutes);
+app.use('/policies', policyRoutes);
 
 // Firebase Cloud Messaging (FCM) Push Notification Routes (SOP Standard)
-app.use('/api/fcm-tokens', fcmTokenRoutes);
+app.use('/fcm-tokens', fcmTokenRoutes);
 
 // Transport Module Routes
-app.use('/api/transport/vehicles', vehicleTypeRoutes);
-app.use('/api/transport/bookings', transportBookingRoutes);
+app.use('/transport/vehicles', vehicleTypeRoutes);
+app.use('/transport/bookings', transportBookingRoutes);
 
 // Base route
 app.get('/', (req, res) => {
