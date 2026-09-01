@@ -36,6 +36,10 @@ const productSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: 'ShippNex Official Store',
     },
+    sellerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Seller',
+    },
     description: {
       type: String,
       default: ''

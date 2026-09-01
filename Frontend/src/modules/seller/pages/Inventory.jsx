@@ -1,14 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Plus, Search, Download, ChevronDown, FileText, FileSpreadsheet, RefreshCw, Box, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { productService } from '../../../services/authService';
-
-const defaultMockInventory = [
-  { id: 'INV-101', name: 'Premium Basmati Rice', category: 'Grains & Flours', available: 1250, reserved: 200, unit: 'kg', threshold: 300, status: 'In Stock' },
-  { id: 'INV-102', name: 'Refined Sunflower Oil', category: 'Oil & Ghee', available: 450, reserved: 80, unit: 'Liters', threshold: 200, status: 'In Stock' },
-  { id: 'INV-103', name: 'Organic Toor Dal', category: 'Spices & Masala', available: 80, reserved: 30, unit: 'kg', threshold: 150, status: 'Low Stock' },
-  { id: 'INV-104', name: 'Whole Wheat Atta (50kg)', category: 'Grains & Flours', available: 0, reserved: 0, unit: 'Bags', threshold: 50, status: 'Out of Stock' },
-  { id: 'INV-105', name: 'Himalayan Pink Salt', category: 'Spices & Masala', available: 500, reserved: 50, unit: 'Packets', threshold: 100, status: 'In Stock' },
-];
+import { productService, authService } from '../../../services/authService';
 
 const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -30,15 +22,31 @@ const Inventory = () => {
     setLoading(true);
     let apiProducts = [];
     try {
-      const res = await productService.getProducts();
+      let sellerData = null;
+      try {
+        const cached = localStorage.getItem('shippnex_seller_data');
+        if (cached) sellerData = JSON.parse(cached);
+      } catch (e) {}
+
+      if (!sellerData?._id) {
+        const profRes = await authService.getSellerProfile().catch(() => null);
+        if (profRes?.seller) sellerData = profRes.seller;
+      }
+
+      const sellerId = sellerData?._id || sellerData?.id;
+      const sellerName = sellerData?.businessName || sellerData?.ownerName;
+
+      const params = {};
+      if (sellerId) params.sellerId = sellerId;
+      if (sellerName) params.seller = sellerName;
+
+      const res = await productService.getProducts(params);
       if (res && res.products && Array.isArray(res.products)) {
         apiProducts = res.products;
       }
     } catch (err) {
       console.warn('Error fetching inventory products from API:', err.message);
     }
-
-    const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
 
     const formattedApi = apiProducts.map(ap => {
       const stockVal = Number(ap.stock !== undefined ? ap.stock : 0);
@@ -61,41 +69,11 @@ const Inventory = () => {
       };
     });
 
-    const formattedLocal = localSaved.map(lp => {
-      const stockVal = Number(lp.stock !== undefined ? lp.stock : 0);
-      const minLimit = Number(lp.minStockLimit || 10);
-      let st = 'In Stock';
-      if (stockVal === 0) st = 'Out of Stock';
-      else if (stockVal <= minLimit) st = 'Low Stock';
-
-      return {
-        id: lp._id || lp.id || lp.sku,
-        _id: lp._id,
-        name: lp.name,
-        category: lp.category || 'General',
-        available: stockVal,
-        reserved: Math.floor(stockVal * 0.05),
-        unit: lp.unitType || 'kg',
-        threshold: minLimit,
-        status: st,
-        rawProduct: lp
-      };
-    });
-
-    const combined = [...formattedApi, ...formattedLocal, ...defaultMockInventory];
-    const seen = new Set();
-    const unique = combined.filter(item => {
-      const key = (item._id || item.id || item.name).toString();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
     // Collect dynamic category names
-    const cats = Array.from(new Set(unique.map(i => i.category))).filter(Boolean);
+    const cats = Array.from(new Set(formattedApi.map(i => i.category))).filter(Boolean);
     if (cats.length > 0) setCategoriesList(cats);
 
-    setInventory(unique);
+    setInventory(formattedApi);
     setLoading(false);
   };
 

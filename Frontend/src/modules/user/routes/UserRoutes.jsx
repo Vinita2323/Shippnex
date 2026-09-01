@@ -47,7 +47,7 @@ const UserRoutes = () => {
   const isFlashSale = location.pathname === '/flash-sale';
   const isNotifications = location.pathname === '/notifications';
   const isLocation = location.pathname === '/location';
-  const isPlaceholder = ['/account-information', '/saved-addresses', '/security', '/terms', '/faqs', '/support'].includes(location.pathname);
+  const isPlaceholder = ['/account-information', '/saved-addresses', '/security', '/terms', '/privacy', '/faqs', '/support'].includes(location.pathname);
   
   // Transport flow routes that should hide the bottom nav
   const isTransportFlow = ['/transport/register', '/transport/location', '/transport/goods', '/transport/vehicle', '/transport/summary', '/transport/success', '/transport/booking-details'].includes(location.pathname);
@@ -69,6 +69,7 @@ const UserRoutes = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/verify-otp" element={<VerifyOtp />} />
         <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Terms />} />
         <Route path="/faqs" element={<Faqs />} />
         <Route path="/support" element={<HelpSupport />} />
 

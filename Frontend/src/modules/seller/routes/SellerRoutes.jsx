@@ -20,14 +20,18 @@ import Settings from '../pages/Settings';
 import Taxes from '../pages/Taxes';
 import Wallet from '../pages/Wallet';
 import Return from '../pages/Return';
+import SellerMembership from '../pages/SellerMembership';
+import SellerPolicyPage from '../pages/SellerPolicyPage';
 
 const SellerRoutes = () => {
   return (
     <Routes>
-      {/* Public Auth Routes */}
+      {/* Public Auth & Policy Routes */}
       <Route path="login" element={<SellerLogin />} />
       <Route path="register" element={<SellerRegister />} />
       <Route path="under-review" element={<SellerUnderReview />} />
+      <Route path="terms" element={<SellerPolicyPage />} />
+      <Route path="privacy" element={<SellerPolicyPage />} />
       
       {/* Protected Layout Routes */}
       <Route element={<ProtectedRoute role="seller" redirectPath="/seller/login" />}>
@@ -65,6 +69,11 @@ const SellerRoutes = () => {
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Route>
+      </Route>
+
+      {/* Membership Route — protected (requires seller token) but full-screen (outside SellerLayout) */}
+      <Route element={<ProtectedRoute role="seller" redirectPath="/seller/login" />}>
+        <Route path="membership" element={<SellerMembership />} />
       </Route>
     </Routes>
   );

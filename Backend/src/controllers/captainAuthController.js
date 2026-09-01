@@ -1,6 +1,7 @@
 import Captain from '../models/Captain.model.js';
 import { generateOtp } from '../utils/generateOtp.js';
 import { generateToken } from '../utils/generateToken.js';
+import CaptainMembership from '../models/CaptainMembership.model.js';
 
 // Register Captain (Submit Registration Form)
 export const registerCaptain = async (req, res, next) => {
@@ -252,6 +253,43 @@ export const verifyOtp = async (req, res, next) => {
     await captain.save();
 
     const token = generateToken({ id: captain._id, phone: captain.phone, role: captain.role });
+
+    // Membership gate: check if captain has an active membership
+    const now = new Date();
+    const activeMembership = await CaptainMembership.findOne({
+      captainId: captain._id,
+      membershipStatus: 'active',
+      expiryDate: { $gt: now },
+    });
+
+    // Auto-expire stale memberships
+    await CaptainMembership.updateMany(
+      { captainId: captain._id, membershipStatus: 'active', expiryDate: { $lte: now } },
+      { $set: { membershipStatus: 'expired' } }
+    );
+
+    if (!activeMembership) {
+      const pendingMembership = await CaptainMembership.findOne({
+        captainId: captain._id,
+        membershipStatus: 'pending_payment',
+      });
+      const membershipStatus = pendingMembership ? 'pending_payment' : 'none';
+
+      return res.status(200).json({
+        success: true,
+        requiresMembership: true,
+        membershipStatus,
+        message: 'Membership purchase required to activate your captain account.',
+        token,
+        captain: {
+          id: captain._id,
+          name: captain.name,
+          phone: captain.phone,
+          role: captain.role,
+          status: captain.status,
+        },
+      });
+    }
 
     res.status(200).json({
       success: true,

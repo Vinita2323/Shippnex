@@ -21,6 +21,8 @@ const sellerSchema = new mongoose.Schema(
     gstNumber: { type: String, trim: true },
     panNumber: { type: String, trim: true },
     fssaiLicense: { type: String, trim: true },
+    gstPhoto: { type: String },
+    bankPassbookPhoto: { type: String },
     tagline: { type: String, trim: true },
     bankName: { type: String, trim: true },
     accountNumber: { type: String, trim: true },
@@ -69,6 +71,11 @@ const sellerSchema = new mongoose.Schema(
       enum: ['pending', 'approved', 'rejected'],
       default: 'pending',
     },
+    membershipStatus: {
+      type: String,
+      enum: ['active', 'expired', 'pending_payment', 'none'],
+      default: 'none',
+    },
     warehouseLocation: {
       location: {
         type: { type: String, enum: ['Point'], default: 'Point' },
@@ -80,6 +87,15 @@ const sellerSchema = new mongoose.Schema(
       city: String,
       area: String,
       pincode: String,
+    },
+    // FCM Push Notification Tokens (SOP Standard)
+    fcmTokens: {
+      type: [String],
+      default: [],
+    },
+    fcmTokenMobile: {
+      type: [String],
+      default: [],
     },
   },
   {

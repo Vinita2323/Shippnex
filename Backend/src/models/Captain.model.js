@@ -78,6 +78,11 @@ const captainSchema = new mongoose.Schema(
       enum: ['pending', 'approved', 'rejected'],
       default: 'pending',
     },
+    membershipStatus: {
+      type: String,
+      enum: ['active', 'expired', 'pending_payment', 'none'],
+      default: 'none',
+    },
 
     walletBalance: {
       type: Number,
@@ -115,6 +120,15 @@ const captainSchema = new mongoose.Schema(
     isOnline: {
       type: Boolean,
       default: false,
+    },
+    // FCM Push Notification Tokens (SOP Standard)
+    fcmTokens: {
+      type: [String],
+      default: [],
+    },
+    fcmTokenMobile: {
+      type: [String],
+      default: [],
     },
   },
   {

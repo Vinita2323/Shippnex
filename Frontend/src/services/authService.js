@@ -1,4 +1,5 @@
 import API from './api';
+import { registerFCMToken, removeFCMToken } from './pushNotificationService';
 
 export const authService = {
   // User Auth
@@ -23,11 +24,18 @@ export const authService = {
       if (response.data.user?.addresses && Array.isArray(response.data.user.addresses)) {
         localStorage.setItem('shippnex_saved_addresses', JSON.stringify(response.data.user.addresses));
       }
+      // Register FCM Push Token on login (SOP Step 7)
+      registerFCMToken(true, 'user').catch(() => {});
     }
     return response.data;
   },
 
   // Seller Auth
+  registerSeller: async (formData) => {
+    const response = await API.post('/auth/seller/register', formData);
+    return response.data;
+  },
+
   sendSellerOtp: async (phone) => {
     const response = await API.post('/auth/seller/send-otp', { phone });
     return response.data;
@@ -39,6 +47,8 @@ export const authService = {
       if (response.data.token) {
         localStorage.setItem('shippnex_seller_token', response.data.token);
         localStorage.setItem('shippnex_seller_data', JSON.stringify(response.data.seller));
+        // Register FCM Push Token on login (SOP Step 7)
+        registerFCMToken(true, 'seller').catch(() => {});
       }
       return response.data;
     } catch (error) {
@@ -82,6 +92,8 @@ export const authService = {
     if (response.data.token) {
       localStorage.setItem('shippnex_captain_token', response.data.token);
       localStorage.setItem('shippnex_captain_data', JSON.stringify(response.data.captain));
+      // Register FCM Push Token on login (SOP Step 7)
+      registerFCMToken(true, 'captain').catch(() => {});
     }
     return response.data;
   },
@@ -92,12 +104,15 @@ export const authService = {
     if (response.data.token) {
       localStorage.setItem('shippnex_admin_token', response.data.token);
       localStorage.setItem('shippnex_admin_data', JSON.stringify(response.data.admin));
+      registerFCMToken(true, 'admin').catch(() => {});
     }
     return response.data;
   },
 
   // Logout utility
   logout: (role) => {
+    removeFCMToken(role).catch(() => {});
+
     if (role === 'user') {
       localStorage.removeItem('shippnex_user_token');
       localStorage.removeItem('shippnex_user_data');
@@ -456,6 +471,170 @@ export const userService = {
     } catch (error) {
       throw error.response?.data || error.message;
     }
+  },
+};
+
+export const membershipService = {
+  // ── Seller (user-facing) ──────────────────────────────────
+  getSellerPlans: async () => {
+    const response = await API.get('/membership/seller/plans');
+    return response.data;
+  },
+  createRazorpayOrder: async (planId, userType = 'seller') => {
+    const response = await API.post('/membership/razorpay/create-order', { planId, userType });
+    return response.data;
+  },
+  getSellerMembership: async () => {
+    const response = await API.get('/membership/seller/current');
+    return response.data;
+  },
+  getSellerMembershipHistory: async () => {
+    const response = await API.get('/membership/seller/history');
+    return response.data;
+  },
+  purchaseSellerMembership: async (payload) => {
+    const response = await API.post('/membership/seller/purchase', payload);
+    return response.data;
+  },
+  renewSellerMembership: async (payload) => {
+    const response = await API.post('/membership/seller/renew', payload);
+    return response.data;
+  },
+
+  // ── Captain (user-facing) ─────────────────────────────────
+  getCaptainPlans: async () => {
+    const response = await API.get('/membership/captain/plans');
+    return response.data;
+  },
+  getCaptainMembership: async () => {
+    const response = await API.get('/membership/captain/current');
+    return response.data;
+  },
+  getCaptainMembershipHistory: async () => {
+    const response = await API.get('/membership/captain/history');
+    return response.data;
+  },
+  purchaseCaptainMembership: async (payload) => {
+    const response = await API.post('/membership/captain/purchase', payload);
+    return response.data;
+  },
+  renewCaptainMembership: async (payload) => {
+    const response = await API.post('/membership/captain/renew', payload);
+    return response.data;
+  },
+
+  // ── Admin: Seller Plans ───────────────────────────────────
+  adminGetSellerPlans: async () => {
+    const response = await API.get('/membership/admin/seller/plans');
+    return response.data;
+  },
+  adminCreateSellerPlan: async (data) => {
+    const response = await API.post('/membership/admin/seller/plans', data);
+    return response.data;
+  },
+  adminUpdateSellerPlan: async (id, data) => {
+    const response = await API.put(`/membership/admin/seller/plans/${id}`, data);
+    return response.data;
+  },
+  adminToggleSellerPlan: async (id) => {
+    const response = await API.put(`/membership/admin/seller/plans/${id}/toggle`);
+    return response.data;
+  },
+  adminDeleteSellerPlan: async (id) => {
+    const response = await API.delete(`/membership/admin/seller/plans/${id}`);
+    return response.data;
+  },
+
+  // ── Admin: Captain Plans ──────────────────────────────────
+  adminGetCaptainPlans: async () => {
+    const response = await API.get('/membership/admin/captain/plans');
+    return response.data;
+  },
+  adminCreateCaptainPlan: async (data) => {
+    const response = await API.post('/membership/admin/captain/plans', data);
+    return response.data;
+  },
+  adminUpdateCaptainPlan: async (id, data) => {
+    const response = await API.put(`/membership/admin/captain/plans/${id}`, data);
+    return response.data;
+  },
+  adminToggleCaptainPlan: async (id) => {
+    const response = await API.put(`/membership/admin/captain/plans/${id}/toggle`);
+    return response.data;
+  },
+  adminDeleteCaptainPlan: async (id) => {
+    const response = await API.delete(`/membership/admin/captain/plans/${id}`);
+    return response.data;
+  },
+
+  // ── Admin: Subscriptions ──────────────────────────────────
+  adminGetSellerSubscriptions: async (params = {}) => {
+    const response = await API.get('/membership/admin/seller/subscriptions', { params });
+    return response.data;
+  },
+  adminGetCaptainSubscriptions: async (params = {}) => {
+    const response = await API.get('/membership/admin/captain/subscriptions', { params });
+    return response.data;
+  },
+  adminConfirmSellerPayment: async (id, adminNote = '') => {
+    const response = await API.put(`/membership/admin/seller/subscriptions/${id}/confirm-payment`, { adminNote });
+    return response.data;
+  },
+  adminConfirmCaptainPayment: async (id, adminNote = '') => {
+    const response = await API.put(`/membership/admin/captain/subscriptions/${id}/confirm-payment`, { adminNote });
+    return response.data;
+  },
+
+  // ── Admin: Stats ──────────────────────────────────────────
+  adminGetSellerStats: async () => {
+    const response = await API.get('/membership/admin/seller/stats');
+    return response.data;
+  },
+  adminGetCaptainStats: async () => {
+    const response = await API.get('/membership/admin/captain/stats');
+    return response.data;
+  },
+  adminCheckExpiry: async () => {
+    const response = await API.post('/membership/admin/check-expiry');
+    return response.data;
+  },
+};
+
+export const policyService = {
+  getPolicies: async (params = {}) => {
+    const response = await API.get('/policies', { params });
+    return response.data;
+  },
+  getPolicy: async (target, type) => {
+    const response = await API.get(`/policies/${target}/${type}`);
+    return response.data;
+  },
+  savePolicy: async (data) => {
+    const response = await API.post('/policies', data);
+    return response.data;
+  },
+  deletePolicy: async (id) => {
+    const response = await API.delete(`/policies/${id}`);
+    return response.data;
+  },
+};
+
+export const fcmService = {
+  saveToken: async (token, platform = 'web') => {
+    const response = await API.post('/fcm-tokens/save', { token, platform });
+    return response.data;
+  },
+  saveMobileToken: async (token) => {
+    const response = await API.post('/fcm-tokens/mobile/save', { token });
+    return response.data;
+  },
+  removeToken: async (token, platform = 'web') => {
+    const response = await API.delete('/fcm-tokens/remove', { data: { token, platform } });
+    return response.data;
+  },
+  sendTestPush: async () => {
+    const response = await API.post('/fcm-tokens/test');
+    return response.data;
   },
 };
 

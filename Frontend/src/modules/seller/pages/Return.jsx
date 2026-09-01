@@ -1,18 +1,45 @@
-import React, { useState } from 'react';
-import { Download, ChevronDown, FileText, FileSpreadsheet, CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
-
-const initialReturns = [
-  { id: 'RET-1092', orderId: 'ORD-8812', customer: 'Ramesh Sharma', product: 'Fortune Whole Wheat Atta 10kg', reason: 'Packaging Damaged', status: 'Pending Approval', date: '26 Jul 2026' },
-  { id: 'RET-1091', orderId: 'ORD-8790', customer: 'Priya Singh', product: 'Fortune Mustard Oil 5L', reason: 'Wrong Item Delivered', status: 'Approved', date: '24 Jul 2026' },
-  { id: 'RET-1090', orderId: 'ORD-8740', customer: 'Amit Kumar', product: 'India Gate Basmati Rice 5kg', reason: 'Quality Issue', status: 'Rejected', date: '21 Jul 2026' },
-];
+import React, { useState, useEffect } from 'react';
+import { Download, ChevronDown, FileText, FileSpreadsheet, CheckCircle2, AlertCircle, XCircle, RefreshCw } from 'lucide-react';
+import { orderService } from '../../../services/authService';
 
 const Return = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [pageSize, setPageSize] = useState(10);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [returns] = useState(initialReturns);
+  const [returns, setReturns] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchReturns();
+  }, []);
+
+  const fetchReturns = async () => {
+    setLoading(true);
+    try {
+      const res = await orderService.getSellerNotifications().catch(() => null);
+      if (res && Array.isArray(res.notifications)) {
+        const returnList = res.notifications
+          .filter(n => n.status === 'REJECTED' || n.status === 'Rejected' || n.status === 'RETURNED')
+          .map((n, idx) => ({
+            id: `RET-${n.orderId || idx + 1}`,
+            orderId: n.orderId || `#ORD-${idx + 1}`,
+            customer: n.customerDetails?.name || 'Customer',
+            product: (n.items || []).map(i => i.name || i.product?.name).filter(Boolean).join(', ') || 'Ordered Item',
+            reason: n.rejectionReason || 'Customer requested return / rejected',
+            status: n.status === 'REJECTED' || n.status === 'Rejected' ? 'Rejected' : 'Approved',
+            date: n.createdAt ? new Date(n.createdAt).toLocaleDateString() : 'Today'
+          }));
+        setReturns(returnList);
+      } else {
+        setReturns([]);
+      }
+    } catch (e) {
+      setReturns([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredReturns = returns.filter(r => {
     const matchesSearch = r.id.toLowerCase().includes(searchTerm.toLowerCase()) || 

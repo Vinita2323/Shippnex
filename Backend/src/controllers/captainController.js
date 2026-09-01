@@ -160,6 +160,9 @@ export const getDashboardStats = async (req, res, next) => {
     const captain = await Captain.findById(captainId).select('name walletBalance isOnline');
     if (!captain) return res.status(404).json({ success: false, message: 'Captain not found' });
 
+    const isMongoId = mongoose.Types.ObjectId.isValid(captainId);
+    const captainQuery = isMongoId ? { $in: [captainId, new mongoose.Types.ObjectId(captainId)] } : captainId;
+
     // Today's date range
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
@@ -168,7 +171,7 @@ export const getDashboardStats = async (req, res, next) => {
 
     // Today's completed transactions (both e-commerce and transport)
     const todayTransactions = await CaptainTransaction.find({
-      captainId,
+      captainId: captainQuery,
       type: 'CREDIT',
       createdAt: { $gte: startOfDay, $lte: endOfDay },
     });
@@ -177,7 +180,7 @@ export const getDashboardStats = async (req, res, next) => {
 
     // Today's assigned orders (E-Commerce)
     const todayOrders = await Order.find({
-      captainId,
+      captainId: captainQuery,
       captainAssignedAt: { $gte: startOfDay, $lte: endOfDay },
     }).select('captainStatus orderId shippingAddress items captainEarnings createdAt deliverySlot');
 
@@ -186,15 +189,17 @@ export const getDashboardStats = async (req, res, next) => {
     const { getVehicleMatchPattern } = await import('./transportBookingController.js');
 
     const todayCompletedTransport = await TransportBooking.countDocuments({
-      captainId,
+      captainId: captainQuery,
       status: 'RIDE_COMPLETED',
       updatedAt: { $gte: startOfDay, $lte: endOfDay },
     });
 
     const deliveredToday = todayOrders.filter((o) => o.captainStatus === 'Delivered').length + todayCompletedTransport;
     const pendingOrders = await Order.find({
-      captainId,
-      captainStatus: { $in: ['Assigned', 'Accepted', 'At Pickup', 'Picked Up', 'In Transit'] },
+      $or: [
+        { captainId: captainQuery, captainStatus: { $in: ['Assigned', 'Accepted', 'Reached Store', 'At Pickup', 'Picked Up', 'In Transit', 'Out for Delivery'] } },
+        { captainStatus: 'Assigned' },
+      ],
     })
       .populate('user', 'name phone email')
       .select('orderId shippingAddress captainStatus captainEarnings deliverySlot items createdAt captainAssignedAt paymentMethod paymentStatus itemsTotal grandTotal deliveryInstructions');
@@ -377,10 +382,13 @@ export const getJobs = async (req, res, next) => {
       return res.json({ success: true, orders: allCompleted, count: allCompleted.length });
     }
 
-    let query = { captainId };
+    const isMongoId = mongoose.Types.ObjectId.isValid(captainId);
+    const captainQuery = isMongoId ? { $in: [captainId, new mongoose.Types.ObjectId(captainId)] } : captainId;
+
+    let query = { captainId: captainQuery };
     if (tab === 'deliveries' || tab === 'bookings') {
       // Both "deliveries" and "bookings" show assigned/active jobs
-      query.captainStatus = { $in: ['Assigned', 'Accepted', 'Picked Up', 'In Transit'] };
+      query.captainStatus = { $in: ['Assigned', 'Accepted', 'Reached Store', 'At Pickup', 'Picked Up', 'In Transit', 'Out for Delivery'] };
     }
 
     const orders = await Order.find(query)
@@ -401,18 +409,24 @@ export const acceptJob = async (req, res, next) => {
   try {
     const { orderId } = req.params;
     const captainId = req.user.id;
+    const isMongoId = mongoose.Types.ObjectId.isValid(captainId);
+    const captainQuery = isMongoId ? { $in: [captainId, new mongoose.Types.ObjectId(captainId)] } : captainId;
 
-    // Find and update order assigned to captain
+    // Find and update order assigned to captain or available for acceptance
     const query = buildOrderQuery(orderId, {
-      captainId,
-      captainStatus: { $in: ['Assigned', 'Accepted'] },
+      $or: [
+        { captainId: captainQuery, captainStatus: { $in: ['Assigned', 'Accepted'] } },
+        { captainStatus: 'Assigned' },
+      ],
     });
 
     const order = await Order.findOneAndUpdate(
       query,
       {
         $set: {
+          captainId: req.user.id,
           captainStatus: 'Accepted',
+          captainAssignedAt: new Date(),
         },
       },
       { new: true }
@@ -832,7 +846,10 @@ export const requestWithdrawal = async (req, res, next) => {
 export const getNotifications = async (req, res, next) => {
   try {
     const captainId = req.user.id;
-    const notifications = await CaptainNotification.find({ captainId })
+    const isMongoId = mongoose.Types.ObjectId.isValid(captainId);
+    const captainQuery = isMongoId ? { $in: [captainId, new mongoose.Types.ObjectId(captainId)] } : captainId;
+
+    const notifications = await CaptainNotification.find({ captainId: captainQuery })
       .sort({ createdAt: -1 })
       .limit(50);
 
@@ -851,9 +868,11 @@ export const markNotificationRead = async (req, res, next) => {
   try {
     const { id } = req.params;
     const captainId = req.user.id;
+    const isMongoId = mongoose.Types.ObjectId.isValid(captainId);
+    const captainQuery = isMongoId ? { $in: [captainId, new mongoose.Types.ObjectId(captainId)] } : captainId;
 
     await CaptainNotification.findOneAndUpdate(
-      { _id: id, captainId },
+      { _id: id, captainId: captainQuery },
       { read: true }
     );
 
@@ -869,7 +888,10 @@ export const markNotificationRead = async (req, res, next) => {
 export const markAllNotificationsRead = async (req, res, next) => {
   try {
     const captainId = req.user.id;
-    await CaptainNotification.updateMany({ captainId, read: false }, { read: true });
+    const isMongoId = mongoose.Types.ObjectId.isValid(captainId);
+    const captainQuery = isMongoId ? { $in: [captainId, new mongoose.Types.ObjectId(captainId)] } : captainId;
+
+    await CaptainNotification.updateMany({ captainId: captainQuery, read: false }, { read: true });
     res.json({ success: true, message: 'All notifications marked as read' });
   } catch (error) {
     next(error);

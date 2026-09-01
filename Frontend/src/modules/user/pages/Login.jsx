@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Phone, ArrowRight, ArrowLeft, Package, MapPin, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../../../services/authService';
 
 const Login = () => {
@@ -108,8 +108,16 @@ const Login = () => {
         </div>
 
         {/* Footer info */}
-        <p className="text-[11px] text-center text-slate-400 font-normal mt-6">
-          By continuing, you agree to Shippnex's Terms of Service & Privacy Policy.
+        <p className="text-[11px] text-center text-slate-400 font-normal mt-6 leading-relaxed">
+          By continuing, you agree to Shippnex's{' '}
+          <Link to="/terms" className="text-[#ea580c] hover:underline font-semibold">
+            Terms of Service
+          </Link>{' '}
+          &{' '}
+          <Link to="/privacy" className="text-[#ea580c] hover:underline font-semibold">
+            Privacy Policy
+          </Link>
+          .
         </p>
 
       </div>

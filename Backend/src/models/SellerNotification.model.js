@@ -95,6 +95,18 @@ const sellerNotificationSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    captainId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Captain',
+    },
+    captainName: {
+      type: String,
+      default: '',
+    },
+    captainPhone: {
+      type: String,
+      default: '',
+    },
     viewedAt: { type: Date },
     acceptedAt: { type: Date },
     rejectedAt: { type: Date },

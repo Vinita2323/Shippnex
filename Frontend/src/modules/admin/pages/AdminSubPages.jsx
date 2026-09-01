@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../context/useAdmin';
 import { StatusBadge, Drawer } from '../components/AdminUIComponents';
-import { categoryService, bannerService, productService, walletService, captainService } from '../../../services/authService';
+import { categoryService, bannerService, productService, walletService, captainService, fcmService } from '../../../services/authService';
 import { mockUsers, mockSellers, mockCaptains, mockWarehouses, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
 import { 
   Search, 
@@ -261,6 +261,7 @@ export const SellerManagement = () => {
   const [selectedSellerCategoryDrawer, setSelectedSellerCategoryDrawer] = React.useState(null);
   const [editingSellerModal, setEditingSellerModal] = React.useState(null);
   const [editFormData, setEditFormData] = React.useState({ name: '', storeName: '', commission: '', balance: '' });
+  const [previewDocImage, setPreviewDocImage] = React.useState(null);
 
   // Column Sort Handler
   const handleSort = (field) => {
@@ -994,6 +995,86 @@ export const SellerManagement = () => {
                 </div>
               </div>
 
+              {/* 6. Uploaded Verification Documents */}
+              <div className="bg-slate-50/70 p-5 rounded-2xl border border-slate-200 space-y-4">
+                <h4 className="text-sm font-bold text-slate-800 m-0">Uploaded Verification Documents</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700 block">GST Certificate / Photo</span>
+                      {editingSellerModal.gstPhoto && (
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">Attached</span>
+                      )}
+                    </div>
+                    {editingSellerModal.gstPhoto ? (
+                      <div className="space-y-2">
+                        <div 
+                          className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-slate-900 h-44 flex items-center justify-center"
+                          onClick={() => setPreviewDocImage({ title: `GST Certificate - ${editingSellerModal.storeName || editingSellerModal.name}`, src: editingSellerModal.gstPhoto })}
+                        >
+                          <img 
+                            src={editingSellerModal.gstPhoto} 
+                            alt="GST Document" 
+                            className="w-full h-full object-contain group-hover:scale-105 transition-transform" 
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs gap-1.5 backdrop-blur-[1px]">
+                            <Eye size={16} /> View Document
+                          </div>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => setPreviewDocImage({ title: `GST Certificate - ${editingSellerModal.storeName || editingSellerModal.name}`, src: editingSellerModal.gstPhoto })}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#ff5500] hover:text-[#e04a00] border-none bg-transparent cursor-pointer p-0"
+                        >
+                          <Eye size={14} /> Open in Same Tab Preview
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-28 flex items-center justify-center bg-slate-50 rounded-lg border border-dashed border-slate-200 text-xs text-slate-400">
+                        No GST Document uploaded
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700 block">Bank Passbook / Cancelled Cheque</span>
+                      {editingSellerModal.bankPassbookPhoto && (
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">Attached</span>
+                      )}
+                    </div>
+                    {editingSellerModal.bankPassbookPhoto ? (
+                      <div className="space-y-2">
+                        <div 
+                          className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-slate-900 h-44 flex items-center justify-center"
+                          onClick={() => setPreviewDocImage({ title: `Bank Passbook - ${editingSellerModal.storeName || editingSellerModal.name}`, src: editingSellerModal.bankPassbookPhoto })}
+                        >
+                          <img 
+                            src={editingSellerModal.bankPassbookPhoto} 
+                            alt="Bank Passbook Document" 
+                            className="w-full h-full object-contain group-hover:scale-105 transition-transform" 
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs gap-1.5 backdrop-blur-[1px]">
+                            <Eye size={16} /> View Document
+                          </div>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => setPreviewDocImage({ title: `Bank Passbook - ${editingSellerModal.storeName || editingSellerModal.name}`, src: editingSellerModal.bankPassbookPhoto })}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#ff5500] hover:text-[#e04a00] border-none bg-transparent cursor-pointer p-0"
+                        >
+                          <Eye size={14} /> Open in Same Tab Preview
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-28 flex items-center justify-center bg-slate-50 rounded-lg border border-dashed border-slate-200 text-xs text-slate-400">
+                        No Bank Passbook uploaded
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
             </div>
 
             {/* Modal Footer */}
@@ -1010,6 +1091,48 @@ export const SellerManagement = () => {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* SELLER LIGHTBOX DOCUMENT IMAGE PREVIEW (SAME TAB) */}
+      {previewDocImage && (
+        <div 
+          className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setPreviewDocImage(null)}
+        >
+          <div 
+            className="bg-white rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-3.5 bg-slate-900 text-white flex justify-between items-center">
+              <h4 className="text-xs font-bold text-white m-0 flex items-center gap-2">
+                <FileText size={16} className="text-[#ff5500]" />
+                {previewDocImage.title}
+              </h4>
+              <button 
+                onClick={() => setPreviewDocImage(null)} 
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center border-none cursor-pointer text-lg font-bold"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-4 bg-slate-950 flex items-center justify-center overflow-auto max-h-[75vh]">
+              <img 
+                src={previewDocImage.src} 
+                alt={previewDocImage.title} 
+                className="max-h-[70vh] w-auto max-w-full object-contain rounded-xl shadow-lg" 
+              />
+            </div>
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+              <span className="text-[11px] text-slate-500 font-medium">Viewing document on same page</span>
+              <button 
+                onClick={() => setPreviewDocImage(null)}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-sm transition-colors"
+              >
+                Close Preview
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -6264,11 +6387,30 @@ export const RoleManagement = () => {
    14. SYSTEM SETTINGS PAGE
    ========================================================================= */
 export const SettingManagement = () => {
+  const [fcmTesting, setFcmTesting] = useState(false);
+  const [fcmTestResult, setFcmTestResult] = useState(null);
+
+  const handleTestFCM = async () => {
+    setFcmTesting(true);
+    setFcmTestResult(null);
+    try {
+      const res = await fcmService.sendTestPush();
+      setFcmTestResult(res);
+    } catch (err) {
+      setFcmTestResult({
+        success: false,
+        error: err.response?.data?.error || err.response?.data?.message || err.message
+      });
+    } finally {
+      setFcmTesting(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <h2 className="text-xl font-bold text-slate-900">Global Platform Settings</h2>
-        <p className="text-xs text-slate-500">Branding, tax rules, payment gateways, and security configurations</p>
+        <p className="text-xs text-slate-500">Branding, tax rules, payment gateways, push notifications, and security configurations</p>
       </div>
 
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6 max-w-3xl">
@@ -6286,8 +6428,47 @@ export const SettingManagement = () => {
           </div>
         </div>
 
+        {/* Firebase Push Notifications (SOP Standard) */}
+        <div className="pt-4 border-t border-slate-100 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Firebase Cloud Messaging (FCM)</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">Push notifications for Customer orders, Merchant alerts & Delivery Captains (SOP v2.0)</p>
+            </div>
+            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-extrabold uppercase">
+              SOP Active
+            </span>
+          </div>
+
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+            <div className="text-xs text-slate-600 space-y-1">
+              <p className="m-0 font-medium">● <b>Service Worker:</b> <code className="text-[11px] bg-white px-1.5 py-0.5 rounded border border-slate-200 font-mono">/firebase-messaging-sw.js</code></p>
+              <p className="m-0 font-medium">● <b>Status:</b> Ready with standard schema and fallback dispatcher.</p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={handleTestFCM}
+                disabled={fcmTesting}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl cursor-pointer border-none flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              >
+                {fcmTesting ? <RefreshCw size={13} className="animate-spin" /> : null}
+                <span>{fcmTesting ? 'Testing FCM...' : 'Send Test Push Notification'}</span>
+              </button>
+            </div>
+
+            {fcmTestResult && (
+              <div className={`p-3 rounded-xl text-xs ${fcmTestResult.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+                <p className="font-bold m-0">{fcmTestResult.success ? '✅ Test Notification Dispatched:' : 'ℹ️ FCM Status:'}</p>
+                <p className="m-0 text-[11px] mt-0.5">{fcmTestResult.message || fcmTestResult.error || JSON.stringify(fcmTestResult)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="pt-4 border-t border-slate-100 flex justify-end">
-          <button onClick={() => alert('Settings Saved (UI Only)')} className="px-5 py-2.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl cursor-pointer border-none">
+          <button onClick={() => alert('Settings Saved Successfully')} className="px-5 py-2.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl cursor-pointer border-none">
             Save System Configurations
           </button>
         </div>

@@ -1,23 +1,61 @@
-import React, { useState } from 'react';
-import { Download, FileText, Calendar, TrendingUp, FileSpreadsheet, Percent, CheckCircle2 } from 'lucide-react';
-
-const mockReportDetails = [
-  { id: 'REP-01', date: '27-07-2026', orderId: '#ORD-9021', grossSales: '₹48,200.00', gstAmount: '₹2,410.00', netPayout: '₹45,790.00', status: 'Settled' },
-  { id: 'REP-02', date: '27-07-2026', orderId: '#ORD-9020', grossSales: '₹84,500.00', gstAmount: '₹4,225.00', netPayout: '₹80,275.00', status: 'Settled' },
-  { id: 'REP-03', date: '26-07-2026', orderId: '#ORD-9019', grossSales: '₹18,900.00', gstAmount: '₹945.00', netPayout: '₹17,955.00', status: 'Settled' },
-  { id: 'REP-04', date: '26-07-2026', orderId: '#ORD-9018', grossSales: '₹1,24,000.00', gstAmount: '₹6,200.00', netPayout: '₹1,17,800.00', status: 'Settled' },
-  { id: 'REP-05', date: '25-07-2026', orderId: '#ORD-9015', grossSales: '₹35,600.00', gstAmount: '₹1,780.00', netPayout: '₹33,820.00', status: 'Settled' },
-];
+import React, { useState, useEffect } from 'react';
+import { Download, FileText, Calendar, TrendingUp, FileSpreadsheet, Percent, CheckCircle2, RefreshCw } from 'lucide-react';
+import { orderService } from '../../../services/authService';
 
 const Reports = () => {
   const [reportType, setReportType] = useState('sales');
   const [fromDate, setFromDate] = useState('2026-07-01');
-  const [toDate, setToDate] = useState('2026-07-25');
+  const [toDate, setToDate] = useState('2026-09-01');
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [reportDetails, setReportDetails] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchReports();
+  }, []);
+
+  const fetchReports = async () => {
+    setLoading(true);
+    try {
+      const res = await orderService.getSellerNotifications().catch(() => null);
+      if (res && Array.isArray(res.notifications)) {
+        const rows = res.notifications.map((n, idx) => {
+          const gross = Number(n.totalAmount || 0);
+          const gst = Number((gross * 0.05).toFixed(2));
+          const net = Number(n.netSellerAmount || (gross - gst).toFixed(2));
+          return {
+            id: `REP-${String(idx + 1).padStart(2, '0')}`,
+            date: n.createdAt ? new Date(n.createdAt).toLocaleDateString() : 'Today',
+            orderId: n.orderId ? `#${n.orderId}` : `#ORD-${idx + 1}`,
+            grossSales: `₹${gross.toFixed(2)}`,
+            gstAmount: `₹${gst.toFixed(2)}`,
+            netPayout: `₹${net.toFixed(2)}`,
+            rawGross: gross,
+            rawGst: gst,
+            status: n.settlementStatus === 'SETTLED' ? 'Settled' : (n.status === 'DELIVERED' ? 'Settled' : 'Pending')
+          };
+        });
+        setReportDetails(rows);
+      } else {
+        setReportDetails([]);
+      }
+    } catch (e) {
+      setReportDetails([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalGrossRevenue = reportDetails.reduce((sum, r) => sum + (r.rawGross || 0), 0);
+  const totalGst = reportDetails.reduce((sum, r) => sum + (r.rawGst || 0), 0);
 
   const handleExport = (format = 'excel') => {
+    if (reportDetails.length === 0) {
+      alert('No report data available to export.');
+      return;
+    }
     const headers = ['Report ID', 'Date', 'Order ID', 'Gross Sales', 'GST Amount', 'Net Payout', 'Status'];
-    const rows = mockReportDetails.map(r => [
+    const rows = reportDetails.map(r => [
       `"${r.id}"`,
       `"${r.date}"`,
       `"${r.orderId}"`,
@@ -109,25 +147,25 @@ const Reports = () => {
         
         {/* Card 1 */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-2">
-          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Gross Revenue (July)</span>
-          <h3 className="text-3xl font-semibold text-slate-900">₹14,85,200</h3>
+          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Gross Revenue</span>
+          <h3 className="text-3xl font-semibold text-slate-900">₹{totalGrossRevenue.toFixed(2)}</h3>
           <p className="text-xs font-normal text-emerald-600 flex items-center gap-1">
-            <TrendingUp size={14} /> +18.4% compared to June
+            <TrendingUp size={14} /> Total Settled & Pending Sales
           </p>
         </div>
 
         {/* Card 2 */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-2">
-          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total GST Collected (5% / 12%)</span>
-          <h3 className="text-3xl font-semibold text-slate-900">₹1,12,450</h3>
+          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total GST Estimated</span>
+          <h3 className="text-3xl font-semibold text-slate-900">₹{totalGst.toFixed(2)}</h3>
           <p className="text-xs font-normal text-slate-500">Ready for GSTR-1 Filing</p>
         </div>
 
         {/* Card 3 */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-2">
-          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Units Dispatched</span>
-          <h3 className="text-3xl font-semibold text-[#ff7526]">24,500 kg</h3>
-          <p className="text-xs font-normal text-slate-500">Across 142 B2B Bulk Orders</p>
+          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Orders</span>
+          <h3 className="text-3xl font-semibold text-[#ff7526]">{reportDetails.length}</h3>
+          <p className="text-xs font-normal text-slate-500">Store Order Statement</p>
         </div>
 
       </div>
@@ -138,7 +176,7 @@ const Reports = () => {
         {/* Light Orange Banner Header */}
         <div className="bg-[#ff7526] px-5 py-3.5 flex justify-between items-center">
           <h2 className="text-white font-semibold text-lg tracking-wide">Detailed Sales & Revenue Statement</h2>
-          <span className="text-white/90 text-xs font-medium">Total Entries: {mockReportDetails.length}</span>
+          <span className="text-white/90 text-xs font-medium">Total Entries: {reportDetails.length}</span>
         </div>
 
         {/* Table */}
@@ -156,22 +194,34 @@ const Reports = () => {
               </tr>
             </thead>
             <tbody className="text-[15px] font-normal text-slate-700 divide-y divide-slate-100">
-              {mockReportDetails.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{item.id}</td>
-                  <td className="px-6 py-4 font-normal text-slate-600 text-sm">{item.date}</td>
-                  <td className="px-6 py-4 font-semibold text-slate-900">{item.orderId}</td>
-                  <td className="px-6 py-4 font-semibold text-slate-900">{item.grossSales}</td>
-                  <td className="px-6 py-4 text-slate-600 font-normal">{item.gstAmount}</td>
-                  <td className="px-6 py-4 font-semibold text-[#ff7526]">{item.netPayout}</td>
-                  <td className="px-6 py-4 text-right">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <CheckCircle2 size={13} />
-                      {item.status}
-                    </span>
+              {reportDetails.length > 0 ? (
+                reportDetails.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-6 py-4 font-mono text-xs text-slate-500">{item.id}</td>
+                    <td className="px-6 py-4 font-normal text-slate-600 text-sm">{item.date}</td>
+                    <td className="px-6 py-4 font-semibold text-slate-900">{item.orderId}</td>
+                    <td className="px-6 py-4 font-semibold text-slate-900">{item.grossSales}</td>
+                    <td className="px-6 py-4 text-slate-600 font-normal">{item.gstAmount}</td>
+                    <td className="px-6 py-4 font-semibold text-[#ff7526]">{item.netPayout}</td>
+                    <td className="px-6 py-4 text-right">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ${
+                        item.status === 'Settled' 
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                          : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}>
+                        <CheckCircle2 size={13} />
+                        {item.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="7" className="py-12 text-center text-slate-400 text-sm italic">
+                    {loading ? 'Loading report entries...' : 'No orders or transactions found for this store yet.'}
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

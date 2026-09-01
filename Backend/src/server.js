@@ -23,13 +23,16 @@ import adminRoutes from './routes/adminRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
 import vehicleTypeRoutes from './routes/vehicleTypeRoutes.js';
 import transportBookingRoutes from './routes/transportBookingRoutes.js';
+import membershipRoutes from './routes/membershipRoutes.js';
+import policyRoutes from './routes/policyRoutes.js';
+import fcmTokenRoutes from './routes/fcmTokenRoutes.js';
 
 import { fileURLToPath } from 'url';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
 
@@ -61,6 +64,15 @@ app.use('/api/user/addresses', addressRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/wallet', walletRoutes);
+
+// Membership Routes
+app.use('/api/membership', membershipRoutes);
+
+// Policy & Terms Routes
+app.use('/api/policies', policyRoutes);
+
+// Firebase Cloud Messaging (FCM) Push Notification Routes (SOP Standard)
+app.use('/api/fcm-tokens', fcmTokenRoutes);
 
 // Transport Module Routes
 app.use('/api/transport/vehicles', vehicleTypeRoutes);

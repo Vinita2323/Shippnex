@@ -37,10 +37,15 @@ const Dashboard = () => {
       }
 
       // 3. Fetch Seller Products Count
-      const prodRes = await productService.getProducts().catch(() => null);
+      const activeSeller = profRes?.seller || seller;
+      const sellerId = activeSeller?._id || activeSeller?.id;
+      const sName = activeSeller?.businessName || activeSeller?.ownerName;
+      const prodParams = {};
+      if (sellerId) prodParams.sellerId = sellerId;
+      if (sName) prodParams.seller = sName;
+      const prodRes = await productService.getProducts(prodParams).catch(() => null);
       let apiProds = prodRes?.products && Array.isArray(prodRes.products) ? prodRes.products : [];
-      const localProds = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
-      setProductsCount(apiProds.length + localProds.length);
+      setProductsCount(apiProds.length);
     } catch (err) {
       console.error('Error loading dashboard dynamic data:', err);
     } finally {

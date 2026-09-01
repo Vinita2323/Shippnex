@@ -103,11 +103,24 @@ const Orders = () => {
 
   useEffect(() => {
     fetchSellerOrders();
+
+    const handleOrderUpdate = (e) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setNotifications(e.detail);
+      }
+    };
+
+    window.addEventListener('seller-order-update', handleOrderUpdate);
+
     // Poll every 5 seconds for real-time incoming order notifications
     const interval = setInterval(() => {
       fetchSellerOrders(true);
     }, 5000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('seller-order-update', handleOrderUpdate);
+    };
   }, []);
 
   const showToast = (msg) => {

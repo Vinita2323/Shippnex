@@ -220,6 +220,7 @@ const AddProduct = () => {
         ...formData,
         mainImage: cleanMainImage,
         seller: formData.seller || defaultSellerName,
+        sellerId: sellerInfo?._id || sellerInfo?.id,
         homeSections: selectedHomeSections,
         status: statusToSave,
         mrp: Number(formData.mrp || 0),

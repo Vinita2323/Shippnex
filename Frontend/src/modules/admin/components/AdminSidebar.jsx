@@ -43,7 +43,8 @@ import {
   XCircle,
   RefreshCw,
   Clock,
-  Zap
+  Zap,
+  Crown
 } from 'lucide-react';
 
 export const AdminSidebar = () => {
@@ -166,6 +167,20 @@ export const AdminSidebar = () => {
       ]
     },
     {
+      title: 'SELLER MEMBERSHIP',
+      items: [
+        { id: 'seller_membership_plans', label: 'Seller Plans', icon: Crown },
+        { id: 'seller_memberships', label: 'Seller Subscriptions', icon: CreditCard },
+      ]
+    },
+    {
+      title: 'CAPTAIN MEMBERSHIP',
+      items: [
+        { id: 'captain_membership_plans', label: 'Captain Plans', icon: Crown },
+        { id: 'captain_memberships', label: 'Captain Subscriptions', icon: CreditCard },
+      ]
+    },
+    {
       title: 'MISCELLANEOUS',
       items: [
         { id: 'users', label: 'Users', icon: Users },
@@ -208,8 +223,7 @@ export const AdminSidebar = () => {
       title: 'SETTING',
       items: [
         { id: 'system_user', label: 'System User', icon: Users },
-        { id: 'customer_app_policy', label: 'Customer App Policy', icon: FileCheck },
-        { id: 'delivery_app_policy', label: 'Delivery App Policy', icon: FileCheck },
+        { id: 'policies', label: 'Terms & Policies Manager', icon: FileCheck },
         { id: 'billing_charges', label: 'Billing & Charges', icon: DollarSign },
       ]
     }

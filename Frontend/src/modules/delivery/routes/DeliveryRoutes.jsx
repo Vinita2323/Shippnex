@@ -14,13 +14,20 @@ import FinalVerification from '../pages/FinalVerification';
 import NewJobRequest from '../pages/NewJobRequest';
 import CaptainNotifications from '../pages/CaptainNotifications';
 import CaptainServiceAreas from '../pages/CaptainServiceAreas';
+import CaptainMembership from '../pages/CaptainMembership';
+import CaptainPolicyPage from '../pages/CaptainPolicyPage';
+import CaptainOrderNotifier from '../components/CaptainOrderNotifier';
 
 const DeliveryRoutes = () => {
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/captain/dashboard" replace />} />
+    <>
+      <CaptainOrderNotifier />
+      <Routes>
+        <Route path="/" element={<Navigate to="/captain/dashboard" replace />} />
       <Route path="/login" element={<CaptainLogin />} />
       <Route path="/register" element={<CaptainRegister />} />
+      <Route path="/terms" element={<CaptainPolicyPage />} />
+      <Route path="/privacy" element={<CaptainPolicyPage />} />
       
       {/* Protected Captain Routes */}
       <Route element={<ProtectedRoute role="captain" redirectPath="/captain/login" />}>
@@ -36,8 +43,10 @@ const DeliveryRoutes = () => {
         <Route path="/personal-details" element={<CaptainPersonalDetails />} />
         <Route path="/notifications" element={<CaptainNotifications />} />
         <Route path="/service-areas" element={<CaptainServiceAreas />} />
+        <Route path="/membership" element={<CaptainMembership />} />
       </Route>
     </Routes>
+    </>
   );
 };
 

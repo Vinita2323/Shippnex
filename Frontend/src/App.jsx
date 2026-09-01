@@ -11,12 +11,26 @@ import { OrderProvider } from './modules/user/context/OrderContext';
 import { TransportProvider } from './modules/user/context/TransportContext';
 
 import { LocationProvider } from './context/LocationContext';
+import { initializePushNotifications, setupForegroundNotificationHandler } from './services/pushNotificationService';
 
 function App() {
   const location = useLocation();
   const isCaptainRoute = location.pathname.startsWith('/captain');
   const isSellerRoute = location.pathname.startsWith('/seller');
   const isAdminRoute = location.pathname.startsWith('/admin');
+
+  // Initialize Firebase Push Notifications on App mount (SOP Standard)
+  React.useEffect(() => {
+    initializePushNotifications();
+
+    setupForegroundNotificationHandler((payload) => {
+      console.log('🔔 [App Notification Received]:', payload);
+      // Optional direct navigation if deep link provided
+      if (payload?.data?.link) {
+        // Handled or displayed via in-app toast
+      }
+    });
+  }, []);
   
   // Bypass splash screen if accessing any specific sub-route or if splash has already been dismissed
   const isSpecificRoute = location.pathname !== '/' && location.pathname !== '';

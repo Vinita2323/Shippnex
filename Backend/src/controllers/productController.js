@@ -36,6 +36,7 @@ export const createProduct = async (req, res) => {
       unitValue,
       unitType,
       seller,
+      sellerId,
       description,
       mrp,
       salePrice,
@@ -80,6 +81,7 @@ export const createProduct = async (req, res) => {
       unitType: String(unitType || 'kg'),
       unit: formattedUnit,
       seller: seller || 'ShippNex Official Store',
+      sellerId: sellerId && mongoose.Types.ObjectId.isValid(sellerId) ? sellerId : undefined,
       description: description || '',
       mrp: parsedMrp,
       salePrice: parsedSalePrice,
@@ -95,7 +97,7 @@ export const createProduct = async (req, res) => {
       isFeatured: Boolean(isFeatured)
     });
 
-    console.log(`[PRODUCT CREATED IN DB] ID: ${product._id}, Name: ${product.name}, Seller: ${product.seller}`);
+    console.log(`[PRODUCT CREATED IN DB] ID: ${product._id}, Name: ${product.name}, Seller: ${product.seller}, SellerID: ${product.sellerId}`);
 
     res.status(201).json({
       success: true,
@@ -116,8 +118,22 @@ export const createProduct = async (req, res) => {
 // @access  Public
 export const getProducts = async (req, res) => {
   try {
-    const { category, subCategory, section, search } = req.query;
+    const { category, subCategory, section, search, sellerId, seller } = req.query;
     let query = {};
+
+    if (sellerId) {
+      if (mongoose.Types.ObjectId.isValid(sellerId)) {
+        query.$or = [
+          { sellerId: sellerId },
+          { seller: sellerId },
+          ...(seller ? [{ seller: seller }] : [])
+        ];
+      } else {
+        query.seller = sellerId;
+      }
+    } else if (seller) {
+      query.seller = seller;
+    }
 
     if (category) {
       query.category = category;

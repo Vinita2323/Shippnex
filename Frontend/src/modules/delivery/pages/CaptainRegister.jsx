@@ -12,7 +12,8 @@ import {
   UserCheck, 
   RotateCcw, 
   AlertCircle, 
-  Sparkles 
+  Sparkles,
+  ArrowLeft 
 } from 'lucide-react';
 import { authService } from '../../../services/authService';
 
@@ -301,6 +302,18 @@ const CaptainRegister = () => {
     <main className="min-h-screen bg-slate-50 py-10 px-4 md:px-8 flex items-center justify-center">
       <div className="w-full max-w-2xl bg-white rounded-3xl p-6 sm:p-10 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
         
+        {/* Top Back Navigation */}
+        <div className="flex items-center justify-between mb-6">
+          <button
+            type="button"
+            onClick={() => navigate('/captain/login')}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-bold transition-all cursor-pointer border border-slate-200 shadow-xs"
+          >
+            <ArrowLeft size={15} />
+            <span>Back to Login</span>
+          </button>
+        </div>
+
         {/* Header Branding & Toggle */}
         <div className="flex flex-col items-center mb-8">
           <img src="/DeliveryLogo.png" alt="ShippNex Logo" className="h-16 object-contain mb-3" />
@@ -1145,12 +1158,21 @@ const CaptainRegister = () => {
               </div>
             )}
 
-            {/* Submit Button */}
-            <div className="pt-2">
+            {/* Submit & Back Action Buttons */}
+            <div className="pt-2 flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={() => navigate('/captain/login')}
+                className="order-2 sm:order-1 sm:w-1/3 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs sm:text-sm rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 border border-slate-200"
+              >
+                <ArrowLeft size={16} />
+                <span>Back</span>
+              </button>
+
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-4 bg-[#ea580c] hover:bg-[#c2410c] text-white font-extrabold text-sm rounded-2xl shadow-lg transition-all transform active:scale-95 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2"
+                className="order-1 sm:order-2 flex-1 py-4 bg-[#ea580c] hover:bg-[#c2410c] text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-lg transition-all transform active:scale-95 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   <>

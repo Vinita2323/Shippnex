@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Download, ChevronDown, Edit, Trash2, Eye, FileText, FileSpreadsheet, CheckCircle2, RefreshCw, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { productService } from '../../../services/authService';
+import { productService, authService } from '../../../services/authService';
 
 const Products = () => {
   const navigate = useNavigate();
@@ -19,15 +19,33 @@ const Products = () => {
     setLoading(true);
     let apiProds = [];
     try {
-      const res = await productService.getProducts();
+      // 1. Get logged-in seller info
+      let sellerData = null;
+      try {
+        const cached = localStorage.getItem('shippnex_seller_data');
+        if (cached) sellerData = JSON.parse(cached);
+      } catch (e) {}
+
+      if (!sellerData?._id) {
+        const profRes = await authService.getSellerProfile().catch(() => null);
+        if (profRes?.seller) sellerData = profRes.seller;
+      }
+
+      const sellerId = sellerData?._id || sellerData?.id;
+      const sellerName = sellerData?.businessName || sellerData?.ownerName;
+
+      // Pass sellerId so backend only returns products belonging to this seller
+      const params = {};
+      if (sellerId) params.sellerId = sellerId;
+      if (sellerName) params.seller = sellerName;
+
+      const res = await productService.getProducts(params);
       if (res && res.products && Array.isArray(res.products)) {
         apiProds = res.products;
       }
     } catch (err) {
       console.warn('Error fetching products from API:', err.message);
     }
-
-    const localProds = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
 
     const formattedApi = apiProds.map(ap => ({
       id: ap._id || ap.id || ap.sku,
@@ -43,34 +61,11 @@ const Products = () => {
       image: ap.mainImage || ap.image || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&auto=format&fit=crop&q=80',
     }));
 
-    const formattedLocal = localProds.map(lp => ({
-      id: lp._id || lp.id || lp.sku,
-      _id: lp._id,
-      name: lp.name,
-      sku: lp.sku || lp.id || 'SKU-001',
-      category: lp.category || 'General',
-      subCategory: lp.subCategory || '',
-      stock: Number(lp.stock !== undefined ? lp.stock : 0),
-      price: Number(lp.salePrice || lp.mrp || lp.price || 0),
-      mrp: Number(lp.mrp || 0),
-      status: lp.status || 'Published',
-      image: lp.mainImage || lp.image || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&auto=format&fit=crop&q=80',
-    }));
-
-    const combined = [...formattedApi, ...formattedLocal];
-    const seen = new Set();
-    const unique = combined.filter(p => {
-      const key = (p._id || p.id || p.name).toString();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
     // Populate category dropdown from loaded products
-    const cats = Array.from(new Set(unique.map(p => p.category))).filter(Boolean);
+    const cats = Array.from(new Set(formattedApi.map(p => p.category))).filter(Boolean);
     setCategoriesList(cats);
 
-    setProducts(unique);
+    setProducts(formattedApi);
     setLoading(false);
   };
 

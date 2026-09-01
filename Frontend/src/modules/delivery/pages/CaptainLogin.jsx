@@ -80,7 +80,11 @@ const CaptainLogin = () => {
       const res = await authService.verifyCaptainOtp(mobileNumber, enteredOtp);
       setOtpStatus('success');
       setTimeout(() => {
-        navigate('/captain/dashboard');
+        if (res?.requiresMembership) {
+          navigate('/captain/membership');
+        } else {
+          navigate('/captain/dashboard');
+        }
       }, 800);
     } catch (err) {
       setOtpStatus('idle');
@@ -318,8 +322,21 @@ const CaptainLogin = () => {
               </p>
               <p className="text-[10px] text-slate-500 leading-relaxed">
                 By continuing, you agree to our <br />
-                <a href="#terms" className="text-[#15803d] hover:underline font-bold">Terms of Service</a> &{' '}
-                <a href="#privacy" className="text-[#15803d] hover:underline font-bold">Privacy Policy</a>
+                <button 
+                  type="button" 
+                  onClick={() => navigate('/captain/terms')} 
+                  className="text-[#15803d] hover:underline font-bold bg-transparent border-none p-0 cursor-pointer text-[10px]"
+                >
+                  Terms of Service
+                </button>
+                {' '}&{' '}
+                <button 
+                  type="button" 
+                  onClick={() => navigate('/captain/privacy')} 
+                  className="text-[#15803d] hover:underline font-bold bg-transparent border-none p-0 cursor-pointer text-[10px]"
+                >
+                  Privacy Policy
+                </button>
               </p>
             </div>
           </div>

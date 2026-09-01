@@ -8,41 +8,70 @@ import SellerNotification from '../models/SellerNotification.model.js';
 import WalletTransaction from '../models/WalletTransaction.model.js';
 import Captain from '../models/Captain.model.js';
 import CaptainNotification from '../models/CaptainNotification.model.js';
+import { 
+  sendNotificationToUser, 
+  sendNotificationToSeller, 
+  sendNotificationToCaptain 
+} from '../utils/pushNotificationHelper.js';
 
 // Helper: Generate delivery OTP
 const genDeliveryOtp = () => Math.floor(1000 + Math.random() * 9000).toString();
 
-// Helper: Find nearest available captain to a seller/order
-// Strategy 1: geo-query if captain has real coordinates
-// Strategy 2: city/workingArea match as fallback
-const findNearestCaptain = async (deliveryCity, deliveryState) => {
-  // First try: find online + approved captains in the same city
-  const cityCaptains = await Captain.find({
-    status: 'approved',
-    isOnline: true,
-    $or: [
-      { city: { $regex: deliveryCity || '', $options: 'i' } },
-      { 'workingArea.city': { $regex: deliveryCity || '', $options: 'i' } },
-    ],
-  }).sort({ createdAt: 1 }); // oldest first = most experienced
+// Helper: Find all eligible captains for a delivery
+export const findAllEligibleCaptains = async (deliveryCity = '', deliveryState = '', deliveryPincode = '', sellerCity = '', sellerPincode = '') => {
+  const cleanCity = (deliveryCity || sellerCity || '').trim();
+  const cleanPincode = (deliveryPincode || sellerPincode || '').trim();
+  const cleanState = (deliveryState || '').trim();
 
-  if (cityCaptains.length > 0) return cityCaptains[0];
-
-  // Fallback: any online + approved captain in the same state
-  if (deliveryState) {
-    const stateCaptains = await Captain.find({
-      status: 'approved',
+  // Tier 1: Match by Pincode / Local Area
+  if (cleanPincode) {
+    const pinCaptains = await Captain.find({
+      status: { $ne: 'rejected' },
       isOnline: true,
       $or: [
-        { state: { $regex: deliveryState, $options: 'i' } },
-        { 'workingArea.state': { $regex: deliveryState, $options: 'i' } },
+        { pinCode: cleanPincode },
+        { currentAddress: { $regex: cleanPincode, $options: 'i' } },
+        { permanentAddress: { $regex: cleanPincode, $options: 'i' } },
+        { 'workingArea.area': { $regex: cleanPincode, $options: 'i' } },
       ],
-    });
-    if (stateCaptains.length > 0) return stateCaptains[0];
+    }).sort({ createdAt: 1 });
+    if (pinCaptains.length > 0) return pinCaptains;
   }
 
-  // Last resort: any online + approved captain at all
-  return Captain.findOne({ status: 'approved', isOnline: true });
+  // Tier 2: Match by City / Working Area
+  if (cleanCity) {
+    const cityCaptains = await Captain.find({
+      status: { $ne: 'rejected' },
+      isOnline: true,
+      $or: [
+        { city: { $regex: cleanCity, $options: 'i' } },
+        { currentAddress: { $regex: cleanCity, $options: 'i' } },
+        { 'workingArea.city': { $regex: cleanCity, $options: 'i' } },
+        { 'workingArea.district': { $regex: cleanCity, $options: 'i' } },
+      ],
+    }).sort({ createdAt: 1 });
+    if (cityCaptains.length > 0) return cityCaptains;
+  }
+
+  // Tier 3: Match by State
+  if (cleanState) {
+    const stateCaptains = await Captain.find({
+      status: { $ne: 'rejected' },
+      isOnline: true,
+      $or: [
+        { state: { $regex: cleanState, $options: 'i' } },
+        { 'workingArea.state': { $regex: cleanState, $options: 'i' } },
+      ],
+    }).sort({ createdAt: 1 });
+    if (stateCaptains.length > 0) return stateCaptains;
+  }
+
+  // Tier 4: All online captains
+  const allOnline = await Captain.find({ status: { $ne: 'rejected' }, isOnline: true }).sort({ updatedAt: -1 });
+  if (allOnline.length > 0) return allOnline;
+
+  // Fallback: All active captains
+  return Captain.find({ status: { $ne: 'rejected' } }).sort({ updatedAt: -1 }).limit(10);
 };
 
 // Helper: Auto-assign captain and create notification
@@ -52,11 +81,27 @@ export const autoAssignCaptainToOrder = async (notification) => {
     if (parentOrder && (!parentOrder.captainId || parentOrder.captainStatus === 'Rejected')) {
       const deliveryCity = notification.deliveryAddress?.city || parentOrder.shippingAddress?.city || '';
       const deliveryState = notification.deliveryAddress?.state || parentOrder.shippingAddress?.state || '';
+      const deliveryPincode = notification.deliveryAddress?.pincode || parentOrder.shippingAddress?.pinCode || parentOrder.shippingAddress?.pincode || '';
+      
+      // Look up seller city/pincode for pickup location proximity
+      let sellerCity = '';
+      let sellerPincode = '';
+      if (notification.sellerId) {
+        try {
+          const sellerDoc = await Seller.findById(notification.sellerId);
+          if (sellerDoc) {
+            sellerCity = sellerDoc.city || sellerDoc.warehouseLocation?.city || '';
+            sellerPincode = sellerDoc.pinCode || sellerDoc.warehouseLocation?.pincode || '';
+          }
+        } catch (e) {}
+      }
+
       const captainEarnings = Math.max(15, Math.round((notification.totalAmount || parentOrder.grandTotal || 0) * 0.08 * 100) / 100);
 
-      const nearestCaptain = await findNearestCaptain(deliveryCity, deliveryState);
+      const eligibleCaptains = await findAllEligibleCaptains(deliveryCity, deliveryState, deliveryPincode, sellerCity, sellerPincode);
 
-      if (nearestCaptain) {
+      if (eligibleCaptains && eligibleCaptains.length > 0) {
+        const nearestCaptain = eligibleCaptains[0];
         const otp = genDeliveryOtp();
 
         await Order.findByIdAndUpdate(parentOrder._id, {
@@ -67,21 +112,41 @@ export const autoAssignCaptainToOrder = async (notification) => {
           captainAssignedAt: new Date(),
         });
 
-        await CaptainNotification.create({
-          captainId: nearestCaptain._id,
-          type: 'JOB_ASSIGNED',
-          title: 'New Delivery Assigned!',
-          message: `Order #${notification.orderId} from ${notification.sellerName || 'Seller'} — Drop: ${deliveryCity}. Payout: ₹${captainEarnings.toFixed(2)}. Report to pickup immediately.`,
-          orderId: notification.orderId,
-          order: parentOrder._id,
-          amount: captainEarnings,
-          icon: 'local_shipping',
-        });
+        // Save assigned captain info on SellerNotification too
+        notification.captainId = nearestCaptain._id;
+        notification.captainName = nearestCaptain.name || 'Delivery Captain';
+        notification.captainPhone = nearestCaptain.phone || '';
+        await notification.save();
 
-        console.log(`[CaptainAssign] Auto-assigned Captain "${nearestCaptain.name}" (${nearestCaptain.phone}) to Order #${notification.orderId}. OTP: ${otp}, Payout: ₹${captainEarnings}`);
+        // Broadcast notifications to all eligible online captains
+        for (const captain of eligibleCaptains) {
+          await CaptainNotification.create({
+            captainId: captain._id,
+            type: 'JOB_ASSIGNED',
+            title: 'New Delivery Assigned!',
+            message: `Order #${notification.orderId} from ${notification.sellerName || 'Seller'} — Drop: ${deliveryCity || 'Customer Address'}. Payout: ₹${captainEarnings.toFixed(2)}. Report to pickup immediately.`,
+            orderId: notification.orderId,
+            order: parentOrder._id,
+            amount: captainEarnings,
+            icon: 'local_shipping',
+          });
+
+          // Trigger FCM Push Notification to Captain device
+          sendNotificationToCaptain(captain._id, {
+            title: '🛵 New Delivery Assigned!',
+            body: `Order #${notification.orderId} — Pickup from ${notification.sellerName || 'Store'}. Payout: ₹${captainEarnings.toFixed(2)}`,
+            data: {
+              type: 'delivery_assigned',
+              orderId: notification.orderId,
+              link: '/captain/dashboard',
+            },
+          }).catch(() => {});
+        }
+
+        console.log(`[CaptainAssign] Dispatched Order #${notification.orderId} to ${eligibleCaptains.length} captains (Primary: "${nearestCaptain.name}" - ${nearestCaptain.phone}). OTP: ${otp}, Payout: ₹${captainEarnings}`);
         return nearestCaptain;
       } else {
-        console.warn(`[CaptainAssign] No available online captain found for Order #${notification.orderId} in ${deliveryCity || 'any area'}.`);
+        console.warn(`[CaptainAssign] No approved/active captain found for Order #${notification.orderId} in ${deliveryCity || 'any area'}.`);
       }
     }
   } catch (err) {
@@ -303,8 +368,30 @@ export const placeOrder = async (req, res, next) => {
         status: 'NEW',
       });
 
+      // Trigger FCM Push Notification to Seller
+      sendNotificationToSeller(assignedSellerId, {
+        title: '🔔 New Order Received!',
+        body: `Order #${order.orderId} from ${shippingAddress.fullName || 'Customer'} (₹${groupSubtotal.toFixed(2)}). Open to accept.`,
+        data: {
+          type: 'new_order',
+          orderId: order.orderId,
+          link: '/seller/orders',
+        },
+      }).catch(() => {});
+
       console.log(`[SellerNotification] Created notification for Seller "${actualSellerName}" (SellerID: ${assignedSellerId}, Gross: ₹${groupSubtotal}, Comm: ${commRate}% = ₹${commAmount}, Net: ₹${netAmount}) for Order ${order.orderId}`);
     }
+
+    // Trigger FCM Push Notification to Customer
+    sendNotificationToUser(userId, {
+      title: 'Order Placed Successfully! 🎉',
+      body: `Your order #${order.orderId} of ₹${grandTotal} has been placed. We are assigning the store.`,
+      data: {
+        type: 'order_placed',
+        orderId: order.orderId,
+        link: '/profile',
+      },
+    }).catch(() => {});
 
     // Clear user cart array in User collection after successful order creation
     let isUserUpdated = false;
@@ -496,11 +583,10 @@ export const getSellerNotifications = async (req, res, next) => {
 
     const possibleSellerKeys = [
       sellerId,
+      sellerDoc?._id ? String(sellerDoc._id) : null,
       sellerDoc?.businessName,
       sellerDoc?.ownerName,
-      'ShippNex Official Store',
-      'Seller Store',
-      'Fashion Hub'
+      sellerDoc?.phone
     ].filter(Boolean);
 
     const notifications = await SellerNotification.find({

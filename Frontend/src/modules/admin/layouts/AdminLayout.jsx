@@ -30,6 +30,12 @@ import {
   AdminProfile
 } from '../pages/AdminSubPages';
 import {
+  SellerMembershipPlans,
+  SellerMembershipSubscriptions,
+  CaptainMembershipPlans,
+  CaptainMembershipSubscriptions,
+} from '../pages/MembershipPages';
+import {
   PromotionDashboard,
   PromoHomeSection,
   PromoCategoryProducts,
@@ -42,6 +48,7 @@ import {
 } from '../pages/PromotionPages';
 
 import { AdminLocationDashboard } from '../pages/AdminLocationDashboard';
+import { PolicyManagement } from '../pages/PolicyManagement';
 
 export const AdminLayout = () => {
   const { activeTab, setActiveTab } = useAdmin();
@@ -134,12 +141,24 @@ export const AdminLayout = () => {
       case 'settings':
       case 'payment_list':
       case 'sms_gateway':
-      case 'customer_app_policy':
-      case 'delivery_app_policy':
       case 'billing_charges':
         return <SettingManagement />;
+      case 'policies':
+      case 'policy_management':
+      case 'customer_app_policy':
+      case 'delivery_app_policy':
+      case 'seller_app_policy':
+        return <PolicyManagement />;
       case 'system_user':
         return <UserManagement />;
+      case 'seller_membership_plans':
+        return <SellerMembershipPlans />;
+      case 'seller_memberships':
+        return <SellerMembershipSubscriptions />;
+      case 'captain_membership_plans':
+        return <CaptainMembershipPlans />;
+      case 'captain_memberships':
+        return <CaptainMembershipSubscriptions />;
       default:
         return <AdminDashboard onNavigate={(tab) => setActiveTab(tab)} />;
     }

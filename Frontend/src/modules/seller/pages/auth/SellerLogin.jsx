@@ -74,7 +74,12 @@ const SellerLogin = () => {
       }
 
       if (res.success && res.token) {
-        navigate('/seller/dashboard');
+        if (res.requiresMembership) {
+          // Token already stored by authService.verifySellerOtp — redirect to membership page
+          navigate('/seller/membership');
+        } else {
+          navigate('/seller/dashboard');
+        }
       } else {
         setErrorMsg(res.message || 'Verification failed');
       }
@@ -231,6 +236,17 @@ const SellerLogin = () => {
           >
             Apply for Seller Account
           </Link>
+
+          <p className="text-[11px] text-slate-400 text-center leading-relaxed m-0 pt-1">
+            By accessing the portal, you agree to our{' '}
+            <Link to="/seller/terms" className="text-[#ff7526] hover:underline font-medium">
+              Terms of Service
+            </Link>{' '}
+            &{' '}
+            <Link to="/seller/privacy" className="text-[#ff7526] hover:underline font-medium">
+              Privacy Policy
+            </Link>
+          </p>
         </div>
 
       </div>

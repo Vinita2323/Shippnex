@@ -15,12 +15,12 @@ API.interceptors.request.use(
     const requestUrl = config.url || '';
 
     // Route-specific or endpoint-specific token resolution
-    if (requestUrl.includes('/captain')) {
+    if (requestUrl.includes('/admin')) {
+      token = localStorage.getItem('shippnex_admin_token');
+    } else if (requestUrl.includes('/captain')) {
       token = localStorage.getItem('shippnex_captain_token');
     } else if (requestUrl.includes('/seller')) {
       token = localStorage.getItem('shippnex_seller_token');
-    } else if (requestUrl.includes('/admin')) {
-      token = localStorage.getItem('shippnex_admin_token');
     } else if (
       requestUrl.includes('/cart') ||
       requestUrl.includes('/wishlist') ||

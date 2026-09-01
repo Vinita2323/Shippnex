@@ -78,6 +78,15 @@ const userSchema = new mongoose.Schema(
         ref: 'Product',
       },
     ],
+    // FCM Push Notification Tokens (SOP Standard)
+    fcmTokens: {
+      type: [String],
+      default: [],
+    },
+    fcmTokenMobile: {
+      type: [String],
+      default: [],
+    },
   },
   {
     timestamps: true,

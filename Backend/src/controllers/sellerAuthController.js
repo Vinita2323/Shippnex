@@ -2,6 +2,9 @@ import Seller from '../models/Seller.model.js';
 import { generateOtp } from '../utils/generateOtp.js';
 import { generateToken } from '../utils/generateToken.js';
 import { uploadToCloudinary } from '../config/cloudinary.js';
+import SellerMembership from '../models/SellerMembership.model.js';
+import SellerMembershipPlan from '../models/SellerMembershipPlan.model.js';
+import crypto from 'crypto';
 
 // Send OTP
 export const sendOtp = async (req, res, next) => {
@@ -118,6 +121,38 @@ export const verifyOtp = async (req, res, next) => {
 
     const token = generateToken({ id: seller._id, phone: seller.phone, role: seller.role || 'seller' });
 
+    // Membership gate: check if seller has an active membership
+    const now = new Date();
+    const activeMembership = await SellerMembership.findOne({
+      sellerId: seller._id,
+      membershipStatus: 'active',
+      expiryDate: { $gt: now },
+    });
+
+    // Auto-expire stale memberships
+    await SellerMembership.updateMany(
+      { sellerId: seller._id, membershipStatus: 'active', expiryDate: { $lte: now } },
+      { $set: { membershipStatus: 'expired' } }
+    );
+
+    if (!activeMembership) {
+      // Determine the pending membership status (if any)
+      const pendingMembership = await SellerMembership.findOne({
+        sellerId: seller._id,
+        membershipStatus: 'pending_payment',
+      });
+      const membershipStatus = pendingMembership ? 'pending_payment' : 'none';
+
+      return res.status(200).json({
+        success: true,
+        requiresMembership: true,
+        membershipStatus,
+        message: 'Membership purchase required to activate your seller account.',
+        token,
+        seller,
+      });
+    }
+
     res.status(200).json({
       success: true,
       message: 'Seller verified successfully',
@@ -146,7 +181,13 @@ export const registerSeller = async (req, res, next) => {
       pincode,
       gstNumber,
       panNumber,
-      fssaiLicense
+      fssaiLicense,
+      gstPhoto,
+      bankPassbookPhoto,
+      planId,
+      razorpayPaymentId,
+      razorpayOrderId,
+      razorpaySignature
     } = req.body;
 
     if (!phone || !businessName) {
@@ -168,6 +209,32 @@ export const registerSeller = async (req, res, next) => {
       }
     }
 
+    let processedGstPhoto = '';
+    if (gstPhoto && typeof gstPhoto === 'string' && gstPhoto.startsWith('data:image/')) {
+      try {
+        const uploadRes = await uploadToCloudinary(gstPhoto, 'sellers/documents');
+        processedGstPhoto = uploadRes.secure_url;
+      } catch (err) {
+        console.warn('Cloudinary upload failed for GST photo:', err.message);
+        processedGstPhoto = gstPhoto;
+      }
+    } else {
+      processedGstPhoto = gstPhoto || '';
+    }
+
+    let processedPassbookPhoto = '';
+    if (bankPassbookPhoto && typeof bankPassbookPhoto === 'string' && bankPassbookPhoto.startsWith('data:image/')) {
+      try {
+        const uploadRes = await uploadToCloudinary(bankPassbookPhoto, 'sellers/documents');
+        processedPassbookPhoto = uploadRes.secure_url;
+      } catch (err) {
+        console.warn('Cloudinary upload failed for passbook photo:', err.message);
+        processedPassbookPhoto = bankPassbookPhoto;
+      }
+    } else {
+      processedPassbookPhoto = bankPassbookPhoto || '';
+    }
+
     const sellerData = {
       businessName,
       ownerName,
@@ -179,6 +246,8 @@ export const registerSeller = async (req, res, next) => {
       gstNumber,
       panNumber,
       fssaiLicense,
+      gstPhoto: processedGstPhoto,
+      bankPassbookPhoto: processedPassbookPhoto,
       warehouseLocation: {
         storeAddress: completeAddress,
         city,
@@ -194,6 +263,59 @@ export const registerSeller = async (req, res, next) => {
       seller = await Seller.findByIdAndUpdate(existingSeller._id, sellerData, { new: true });
     } else {
       seller = await Seller.create(sellerData);
+    }
+
+    // Process Membership if provided
+    if (planId) {
+      const plan = await SellerMembershipPlan.findById(planId);
+      if (plan && plan.status === 'active') {
+        if (razorpayPaymentId && razorpayOrderId && razorpaySignature) {
+          // Verify Razorpay Signature
+          const generatedSignature = crypto
+            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'secret_placeholder')
+            .update(razorpayOrderId + '|' + razorpayPaymentId)
+            .digest('hex');
+
+          if (generatedSignature === razorpaySignature) {
+            const startDate = new Date();
+            const expiryDate = new Date();
+            expiryDate.setMonth(expiryDate.getMonth() + plan.durationMonths);
+
+            await SellerMembership.create({
+              sellerId: seller._id,
+              planId: plan._id,
+              planName: plan.name,
+              durationType: plan.durationType,
+              durationMonths: plan.durationMonths,
+              priceAtPurchase: plan.price,
+              membershipStatus: 'active',
+              paymentStatus: 'paid',
+              paymentReference: razorpayPaymentId,
+              paymentMethod: 'razorpay',
+              transactionId: razorpayOrderId,
+              startDate,
+              expiryDate
+            });
+            await Seller.findByIdAndUpdate(seller._id, { membershipStatus: 'active' });
+          }
+        } else if (req.body.paymentMethod === 'cod' || req.body.paymentMethod === 'manual') {
+          // Create pending membership for COD/Manual
+          await SellerMembership.create({
+            sellerId: seller._id,
+            planId: plan._id,
+            planName: plan.name,
+            durationType: plan.durationType,
+            durationMonths: plan.durationMonths,
+            priceAtPurchase: plan.price,
+            membershipStatus: 'pending_payment',
+            paymentStatus: 'pending',
+            paymentReference: 'COD',
+            paymentMethod: req.body.paymentMethod || 'cod',
+            transactionId: `COD-${Date.now()}`
+          });
+          await Seller.findByIdAndUpdate(seller._id, { membershipStatus: 'pending_payment' });
+        }
+      }
     }
 
     res.status(201).json({
@@ -236,6 +358,8 @@ export const updateSellerProfile = async (req, res, next) => {
       gstNumber,
       panNumber,
       fssaiLicense,
+      gstPhoto,
+      bankPassbookPhoto,
       bankName,
       accountNumber,
       ifscCode,
@@ -266,6 +390,30 @@ export const updateSellerProfile = async (req, res, next) => {
       }
     } else if (storeLogo !== undefined) {
       seller.storeLogo = storeLogo;
+    }
+
+    if (gstPhoto && typeof gstPhoto === 'string' && gstPhoto.startsWith('data:image/')) {
+      try {
+        const uploadRes = await uploadToCloudinary(gstPhoto, 'sellers/documents');
+        seller.gstPhoto = uploadRes.secure_url;
+      } catch (err) {
+        console.warn('Cloudinary upload failed for GST photo:', err.message);
+        seller.gstPhoto = gstPhoto;
+      }
+    } else if (gstPhoto !== undefined) {
+      seller.gstPhoto = gstPhoto;
+    }
+
+    if (bankPassbookPhoto && typeof bankPassbookPhoto === 'string' && bankPassbookPhoto.startsWith('data:image/')) {
+      try {
+        const uploadRes = await uploadToCloudinary(bankPassbookPhoto, 'sellers/documents');
+        seller.bankPassbookPhoto = uploadRes.secure_url;
+      } catch (err) {
+        console.warn('Cloudinary upload failed for passbook photo:', err.message);
+        seller.bankPassbookPhoto = bankPassbookPhoto;
+      }
+    } else if (bankPassbookPhoto !== undefined) {
+      seller.bankPassbookPhoto = bankPassbookPhoto;
     }
 
     if (serviceRadius !== undefined) seller.serviceRadius = Number(serviceRadius);

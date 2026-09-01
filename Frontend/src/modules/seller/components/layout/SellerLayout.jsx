@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import SellerSidebar from './SellerSidebar';
 import SellerHeader from './SellerHeader';
+import SellerOrderNotifier from './SellerOrderNotifier';
 
 const SellerLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -17,6 +18,9 @@ const SellerLayout = () => {
 
   return (
     <div className="flex h-screen bg-[#f8fafc] font-sans text-slate-800 overflow-hidden select-none">
+      {/* Global incoming order audio ringtone and popup modal across all seller pages */}
+      <SellerOrderNotifier />
+
       <SellerSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
       
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
