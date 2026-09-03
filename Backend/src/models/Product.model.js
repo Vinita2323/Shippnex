@@ -95,12 +95,25 @@ const productSchema = new mongoose.Schema(
     isFeatured: {
       type: Boolean,
       default: false
+    },
+    isReturnable: {
+      type: Boolean,
+      default: true
+    },
+    returnWindow: {
+      type: Number,
+      default: 7
+    },
+    returnPolicy: {
+      type: String,
+      default: '7 Days Returnable'
     }
   },
   {
     timestamps: true
   }
 );
+
 
 const Product = mongoose.model('Product', productSchema);
 

@@ -638,4 +638,46 @@ export const fcmService = {
   },
 };
 
+export const sellerService = {
+  getPublicSellers: async (params = {}) => {
+    try {
+      const response = await API.get('/sellers', { params });
+      return response.data;
+    } catch (err) {
+      console.warn('Failed to fetch public sellers from API, returning local fallbacks:', err.message);
+      return { success: false, sellers: [] };
+    }
+  },
+  getSellerStore: async (id) => {
+    try {
+      const response = await API.get(`/sellers/${id}`);
+      return response.data;
+    } catch (err) {
+      console.warn('Failed to fetch seller store from API:', err.message);
+      return { success: false, seller: null, products: [] };
+    }
+  }
+};
+
+export const adminService = {
+  getDashboardStats: async () => {
+    const response = await API.get('/admin/dashboard/stats');
+    return response.data;
+  },
+  getOrders: async () => {
+    const response = await API.get('/admin/orders');
+    return response.data;
+  },
+  getSellers: async () => {
+    const response = await API.get('/admin/sellers');
+    return response.data;
+  },
+  toggleSellerStatus: async (id, status) => {
+    const response = await API.put(`/admin/sellers/${id}/status`, { status });
+    return response.data;
+  },
+};
+
+
+
 

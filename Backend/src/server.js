@@ -26,6 +26,7 @@ import transportBookingRoutes from './routes/transportBookingRoutes.js';
 import membershipRoutes from './routes/membershipRoutes.js';
 import policyRoutes from './routes/policyRoutes.js';
 import fcmTokenRoutes from './routes/fcmTokenRoutes.js';
+import sellerRoutes from './routes/sellerRoutes.js';
 
 import { fileURLToPath } from 'url';
 
@@ -47,36 +48,35 @@ const uploadsDir = fs.existsSync(path.join(__dirname, '../uploads'))
   : path.join(process.cwd(), 'uploads');
 app.use('/uploads', express.static(uploadsDir));
 
-// Core API Routes
+// Core API Routes (Mounted under both /api and root for backwards compatibility)
+const registerRoutes = (prefix = '') => {
+  app.use(`${prefix}/auth/user`, userAuthRoutes);
+  app.use(`${prefix}/auth/seller`, sellerAuthRoutes);
+  app.use(`${prefix}/auth/captain`, captainAuthRoutes);
+  app.use(`${prefix}/captain`, captainRoutes);
+  app.use(`${prefix}/auth/admin`, adminAuthRoutes);
+  app.use(`${prefix}/banners`, bannerRoutes);
+  app.use(`${prefix}/upload`, uploadRoutes);
+  app.use(`${prefix}/categories`, categoryRoutes);
+  app.use(`${prefix}/products`, productRoutes);
+  app.use(`${prefix}/sellers`, sellerRoutes);
+  app.use(`${prefix}/cart`, cartRoutes);
+  app.use(`${prefix}/wishlist`, wishlistRoutes);
+  app.use(`${prefix}/user/addresses`, addressRoutes);
+  app.use(`${prefix}/orders`, orderRoutes);
+  app.use(`${prefix}/admin`, adminRoutes);
+  app.use(`${prefix}/wallet`, walletRoutes);
+  app.use(`${prefix}/membership`, membershipRoutes);
+  app.use(`${prefix}/policies`, policyRoutes);
+  app.use(`${prefix}/fcm-tokens`, fcmTokenRoutes);
+  app.use(`${prefix}/transport/vehicles`, vehicleTypeRoutes);
+  app.use(`${prefix}/transport/bookings`, transportBookingRoutes);
+};
+
 app.use('', healthRoutes);
-app.use('/auth/user', userAuthRoutes);
-app.use('/auth/seller', sellerAuthRoutes);
-app.use('/auth/captain', captainAuthRoutes);
-app.use('/captain', captainRoutes);
-app.use('/auth/admin', adminAuthRoutes);
-app.use('/banners', bannerRoutes);
-app.use('/upload', uploadRoutes);
-app.use('/categories', categoryRoutes);
-app.use('/products', productRoutes);
-app.use('/cart', cartRoutes);
-app.use('/wishlist', wishlistRoutes);
-app.use('/user/addresses', addressRoutes);
-app.use('/orders', orderRoutes);
-app.use('/admin', adminRoutes);
-app.use('/wallet', walletRoutes);
-
-// Membership Routes
-app.use('/membership', membershipRoutes);
-
-// Policy & Terms Routes
-app.use('/policies', policyRoutes);
-
-// Firebase Cloud Messaging (FCM) Push Notification Routes (SOP Standard)
-app.use('/fcm-tokens', fcmTokenRoutes);
-
-// Transport Module Routes
-app.use('/transport/vehicles', vehicleTypeRoutes);
-app.use('/transport/bookings', transportBookingRoutes);
+app.use('/api', healthRoutes);
+registerRoutes('/api');
+registerRoutes('');
 
 // Base route
 app.get('/', (req, res) => {

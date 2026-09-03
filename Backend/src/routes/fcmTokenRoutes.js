@@ -15,10 +15,10 @@ const getEntityModel = (role) => {
 };
 
 // ──────────────────────────────────────────────
-// POST /api/fcm-tokens/save
+// POST /api/fcm-tokens/save or POST /api/fcm-tokens
 // Save Web FCM Token (Max 10 per account as per SOP)
 // ──────────────────────────────────────────────
-router.post('/save', protect(), async (req, res) => {
+router.post(['/save', '/'], protect(), async (req, res) => {
   try {
     const { token, platform = 'web' } = req.body;
     const userId = req.user.id;

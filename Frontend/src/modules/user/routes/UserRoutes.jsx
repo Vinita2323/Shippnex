@@ -15,6 +15,8 @@ import ProductDetails from '../pages/ProductDetails';
 import Wishlist from '../pages/Wishlist';
 import FlashSale from '../pages/FlashSale';
 import BestSelling from '../pages/BestSelling';
+import AllSellers from '../pages/AllSellers';
+import SellerStore from '../pages/SellerStore';
 import LocationSelectionPage from '../pages/LocationSelectionPage';
 import Notifications from '../pages/Notifications';
 import BottomNav from '../components/BottomNav';
@@ -43,6 +45,7 @@ const UserRoutes = () => {
   const isLogin = location.pathname === '/login';
   const isVerifyOtp = location.pathname === '/verify-otp';
   const isProductDetails = location.pathname.startsWith('/product');
+  const isSellerStore = location.pathname.startsWith('/store');
   const isWishlist = location.pathname === '/wishlist';
   const isFlashSale = location.pathname === '/flash-sale';
   const isNotifications = location.pathname === '/notifications';
@@ -52,7 +55,7 @@ const UserRoutes = () => {
   // Transport flow routes that should hide the bottom nav
   const isTransportFlow = ['/transport/register', '/transport/location', '/transport/goods', '/transport/vehicle', '/transport/summary', '/transport/success', '/transport/booking-details'].includes(location.pathname);
   
-  const hideBottomNav = isCart || isCheckout || isPayment || isTrackOrder || isProfile || isLogin || isVerifyOtp || isProductDetails || isWishlist || isFlashSale || isNotifications || isLocation || isPlaceholder || isTransportFlow;
+  const hideBottomNav = isCart || isCheckout || isPayment || isTrackOrder || isProfile || isLogin || isVerifyOtp || isProductDetails || isSellerStore || isWishlist || isFlashSale || isNotifications || isLocation || isPlaceholder || isTransportFlow;
 
   return (
     <>
@@ -60,6 +63,8 @@ const UserRoutes = () => {
         {/* Public Browsing Routes (Accessible to Guests) */}
         <Route path="/" element={<Home />} />
         <Route path="/categories" element={<Categories />} />
+        <Route path="/sellers" element={<AllSellers />} />
+        <Route path="/store/:sellerId" element={<SellerStore />} />
         <Route path="/product/:id" element={<ProductDetails />} />
         <Route path="/wishlist" element={<Wishlist />} />
         <Route path="/flash-sale" element={<FlashSale />} />

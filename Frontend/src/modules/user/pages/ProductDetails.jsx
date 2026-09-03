@@ -316,12 +316,27 @@ const ProductDetails = () => {
               className="flex justify-between items-center cursor-pointer"
               onClick={() => toggleAccordion('policy')}
             >
-              <span className="text-[13px] font-medium text-slate-700">Return & Refund Policy</span>
+              <span className="text-[13px] font-medium text-slate-700 flex items-center gap-1.5">
+                Return & Refund Policy
+                {product.isReturnable === false && (
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                    Non-Returnable
+                  </span>
+                )}
+              </span>
               {activeAccordion === 'policy' ? <ChevronDown size={15} className="text-slate-400" /> : <ChevronRight size={15} className="text-slate-400" />}
             </div>
             {activeAccordion === 'policy' && (
               <div className="pt-2 text-[12px] text-slate-600 space-y-1 font-normal">
-                <p className="m-0">🛡️ 7-day replacement warranty for damaged or incorrect items.</p>
+                {product.isReturnable === false ? (
+                  <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-amber-800 text-[11px]">
+                    🚫 <strong>Non-Returnable Item:</strong> This product cannot be returned or replaced once delivered due to hygiene, freshness, or perishable nature.
+                  </div>
+                ) : (
+                  <p className="m-0 text-emerald-700 font-medium">
+                    🛡️ {product.returnPolicy || `${product.returnWindow || 7}-Day Replacement Guarantee for damaged, missing, or incorrect items.`}
+                  </p>
+                )}
               </div>
             )}
           </div>

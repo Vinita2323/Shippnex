@@ -1,11 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StatWidget, StatusBadge } from '../components/AdminUIComponents';
-import { 
-  mockStats, 
-  mockRevenueChartData, 
-  mockOrders, 
-  mockWarehouses 
-} from '../mock/adminMockData';
+import { adminService } from '../../../services/authService';
 import { 
   Users, 
   Store, 
@@ -25,23 +20,107 @@ import {
   ClipboardList,
   CheckCircle2,
   XCircle,
-  ShoppingBag
+  ShoppingBag,
+  RefreshCw,
+  Loader2,
+  Calendar
 } from 'lucide-react';
 
 export const AdminDashboard = ({ onNavigate }) => {
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalCategories: 0,
+    totalSubcategories: 0,
+    totalProducts: 0,
+    productSoldOut: 0,
+    lowStockProducts: 0,
+    totalOrders: 0,
+    completedOrders: 0,
+    pendingOrders: 0,
+    cancelledOrders: 0,
+    totalSellers: 0,
+    pendingSellerApprovals: 0,
+    totalCaptains: 0,
+    activeCaptains: 0,
+    totalWarehouses: 4,
+    revenueToday: 0,
+    totalVolume: 0,
+  });
+
+  const [revenueChartData, setRevenueChartData] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [topSellers, setTopSellers] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+
+  // Table pagination & page size states
+  const [orderEntries, setOrderEntries] = useState(10);
+  const [orderPage, setOrderPage] = useState(1);
+  const [sellerEntries, setSellerEntries] = useState(10);
+  const [sellerPage, setSellerPage] = useState(1);
+
+  const fetchDashboardData = useCallback(async (isManualRefresh = false) => {
+    if (isManualRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+
+    try {
+      const res = await adminService.getDashboardStats();
+      if (res && res.success) {
+        if (res.stats) setStats(res.stats);
+        if (Array.isArray(res.revenueChartData)) setRevenueChartData(res.revenueChartData);
+        if (Array.isArray(res.recentOrders)) setRecentOrders(res.recentOrders);
+        if (Array.isArray(res.topSellers)) setTopSellers(res.topSellers);
+        if (Array.isArray(res.warehouses)) setWarehouses(res.warehouses);
+      }
+    } catch (err) {
+      console.error('Failed to fetch live admin dashboard stats:', err);
+      setError(err.message || 'Failed to load live data');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Order pagination slice
+  const paginatedOrders = recentOrders.slice(
+    (orderPage - 1) * orderEntries,
+    orderPage * orderEntries
+  );
+  const totalOrderPages = Math.max(1, Math.ceil(recentOrders.length / orderEntries));
+
+  // Seller pagination slice
+  const paginatedSellers = topSellers.slice(
+    (sellerPage - 1) * sellerEntries,
+    sellerPage * sellerEntries
+  );
+  const totalSellerPages = Math.max(1, Math.ceil(topSellers.length / sellerEntries));
+
+  // Max revenue in chart for proportional bar calculation
+  const maxChartRevenue = revenueChartData.length > 0 
+    ? Math.max(...revenueChartData.map(d => Number(d.revenue) || 0), 1)
+    : 1;
+
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6 animate-fadeIn pb-10">
       {/* Orange Hero Banner matching Seller Dashboard Overview */}
       <div className="bg-[#ff5500] text-white rounded-2xl p-6 shadow-sm relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="relative z-10">
           <span className="text-[11px] font-bold uppercase tracking-wider bg-white/20 text-white px-3 py-1 rounded-full">
-            SUPER ADMIN DASHBOARD OVERVIEW
+            SUPER ADMIN DASHBOARD OVERVIEW (LIVE DATA)
           </span>
           <h1 className="text-2xl md:text-3xl font-bold text-white mt-2 tracking-tight">
             Welcome back, System Administrator! 👋
           </h1>
           <p className="text-xs md:text-sm text-white/90 mt-1 max-w-xl">
-            Here is your live platform performance, seller compliance queue, warehouse operations, and financial metrics for today.
+            Here is your live real-time platform performance, seller compliance queue, warehouse operations, and financial metrics.
           </p>
         </div>
         <div className="flex items-center gap-3 relative z-10">
@@ -50,10 +129,40 @@ export const AdminDashboard = ({ onNavigate }) => {
             className="px-4 py-2.5 bg-white text-[#ff5500] hover:bg-slate-100 text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-1.5 border-none"
           >
             <UserCheck size={16} />
-            <span>Pending Approvals ({mockStats.pendingSellerApprovals.value})</span>
+            <span>Pending Approvals ({stats.pendingSellerApprovals ?? 0})</span>
+          </button>
+          <button 
+            onClick={() => fetchDashboardData(true)}
+            disabled={refreshing}
+            title="Refresh Live Data"
+            className="p-2.5 bg-black/20 hover:bg-black/30 text-white rounded-xl transition-all cursor-pointer border border-white/20 flex items-center justify-center"
+          >
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
+
+      {loading && !refreshing && (
+        <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center flex flex-col items-center justify-center gap-3">
+          <Loader2 size={32} className="animate-spin text-[#ff5500]" />
+          <p className="text-sm font-semibold text-slate-600">Loading live platform statistics from database...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex items-center justify-between text-rose-700 text-xs">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertTriangle size={16} />
+            <span>Could not refresh live statistics: {error}</span>
+          </div>
+          <button 
+            onClick={() => fetchDashboardData(true)} 
+            className="px-3 py-1 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Primary 10 Metrics Cards Grid (Compact) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
@@ -68,7 +177,7 @@ export const AdminDashboard = ({ onNavigate }) => {
           <div>
             <p className="text-[11px] font-medium text-slate-500 leading-tight">Total User</p>
             <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
-              {mockStats.totalUsers.value}
+              {stats.totalUsers ?? 0}
             </h3>
           </div>
         </div>
@@ -84,7 +193,7 @@ export const AdminDashboard = ({ onNavigate }) => {
           <div>
             <p className="text-[11px] font-medium text-slate-500 leading-tight">Total Category</p>
             <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
-              {mockStats.totalCategories.value}
+              {stats.totalCategories ?? 0}
             </h3>
           </div>
         </div>
@@ -100,7 +209,7 @@ export const AdminDashboard = ({ onNavigate }) => {
           <div>
             <p className="text-[11px] font-medium text-slate-500 leading-tight">Total Subcategory</p>
             <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
-              {mockStats.totalSubcategories.value}
+              {stats.totalSubcategories ?? 0}
             </h3>
           </div>
         </div>
@@ -116,7 +225,7 @@ export const AdminDashboard = ({ onNavigate }) => {
           <div>
             <p className="text-[11px] font-medium text-slate-500 leading-tight">Total Product</p>
             <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
-              {mockStats.totalProducts.value}
+              {stats.totalProducts ?? 0}
             </h3>
           </div>
         </div>
@@ -132,7 +241,7 @@ export const AdminDashboard = ({ onNavigate }) => {
           <div>
             <p className="text-[11px] font-medium text-slate-500 leading-tight">Total Orders</p>
             <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
-              {mockStats.totalOrders.value}
+              {stats.totalOrders ?? 0}
             </h3>
           </div>
         </div>
@@ -148,7 +257,7 @@ export const AdminDashboard = ({ onNavigate }) => {
           <div>
             <p className="text-[11px] font-medium text-slate-500 leading-tight">Completed Orders</p>
             <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
-              {mockStats.completedOrders.value}
+              {stats.completedOrders ?? 0}
             </h3>
           </div>
         </div>
@@ -164,7 +273,7 @@ export const AdminDashboard = ({ onNavigate }) => {
           <div>
             <p className="text-[11px] font-medium text-slate-500 leading-tight">Pending Orders</p>
             <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
-              {mockStats.pendingOrders.value}
+              {stats.pendingOrders ?? 0}
             </h3>
           </div>
         </div>
@@ -180,7 +289,7 @@ export const AdminDashboard = ({ onNavigate }) => {
           <div>
             <p className="text-[11px] font-medium text-slate-500 leading-tight">Cancelled Orders</p>
             <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
-              {mockStats.cancelledOrders.value}
+              {stats.cancelledOrders ?? 0}
             </h3>
           </div>
         </div>
@@ -196,7 +305,7 @@ export const AdminDashboard = ({ onNavigate }) => {
           <div>
             <p className="text-[11px] font-medium text-slate-500 leading-tight">Product Sold Out</p>
             <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
-              {mockStats.productSoldOut.value}
+              {stats.productSoldOut ?? 0}
             </h3>
           </div>
         </div>
@@ -212,7 +321,7 @@ export const AdminDashboard = ({ onNavigate }) => {
           <div>
             <p className="text-[11px] font-medium text-slate-500 leading-tight">Product low on Stock</p>
             <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff5500] transition-colors mt-0.5 leading-none">
-              {mockStats.lowStockProducts.value}
+              {stats.lowStockProducts ?? 0}
             </h3>
           </div>
         </div>
@@ -222,124 +331,96 @@ export const AdminDashboard = ({ onNavigate }) => {
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
         <StatWidget 
           title="TOTAL SELLERS" 
-          value={mockStats.totalSellers.value} 
-          change={mockStats.totalSellers.change} 
-          isPositive={mockStats.totalSellers.isPositive} 
+          value={String(stats.totalSellers ?? 0)} 
+          change={`${stats.pendingSellerApprovals ?? 0} pending`} 
+          isPositive={stats.pendingSellerApprovals === 0} 
+          isAlert={stats.pendingSellerApprovals > 0}
           icon={Store}
           onClick={() => onNavigate('sellers')}
         />
         <StatWidget 
           title="TOTAL CAPTAINS" 
-          value={mockStats.totalCaptains.value} 
-          change={mockStats.totalCaptains.change} 
-          isPositive={mockStats.totalCaptains.isPositive} 
+          value={String(stats.totalCaptains ?? 0)} 
+          change={`${stats.activeCaptains ?? 0} online`} 
+          isPositive={true} 
           icon={Truck}
           onClick={() => onNavigate('captains')}
         />
         <StatWidget 
           title="ACTIVE WAREHOUSES" 
-          value={mockStats.totalWarehouses.value} 
-          change={mockStats.totalWarehouses.change} 
-          isPositive={mockStats.totalWarehouses.isPositive} 
+          value={String(stats.totalWarehouses ?? warehouses.length ?? 4)} 
+          change="Operational" 
+          isPositive={true} 
           icon={Warehouse}
           onClick={() => onNavigate('warehouses')}
         />
         <StatWidget 
           title="REVENUE TODAY" 
-          value={mockStats.revenueToday.value} 
-          change={mockStats.revenueToday.change} 
-          isPositive={mockStats.revenueToday.isPositive} 
+          value={`₹${Number(stats.revenueToday ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} 
+          change="Live Sync" 
+          isPositive={true} 
           icon={DollarSign}
-          onClick={() => onNavigate('payments')}
+          onClick={() => onNavigate('wallet')}
         />
       </div>
 
-      {/* Charts & Capacity Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Charts Section */}
+      <div className="w-full">
         {/* Revenue & Growth Chart */}
-        <div className="lg:col-span-2 bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+        <div className="w-full bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
                 <TrendingUp size={16} className="text-[#ff5500]" />
                 Weekly Revenue & Sales Trend
               </h3>
-              <p className="text-[11px] text-slate-500">Overview of daily gross revenue across hubs</p>
+              <p className="text-[11px] text-slate-500">Live 7-day revenue aggregation across all orders</p>
             </div>
-            <span className="text-[11px] font-medium bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-md border border-slate-200">
-              YTD +38.4%
+            <span className="text-[11px] font-medium bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+              <CheckCircle2 size={12} /> Live DB
             </span>
           </div>
 
           {/* Bar Chart */}
-          <div className="h-40 flex items-end justify-between gap-3 pt-4 px-2 border-b border-slate-100">
-            {mockRevenueChartData.map((item, idx) => {
-              const maxRevenue = Math.max(...mockRevenueChartData.map(d => d.revenue));
-              const heightPercent = Math.round((item.revenue / maxRevenue) * 85); // scaled properly up to 85%
-              return (
-                <div key={idx} className="flex-1 flex flex-col items-center gap-1 group relative h-full justify-end">
-                  <span className="text-[10px] font-mono font-semibold text-slate-600 mb-0.5">₹{(item.revenue / 1000).toFixed(0)}k</span>
-                  <div 
-                    className="w-full bg-[#ff5500] hover:bg-[#e04a00] rounded-t-md transition-all duration-300 min-h-[16px]"
-                    style={{ height: `${heightPercent}%` }}
-                  />
-                  <span className="text-[11px] font-medium text-slate-600">{item.month}</span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2.5">
-            <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-2.5 h-2.5 rounded bg-[#ff5500] inline-block" /> Gross Sales
-            </span>
-            <span className="font-mono text-slate-800 font-bold">Total Platform Volume: ₹10.6M</span>
-          </div>
-        </div>
-
-        {/* Hub Capacity */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Warehouse size={18} className="text-[#002625]" />
-              Warehouse Storage
-            </h3>
-            <button 
-              onClick={() => onNavigate('warehouses')}
-              className="text-xs text-[#ff5500] hover:underline flex items-center font-bold"
-            >
-              Manage <ArrowUpRight size={12} />
-            </button>
-          </div>
-
-          <div className="space-y-3.5 my-auto">
-            {mockWarehouses.map((wh) => (
-              <div key={wh.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-                <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-900 truncate max-w-[170px]">{wh.name}</span>
-                  <span className={wh.utilization > 85 ? 'text-rose-600 font-bold' : 'text-emerald-600'}>{wh.utilization}%</span>
-                </div>
-                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      wh.utilization > 85 ? 'bg-rose-500' : 'bg-[#ff5500]'
-                    }`}
-                    style={{ width: `${wh.utilization}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-                  <span>{wh.city}</span>
-                  <span>{wh.activeOrders} active orders</span>
-                </div>
+          <div className="h-48 flex items-end justify-between gap-4 pt-4 px-2 border-b border-slate-100">
+            {revenueChartData.length > 0 ? (
+              revenueChartData.map((item, idx) => {
+                const itemRev = Number(item.revenue) || 0;
+                const heightPercent = maxChartRevenue > 0 
+                  ? Math.max(12, Math.round((itemRev / maxChartRevenue) * 85))
+                  : 12;
+                return (
+                  <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 group relative h-full justify-end">
+                    <span className="text-[11px] font-mono font-bold text-slate-700 mb-0.5">
+                      {itemRev >= 1000 ? `₹${(itemRev / 1000).toFixed(1)}k` : `₹${itemRev}`}
+                    </span>
+                    <div 
+                      className="w-full bg-[#ff5500] hover:bg-[#e04a00] rounded-t-lg transition-all duration-300 min-h-[14px] shadow-xs"
+                      style={{ height: `${heightPercent}%` }}
+                      title={`${item.date}: ₹${itemRev} (${item.orders || 0} orders)`}
+                    />
+                    <span className="text-xs font-semibold text-slate-600">{item.month}</span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">
+                No revenue trend data recorded for the past 7 days.
               </div>
-            ))}
+            )}
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 text-center">
-            <span className="text-xs text-slate-500">Total Capacity: <strong className="text-slate-900 font-mono">360,000 sq ft</strong></span>
+          <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-1">
+            <span className="flex items-center gap-2 font-medium">
+              <span className="w-3 h-3 rounded-md bg-[#ff5500] inline-block" /> Gross Platform Sales (Last 7 Days)
+            </span>
+            <span className="font-mono text-slate-800 font-bold text-sm">
+              Total Platform Volume: ₹{Number(stats.totalVolume ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
           </div>
         </div>
       </div>
+
 
       {/* New Orders & Top Sellers Tables (Styled according to ShippNex Theme) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -350,10 +431,11 @@ export const AdminDashboard = ({ onNavigate }) => {
             <div className="bg-[#002625] text-white px-6 py-4 flex items-center justify-between">
               <h3 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
                 <ShoppingCart size={18} className="text-[#ff5500]" />
-                View New Orders
+                View New Orders ({recentOrders.length})
               </h3>
-              <span className="text-[10px] uppercase font-bold tracking-wider bg-white/10 text-white/90 px-2.5 py-1 rounded-full">
-                Live Feed
+              <span className="text-[10px] uppercase font-bold tracking-wider bg-white/10 text-white/90 px-2.5 py-1 rounded-full flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Live DB Feed
               </span>
             </div>
 
@@ -362,13 +444,26 @@ export const AdminDashboard = ({ onNavigate }) => {
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <div className="flex items-center gap-2">
                   <span>Show</span>
-                  <select className="border border-slate-200 rounded-lg px-2.5 py-1 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:border-[#ff5500]">
-                    <option>10</option>
-                    <option>25</option>
-                    <option>50</option>
+                  <select 
+                    value={orderEntries} 
+                    onChange={(e) => {
+                      setOrderEntries(Number(e.target.value));
+                      setOrderPage(1);
+                    }}
+                    className="border border-slate-200 rounded-lg px-2.5 py-1 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:border-[#ff5500]"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
                   </select>
                   <span>entries</span>
                 </div>
+                <button 
+                  onClick={() => onNavigate('orders')}
+                  className="text-xs text-[#ff5500] font-bold hover:underline bg-transparent border-none cursor-pointer flex items-center gap-1"
+                >
+                  View All Orders <ArrowUpRight size={12} />
+                </button>
               </div>
 
               {/* Table */}
@@ -376,56 +471,50 @@ export const AdminDashboard = ({ onNavigate }) => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                      <th className="py-3 px-3.5">ID ↕</th>
-                      <th className="py-3 px-3.5">USER DETAILS</th>
-                      <th className="py-3 px-3.5">O. DATE ↕</th>
-                      <th className="py-3 px-3.5">STATUS ↕</th>
+                      <th className="py-3 px-3.5">ORDER ID</th>
+                      <th className="py-3 px-3.5">CUSTOMER</th>
+                      <th className="py-3 px-3.5">DATE</th>
+                      <th className="py-3 px-3.5">STATUS</th>
                       <th className="py-3 px-3.5 text-right">AMOUNT</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
-                    <tr className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">ORD1784732281209325</td>
-                      <td className="py-3 px-3.5 font-semibold text-slate-900">Sujay Gupta</td>
-                      <td className="py-3 px-3.5 text-slate-500 font-mono">22/7/2026</td>
-                      <td className="py-3 px-3.5"><StatusBadge status="Pending" /></td>
-                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹1,480.00</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">ORD1784085563185506</td>
-                      <td className="py-3 px-3.5 font-semibold text-slate-900">KUMKUM SRIVASTAVA</td>
-                      <td className="py-3 px-3.5 text-slate-500 font-mono">15/7/2026</td>
-                      <td className="py-3 px-3.5"><StatusBadge status="Cancelled" /></td>
-                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹1,200.00</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">ORD1784085540698717</td>
-                      <td className="py-3 px-3.5 font-semibold text-slate-900">KUMKUM SRIVASTAVA</td>
-                      <td className="py-3 px-3.5 text-slate-500 font-mono">15/7/2026</td>
-                      <td className="py-3 px-3.5"><StatusBadge status="Cancelled" /></td>
-                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹1,150.00</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">ORD1783784745338285</td>
-                      <td className="py-3 px-3.5 font-semibold text-slate-900">Deepak kumar</td>
-                      <td className="py-3 px-3.5 text-slate-500 font-mono">11/7/2026</td>
-                      <td className="py-3 px-3.5"><StatusBadge status="Completed" /></td>
-                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹2,450.00</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">ORD1783784503734275</td>
-                      <td className="py-3 px-3.5 font-semibold text-slate-900">Deepak kumar</td>
-                      <td className="py-3 px-3.5 text-slate-500 font-mono">11/7/2026</td>
-                      <td className="py-3 px-3.5"><StatusBadge status="Cancelled" /></td>
-                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹2,100.00</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">ORD1783781163578991</td>
-                      <td className="py-3 px-3.5 font-semibold text-slate-900">Ansh kumar</td>
-                      <td className="py-3 px-3.5 text-slate-500 font-mono">11/7/2026</td>
-                      <td className="py-3 px-3.5"><StatusBadge status="Cancelled" /></td>
-                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹2,800.00</td>
-                    </tr>
+                    {paginatedOrders.length > 0 ? (
+                      paginatedOrders.map((ord) => {
+                        const custName = ord.user?.name || ord.shippingAddress?.fullName || 'Customer';
+                        const custPhone = ord.user?.phone || ord.shippingAddress?.phone || '';
+                        const dateFormatted = ord.createdAt 
+                          ? new Date(ord.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                          : 'Recent';
+                        const grandTotalFormatted = `₹${Number(ord.grandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+                        const displayStatus = ord.orderStatus || 'Placed';
+
+                        return (
+                          <tr key={ord._id || ord.orderId} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3 px-3.5 font-mono font-bold text-[#ff5500]">
+                              {ord.orderId || String(ord._id).slice(-8)}
+                            </td>
+                            <td className="py-3 px-3.5">
+                              <div className="font-semibold text-slate-900">{custName}</div>
+                              {custPhone && <div className="text-[10px] text-slate-400 font-mono">{custPhone}</div>}
+                            </td>
+                            <td className="py-3 px-3.5 text-slate-500 font-mono text-[11px]">{dateFormatted}</td>
+                            <td className="py-3 px-3.5">
+                              <StatusBadge status={displayStatus} />
+                            </td>
+                            <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">
+                              {grandTotalFormatted}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-slate-400 text-xs">
+                          No orders placed in database yet.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -434,11 +523,28 @@ export const AdminDashboard = ({ onNavigate }) => {
 
           {/* Footer Pagination Controls */}
           <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50">
-            <span>Showing 1 to 6 of 14 entries</span>
+            <span>
+              Showing {recentOrders.length === 0 ? 0 : (orderPage - 1) * orderEntries + 1} to{' '}
+              {Math.min(orderPage * orderEntries, recentOrders.length)} of {recentOrders.length} entries
+            </span>
             <div className="flex items-center gap-1">
-              <button className="px-3 py-1 border border-slate-200 rounded-lg text-slate-400 cursor-not-allowed bg-white">&lt;</button>
-              <button className="px-3 py-1 border border-[#ff5500] bg-[#ff5500] text-white rounded-lg font-bold shadow-xs">1</button>
-              <button className="px-3 py-1 border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 bg-white font-medium">&gt;</button>
+              <button 
+                onClick={() => setOrderPage(p => Math.max(1, p - 1))}
+                disabled={orderPage <= 1}
+                className="px-3 py-1 border border-slate-200 rounded-lg text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed bg-white"
+              >
+                &lt;
+              </button>
+              <button className="px-3 py-1 border border-[#ff5500] bg-[#ff5500] text-white rounded-lg font-bold shadow-xs">
+                {orderPage}
+              </button>
+              <button 
+                onClick={() => setOrderPage(p => Math.min(totalOrderPages, p + 1))}
+                disabled={orderPage >= totalOrderPages}
+                className="px-3 py-1 border border-slate-200 rounded-lg text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed bg-white"
+              >
+                &gt;
+              </button>
             </div>
           </div>
         </div>
@@ -450,7 +556,7 @@ export const AdminDashboard = ({ onNavigate }) => {
             <div className="bg-[#002625] text-white px-6 py-4 flex items-center justify-between">
               <h3 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
                 <Store size={18} className="text-[#ff5500]" />
-                View Top Seller
+                View Top Sellers ({topSellers.length})
               </h3>
               <span className="text-[10px] uppercase font-bold tracking-wider bg-white/10 text-white/90 px-2.5 py-1 rounded-full">
                 Leaderboard
@@ -462,13 +568,26 @@ export const AdminDashboard = ({ onNavigate }) => {
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <div className="flex items-center gap-2">
                   <span>Show</span>
-                  <select className="border border-slate-200 rounded-lg px-2.5 py-1 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:border-[#ff5500]">
-                    <option>10</option>
-                    <option>25</option>
-                    <option>50</option>
+                  <select 
+                    value={sellerEntries} 
+                    onChange={(e) => {
+                      setSellerEntries(Number(e.target.value));
+                      setSellerPage(1);
+                    }}
+                    className="border border-slate-200 rounded-lg px-2.5 py-1 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:border-[#ff5500]"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
                   </select>
                   <span>entries</span>
                 </div>
+                <button 
+                  onClick={() => onNavigate('sellers')}
+                  className="text-xs text-[#ff5500] font-bold hover:underline bg-transparent border-none cursor-pointer flex items-center gap-1"
+                >
+                  Manage Sellers <ArrowUpRight size={12} />
+                </button>
               </div>
 
               {/* Table */}
@@ -476,37 +595,45 @@ export const AdminDashboard = ({ onNavigate }) => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                      <th className="py-3 px-3.5">ID ↕</th>
-                      <th className="py-3 px-3.5">SELLER NAME</th>
+                      <th className="py-3 px-3.5">SELLER ID</th>
+                      <th className="py-3 px-3.5">SELLER / OWNER</th>
                       <th className="py-3 px-3.5">STORE NAME</th>
-                      <th className="py-3 px-3.5 text-right">TOTAL REVENUE ↕</th>
+                      <th className="py-3 px-3.5 text-right">TOTAL EARNINGS</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
-                    <tr className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3.5 font-mono text-slate-500 truncate max-w-[120px]">695cbdc15cd5cbace1782a0e</td>
-                      <td className="py-3 px-3.5 font-semibold text-slate-900">Harsh shop</td>
-                      <td className="py-3 px-3.5 text-[#ff5500] font-medium">Harshvardhan</td>
-                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹ 59,666.00</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3.5 font-mono text-slate-500 truncate max-w-[120px]">695b7d5ea0b51822cd33332b</td>
-                      <td className="py-3 px-3.5 font-semibold text-slate-900">appzeto</td>
-                      <td className="py-3 px-3.5 text-[#ff5500] font-medium">Appzeto E-commerce</td>
-                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹ 900.00</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3.5 font-mono text-slate-500 truncate max-w-[120px]">69d4efce71d41c6d982a2e0d</td>
-                      <td className="py-3 px-3.5 font-semibold text-slate-900">Deepak kumar</td>
-                      <td className="py-3 px-3.5 text-[#ff5500] font-medium">The Ranchi Store</td>
-                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹ 440.00</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3.5 font-mono text-slate-500 truncate max-w-[120px]">6a2125c5255c12dbcf2b3c97</td>
-                      <td className="py-3 px-3.5 font-semibold text-slate-900">durga turi</td>
-                      <td className="py-3 px-3.5 text-[#ff5500] font-medium">DURGA CHAAT STORE</td>
-                      <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹ 180.00</td>
-                    </tr>
+                    {paginatedSellers.length > 0 ? (
+                      paginatedSellers.map((seller) => {
+                        const sellerId = seller._id ? String(seller._id) : '—';
+                        const ownerName = seller.ownerName || seller.businessName || 'Merchant';
+                        const businessName = seller.businessName || 'ShippNex Store';
+                        const earningsFormatted = `₹ ${Number(seller.totalEarnings || seller.walletBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+
+                        return (
+                          <tr key={seller._id || seller.phone} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3 px-3.5 font-mono text-slate-500 truncate max-w-[120px]" title={sellerId}>
+                              {sellerId.slice(-8)}
+                            </td>
+                            <td className="py-3 px-3.5">
+                              <div className="font-semibold text-slate-900">{ownerName}</div>
+                              {seller.phone && <div className="text-[10px] text-slate-400 font-mono">{seller.phone}</div>}
+                            </td>
+                            <td className="py-3 px-3.5 text-[#ff5500] font-medium">
+                              {businessName}
+                            </td>
+                            <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-900">
+                              {earningsFormatted}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-slate-400 text-xs">
+                          No sellers registered in database yet.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -515,11 +642,28 @@ export const AdminDashboard = ({ onNavigate }) => {
 
           {/* Footer Pagination Controls */}
           <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50">
-            <span>Showing 1 to 4 of 4 entries</span>
+            <span>
+              Showing {topSellers.length === 0 ? 0 : (sellerPage - 1) * sellerEntries + 1} to{' '}
+              {Math.min(sellerPage * sellerEntries, topSellers.length)} of {topSellers.length} entries
+            </span>
             <div className="flex items-center gap-1">
-              <button className="px-3 py-1 border border-slate-200 rounded-lg text-slate-400 cursor-not-allowed bg-white">&lt;</button>
-              <button className="px-3 py-1 border border-[#ff5500] bg-[#ff5500] text-white rounded-lg font-bold shadow-xs">1</button>
-              <button className="px-3 py-1 border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-700 bg-white font-medium">&gt;</button>
+              <button 
+                onClick={() => setSellerPage(p => Math.max(1, p - 1))}
+                disabled={sellerPage <= 1}
+                className="px-3 py-1 border border-slate-200 rounded-lg text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed bg-white"
+              >
+                &lt;
+              </button>
+              <button className="px-3 py-1 border border-[#ff5500] bg-[#ff5500] text-white rounded-lg font-bold shadow-xs">
+                {sellerPage}
+              </button>
+              <button 
+                onClick={() => setSellerPage(p => Math.min(totalSellerPages, p + 1))}
+                disabled={sellerPage >= totalSellerPages}
+                className="px-3 py-1 border border-slate-200 rounded-lg text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed bg-white"
+              >
+                &gt;
+              </button>
             </div>
           </div>
         </div>
@@ -527,3 +671,4 @@ export const AdminDashboard = ({ onNavigate }) => {
     </div>
   );
 };
+

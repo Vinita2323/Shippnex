@@ -49,7 +49,10 @@ export const createProduct = async (req, res) => {
       homeSections,
       galleryImages,
       status,
-      isFeatured
+      isFeatured,
+      isReturnable,
+      returnWindow,
+      returnPolicy
     } = req.body;
 
     if (!name || typeof name !== 'string' || !name.trim()) {
@@ -71,6 +74,10 @@ export const createProduct = async (req, res) => {
     if (Array.isArray(galleryImages)) {
       processedGalleryImages = await Promise.all(galleryImages.map(img => processImage(img, 'products/gallery')));
     }
+
+    const finalIsReturnable = isReturnable !== undefined ? Boolean(isReturnable) : true;
+    const finalReturnWindow = returnWindow ? Number(returnWindow) : 7;
+    const finalReturnPolicy = returnPolicy || (finalIsReturnable ? `${finalReturnWindow} Days Returnable` : 'Non-Returnable');
 
     const product = await Product.create({
       name: name.trim(),
@@ -94,8 +101,12 @@ export const createProduct = async (req, res) => {
       homeSections: Array.isArray(homeSections) && homeSections.length > 0 ? homeSections : ['flash_sale', 'bestseller'],
       galleryImages: processedGalleryImages,
       status: status || 'Published',
-      isFeatured: Boolean(isFeatured)
+      isFeatured: Boolean(isFeatured),
+      isReturnable: finalIsReturnable,
+      returnWindow: finalReturnWindow,
+      returnPolicy: finalReturnPolicy
     });
+
 
     console.log(`[PRODUCT CREATED IN DB] ID: ${product._id}, Name: ${product.name}, Seller: ${product.seller}, SellerID: ${product.sellerId}`);
 

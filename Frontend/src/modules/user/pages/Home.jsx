@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useLocationContext } from '../../../context/LocationContext';
-import { bannerService, categoryService, productService } from '../../../services/authService';
+import { bannerService, categoryService, productService, sellerService } from '../../../services/authService';
 import { 
   Bell, 
   ShoppingCart, 
@@ -26,7 +26,11 @@ import {
   MapPin,
   Mic,
   Gamepad2,
-  Trash2
+  Trash2,
+  Store,
+  Star,
+  CheckCircle,
+  ChevronRight
 } from 'lucide-react';
 import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
 import oilGheeImg from '../../../assets/user/categories/OilGhee-removebg-preview.png';
@@ -48,6 +52,49 @@ const allProducts = [
   { id: 'p7', name: 'Premium Tea', price: 145, originalPrice: 160, image: groceryImg, unit: '500g' },
 ];
 
+const fallbackSellersList = [
+  {
+    _id: 'seller_fashion_hub',
+    businessName: 'Fashion Hub',
+    businessType: 'Retail & Grocery',
+    tagline: 'Fresh staples & cooking oils',
+    storeLogo: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=160&auto=format&fit=crop&q=80',
+    banner: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=600&auto=format&fit=crop&q=80',
+    rating: 4.9,
+    deliveryTime: '15-25 min'
+  },
+  {
+    _id: 'seller_clothing_hub',
+    businessName: 'Clothing Hub',
+    businessType: 'Fruits & Produce',
+    tagline: 'Farm fresh fruits & vegetables',
+    storeLogo: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=160&auto=format&fit=crop&q=80',
+    banner: 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=600&auto=format&fit=crop&q=80',
+    rating: 4.8,
+    deliveryTime: '20-30 min'
+  },
+  {
+    _id: 'seller_granic_farms',
+    businessName: 'GRANIC FARMS',
+    businessType: 'Dry Fruits & Organics',
+    tagline: 'Roasted nuts & superfoods',
+    storeLogo: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=160&auto=format&fit=crop&q=80',
+    banner: 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=600&auto=format&fit=crop&q=80',
+    rating: 5.0,
+    deliveryTime: '15-20 min'
+  },
+  {
+    _id: 'seller_apex_wholesale',
+    businessName: 'Apex Wholesale Grocery',
+    businessType: 'Superstore',
+    tagline: 'Bulk groceries & household',
+    storeLogo: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=160&auto=format&fit=crop&q=80',
+    banner: 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=600&auto=format&fit=crop&q=80',
+    rating: 4.7,
+    deliveryTime: '25-35 min'
+  }
+];
+
 const Home = () => {
   const navigate = useNavigate();
   const { addToCart, updateQuantity, getItemQuantity, isInCart, cartCount, removeFromCart } = useCart();
@@ -59,6 +106,7 @@ const Home = () => {
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [bannerVisible, setBannerVisible] = useState(true);
   const [categories, setCategories] = useState([]);
+  const [sellers, setSellers] = useState(fallbackSellersList);
   const [flashDeals, setFlashDeals] = useState([]);
   const [bestsellerProducts, setBestsellerProducts] = useState([]);
 
@@ -84,6 +132,17 @@ const Home = () => {
         }
       } catch (err) {
         console.error('Failed to load categories:', err);
+      }
+    };
+
+    const fetchSellers = async () => {
+      try {
+        const res = await sellerService.getPublicSellers();
+        if (res.success && Array.isArray(res.sellers) && res.sellers.length > 0) {
+          setSellers(res.sellers);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch sellers:', err);
       }
     };
 
@@ -151,6 +210,7 @@ const Home = () => {
 
     fetchBanners();
     fetchCategories();
+    fetchSellers();
     fetchHomeProducts();
   }, []);
 
@@ -492,6 +552,72 @@ const Home = () => {
                       <Trash2 size={13} strokeWidth={2.5} /> REMOVE
                     </button>
                   )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Best Sellers (List of All Sellers / Top Stores) */}
+        <div className="flex justify-between items-center mb-3 mt-5">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[16px] font-bold m-0 text-[#ff5500]">Best Sellers</h3>
+            <span className="bg-amber-100 text-amber-900 text-[10.5px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+              <Sparkles size={11} className="text-amber-600 fill-amber-500" /> Top Stores
+            </span>
+          </div>
+          <button onClick={() => navigate('/sellers')} className="bg-transparent border-none text-blue-600 text-[12px] font-semibold cursor-pointer hover:underline">See All</button>
+        </div>
+
+        <div className="flex overflow-x-auto gap-3.5 pb-4 -mr-5 pr-5 hide-scrollbar [&::-webkit-scrollbar]:hidden">
+          {sellers.map((seller) => (
+            <div 
+              key={seller._id || seller.businessName}
+              onClick={() => navigate(`/store/${encodeURIComponent(seller._id || seller.businessName)}`)}
+              className="min-w-[190px] max-w-[190px] bg-white border border-slate-100/90 rounded-2xl overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col justify-between cursor-pointer group hover:shadow-md transition-all shrink-0 hover:-translate-y-0.5"
+            >
+              {/* Store Mini Banner & Logo */}
+              <div className="h-20 w-full bg-slate-100 relative overflow-hidden">
+                <img 
+                  src={seller.banner || 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=600&auto=format&fit=crop&q=80'} 
+                  alt={seller.businessName} 
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
+                
+                {/* Rating Badge */}
+                <div className="absolute top-1.5 right-1.5 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 border border-white/20">
+                  <Star size={10} className="text-amber-400 fill-amber-400" />
+                  {seller.rating || 4.9}
+                </div>
+
+                {/* Store Avatar */}
+                <div className="absolute -bottom-2 left-2.5 w-10 h-10 rounded-xl bg-white p-0.5 shadow-md border border-white overflow-hidden">
+                  <img 
+                    src={seller.storeLogo || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=160&auto=format&fit=crop&q=80'} 
+                    alt={seller.businessName} 
+                    className="w-full h-full object-cover rounded-lg"
+                  />
+                </div>
+              </div>
+
+              {/* Store Details */}
+              <div className="p-3 pt-3.5 flex flex-col justify-between flex-1 gap-2">
+                <div>
+                  <h4 className="text-[13px] font-bold m-0 text-slate-800 truncate flex items-center gap-1">
+                    {seller.businessName}
+                    <CheckCircle size={13} className="text-emerald-500 fill-emerald-100 shrink-0" />
+                  </h4>
+                  <p className="text-[10.5px] text-slate-500 m-0 mt-0.5 truncate">{seller.tagline || seller.businessType || 'Verified Merchant'}</p>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-50 text-[10px] text-slate-400">
+                  <span className="font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                    ⚡ {seller.deliveryTime || '15-25 min'}
+                  </span>
+                  <span className="font-bold text-[#ea580c] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                    Visit <ChevronRight size={12} />
+                  </span>
                 </div>
               </div>
             </div>

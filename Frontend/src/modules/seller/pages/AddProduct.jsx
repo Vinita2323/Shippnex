@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  FileText, Upload, Tag, DollarSign, Boxes, CheckCircle, Package, Plus, ArrowLeft 
+  FileText, Upload, Tag, DollarSign, Boxes, CheckCircle, Package, Plus, ArrowLeft, ShieldCheck, RotateCcw, AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { categoryService, productService, authService } from '../../../services/authService';
@@ -48,10 +48,14 @@ const AddProduct = () => {
     seller: defaultSellerName,
     status: 'Published',
     isFeatured: false,
+    isReturnable: true,
+    returnWindow: '7',
+    returnPolicy: '7 Days Returnable / Replacement',
     mainImage: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
     mainImageFile: null,
     galleryImages: []
   };
+
 
   const [formData, setFormData] = useState(initialData);
 
@@ -736,6 +740,123 @@ const AddProduct = () => {
           </div>
         </div>
 
+        {/* Card 6: Return Policy & Guarantee */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <RotateCcw size={18} className="text-[#ff5500]" /> Return & Refund Policy *
+            </h3>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${formData.isReturnable ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+              {formData.isReturnable ? `Returnable (${formData.returnWindow || 7} Days)` : 'Non-Returnable'}
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Is this product Returnable? *</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div 
+                onClick={() => setFormData(prev => ({ 
+                  ...prev, 
+                  isReturnable: true,
+                  returnPolicy: prev.returnPolicy === 'Non-Returnable' ? `${prev.returnWindow || 7} Days Returnable / Replacement` : prev.returnPolicy
+                }))}
+                className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-3.5 ${
+                  formData.isReturnable 
+                    ? 'bg-emerald-50/60 border-emerald-500 shadow-2xs' 
+                    : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <input 
+                  type="radio"
+                  name="seller_isReturnable"
+                  checked={formData.isReturnable === true}
+                  onChange={() => {}}
+                  className="mt-1 w-4 h-4 accent-emerald-600 cursor-pointer"
+                />
+                <div className="flex-1 space-y-0.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                      <ShieldCheck size={16} className="text-emerald-600" /> Yes, Product is Returnable
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 m-0">Customers can request return / replacement within the designated window.</p>
+                </div>
+              </div>
+
+              <div 
+                onClick={() => setFormData(prev => ({ 
+                  ...prev, 
+                  isReturnable: false,
+                  returnPolicy: 'Non-Returnable due to hygiene / perishable nature'
+                }))}
+                className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-3.5 ${
+                  !formData.isReturnable 
+                    ? 'bg-amber-50/60 border-amber-500 shadow-2xs' 
+                    : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <input 
+                  type="radio"
+                  name="seller_isReturnable"
+                  checked={formData.isReturnable === false}
+                  onChange={() => {}}
+                  className="mt-1 w-4 h-4 accent-amber-600 cursor-pointer"
+                />
+                <div className="flex-1 space-y-0.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                      <AlertCircle size={16} className="text-amber-600" /> No, Non-Returnable
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 m-0">Suitable for perishable groceries, fresh bakery, personal hygiene or customized items.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {formData.isReturnable ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Return Window Period *</label>
+                <select 
+                  value={formData.returnWindow}
+                  onChange={(e) => {
+                    const win = e.target.value;
+                    setFormData(prev => ({
+                      ...prev,
+                      returnWindow: win,
+                      returnPolicy: `${win} Days Returnable / Replacement`
+                    }));
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:border-[#ff5500]"
+                >
+                  <option value="3">3 Days Return Window</option>
+                  <option value="7">7 Days Return Window (Standard)</option>
+                  <option value="10">10 Days Return Window</option>
+                  <option value="14">14 Days Return Window</option>
+                  <option value="30">30 Days Return Window</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Customer Return Policy Note</label>
+                <input 
+                  type="text"
+                  placeholder="e.g. 7 Days Returnable / Replacement if damaged"
+                  value={formData.returnPolicy}
+                  onChange={(e) => handleInputChange('returnPolicy', e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-center gap-2 text-xs text-amber-800 font-medium">
+              <AlertCircle size={15} className="text-amber-600 shrink-0" />
+              <span>This product will display a "Non-Returnable" badge on the customer product page and checkout screen.</span>
+            </div>
+          )}
+        </div>
+
         {/* Submit Button */}
         <div className="pt-4 flex justify-end">
           <button 
@@ -746,6 +867,7 @@ const AddProduct = () => {
             {isSubmitting ? 'Saving Product...' : 'Add Product'}
           </button>
         </div>
+
       </form>
     </div>
   );
