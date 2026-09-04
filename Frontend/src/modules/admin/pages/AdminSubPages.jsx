@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../context/useAdmin';
 import { StatusBadge, Drawer } from '../components/AdminUIComponents';
-import { categoryService, bannerService, productService, walletService, captainService, fcmService } from '../../../services/authService';
-import { mockUsers, mockSellers, mockCaptains, mockWarehouses, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
+import { categoryService, bannerService, productService, walletService, captainService, fcmService, adminService } from '../../../services/authService';
+import { mockUsers, mockSellers, mockCaptains, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
 import { 
   Search, 
   Download, 
@@ -39,12 +39,38 @@ import {
    1. USER MANAGEMENT PAGE
    ========================================================================= */
 export const UserManagement = () => {
-  const [users] = useState(mockUsers);
+  const [users, setUsers] = useState(mockUsers);
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(10);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const res = await adminService.getUsers();
+      if (res && res.success && Array.isArray(res.users) && res.users.length > 0) {
+        const mappedUsers = res.users.map(u => ({
+          id: u._id,
+          name: u.name || 'User',
+          email: u.email || 'N/A',
+          phone: u.phone || 'N/A',
+          avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'User')}&background=0D8ABC&color=fff`,
+          ordersCount: 0,
+          walletBalance: `₹${Number(u.walletBalance || 0).toFixed(2)}`,
+          joinedDate: u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : '2025-01-01',
+          status: u.isVerified !== false ? 'Active' : 'Pending'
+        }));
+        setUsers(mappedUsers);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch real users, using fallback mock data:', err.message);
+    }
+  };
 
   const filteredUsers = users.filter(u => 
     u.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -221,29 +247,30 @@ export const UserManagement = () => {
    ========================================================================= */
 export const SellerManagement = () => {
   const [sellers, setSellers] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
     fetchSellers();
   }, []);
 
   const fetchSellers = async () => {
+    setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/admin/sellers');
-      const data = await res.json();
-      if (data.success) {
-        const mappedSellers = data.sellers.map(s => ({
+      const data = await adminService.getSellers();
+      if (data && data.success) {
+        const mappedSellers = (data.sellers || []).map(s => ({
           ...s,
           id: s._id,
           name: s.ownerName || s.businessName,
           storeName: s.businessName,
           contactPhone: s.phone,
           contactEmail: s.email || '-',
-          logoText: s.businessName.substring(0, 2).toUpperCase(),
+          logoText: (s.businessName || 'SN').substring(0, 2).toUpperCase(),
           logoBg: 'bg-emerald-500',
-          balance: '0.00',
-          commission: '0.00%',
-          categoriesCount: 0,
-          assignedCategories: [],
+          balance: `₹${Number(s.walletBalance || 0).toFixed(2)}`,
+          commission: `${s.commissionPercentage || 0}%`,
+          categoriesCount: Array.isArray(s.categories) ? s.categories.length : 0,
+          assignedCategories: s.categories || [],
           status: s.status === 'pending' ? 'Pending' : (s.status === 'approved' ? 'Approved' : 'Rejected'),
           needApproval: s.status === 'pending' ? 'Yes' : 'No'
         }));
@@ -251,6 +278,8 @@ export const SellerManagement = () => {
       }
     } catch (err) {
       console.error('Error fetching sellers:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -297,13 +326,8 @@ export const SellerManagement = () => {
     
     const nextStatus = seller.status === 'Approved' ? 'pending' : 'approved';
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/sellers/${id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus })
-      });
-      const data = await res.json();
-      if (data.success) {
+      const data = await adminService.toggleSellerStatus(id, nextStatus);
+      if (data && data.success) {
         setSellers(prev => prev.map(s => {
           if (s.id === id) {
             const displayStatus = nextStatus === 'approved' ? 'Approved' : 'Pending';
@@ -312,10 +336,11 @@ export const SellerManagement = () => {
           return s;
         }));
       } else {
-        alert(data.message || 'Failed to update status');
+        alert(data?.message || 'Failed to update status');
       }
     } catch (err) {
       console.error('Error updating status:', err);
+      alert(err.response?.data?.message || 'Error updating status');
     }
   };
 
@@ -332,19 +357,27 @@ export const SellerManagement = () => {
     setEditFormData({
       name: seller.name,
       storeName: seller.storeName,
-      commission: seller.commission,
+      commission: (seller.commission || '').replace('%', ''),
       balance: seller.balance
     });
   };
 
   // Save Edit Modal
-  const handleSaveEdit = (e) => {
+  const handleSaveEdit = async (e) => {
     e.preventDefault();
+    const commNumber = parseFloat(editFormData.commission);
+    if (!isNaN(commNumber) && editingSellerModal) {
+      try {
+        await adminService.updateSellerCommission(editingSellerModal.id, commNumber);
+      } catch (err) {
+        console.warn('Could not update commission on server:', err.message);
+      }
+    }
     setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? {
       ...s,
       name: editFormData.name,
       storeName: editFormData.storeName,
-      commission: editFormData.commission.endsWith('%') ? editFormData.commission : `${editFormData.commission}%`,
+      commission: isNaN(commNumber) ? editFormData.commission : `${commNumber}%`,
       balance: editFormData.balance
     } : s));
     setEditingSellerModal(null);
@@ -664,18 +697,16 @@ export const SellerManagement = () => {
                   <button 
                     onClick={async () => {
                       try {
-                        const res = await fetch(`http://localhost:5000/api/admin/sellers/${editingSellerModal.id}/status`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ status: 'approved' })
-                        });
-                        const data = await res.json();
-                        if (data.success) {
+                        const data = await adminService.toggleSellerStatus(editingSellerModal.id, 'approved');
+                        if (data && data.success) {
                           setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, status: 'Approved', needApproval: 'No' } : s));
                           setEditingSellerModal(prev => ({ ...prev, status: 'Approved', needApproval: 'No' }));
                           alert('Seller has been approved successfully!');
                         }
-                      } catch (err) { console.error(err); }
+                      } catch (err) { 
+                        console.error(err); 
+                        alert(err.response?.data?.message || 'Failed to approve seller');
+                      }
                     }}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all"
                   >
@@ -684,18 +715,16 @@ export const SellerManagement = () => {
                   <button 
                     onClick={async () => {
                       try {
-                        const res = await fetch(`http://localhost:5000/api/admin/sellers/${editingSellerModal.id}/status`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ status: 'rejected' })
-                        });
-                        const data = await res.json();
-                        if (data.success) {
+                        const data = await adminService.toggleSellerStatus(editingSellerModal.id, 'rejected');
+                        if (data && data.success) {
                           setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, status: 'Rejected', needApproval: 'Yes' } : s));
                           setEditingSellerModal(prev => ({ ...prev, status: 'Rejected', needApproval: 'Yes' }));
                           alert('Seller application has been rejected.');
                         }
-                      } catch (err) { console.error(err); }
+                      } catch (err) { 
+                        console.error(err); 
+                        alert(err.response?.data?.message || 'Failed to reject seller');
+                      }
                     }}
                     className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all"
                   >
@@ -2051,129 +2080,7 @@ export const CaptainManagement = () => {
   );
 };
 
-/* =========================================================================
-   4. WAREHOUSE MANAGEMENT PAGE
-   ========================================================================= */
-export const WarehouseManagement = () => {
-  const [warehouses, setWarehouses] = React.useState(mockWarehouses);
-  const [search, setSearch] = React.useState('');
 
-  const filtered = warehouses.filter(w => 
-    w.name.toLowerCase().includes(search.toLowerCase()) || 
-    w.city.toLowerCase().includes(search.toLowerCase()) ||
-    w.address.toLowerCase().includes(search.toLowerCase())
-  );
-
-  return (
-    <div className="space-y-6 animate-fadeIn">
-      {/* Top Header & Breadcrumb */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Fulfillment Warehouses</h1>
-        <div className="text-xs text-slate-500 font-medium">
-          Dashboard / <span className="text-[#ff5500] font-semibold">Warehouses & Hubs</span>
-        </div>
-      </div>
-
-      {/* Main Container Card */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        
-        {/* Light Orange Header Banner with Search Bar */}
-        <div className="bg-[#fff4ed] border-b border-orange-200/70 text-[#002625] px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div>
-            <h2 className="text-base font-bold tracking-tight text-[#002625] flex items-center gap-2 m-0">
-              <MapPin size={18} className="text-[#ff5500]" />
-              Warehouse Locations & Fulfillment Hubs
-            </h2>
-            <p className="text-xs text-slate-500 font-medium mt-0.5 m-0">
-              Showing active fulfillment hubs, exact physical addresses, and capacity utilization
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="relative w-full sm:w-64">
-              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input 
-                type="text" 
-                placeholder="Search warehouse or address..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-[#ff5500] transition-all"
-              />
-            </div>
-
-            <button 
-              onClick={() => alert('Add New Hub Drawer')}
-              className="px-4 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all shrink-0 active:scale-95"
-            >
-              <Plus size={15} /> Add Hub
-            </button>
-          </div>
-        </div>
-
-        {/* Compact Cards Grid (2 Columns on Desktop, 1 on Mobile) */}
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filtered.map((w) => (
-              <div 
-                key={w.id} 
-                className="bg-white rounded-2xl border border-slate-200 hover:border-orange-300 shadow-2xs hover:shadow-md transition-all p-4 flex flex-col justify-between space-y-3 relative group"
-              >
-                {/* Top Row: Hub Name & Status Pill */}
-                <div className="flex justify-between items-start gap-2">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-orange-50 text-[#ff5500] font-mono font-bold text-[10px] rounded-md border border-orange-200">
-                        {w.id}
-                      </span>
-                      <h3 className="text-sm font-bold text-slate-900 tracking-tight m-0">{w.name}</h3>
-                    </div>
-                    <p className="text-xs text-slate-500 font-semibold m-0">{w.city}</p>
-                  </div>
-                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full border border-emerald-200 shrink-0">
-                    ● {w.status}
-                  </span>
-                </div>
-
-                {/* Streamlined Address & Manager Info Block */}
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100/80 space-y-2 text-xs">
-                  <div className="flex items-start gap-2 text-slate-700 font-medium">
-                    <MapPin size={15} className="text-[#ff5500] shrink-0 mt-0.5" />
-                    <span className="leading-snug text-slate-700">{w.address}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-200/50">
-                    <span>Manager: <strong className="text-slate-900 font-semibold">{w.manager}</strong></span>
-                    <span className="flex items-center gap-1 text-[11px] font-medium text-slate-400">
-                      <Clock size={12} /> {w.hours}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Storage Utilization Bar */}
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex justify-between items-center text-[11px] font-bold">
-                    <span className="text-slate-500 uppercase tracking-wider text-[10px]">Storage Utilization</span>
-                    <span className="text-slate-900">{w.utilization}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
-                    <div 
-                      className={`h-full transition-all duration-500 ${
-                        w.utilization > 85 ? 'bg-rose-500' : w.utilization > 70 ? 'bg-[#ff5500]' : 'bg-emerald-500'
-                      }`} 
-                      style={{ width: `${w.utilization}%` }} 
-                    />
-                  </div>
-                </div>
-
-              </div>
-            ))}
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
-};
 
 /* =========================================================================
    4.5. BRAND MANAGEMENT PAGE
@@ -3717,9 +3624,35 @@ export const ProductManagement = () => {
    ========================================================================= */
 export const OrderManagement = () => {
   const { activeTab } = useAdmin();
+  const [orders, setOrders] = useState(mockOrders);
   const [search, setSearch] = useState('');
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const res = await adminService.getOrders();
+        if (res && res.success && Array.isArray(res.orders) && res.orders.length > 0) {
+          const mappedOrders = res.orders.map(o => ({
+            id: o.orderId || o._id,
+            _id: o._id,
+            customer: o.user?.name || o.deliveryAddress?.fullName || 'Customer',
+            seller: o.items?.[0]?.seller?.businessName || o.items?.[0]?.sellerName || 'ShippNex Store',
+            warehouse: 'Central Hub',
+            total: `₹${Number(o.grandTotal || o.totalAmount || 0).toFixed(2)}`,
+            status: o.orderStatus || 'Pending',
+            date: o.createdAt ? new Date(o.createdAt).toISOString().split('T')[0] : 'Today',
+            raw: o
+          }));
+          setOrders(mappedOrders);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch real orders, using fallback mock data:', err.message);
+      }
+    };
+    fetchOrders();
+  }, []);
 
   // Map activeTab sub-item to status filter
   const getTabTitleAndFilter = () => {
@@ -3748,7 +3681,7 @@ export const OrderManagement = () => {
 
   const { title: pageTitle, filter: statusFilter } = getTabTitleAndFilter();
 
-  const filteredOrders = mockOrders.filter(o => {
+  const filteredOrders = orders.filter(o => {
     const matchesStatus = statusFilter === 'All' || o.status.toLowerCase() === statusFilter.toLowerCase();
     const matchesSearch = 
       o.id.toLowerCase().includes(search.toLowerCase()) ||

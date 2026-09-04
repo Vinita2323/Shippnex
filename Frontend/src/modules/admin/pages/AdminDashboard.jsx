@@ -5,7 +5,6 @@ import {
   Users, 
   Store, 
   Truck, 
-  Warehouse, 
   ShoppingCart, 
   DollarSign, 
   Clock, 
@@ -46,7 +45,6 @@ export const AdminDashboard = ({ onNavigate }) => {
     pendingSellerApprovals: 0,
     totalCaptains: 0,
     activeCaptains: 0,
-    totalWarehouses: 4,
     revenueToday: 0,
     totalVolume: 0,
   });
@@ -54,7 +52,6 @@ export const AdminDashboard = ({ onNavigate }) => {
   const [revenueChartData, setRevenueChartData] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
   const [topSellers, setTopSellers] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
 
   // Table pagination & page size states
   const [orderEntries, setOrderEntries] = useState(10);
@@ -74,7 +71,6 @@ export const AdminDashboard = ({ onNavigate }) => {
         if (Array.isArray(res.revenueChartData)) setRevenueChartData(res.revenueChartData);
         if (Array.isArray(res.recentOrders)) setRecentOrders(res.recentOrders);
         if (Array.isArray(res.topSellers)) setTopSellers(res.topSellers);
-        if (Array.isArray(res.warehouses)) setWarehouses(res.warehouses);
       }
     } catch (err) {
       console.error('Failed to fetch live admin dashboard stats:', err);
@@ -120,7 +116,7 @@ export const AdminDashboard = ({ onNavigate }) => {
             Welcome back, System Administrator! 👋
           </h1>
           <p className="text-xs md:text-sm text-white/90 mt-1 max-w-xl">
-            Here is your live real-time platform performance, seller compliance queue, warehouse operations, and financial metrics.
+            Here is your live real-time platform performance, seller compliance queue, delivery operations, and financial metrics.
           </p>
         </div>
         <div className="flex items-center gap-3 relative z-10">
@@ -347,12 +343,12 @@ export const AdminDashboard = ({ onNavigate }) => {
           onClick={() => onNavigate('captains')}
         />
         <StatWidget 
-          title="ACTIVE WAREHOUSES" 
-          value={String(stats.totalWarehouses ?? warehouses.length ?? 4)} 
-          change="Operational" 
+          title="TOTAL CUSTOMERS" 
+          value={String(stats.totalUsers ?? 0)} 
+          change="Registered" 
           isPositive={true} 
-          icon={Warehouse}
-          onClick={() => onNavigate('warehouses')}
+          icon={Users}
+          onClick={() => onNavigate('users')}
         />
         <StatWidget 
           title="REVENUE TODAY" 

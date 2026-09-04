@@ -92,7 +92,7 @@ router.post('/', upload.single('image'), async (req, res) => {
   // Fallback to local storage URL
   const filename = req.file.filename;
   const relativePath = `uploads/${folder.toLowerCase()}/${filename}`;
-  const fileUrl = `http://localhost:5000/${relativePath}`;
+  const fileUrl = `${req.protocol}://${req.get('host')}/${relativePath}`;
 
   res.status(200).json({
     success: true,

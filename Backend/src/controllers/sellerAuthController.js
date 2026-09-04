@@ -9,31 +9,47 @@ import crypto from 'crypto';
 // Send OTP
 export const sendOtp = async (req, res, next) => {
   try {
-    const { phone } = req.body;
+    const rawPhone = req.body.phone;
 
-    if (!phone) {
+    if (!rawPhone) {
       return res.status(400).json({ success: false, message: 'Phone number is required' });
+    }
+
+    const cleanPhone = String(rawPhone).replace(/\D/g, '').slice(-10);
+    if (cleanPhone.length < 10) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit phone number' });
     }
 
     const { otp, otpExpiry } = generateOtp();
 
-    let seller = await Seller.findOne({ phone });
+    let seller = await Seller.findOne({
+      $or: [
+        { phone: cleanPhone },
+        { phone: `+91${cleanPhone}` },
+        { phone: `+91 ${cleanPhone}` },
+        { phone: new RegExp(cleanPhone + '$') },
+        { phone: String(rawPhone).trim() },
+      ]
+    });
 
     if (!seller) {
       // Auto approve seller 9302841832
-      const initialStatus = phone === '9302841832' ? 'approved' : 'pending';
+      const initialStatus = cleanPhone === '9302841832' ? 'approved' : 'pending';
       seller = await Seller.create({ 
-        phone, 
+        phone: cleanPhone, 
         otp, 
         otpExpiry, 
         status: initialStatus,
         isVerified: true,
-        businessName: phone === '9302841832' ? 'Official Seller Store' : 'Seller Store'
+        businessName: cleanPhone === '9302841832' ? 'Official Seller Store' : 'Seller Store'
       });
     } else {
       seller.otp = otp;
       seller.otpExpiry = otpExpiry;
-      if (phone === '9302841832') {
+      if (seller.phone !== cleanPhone) {
+        seller.phone = cleanPhone;
+      }
+      if (cleanPhone === '9302841832') {
         seller.status = 'approved';
         seller.isVerified = true;
       }
@@ -42,13 +58,13 @@ export const sendOtp = async (req, res, next) => {
 
     // Log OTP for development/testing
     console.log(`\n========================================`);
-    console.log(`[SELLER AUTH] OTP for ${phone}: ${otp} (Testing OTP: 123456)`);
+    console.log(`[SELLER AUTH] OTP for ${cleanPhone}: ${otp} (Testing OTP: 123456)`);
     console.log(`========================================\n`);
 
     res.status(200).json({
       success: true,
       message: 'OTP sent successfully. Use code 123456 or generated OTP.',
-      phone,
+      phone: cleanPhone,
       otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
     });
   } catch (error) {
@@ -65,12 +81,23 @@ export const verifyOtp = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Phone and OTP are required' });
     }
 
-    let seller = await Seller.findOne({ phone });
+    const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+    const cleanOtp = String(otp).trim();
+
+    let seller = await Seller.findOne({
+      $or: [
+        { phone: cleanPhone },
+        { phone: `+91${cleanPhone}` },
+        { phone: `+91 ${cleanPhone}` },
+        { phone: new RegExp(cleanPhone + '$') },
+        { phone: String(phone).trim() },
+      ]
+    });
 
     if (!seller) {
-      if (phone === '9302841832') {
+      if (cleanPhone === '9302841832') {
         seller = await Seller.create({
-          phone,
+          phone: cleanPhone,
           status: 'approved',
           isVerified: true,
           businessName: 'Official Seller Store',
@@ -80,9 +107,11 @@ export const verifyOtp = async (req, res, next) => {
       }
     }
 
-    // Allow test OTP '123456'
-    const isTestOtp = otp === '123456';
-    if (!isTestOtp && seller.otp !== otp) {
+    // Allow test OTP '123456' or exact matching OTP
+    const isTestOtp = cleanOtp === '123456';
+    const isMatchingOtp = seller.otp && String(seller.otp).trim() === cleanOtp;
+
+    if (!isTestOtp && !isMatchingOtp) {
       return res.status(400).json({ success: false, message: 'Invalid OTP code' });
     }
 
@@ -94,9 +123,12 @@ export const verifyOtp = async (req, res, next) => {
     seller.otp = undefined;
     seller.otpExpiry = undefined;
     seller.isVerified = true;
+    if (seller.phone !== cleanPhone) {
+      seller.phone = cleanPhone;
+    }
     
     // Auto-approve seller 9302841832
-    if (phone === '9302841832') {
+    if (phone === '9302841832' || cleanPhone === '9302841832') {
       seller.status = 'approved';
     }
 

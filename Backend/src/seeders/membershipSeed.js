@@ -1,4 +1,4 @@
-﻿import mongoose from 'mongoose';
+import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import SellerMembershipPlan from '../models/SellerMembershipPlan.model.js';
 import CaptainMembershipPlan from '../models/CaptainMembershipPlan.model.js';
@@ -82,7 +82,7 @@ const seedMembershipPlans = async () => {
       await SellerMembershipPlan.insertMany(sellerDefaultPlans);
       console.log('✓ Seeded 3 default Seller Membership Plans');
     } else {
-      console.log(ℹ Seller plans already exist ( found) — skipping);
+      console.log(`ℹ Seller plans already exist (${existingSellerPlans} found) — skipping`);
     }
 
     // Seed Captain Plans (only if none exist)
@@ -91,7 +91,7 @@ const seedMembershipPlans = async () => {
       await CaptainMembershipPlan.insertMany(captainDefaultPlans);
       console.log('✓ Seeded 3 default Captain Membership Plans');
     } else {
-      console.log(ℹ Captain plans already exist ( found) — skipping);
+      console.log(`ℹ Captain plans already exist (${existingCaptainPlans} found) — skipping`);
     }
 
     console.log('Seeding complete!');

@@ -1,6 +1,7 @@
 import express from 'express';
 import { 
   getDashboardStats,
+  getAllUsers,
   getAllSellers, 
   toggleSellerStatus, 
   updateSellerCommission,
@@ -17,6 +18,8 @@ const router = express.Router();
 // Live Dashboard Stats
 router.get('/dashboard/stats', getDashboardStats);
 
+// User Management
+router.get('/users', getAllUsers);
 
 // Seller Management
 router.get('/sellers', getAllSellers);

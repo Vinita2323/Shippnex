@@ -8,7 +8,6 @@ import {
   SellerManagement, 
   SellersOverview,
   CaptainManagement, 
-  WarehouseManagement, 
   CategoryManagement, 
   BrandManagement,
   ProductManagement,
@@ -72,9 +71,6 @@ export const AdminLayout = () => {
       case 'captains':
       case 'delivery_boy':
         return <CaptainManagement />;
-      case 'warehouses':
-      case 'manage_location':
-        return <WarehouseManagement />;
       case 'categories':
         return <CategoryManagement initialSubcategoriesOnly={false} />;
       case 'subcategories':

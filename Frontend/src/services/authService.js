@@ -668,12 +668,24 @@ export const adminService = {
     const response = await API.get('/admin/orders');
     return response.data;
   },
+  getUsers: async () => {
+    const response = await API.get('/admin/users');
+    return response.data;
+  },
   getSellers: async () => {
     const response = await API.get('/admin/sellers');
     return response.data;
   },
   toggleSellerStatus: async (id, status) => {
     const response = await API.put(`/admin/sellers/${id}/status`, { status });
+    return response.data;
+  },
+  updateSellerCommission: async (id, commissionPercentage) => {
+    const response = await API.put(`/admin/sellers/${id}/commission`, { commissionPercentage });
+    return response.data;
+  },
+  assignCaptainToOrder: async (orderId, captainId, captainEarnings = 0) => {
+    const response = await API.put(`/admin/orders/${orderId}/assign-captain`, { captainId, captainEarnings });
     return response.data;
   },
 };

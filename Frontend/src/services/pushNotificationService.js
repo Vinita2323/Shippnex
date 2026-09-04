@@ -1,8 +1,9 @@
 import { messaging, getToken, onMessage } from '../firebase';
 import { isSupported } from 'firebase/messaging';
+import { getBaseApiUrl } from './api';
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || 'BEpfQY8Farcg3X9t88x_yH0vOxuuXhaeLP6_EPcDS2gpSXVBEdstE-PyJnTHSiUCjWvIvlzNjhNJGOfgZ88pw_0';
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = getBaseApiUrl();
 
 /**
  * Register background service worker for FCM (SOP Step 5)

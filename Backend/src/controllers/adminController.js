@@ -145,6 +145,21 @@ export const getDashboardStats = async (req, res, next) => {
   }
 };
 
+export const getAllUsers = async (req, res, next) => {
+  try {
+    const users = await User.find({ role: { $ne: 'admin' } })
+      .select('-otp -otpExpiry')
+      .sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      users
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getAllSellers = async (req, res, next) => {
   try {
     const sellers = await Seller.find().sort({ createdAt: -1 });

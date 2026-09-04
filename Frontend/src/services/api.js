@@ -1,7 +1,22 @@
 import axios from 'axios';
 
+export const getBaseApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  // If envUrl is set and is NOT localhost/127.0.0.1 (e.g. production domain like https://api.shippnex.com/api), use it directly
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl;
+  }
+  // Otherwise dynamically connect to port 5000 of whatever hostname served the frontend (localhost, 192.168.x.x, etc.)
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    const protocol = window.location.protocol || 'http:';
+    const hostname = window.location.hostname;
+    return `${protocol}//${hostname}:5000/api`;
+  }
+  return 'http://localhost:5000/api';
+};
+
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000/api`,
+  baseURL: getBaseApiUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
@@ -50,19 +65,43 @@ API.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle 401 Unauthorized globally
+// Response interceptor to handle 401 Unauthorized globally per role
 API.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Clear user auth data
-      localStorage.removeItem('shippnex_user_token');
-      localStorage.removeItem('shippnex_user_data');
+      const currentPath = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
 
-      // If we are on a protected user page, redirect to login
-      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/verify-otp')) {
-        sessionStorage.setItem('shippnex_auth_expired_redirect', window.location.pathname);
-        window.location.href = '/login';
+      if (currentPath.startsWith('/seller')) {
+        // Only redirect if on a protected seller page
+        if (!currentPath.startsWith('/seller/login') && !currentPath.startsWith('/seller/register') && !currentPath.startsWith('/seller/under-review') && !currentPath.startsWith('/seller/terms') && !currentPath.startsWith('/seller/privacy')) {
+          localStorage.removeItem('shippnex_seller_token');
+          localStorage.removeItem('shippnex_seller_data');
+          sessionStorage.setItem('shippnex_seller_auth_expired_redirect', currentPath);
+          window.location.href = '/seller/login';
+        }
+      } else if (currentPath.startsWith('/captain') || currentPath.startsWith('/delivery')) {
+        if (!currentPath.startsWith('/captain/login') && !currentPath.startsWith('/captain/register') && !currentPath.startsWith('/captain/under-review')) {
+          localStorage.removeItem('shippnex_captain_token');
+          localStorage.removeItem('shippnex_captain_data');
+          sessionStorage.setItem('shippnex_captain_auth_expired_redirect', currentPath);
+          window.location.href = '/captain/login';
+        }
+      } else if (currentPath.startsWith('/admin')) {
+        if (!currentPath.startsWith('/admin/login')) {
+          localStorage.removeItem('shippnex_admin_token');
+          localStorage.removeItem('shippnex_admin_data');
+          sessionStorage.setItem('shippnex_admin_auth_expired_redirect', currentPath);
+          window.location.href = '/admin/login';
+        }
+      } else {
+        // Consumer / Customer
+        if (!currentPath.startsWith('/login') && !currentPath.startsWith('/verify-otp') && !currentPath.startsWith('/register')) {
+          localStorage.removeItem('shippnex_user_token');
+          localStorage.removeItem('shippnex_user_data');
+          sessionStorage.setItem('shippnex_auth_expired_redirect', currentPath);
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);

@@ -615,6 +615,9 @@ export const getSellerNotifications = async (req, res, next) => {
 export const markNotificationViewed = async (req, res, next) => {
   try {
     const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(404).json({ success: false, message: 'Notification not found' });
+    }
     const notification = await SellerNotification.findById(id);
 
     if (!notification) {
@@ -642,6 +645,9 @@ export const markNotificationViewed = async (req, res, next) => {
 export const acceptSellerOrder = async (req, res, next) => {
   try {
     const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(404).json({ success: false, message: 'Order notification not found' });
+    }
     const notification = await SellerNotification.findById(id);
 
     if (!notification) {
@@ -693,18 +699,17 @@ export const acceptSellerOrder = async (req, res, next) => {
 export const rejectSellerOrder = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { rejectionReason, customReason } = req.body;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(404).json({ success: false, message: 'Order notification not found' });
+    }
+
+    const rawBody = req.body || {};
+    const rejectionReason = typeof rawBody === 'string' ? rawBody : (rawBody.rejectionReason || rawBody.reason);
+    const customReason = rawBody.customReason;
 
     const finalReason = rejectionReason === 'Other' && customReason
       ? customReason.trim()
       : (rejectionReason || 'Unable to fulfill order');
-
-    if (!finalReason) {
-      return res.status(400).json({
-        success: false,
-        message: 'Rejection reason is required to reject an order',
-      });
-    }
 
     const notification = await SellerNotification.findById(id);
 

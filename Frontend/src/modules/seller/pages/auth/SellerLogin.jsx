@@ -30,14 +30,41 @@ const SellerLogin = () => {
     }
   };
 
+  const handleOtpPaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!pasted) return;
+    const newOtp = ['', '', '', '', '', ''];
+    for (let i = 0; i < pasted.length; i++) {
+      newOtp[i] = pasted[i];
+    }
+    setOtp(newOtp);
+    const focusIdx = Math.min(pasted.length, 5);
+    const targetInput = document.getElementById(`otp-input-${focusIdx}`);
+    if (targetInput) targetInput.focus();
+  };
+
   const handleOtpChange = (index, value) => {
-    if (value.length > 1) value = value.slice(-1);
+    // If pasted or multi-char typed
+    const clean = value.replace(/\D/g, '');
+    if (clean.length > 1) {
+      const newOtp = [...otp];
+      for (let i = 0; i < clean.length && index + i < 6; i++) {
+        newOtp[index + i] = clean[i];
+      }
+      setOtp(newOtp);
+      const nextIdx = Math.min(index + clean.length, 5);
+      const nextInput = document.getElementById(`otp-input-${nextIdx}`);
+      if (nextInput) nextInput.focus();
+      return;
+    }
+
     const newOtp = [...otp];
-    newOtp[index] = value;
+    newOtp[index] = clean;
     setOtp(newOtp);
 
     // Auto-focus next input box
-    if (value && index < 5) {
+    if (clean && index < 5) {
       const nextInput = document.getElementById(`otp-input-${index + 1}`);
       if (nextInput) nextInput.focus();
     }
@@ -52,16 +79,20 @@ const SellerLogin = () => {
 
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
+    if (loading) return;
+
     setErrorMsg('');
-    const enteredOtp = otp.join('');
+    const enteredOtp = otp.join('').trim();
     if (enteredOtp.length < 6) {
       setErrorMsg('Please enter the complete 6-digit OTP');
       return;
     }
 
+    const cleanPhone = mobileNumber.replace(/\D/g, '').slice(-10);
+
     try {
       setLoading(true);
-      const res = await authService.verifySellerOtp(mobileNumber, enteredOtp);
+      const res = await authService.verifySellerOtp(cleanPhone, enteredOtp);
 
       if (res.status === 'pending') {
         navigate('/seller/under-review');
@@ -81,10 +112,10 @@ const SellerLogin = () => {
           navigate('/seller/dashboard');
         }
       } else {
-        setErrorMsg(res.message || 'Verification failed');
+        setErrorMsg(res.message || 'Verification failed. Please try again.');
       }
     } catch (err) {
-      setErrorMsg(err.response?.data?.message || 'Invalid OTP code.');
+      setErrorMsg(err.response?.data?.message || err.message || 'Verification failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -174,10 +205,23 @@ const SellerLogin = () => {
                   Edit
                 </button>
               </p>
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtp(['1', '2', '3', '4', '5', '6']);
+                    setErrorMsg('');
+                  }}
+                  title="Click to fill test OTP 123456"
+                  className="text-[11px] text-orange-600 bg-orange-50 border border-orange-200/80 px-2.5 py-1 rounded-md font-mono hover:bg-orange-100 transition-colors cursor-pointer"
+                >
+                  ⚡ Test OTP: 123456 (Click to fill)
+                </button>
+              </div>
             </div>
 
             {/* 6 Digit OTP Boxes */}
-            <div className="flex justify-between gap-2 py-1">
+            <div className="flex justify-between gap-2 py-1" onPaste={handleOtpPaste}>
               {otp.map((digit, index) => (
                 <input
                   key={index}

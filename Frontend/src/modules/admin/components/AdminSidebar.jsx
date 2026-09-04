@@ -128,14 +128,6 @@ export const AdminSidebar = () => {
       title: 'DELIVERY SECTION',
       items: [
         {
-          id: 'manage_location',
-          label: 'Manage Location',
-          icon: MapPin,
-          submenu: [
-            { id: 'warehouses', label: 'Warehouses & Hubs' }
-          ]
-        },
-        {
           id: 'delivery_boy',
           label: 'Captain',
           icon: Truck,
