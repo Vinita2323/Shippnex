@@ -103,7 +103,7 @@ const sellerSchema = new mongoose.Schema(
   }
 );
 
-sellerSchema.index({ 'warehouseLocation.location': '2dsphere' });
+sellerSchema.index({ 'warehouseLocation.location': '2dsphere' }, { sparse: true });
 
 const Seller = mongoose.model('Seller', sellerSchema);
 export default Seller;
