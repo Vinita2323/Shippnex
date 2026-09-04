@@ -2,6 +2,7 @@ import Captain from '../models/Captain.model.js';
 import { generateOtp } from '../utils/generateOtp.js';
 import { generateToken } from '../utils/generateToken.js';
 import CaptainMembership from '../models/CaptainMembership.model.js';
+import { sendOtpSMS, normalizePhoneNumber } from '../services/smsIndiaHubService.js';
 
 // Register Captain (Submit Registration Form)
 export const registerCaptain = async (req, res, next) => {
@@ -45,13 +46,23 @@ export const registerCaptain = async (req, res, next) => {
       panCardNumber,
     } = req.body;
 
-    const phone = mobileNumber || req.body.phone;
+    const rawPhone = mobileNumber || req.body.phone;
 
-    if (!phone || !fullName) {
+    if (!rawPhone || !fullName) {
       return res.status(400).json({ success: false, message: 'Full Name and Mobile Number are required.' });
     }
 
-    let captain = await Captain.findOne({ phone });
+    const phone = normalizePhoneNumber(rawPhone) || rawPhone;
+
+    let captain = await Captain.findOne({
+      $or: [
+        { phone },
+        { phone: `+91${phone}` },
+        { phone: `+91 ${phone}` },
+        { phone: new RegExp(phone + '$') },
+        { phone: String(rawPhone).trim() },
+      ]
+    });
 
     if (captain) {
       // If already registered and approved
@@ -172,33 +183,53 @@ export const registerCaptain = async (req, res, next) => {
 // Send OTP
 export const sendOtp = async (req, res, next) => {
   try {
-    const { phone } = req.body;
+    const rawPhone = req.body.phone;
 
-    if (!phone) {
+    if (!rawPhone) {
       return res.status(400).json({ success: false, message: 'Phone number is required' });
+    }
+
+    const cleanPhone = normalizePhoneNumber(rawPhone);
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit Indian mobile number' });
     }
 
     const { otp, otpExpiry } = generateOtp();
 
-    let captain = await Captain.findOne({ phone });
+    let captain = await Captain.findOne({
+      $or: [
+        { phone: cleanPhone },
+        { phone: `+91${cleanPhone}` },
+        { phone: `+91 ${cleanPhone}` },
+        { phone: new RegExp(cleanPhone + '$') },
+        { phone: String(rawPhone).trim() },
+      ]
+    });
 
     if (!captain) {
-      captain = await Captain.create({ phone, otp, otpExpiry, status: 'pending' });
+      captain = await Captain.create({ phone: cleanPhone, otp, otpExpiry, status: 'pending' });
     } else {
       captain.otp = otp;
       captain.otpExpiry = otpExpiry;
+      if (captain.phone !== cleanPhone) {
+        captain.phone = cleanPhone;
+      }
       await captain.save();
     }
 
-    // Log OTP for development/testing
-    console.log(`\n========================================`);
-    console.log(`[CAPTAIN AUTH] OTP for ${phone}: ${otp}`);
-    console.log(`========================================\n`);
+    // Dispatch OTP through centralized SMS India Hub Service
+    const smsResult = await sendOtpSMS({
+      phone: cleanPhone,
+      otp,
+      appName: 'ShippNex Captain',
+      role: 'captain',
+    });
 
     res.status(200).json({
       success: true,
-      message: 'OTP sent successfully',
-      phone,
+      message: smsResult.message || 'OTP sent successfully',
+      phone: cleanPhone,
+      otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
     });
   } catch (error) {
     next(error);
@@ -214,18 +245,32 @@ export const verifyOtp = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Phone and OTP are required' });
     }
 
-    const captain = await Captain.findOne({ phone });
+    const cleanPhone = normalizePhoneNumber(phone);
+    const cleanOtp = String(otp).trim();
+
+    const captain = await Captain.findOne({
+      $or: [
+        { phone: cleanPhone },
+        { phone: `+91${cleanPhone}` },
+        { phone: `+91 ${cleanPhone}` },
+        { phone: new RegExp(cleanPhone + '$') },
+        { phone: String(phone).trim() },
+      ]
+    });
 
     if (!captain) {
       return res.status(404).json({ success: false, message: 'Captain account not found. Please register first.' });
     }
 
-    // Allow hardcoded OTP '123456' for testing
-    if (captain.otp !== otp && otp !== '123456') {
+    // Allow test OTP '123456' or matching OTP
+    const isTestOtp = cleanOtp === '123456';
+    const isMatchingOtp = captain.otp && String(captain.otp).trim() === cleanOtp;
+
+    if (!isTestOtp && !isMatchingOtp) {
       return res.status(400).json({ success: false, message: 'Invalid OTP code' });
     }
 
-    if (captain.otpExpiry && new Date() > new Date(captain.otpExpiry)) {
+    if (!isTestOtp && captain.otpExpiry && new Date() > new Date(captain.otpExpiry)) {
       return res.status(400).json({ success: false, message: 'OTP has expired' });
     }
 

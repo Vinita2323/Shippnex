@@ -1,37 +1,56 @@
 import User from '../models/User.model.js';
 import { generateOtp } from '../utils/generateOtp.js';
 import { generateToken } from '../utils/generateToken.js';
+import { sendOtpSMS, normalizePhoneNumber } from '../services/smsIndiaHubService.js';
 
 // Send OTP
 export const sendOtp = async (req, res, next) => {
   try {
-    const { phone } = req.body;
+    const rawPhone = req.body.phone;
 
-    if (!phone) {
+    if (!rawPhone) {
       return res.status(400).json({ success: false, message: 'Phone number is required' });
+    }
+
+    const cleanPhone = normalizePhoneNumber(rawPhone);
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit Indian mobile number' });
     }
 
     const { otp, otpExpiry } = generateOtp();
 
-    let user = await User.findOne({ phone });
+    let user = await User.findOne({
+      $or: [
+        { phone: cleanPhone },
+        { phone: `+91${cleanPhone}` },
+        { phone: `+91 ${cleanPhone}` },
+        { phone: new RegExp(cleanPhone + '$') },
+      ]
+    });
 
     if (!user) {
-      user = await User.create({ phone, otp, otpExpiry });
+      user = await User.create({ phone: cleanPhone, otp, otpExpiry });
     } else {
       user.otp = otp;
       user.otpExpiry = otpExpiry;
+      if (user.phone !== cleanPhone) {
+        user.phone = cleanPhone;
+      }
       await user.save();
     }
 
-    // Log OTP for development/testing
-    console.log(`\n========================================`);
-    console.log(`[USER AUTH] OTP for ${phone}: ${otp}`);
-    console.log(`========================================\n`);
+    // Dispatch OTP through centralized SMS India Hub Service
+    const smsResult = await sendOtpSMS({
+      phone: cleanPhone,
+      otp,
+      appName: 'ShippNex',
+      role: 'user',
+    });
 
     res.status(200).json({
       success: true,
-      message: 'OTP sent successfully',
-      phone,
+      message: smsResult.message || 'OTP sent successfully',
+      phone: cleanPhone,
     });
   } catch (error) {
     next(error);
@@ -47,18 +66,32 @@ export const verifyOtp = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Phone and OTP are required' });
     }
 
-    const user = await User.findOne({ phone });
+    const cleanPhone = normalizePhoneNumber(phone);
+    const cleanOtp = String(otp).trim();
+
+    const user = await User.findOne({
+      $or: [
+        { phone: cleanPhone },
+        { phone: `+91${cleanPhone}` },
+        { phone: `+91 ${cleanPhone}` },
+        { phone: new RegExp(cleanPhone + '$') },
+        { phone: String(phone).trim() },
+      ]
+    });
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Allow hardcoded OTP '123456' for testing
-    if (user.otp !== otp && otp !== '123456') {
+    // Allow hardcoded OTP '123456' for testing or matching OTP
+    const isTestOtp = cleanOtp === '123456';
+    const isMatchingOtp = user.otp && String(user.otp).trim() === cleanOtp;
+
+    if (!isTestOtp && !isMatchingOtp) {
       return res.status(400).json({ success: false, message: 'Invalid OTP code' });
     }
 
-    if (new Date() > new Date(user.otpExpiry)) {
+    if (!isTestOtp && user.otpExpiry && new Date() > new Date(user.otpExpiry)) {
       return res.status(400).json({ success: false, message: 'OTP has expired' });
     }
 
@@ -66,6 +99,9 @@ export const verifyOtp = async (req, res, next) => {
     user.otp = undefined;
     user.otpExpiry = undefined;
     user.isVerified = true;
+    if (user.phone !== cleanPhone && cleanPhone) {
+      user.phone = cleanPhone;
+    }
     await user.save();
 
     const token = generateToken({ id: user._id, phone: user.phone, role: user.role });

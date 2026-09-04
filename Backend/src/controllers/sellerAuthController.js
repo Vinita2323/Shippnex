@@ -4,6 +4,7 @@ import { generateToken } from '../utils/generateToken.js';
 import { uploadToCloudinary } from '../config/cloudinary.js';
 import SellerMembership from '../models/SellerMembership.model.js';
 import SellerMembershipPlan from '../models/SellerMembershipPlan.model.js';
+import { sendOtpSMS, normalizePhoneNumber } from '../services/smsIndiaHubService.js';
 import crypto from 'crypto';
 
 // Send OTP
@@ -15,9 +16,9 @@ export const sendOtp = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Phone number is required' });
     }
 
-    const cleanPhone = String(rawPhone).replace(/\D/g, '').slice(-10);
-    if (cleanPhone.length < 10) {
-      return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit phone number' });
+    const cleanPhone = normalizePhoneNumber(rawPhone);
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit Indian mobile number' });
     }
 
     const { otp, otpExpiry } = generateOtp();
@@ -56,14 +57,17 @@ export const sendOtp = async (req, res, next) => {
       await seller.save();
     }
 
-    // Log OTP for development/testing
-    console.log(`\n========================================`);
-    console.log(`[SELLER AUTH] OTP for ${cleanPhone}: ${otp} (Testing OTP: 123456)`);
-    console.log(`========================================\n`);
+    // Dispatch OTP through centralized SMS India Hub Service
+    const smsResult = await sendOtpSMS({
+      phone: cleanPhone,
+      otp,
+      appName: 'ShippNex Seller',
+      role: 'seller',
+    });
 
     res.status(200).json({
       success: true,
-      message: 'OTP sent successfully. Use code 123456 or generated OTP.',
+      message: smsResult.message || 'OTP sent successfully. Use code 123456 or generated OTP.',
       phone: cleanPhone,
       otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
     });
