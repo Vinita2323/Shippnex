@@ -253,7 +253,7 @@ export const SellerManagement = () => {
     fetchSellers();
   }, []);
 
-  const fetchSellers = async () => {
+  const fetchSellers = async (retryCount = 0) => {
     setLoading(true);
     try {
       const data = await adminService.getSellers();
@@ -278,6 +278,9 @@ export const SellerManagement = () => {
       }
     } catch (err) {
       console.error('Error fetching sellers:', err);
+      if (retryCount < 2) {
+        setTimeout(() => fetchSellers(retryCount + 1), 3500);
+      }
     } finally {
       setLoading(false);
     }
