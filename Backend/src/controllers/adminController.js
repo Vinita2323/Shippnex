@@ -169,12 +169,7 @@ export const getAllSellers = async (req, res, next) => {
       sellers: sellers || []
     });
   } catch (error) {
-    console.error('Error fetching all sellers:', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to fetch sellers',
-      sellers: []
-    });
+    next(error);
   }
 };
 
