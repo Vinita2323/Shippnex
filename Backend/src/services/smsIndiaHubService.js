@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 /**
  * SMS India Hub Centralized OTP Service
  * Reusable SMS provider service for User, Seller, and Captain authentication flows.
