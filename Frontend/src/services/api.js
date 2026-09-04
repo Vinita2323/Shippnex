@@ -2,16 +2,28 @@ import axios from 'axios';
 
 export const getBaseApiUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
-  // If envUrl is set and is NOT localhost/127.0.0.1 (e.g. production domain like https://api.shippnex.com/api), use it directly
-  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
-    return envUrl;
+  if (envUrl && envUrl.trim()) {
+    const cleanUrl = envUrl.trim().replace(/\/$/, '');
+    return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
   }
-  // Otherwise dynamically connect to port 5000 of whatever hostname served the frontend (localhost, 192.168.x.x, etc.)
-  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-    const protocol = window.location.protocol || 'http:';
+
+  if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
-    return `${protocol}//${hostname}:5000/api`;
+    const protocol = window.location.protocol || 'http:';
+
+    // Localhost, loopback, or LAN private IP addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    const isLocalOrLAN =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
+
+    if (isLocalOrLAN) {
+      return `${protocol}//${hostname}:5000/api`;
+    }
   }
+
   return 'http://localhost:5000/api';
 };
 
