@@ -162,14 +162,19 @@ export const getAllUsers = async (req, res, next) => {
 
 export const getAllSellers = async (req, res, next) => {
   try {
-    const sellers = await Seller.find().sort({ createdAt: -1 });
-    res.status(200).json({
+    const sellers = await Seller.find().sort({ createdAt: -1 }).lean();
+    return res.status(200).json({
       success: true,
-      count: sellers.length,
-      sellers
+      count: sellers ? sellers.length : 0,
+      sellers: sellers || []
     });
   } catch (error) {
-    next(error);
+    console.error('Error fetching all sellers:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch sellers',
+      sellers: []
+    });
   }
 };
 
