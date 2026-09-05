@@ -48,5 +48,7 @@ categorySchema.pre('save', async function () {
   }
 });
 
+categorySchema.index({ status: 1, parent: 1, priority: 1 });
+
 const Category = mongoose.model('Category', categorySchema);
 export default Category;

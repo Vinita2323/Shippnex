@@ -142,6 +142,7 @@ export const AdminSidebar = () => {
     { 
       title: 'Users & Staff',
       items: [
+        { id: 'profile_edit_requests', label: 'Profile Edit Requests', icon: ShieldCheck },
         { id: 'customers', label: 'Customers', icon: Users },
         { id: 'captains', label: 'Delivery Captains', icon: Truck },
         { id: 'sellers', label: 'Sellers', icon: Store },

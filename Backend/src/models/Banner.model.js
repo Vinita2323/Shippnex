@@ -48,5 +48,7 @@ const bannerSchema = new mongoose.Schema(
   }
 );
 
+bannerSchema.index({ status: 1, priority: 1 });
+
 const Banner = mongoose.model('Banner', bannerSchema);
 export default Banner;

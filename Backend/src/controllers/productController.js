@@ -162,7 +162,7 @@ export const getProducts = async (req, res) => {
       query.name = { $regex: search, $options: 'i' };
     }
 
-    const products = await Product.find(query).sort({ createdAt: -1 });
+    const products = await Product.find(query).sort({ createdAt: -1 }).lean();
 
     res.status(200).json({
       success: true,
@@ -192,7 +192,13 @@ const findProductByIdOrSku = async (idOrSku) => {
 // @access  Public
 export const getProductById = async (req, res) => {
   try {
-    const product = await findProductByIdOrSku(req.params.id);
+    let product = null;
+    if (req.params.id && mongoose.Types.ObjectId.isValid(req.params.id)) {
+      product = await Product.findById(req.params.id).lean();
+    }
+    if (!product && req.params.id) {
+      product = await Product.findOne({ sku: req.params.id }).lean();
+    }
 
     if (!product) {
       return res.status(404).json({

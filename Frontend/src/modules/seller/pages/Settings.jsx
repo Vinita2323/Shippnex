@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { 
   User, Store, Image as ImageIcon, CreditCard, Edit, CheckCircle2, Save, Check, MapPin, 
   Loader2, Upload, AlertCircle, Search, Navigation, Crown, Zap, Star, Shield, Clock, XCircle, ArrowRight, ExternalLink, Receipt,
-  Eye, FileText, UploadCloud, X, FileCheck, Building2
+  Eye, FileText, UploadCloud, X, FileCheck, Building2, Phone, Mail, Calendar, ShieldCheck, Briefcase, Tag
 } from 'lucide-react';
-import { authService, membershipService, categoryService } from '../../../services/authService';
+import { authService, membershipService, categoryService, profileEditRequestService } from '../../../services/authService';
 import { MapService } from '../../../services/MapService';
 import LocationSearchModal from '../../../components/LocationSearchModal';
 
@@ -51,6 +51,7 @@ const Settings = () => {
 
   const [membership, setMembership] = useState(null);
   const [membershipHistory, setMembershipHistory] = useState([]);
+  const [pendingRequest, setPendingRequest] = useState(null);
 
   const [availableCategories, setAvailableCategories] = useState(defaultStoreCategories);
   const [selectedCategories, setSelectedCategories] = useState([]);
@@ -61,6 +62,7 @@ const Settings = () => {
     fullName: '',
     email: '',
     mobile: '',
+    businessType: 'Retail Store',
     storeName: '',
     storeLocation: '',
     city: '',
@@ -82,6 +84,7 @@ const Settings = () => {
     storeLogo: '',
     status: 'pending',
     createdAt: '',
+    joinedDate: '',
   });
 
   useEffect(() => {
@@ -109,11 +112,18 @@ const Settings = () => {
       setLoading(true);
       setErrorMsg('');
 
-      const [res, memRes, histRes] = await Promise.all([
+      const [res, memRes, histRes, reqRes] = await Promise.all([
         authService.getSellerProfile().catch(() => null),
         membershipService.getSellerMembership().catch(() => ({ membership: null })),
         membershipService.getSellerMembershipHistory().catch(() => ({ memberships: [] })),
+        profileEditRequestService.getMyPendingEditRequest().catch(() => ({ hasPendingRequest: false, request: null })),
       ]);
+
+      if (reqRes?.request) {
+        setPendingRequest(reqRes.request);
+      } else {
+        setPendingRequest(null);
+      }
 
       if (memRes?.membership) {
         setMembership(memRes.membership);
@@ -152,9 +162,11 @@ const Settings = () => {
           ifscCode: s.ifscCode || '',
           gstPhoto: s.gstPhoto || '',
           bankPassbookPhoto: s.bankPassbookPhoto || '',
+          businessType: s.businessType || 'Retail Store',
           storeLogo: s.storeLogo || '',
           status: s.status || 'approved',
           createdAt: s.createdAt ? new Date(s.createdAt).getFullYear() : '2026',
+          joinedDate: s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '2026',
         });
         if (s.categories && Array.isArray(s.categories)) {
           setSelectedCategories(s.categories);
@@ -272,8 +284,11 @@ const Settings = () => {
 
     try {
       const payload = {
+        role: 'seller',
         ownerName: formData.fullName,
         email: formData.email,
+        phone: formData.mobile,
+        businessType: formData.businessType,
         businessName: formData.storeName,
         storeAddress: formData.storeLocation,
         city: formData.city,
@@ -296,44 +311,19 @@ const Settings = () => {
         storeLogo: formData.storeLogo,
       };
 
-      const res = await authService.updateSellerProfile(payload);
+      const res = await profileEditRequestService.submitEditRequest(payload);
       if (res && res.success) {
-        setSuccessMsg('Account settings updated successfully!');
-        setIsEditing(false);
-        if (res.seller) {
-          const s = res.seller;
-          const coords = s.warehouseLocation?.location?.coordinates || [null, null];
-          setFormData(prev => ({
-            ...prev,
-            fullName: s.ownerName || prev.fullName,
-            email: s.email || prev.email,
-            storeName: s.businessName || prev.storeName,
-            storeLocation: s.warehouseLocation?.storeAddress || prev.storeLocation,
-            city: s.warehouseLocation?.city || prev.city,
-            state: s.warehouseLocation?.state || prev.state,
-            pincode: s.warehouseLocation?.pincode || prev.pincode,
-            area: s.warehouseLocation?.area || prev.area,
-            lat: coords[1] != null && coords[1] !== 0 ? coords[1] : prev.lat,
-            lng: coords[0] != null && coords[0] !== 0 ? coords[0] : prev.lng,
-            serviceRadius: String(s.serviceRadius || prev.serviceRadius),
-            tagline: s.tagline || prev.tagline,
-            gstin: s.gstNumber || prev.gstin,
-            panNumber: s.panNumber || prev.panNumber,
-            fssai: s.fssaiLicense || prev.fssai,
-            bankName: s.bankName || prev.bankName,
-            accountNumber: s.accountNumber || prev.accountNumber,
-            ifscCode: s.ifscCode || prev.ifscCode,
-            gstPhoto: s.gstPhoto || prev.gstPhoto,
-            bankPassbookPhoto: s.bankPassbookPhoto || prev.bankPassbookPhoto,
-            storeLogo: s.storeLogo || prev.storeLogo,
-          }));
+        setSuccessMsg('Profile update submitted for admin verification! Changes will take effect once reviewed by admin.');
+        if (res.request) {
+          setPendingRequest(res.request);
         }
+        setIsEditing(false);
       } else {
-        setErrorMsg(res.message || 'Failed to update settings');
+        setErrorMsg(res.message || 'Failed to submit edit request');
       }
     } catch (err) {
-      console.error('Error updating seller profile:', err);
-      setErrorMsg(err.response?.data?.message || 'Server error updating profile settings.');
+      console.error('Error submitting seller edit request:', err);
+      setErrorMsg(err.response?.data?.message || 'Server error submitting profile for verification.');
     } finally {
       setSaving(false);
     }
@@ -365,7 +355,7 @@ const Settings = () => {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Account Settings</h1>
           <p className="text-xs font-normal text-slate-400 mt-0.5">Home / Settings</p>
-          <p className="text-sm font-normal text-slate-500 mt-1">Manage your store preferences and profile details</p>
+          <p className="text-sm font-normal text-slate-500 mt-1">Manage your store preferences and verification details</p>
         </div>
         <div>
           <button 
@@ -373,11 +363,35 @@ const Settings = () => {
             onClick={() => setIsEditing(!isEditing)}
             className="bg-[#ff7526] hover:bg-[#e65507] text-white font-medium py-2 px-4 rounded-lg shadow-sm transition-colors cursor-pointer border-none flex items-center gap-2 text-sm"
           >
-            {isEditing ? <Save size={16} /> : <Edit size={16} />}
-            {isEditing ? 'Editing Profile' : 'Edit Profile'}
+            {isEditing ? <X size={16} /> : <Edit size={16} />}
+            {isEditing ? 'Cancel Editing' : 'Edit Profile'}
           </button>
         </div>
       </div>
+
+      {/* Pending Verification Notice Banner */}
+      {pendingRequest && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-start gap-3.5">
+            <div className="p-2.5 bg-amber-100 text-amber-700 rounded-xl shrink-0 mt-0.5">
+              <Clock size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-sm font-bold text-amber-900">Profile Verification Pending</h4>
+                <span className="bg-amber-200/80 text-amber-900 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  Under Admin Review
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                You submitted updates on <strong className="font-semibold">{formatDate(pendingRequest.createdAt)}</strong> (
+                {pendingRequest.changedFields?.map(f => f.label).join(', ') || 'profile details'}
+                ). Your live profile remains active with current data until the administrator approves these modifications.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {successMsg && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium p-4 rounded-xl flex items-center gap-2">
@@ -514,49 +528,177 @@ const Settings = () => {
                 <div className="space-y-6">
                   
                   {/* Avatar Banner Header */}
-                  <div className="flex items-center gap-5 pb-6 border-b border-slate-100">
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-[#ff7526] p-1 shrink-0 overflow-hidden bg-slate-100 flex items-center justify-center relative">
-                      {formData.storeLogo ? (
-                        <img src={formData.storeLogo} alt="Store Logo" className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full rounded-full bg-slate-200 flex items-center justify-center font-bold text-2xl text-slate-600">
-                          {getInitials(formData.fullName || formData.storeName)}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 pb-6 border-b border-slate-100">
+                    <div className="flex items-center gap-5">
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 border-[#ff7526] p-1 shrink-0 overflow-hidden bg-slate-100 flex items-center justify-center relative shadow-xs">
+                        {formData.storeLogo ? (
+                          <img src={formData.storeLogo} alt="Store Logo" className="w-full h-full rounded-xl object-cover" />
+                        ) : (
+                          <div className="w-full h-full rounded-xl bg-gradient-to-br from-orange-400 to-[#ff7526] text-white flex items-center justify-center font-bold text-2xl shadow-inner">
+                            {getInitials(formData.fullName || formData.storeName)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">{formData.fullName || 'Seller Profile'}</h2>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <ShieldCheck size={13} /> Verified Merchant
+                          </span>
                         </div>
-                      )}
+                        <p className="text-sm font-medium text-slate-600 flex items-center gap-1.5">
+                          <Store size={14} className="text-[#ff7526]" /> {formData.storeName || 'Store Name Not Set'}
+                        </p>
+                        <div className="flex items-center gap-3 text-xs text-slate-500 pt-0.5 flex-wrap">
+                          <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
+                            <Phone size={13} className="text-slate-400" /> +91 {formData.mobile || '—'}
+                          </span>
+                          {formData.email && (
+                            <span className="inline-flex items-center gap-1">
+                              <Mail size={13} className="text-slate-400" /> {formData.email}
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1 text-slate-400">
+                            <Calendar size={13} /> Member since {formData.joinedDate || formData.createdAt || '2026'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-xl sm:text-2xl font-semibold text-slate-900">{formData.fullName || 'Seller Profile'}</h2>
-                      <p className="text-sm font-normal text-slate-500 mt-0.5">{formData.email || 'No email added'}</p>
-                      <p className="text-xs font-normal text-slate-400 mt-1">Phone: +91 {formData.mobile}</p>
+
+                    <div className="flex sm:flex-col items-start sm:items-end justify-between gap-2 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Account Status</span>
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 size={13} /> {formData.status?.toUpperCase() || 'APPROVED'}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Profile Form Fields */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">Full Name / Owner Name</label>
-                      <input 
-                        type="text" 
-                        disabled={!isEditing}
-                        value={formData.fullName}
-                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                        placeholder="Enter full owner name"
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
-                      />
-                    </div>
+                  {/* Profile Form Fields Grid */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <User size={16} className="text-[#ff7526]" /> Personal & Contact Information
+                    </h3>
 
-                    <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">Email Address</label>
-                      <input 
-                        type="email" 
-                        disabled={!isEditing}
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        placeholder="seller@example.com"
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      {/* Owner Full Name */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Full Name / Owner Name
+                        </label>
+                        <div className="relative">
+                          <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input 
+                            type="text" 
+                            disabled={!isEditing}
+                            value={formData.fullName}
+                            onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                            placeholder="Enter full owner name"
+                            className="w-full pl-10 pr-3.5 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-[#ff7526] text-sm font-semibold disabled:bg-slate-50 disabled:text-slate-700 transition-all shadow-2xs" 
+                          />
+                        </div>
+                      </div>
+
+                      {/* Primary Registered Phone */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Registered Mobile Number
+                          </label>
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            Verified OTP Login
+                          </span>
+                        </div>
+                        <div className="relative">
+                          <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input 
+                            type="text" 
+                            disabled={!isEditing}
+                            value={formData.mobile}
+                            onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                            placeholder="e.g. 9302841832"
+                            className="w-full pl-10 pr-3.5 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-[#ff7526] text-sm font-semibold disabled:bg-slate-50 disabled:text-slate-700 transition-all shadow-2xs" 
+                          />
+                        </div>
+                      </div>
+
+                      {/* Email Address */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Email Address
+                        </label>
+                        <div className="relative">
+                          <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input 
+                            type="email" 
+                            disabled={!isEditing}
+                            value={formData.email}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            placeholder="seller@example.com"
+                            className="w-full pl-10 pr-3.5 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-[#ff7526] text-sm font-semibold disabled:bg-slate-50 disabled:text-slate-700 transition-all shadow-2xs" 
+                          />
+                        </div>
+                      </div>
+
+                      {/* Business Entity Type */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Business Entity Type
+                        </label>
+                        <div className="relative">
+                          <Briefcase size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input 
+                            type="text" 
+                            disabled={!isEditing}
+                            value={formData.businessType || 'Retail Store'}
+                            onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
+                            placeholder="e.g. Retail Store, Wholesaler, Proprietorship"
+                            className="w-full pl-10 pr-3.5 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-[#ff7526] text-sm font-semibold disabled:bg-slate-50 disabled:text-slate-700 transition-all shadow-2xs" 
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Summary Overview Cards */}
+                  <div className="pt-4 border-t border-slate-100">
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+                      Quick Profile Summary
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                      {/* Store Card */}
+                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                        <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold mb-1">
+                          <Store size={14} className="text-[#ff7526]" /> Primary Store
+                        </div>
+                        <p className="font-bold text-slate-900 text-sm truncate">{formData.storeName || 'Not Set'}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 truncate">{selectedCategories.join(', ') || 'General'}</p>
+                      </div>
+
+                      {/* Location Card */}
+                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                        <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold mb-1">
+                          <MapPin size={14} className="text-[#ff7526]" /> Location Hub
+                        </div>
+                        <p className="font-bold text-slate-900 text-sm truncate">{formData.city || 'Indore'}, {formData.state || 'MP'}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 truncate">{formData.pincode || 'Pincode not set'}</p>
+                      </div>
+
+                      {/* Membership Card */}
+                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                        <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold mb-1">
+                          <Crown size={14} className="text-[#ff7526]" /> Plan Status
+                        </div>
+                        <p className="font-bold text-slate-900 text-sm truncate">
+                          {membership?.planId?.name || 'Active Membership'}
+                        </p>
+                        <p className="text-[11px] text-emerald-600 font-bold mt-0.5">
+                          {membership?.expiryDate ? `${daysLeft(membership.expiryDate)} Days Remaining` : 'Active'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               )}
 
@@ -1210,10 +1352,10 @@ const Settings = () => {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="px-5 py-2 bg-[#ff7526] hover:bg-[#e65507] text-white rounded-lg font-medium text-sm cursor-pointer border-none shadow-sm flex items-center gap-2 disabled:opacity-50"
+                    className="px-5 py-2.5 bg-[#ff7526] hover:bg-[#e65507] text-white rounded-lg font-bold text-sm cursor-pointer border-none shadow-sm flex items-center gap-2 disabled:opacity-50"
                   >
-                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    {saving ? 'Saving...' : 'Save Changes'}
+                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Shield size={16} />}
+                    {saving ? 'Submitting Request...' : 'Submit for Verification'}
                   </button>
                 </div>
               )}

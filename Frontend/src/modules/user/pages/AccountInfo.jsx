@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, User, Mail, Phone, Calendar, AlertCircle } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, Calendar, AlertCircle, Clock, CheckCircle2, ShieldCheck, Loader2 } from 'lucide-react';
 import CustomDatePicker from '../../../components/CustomDatePicker';
+import { profileEditRequestService } from '../../../services/authService';
 
 const AccountInfo = () => {
   const navigate = useNavigate();
@@ -11,6 +12,10 @@ const AccountInfo = () => {
   const returnUrl = location.state?.returnUrl || '';
 
   const [isEditing, setIsEditing] = useState(() => Boolean(notice));
+  const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [pendingRequest, setPendingRequest] = useState(null);
+
   const [formData, setFormData] = useState(() => {
     const userDataRaw = localStorage.getItem('shippnex_user_data');
     let name = localStorage.getItem('shippnex_user_name');
@@ -32,12 +37,27 @@ const AccountInfo = () => {
     };
   });
 
+  useEffect(() => {
+    fetchPendingRequest();
+  }, []);
+
+  const fetchPendingRequest = async () => {
+    try {
+      const res = await profileEditRequestService.getMyPendingEditRequest();
+      if (res?.request) {
+        setPendingRequest(res.request);
+      }
+    } catch (e) {
+      // Non-blocking
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.fullName || formData.fullName.trim().length < 2) {
       alert('Please enter a valid Full Name.');
       return;
@@ -48,26 +68,39 @@ const AccountInfo = () => {
     const cleanPhone = formData.phone.trim();
     const cleanDob = formData.dob;
 
-    localStorage.setItem('shippnex_user_name', cleanName);
-    localStorage.setItem('shippnex_user_email', cleanEmail);
-    localStorage.setItem('shippnex_user_phone', cleanPhone);
-    localStorage.setItem('shippnex_user_dob', cleanDob);
+    setSaving(true);
+    setSuccessMsg('');
 
-    const userDataRaw = localStorage.getItem('shippnex_user_data');
-    if (userDataRaw) {
-      try {
-        const u = JSON.parse(userDataRaw);
-        u.name = cleanName;
-        u.email = cleanEmail;
-        u.phone = cleanPhone;
-        localStorage.setItem('shippnex_user_data', JSON.stringify(u));
-      } catch (e) {}
-    }
+    try {
+      const payload = {
+        role: 'user',
+        fullName: cleanName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        dob: cleanDob,
+      };
 
-    setIsEditing(false);
+      const res = await profileEditRequestService.submitEditRequest(payload);
+      if (res && res.success) {
+        setSuccessMsg('Profile update submitted for admin verification! Changes will take effect once approved.');
+        if (res.request) {
+          setPendingRequest(res.request);
+        }
+        setIsEditing(false);
 
-    if (returnUrl) {
-      navigate(returnUrl, { replace: true });
+        if (returnUrl) {
+          setTimeout(() => {
+            navigate(returnUrl, { replace: true });
+          }, 1500);
+        }
+      } else {
+        alert(res?.message || 'Failed to submit profile update.');
+      }
+    } catch (err) {
+      console.error('Error submitting user edit request:', err);
+      alert(err.response?.data?.message || 'Could not submit profile update for verification.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -82,12 +115,37 @@ const AccountInfo = () => {
         <div className="w-6"></div> {/* Spacer for centering */}
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-6 [&::-webkit-scrollbar]:hidden flex flex-col gap-5">
+      <div className="flex-1 overflow-y-auto px-5 py-6 [&::-webkit-scrollbar]:hidden flex flex-col gap-4">
         
         {notice && (
           <div className="bg-orange-50 border border-orange-200 text-[#ea580c] px-4 py-3 rounded-2xl text-[13px] font-semibold flex items-center gap-2.5 shadow-sm">
             <AlertCircle size={20} className="shrink-0 text-[#ea580c]" />
             <span>{notice}</span>
+          </div>
+        )}
+
+        {/* Pending Verification Notice */}
+        {pendingRequest && (
+          <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
+            <Clock size={20} className="text-amber-700 shrink-0 mt-0.5" />
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-bold text-amber-900">Verification Pending</h4>
+                <span className="bg-amber-200/80 text-amber-900 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">
+                  In Review
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">
+                Your submitted profile changes are currently under administrator review and will reflect once verified.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-[12px] font-semibold flex items-center gap-2 shadow-sm">
+            <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+            <span>{successMsg}</span>
           </div>
         )}
 
@@ -174,14 +232,16 @@ const AccountInfo = () => {
       <div className="p-5 bg-white border-t border-slate-100 shadow-[0_-4px_24px_rgba(0,0,0,0.02)]">
         {isEditing ? (
           <button 
-            className="w-full bg-[#ea580c] text-white rounded-2xl py-4 font-bold text-[15px] cursor-pointer active:scale-[0.98] transition-transform border-none shadow-[0_4px_16px_rgba(234,88,12,0.2)]"
+            disabled={saving}
+            className="w-full bg-[#ea580c] hover:bg-[#c2410c] text-white rounded-2xl py-4 font-bold text-[15px] cursor-pointer active:scale-[0.98] transition-transform border-none shadow-[0_4px_16px_rgba(234,88,12,0.2)] flex items-center justify-center gap-2 disabled:opacity-60"
             onClick={handleSave}
           >
-            {returnUrl ? 'Save & Continue to Checkout' : 'Save Changes'}
+            {saving ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
+            <span>{saving ? 'Submitting...' : (returnUrl ? 'Submit for Verification & Continue' : 'Submit for Verification')}</span>
           </button>
         ) : (
           <button 
-            className="w-full bg-slate-900 text-white rounded-2xl py-4 font-bold text-[15px] cursor-pointer active:scale-[0.98] transition-transform border-none shadow-[0_4px_16px_rgba(15,23,42,0.2)]"
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-2xl py-4 font-bold text-[15px] cursor-pointer active:scale-[0.98] transition-transform border-none shadow-[0_4px_16px_rgba(15,23,42,0.2)]"
             onClick={() => setIsEditing(true)}
           >
             Edit Information

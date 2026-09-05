@@ -21,10 +21,12 @@ import {
   X,
   Download,
   Image as ImageIcon,
-  ZoomIn
+  ZoomIn,
+  Clock,
+  Shield
 } from 'lucide-react';
 import CaptainBottomNav from '../components/CaptainBottomNav';
-import { captainService } from '../../../services/authService';
+import { captainService, profileEditRequestService } from '../../../services/authService';
 
 const CaptainPersonalDetails = () => {
   const navigate = useNavigate();
@@ -34,6 +36,7 @@ const CaptainPersonalDetails = () => {
   const [saving, setSaving] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('Details updated successfully!');
+  const [pendingRequest, setPendingRequest] = useState(null);
 
   // Document modal & upload state
   const [selectedDoc, setSelectedDoc] = useState(null);
@@ -85,8 +88,18 @@ const CaptainPersonalDetails = () => {
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      const res = await captainService.getProfile();
-      if (res.captain) {
+      const [res, reqRes] = await Promise.all([
+        captainService.getProfile().catch(() => null),
+        profileEditRequestService.getMyPendingEditRequest().catch(() => ({ hasPendingRequest: false, request: null })),
+      ]);
+
+      if (reqRes?.request) {
+        setPendingRequest(reqRes.request);
+      } else {
+        setPendingRequest(null);
+      }
+
+      if (res?.captain) {
         setProfile(res.captain);
         setFormData({
           name: res.captain.name || '',
@@ -135,6 +148,7 @@ const CaptainPersonalDetails = () => {
     setSaving(true);
     try {
       const payload = {
+        role: 'captain',
         name: formData.name,
         email: formData.email,
         alternateMobile: formData.alternateMobile,
@@ -160,17 +174,22 @@ const CaptainPersonalDetails = () => {
           branchName: formData.branchName,
           upiId: formData.upiId,
         },
+        documents,
       };
 
-      const res = await captainService.updateProfile(payload);
-      if (res.captain) {
-        setProfile(res.captain);
+      const res = await profileEditRequestService.submitEditRequest(payload);
+      if (res && res.success) {
+        if (res.request) {
+          setPendingRequest(res.request);
+        }
+        setIsEditing(false);
+        triggerToast('Modifications submitted for admin verification!');
+      } else {
+        alert(res?.message || 'Failed to submit modifications.');
       }
-      setIsEditing(false);
-      triggerToast('Details updated successfully!');
     } catch (err) {
       console.error('Update profile error:', err);
-      alert(err?.response?.data?.message || 'Failed to update details.');
+      alert(err?.response?.data?.message || 'Failed to submit details for verification.');
     } finally {
       setSaving(false);
     }
@@ -446,6 +465,24 @@ const CaptainPersonalDetails = () => {
 
       {/* Main Container */}
       <main className="max-w-xl mx-auto px-3.5 pt-3.5 space-y-3.5">
+        {/* Pending Verification Banner */}
+        {pendingRequest && (
+          <div className="bg-amber-50 border border-amber-300 rounded-3xl p-4 flex items-start gap-3 shadow-xs">
+            <Clock size={20} className="text-amber-700 shrink-0 mt-0.5" />
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-bold text-amber-900">Modifications Under Admin Verification</h4>
+                <span className="bg-amber-200/80 text-amber-900 text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase">
+                  Pending Review
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">
+                You submitted profile/vehicle/banking updates on <strong>{new Date(pendingRequest.createdAt).toLocaleDateString('en-IN')}</strong>. They are currently being audited by the administrator before taking effect.
+              </p>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-3">
             <span className="material-symbols-outlined text-5xl text-[#15803d] animate-spin">sync</span>
@@ -810,8 +847,8 @@ const CaptainPersonalDetails = () => {
                   disabled={saving}
                   className="flex-2 py-3 bg-[#15803d] hover:bg-[#0f602c] text-white rounded-2xl font-black text-xs shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
                 >
-                  {saving ? <span className="material-symbols-outlined animate-spin text-sm">sync</span> : <Check size={16} />}
-                  {saving ? 'Saving Details…' : 'Save Changes'}
+                  {saving ? <span className="material-symbols-outlined animate-spin text-sm">sync</span> : <Shield size={16} />}
+                  {saving ? 'Submitting Request…' : 'Submit for Verification'}
                 </button>
               </div>
             )}

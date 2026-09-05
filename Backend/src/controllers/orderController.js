@@ -520,7 +520,7 @@ export const placeOrder = async (req, res, next) => {
 export const getUserOrders = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const orders = await Order.find({ user: userId }).sort({ createdAt: -1 });
+    const orders = await Order.find({ user: userId }).sort({ createdAt: -1 }).lean();
 
     res.status(200).json({
       success: true,
@@ -594,7 +594,7 @@ export const getSellerNotifications = async (req, res, next) => {
         { sellerId: { $in: possibleSellerKeys } },
         { sellerName: { $in: possibleSellerKeys } },
       ],
-    }).sort({ createdAt: -1 });
+    }).sort({ createdAt: -1 }).lean();
 
     const newNotificationsCount = notifications.filter(n => n.status === 'NEW').length;
 

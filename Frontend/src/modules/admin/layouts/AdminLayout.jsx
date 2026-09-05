@@ -48,6 +48,7 @@ import {
 
 import { AdminLocationDashboard } from '../pages/AdminLocationDashboard';
 import { PolicyManagement } from '../pages/PolicyManagement';
+import { ProfileEditRequests } from '../pages/ProfileEditRequests';
 
 export const AdminLayout = () => {
   const { activeTab, setActiveTab } = useAdmin();
@@ -60,7 +61,11 @@ export const AdminLayout = () => {
         return <AdminDashboard onNavigate={(tab) => setActiveTab(tab)} />;
       case 'profile':
         return <AdminProfile />;
+      case 'profile_edit_requests':
+      case 'profile_requests':
+        return <ProfileEditRequests />;
       case 'users':
+      case 'customers':
         return <UserManagement />;
       case 'sellers':
       case 'seller':

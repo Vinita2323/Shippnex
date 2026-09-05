@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { useLocation, Routes, Route } from 'react-router-dom';
 import SplashScreen from './modules/user/pages/SplashScreen';
-import UserRoutes from './modules/user/routes/UserRoutes';
-import DeliveryRoutes from './modules/delivery/routes/DeliveryRoutes';
-import SellerRoutes from './modules/seller/routes/SellerRoutes';
-import AdminRoutes from './modules/admin/routes/AdminRoutes';
+import PageSkeleton from './components/PageSkeleton';
+import ErrorBoundary from './components/ErrorBoundary';
+
+const UserRoutes = lazy(() => import('./modules/user/routes/UserRoutes'));
+const DeliveryRoutes = lazy(() => import('./modules/delivery/routes/DeliveryRoutes'));
+const SellerRoutes = lazy(() => import('./modules/seller/routes/SellerRoutes'));
+const AdminRoutes = lazy(() => import('./modules/admin/routes/AdminRoutes'));
+
 import { CartProvider } from './modules/user/context/CartContext';
 import { WishlistProvider } from './modules/user/context/WishlistContext';
 import { OrderProvider } from './modules/user/context/OrderContext';
@@ -52,22 +56,26 @@ function App() {
 
   return (
     <div className="App">
-      <LocationProvider>
-        <WishlistProvider>
-          <CartProvider>
-            <OrderProvider>
-              <TransportProvider>
-                <Routes>
-                  <Route path="/captain/*" element={<DeliveryRoutes />} />
-                  <Route path="/seller/*" element={<SellerRoutes />} />
-                  <Route path="/admin/*" element={<AdminRoutes />} />
-                  <Route path="/*" element={<UserRoutes />} />
-                </Routes>
-              </TransportProvider>
-            </OrderProvider>
-          </CartProvider>
-        </WishlistProvider>
-      </LocationProvider>
+      <ErrorBoundary>
+        <LocationProvider>
+          <WishlistProvider>
+            <CartProvider>
+              <OrderProvider>
+                <TransportProvider>
+                  <Suspense fallback={<PageSkeleton />}>
+                    <Routes>
+                      <Route path="/captain/*" element={<DeliveryRoutes />} />
+                      <Route path="/seller/*" element={<SellerRoutes />} />
+                      <Route path="/admin/*" element={<AdminRoutes />} />
+                      <Route path="/*" element={<UserRoutes />} />
+                    </Routes>
+                  </Suspense>
+                </TransportProvider>
+              </OrderProvider>
+            </CartProvider>
+          </WishlistProvider>
+        </LocationProvider>
+      </ErrorBoundary>
     </div>
   );
 }
