@@ -21,8 +21,8 @@ const Dashboard = () => {
     }
   });
 
-  const fetchDashboardData = async () => {
-    setLoading(true);
+  const fetchDashboardData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
     try {
       // 1. Fetch Seller Profile
       const profRes = await authService.getSellerProfile().catch(() => null);
@@ -49,79 +49,221 @@ const Dashboard = () => {
     } catch (err) {
       console.error('Error loading dashboard dynamic data:', err);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchDashboardData();
+
+    // Live auto-refresh polling every 20 seconds for real-time order updates
+    const timer = setInterval(() => {
+      fetchDashboardData(true);
+    }, 20000);
+
+    return () => clearInterval(timer);
   }, []);
 
   const sellerName = seller?.ownerName || seller?.businessName || seller?.name || 'Seller';
   const storeName = seller?.businessName ? seller.businessName : 'your store';
 
-  // --- Dynamic Stats Calculations ---
-  const validNotifications = notifications.filter(n => n.status !== 'REJECTED' && n.status !== 'Rejected');
+  // --- Dynamic Time Range Filter Function ---
+  const filterByTimeRange = (items, range) => {
+    const now = new Date();
+    return items.filter(item => {
+      if (!item.createdAt) return true;
+      const itemDate = new Date(item.createdAt);
+      if (isNaN(itemDate.getTime())) return true;
+
+      if (range === 'Today') {
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        return itemDate >= startOfToday;
+      }
+      if (range === 'This Week') {
+        const dayOfWeek = now.getDay();
+        const distanceToMonday = (dayOfWeek + 6) % 7;
+        const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - distanceToMonday, 0, 0, 0);
+        return itemDate >= startOfWeek;
+      }
+      if (range === 'This Month') {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+        return itemDate >= startOfMonth;
+      }
+      return true; // 'All Time'
+    });
+  };
+
+  const activeNotifications = filterByTimeRange(notifications, timeRange);
+  const validNotifications = activeNotifications.filter(n => n.status !== 'REJECTED' && n.status !== 'Rejected');
   
   const totalRevenue = validNotifications.reduce((sum, n) => sum + Number(n.totalAmount || 0), 0);
-  const totalOrders = notifications.length;
+  const totalOrders = activeNotifications.length;
   const productsSold = validNotifications.reduce((sum, n) => {
     const itemQtySum = (n.items || []).reduce((iqSum, item) => iqSum + Number(item.quantity || 1), 0);
     return sum + itemQtySum;
   }, 0);
 
-  const pendingDispatches = notifications.filter(n => 
+  const pendingDispatches = activeNotifications.filter(n => 
     n.status === 'NEW' || n.status === 'VIEWED' || n.status === 'ACCEPTED' || n.status === 'OUT_FOR_DELIVERY' || n.status === 'Out for Delivery'
   ).length;
 
   // --- Order Fulfillment Status Counts ---
-  const pendingPackaging = notifications.filter(n => n.status === 'NEW' || n.status === 'VIEWED').length;
-  const acceptedOrders = notifications.filter(n => n.status === 'ACCEPTED' || n.status === 'Accepted').length;
-  const outForDelivery = notifications.filter(n => n.status === 'OUT_FOR_DELIVERY' || n.status === 'Out for Delivery').length;
-  const delivered = notifications.filter(n => n.status === 'DELIVERED' || n.status === 'Delivered').length;
-  const rejected = notifications.filter(n => n.status === 'REJECTED' || n.status === 'Rejected').length;
+  const pendingPackaging = activeNotifications.filter(n => n.status === 'NEW' || n.status === 'VIEWED').length;
+  const acceptedOrders = activeNotifications.filter(n => n.status === 'ACCEPTED' || n.status === 'Accepted').length;
+  const outForDelivery = activeNotifications.filter(n => n.status === 'OUT_FOR_DELIVERY' || n.status === 'Out for Delivery').length;
+  const delivered = activeNotifications.filter(n => n.status === 'DELIVERED' || n.status === 'Delivered').length;
+  const rejected = activeNotifications.filter(n => n.status === 'REJECTED' || n.status === 'Rejected').length;
 
-  const totalFulfillmentCount = notifications.length || 1;
+  const totalFulfillmentCount = activeNotifications.length || 1;
 
-  // --- Dynamic Sales Analytics Chart Data ---
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const daySalesMap = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
-
-  validNotifications.forEach(n => {
-    if (n.createdAt) {
-      const d = new Date(n.createdAt);
-      const dayName = dayNames[d.getDay()];
-      if (dayName && daySalesMap[dayName] !== undefined) {
-        daySalesMap[dayName] += Number(n.totalAmount || 0);
-      }
-    }
-  });
-
-  const orderedDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const maxDaySale = Math.max(...Object.values(daySalesMap), 1);
-
-  const chartData = orderedDays.map(day => {
-    const amt = daySalesMap[day] || 0;
-    const valPercent = maxDaySale > 0 ? Math.max(Math.round((amt / maxDaySale) * 100), amt > 0 ? 15 : 5) : 5;
-    return {
-      day,
-      val: valPercent,
-      amount: `₹${amt.toFixed(2)}`,
-      rawAmt: amt
-    };
-  });
-
-  // Calculate Peak Sales Day
-  let peakDay = 'Mon';
+  // --- Adaptive Dynamic Sales Analytics Chart Data ---
+  let chartTitle = 'Weekly Revenue & Sales Trend';
+  let chartSubtitle = 'Real gross sales revenue by day this week';
+  let chartData = [];
+  let peakLabel = 'Mon';
   let peakVal = 0;
+  let avgSales = '0.00';
+
+  if (timeRange === 'Today') {
+    chartTitle = "Today's Hourly Revenue Trend";
+    chartSubtitle = "Hourly sales revenue breakdown for today";
+    const hours = ['6 AM', '9 AM', '12 PM', '3 PM', '6 PM', '9 PM', '12 AM'];
+    const hourSlots = { '6 AM': 0, '9 AM': 0, '12 PM': 0, '3 PM': 0, '6 PM': 0, '9 PM': 0, '12 AM': 0 };
+
+    validNotifications.forEach(n => {
+      if (n.createdAt) {
+        const d = new Date(n.createdAt);
+        const h = d.getHours();
+        let slot = '6 AM';
+        if (h >= 21) slot = '12 AM';
+        else if (h >= 18) slot = '9 PM';
+        else if (h >= 15) slot = '6 PM';
+        else if (h >= 12) slot = '3 PM';
+        else if (h >= 9) slot = '12 PM';
+        else if (h >= 6) slot = '9 AM';
+        else slot = '6 AM';
+        hourSlots[slot] += Number(n.totalAmount || 0);
+      }
+    });
+
+    const maxSale = Math.max(...Object.values(hourSlots), 1);
+    chartData = hours.map(hr => {
+      const amt = hourSlots[hr] || 0;
+      const valPercent = maxSale > 0 ? Math.max(Math.round((amt / maxSale) * 100), amt > 0 ? 15 : 5) : 5;
+      return {
+        label: hr,
+        val: valPercent,
+        amount: `₹${amt.toFixed(2)}`,
+        rawAmt: amt
+      };
+    });
+    avgSales = (totalRevenue / Math.max(hours.length, 1)).toFixed(2);
+  } else if (timeRange === 'This Month') {
+    chartTitle = 'Monthly Revenue & Sales Trend';
+    chartSubtitle = 'Weekly sales breakdown for the current month';
+    const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
+    const weekSlots = { 'Week 1': 0, 'Week 2': 0, 'Week 3': 0, 'Week 4': 0, 'Week 5': 0 };
+
+    validNotifications.forEach(n => {
+      if (n.createdAt) {
+        const d = new Date(n.createdAt);
+        const dayOfMonth = d.getDate();
+        let slot = 'Week 1';
+        if (dayOfMonth > 28) slot = 'Week 5';
+        else if (dayOfMonth > 21) slot = 'Week 4';
+        else if (dayOfMonth > 14) slot = 'Week 3';
+        else if (dayOfMonth > 7) slot = 'Week 2';
+        weekSlots[slot] += Number(n.totalAmount || 0);
+      }
+    });
+
+    const maxSale = Math.max(...Object.values(weekSlots), 1);
+    chartData = weeks.map(wk => {
+      const amt = weekSlots[wk] || 0;
+      const valPercent = maxSale > 0 ? Math.max(Math.round((amt / maxSale) * 100), amt > 0 ? 15 : 5) : 5;
+      return {
+        label: wk,
+        val: valPercent,
+        amount: `₹${amt.toFixed(2)}`,
+        rawAmt: amt
+      };
+    });
+    avgSales = (totalRevenue / 4).toFixed(2);
+  } else if (timeRange === 'All Time') {
+    chartTitle = 'All-Time Revenue & Sales Trend';
+    chartSubtitle = 'Monthly gross sales distribution';
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const now = new Date();
+    const last6Months = [];
+    const monthSlots = {};
+    for (let i = 5; i >= 0; i--) {
+      const mDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mName = monthNames[mDate.getMonth()];
+      last6Months.push(mName);
+      monthSlots[mName] = 0;
+    }
+
+    validNotifications.forEach(n => {
+      if (n.createdAt) {
+        const d = new Date(n.createdAt);
+        const mName = monthNames[d.getMonth()];
+        if (monthSlots[mName] !== undefined) {
+          monthSlots[mName] += Number(n.totalAmount || 0);
+        }
+      }
+    });
+
+    const maxSale = Math.max(...Object.values(monthSlots), 1);
+    chartData = last6Months.map(mName => {
+      const amt = monthSlots[mName] || 0;
+      const valPercent = maxSale > 0 ? Math.max(Math.round((amt / maxSale) * 100), amt > 0 ? 15 : 5) : 5;
+      return {
+        label: mName,
+        val: valPercent,
+        amount: `₹${amt.toFixed(2)}`,
+        rawAmt: amt
+      };
+    });
+    avgSales = (totalRevenue / Math.max(last6Months.length, 1)).toFixed(2);
+  } else {
+    // Default 'This Week'
+    chartTitle = 'Weekly Revenue & Sales Trend';
+    chartSubtitle = 'Real gross sales revenue by day this week';
+    const orderedDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const daySalesMap = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
+
+    validNotifications.forEach(n => {
+      if (n.createdAt) {
+        const d = new Date(n.createdAt);
+        const dayName = dayNames[d.getDay()];
+        if (dayName && daySalesMap[dayName] !== undefined) {
+          daySalesMap[dayName] += Number(n.totalAmount || 0);
+        }
+      }
+    });
+
+    const maxDaySale = Math.max(...Object.values(daySalesMap), 1);
+    chartData = orderedDays.map(day => {
+      const amt = daySalesMap[day] || 0;
+      const valPercent = maxDaySale > 0 ? Math.max(Math.round((amt / maxDaySale) * 100), amt > 0 ? 15 : 5) : 5;
+      return {
+        label: day,
+        val: valPercent,
+        amount: `₹${amt.toFixed(2)}`,
+        rawAmt: amt
+      };
+    });
+    avgSales = (totalRevenue / 7).toFixed(2);
+  }
+
+  // Calculate Peak Interval
   chartData.forEach(cd => {
     if (cd.rawAmt >= peakVal) {
       peakVal = cd.rawAmt;
-      peakDay = cd.day;
+      peakLabel = cd.label;
     }
   });
-
-  const avgDailySales = (totalRevenue / 7).toFixed(2);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 font-sans pb-12">
@@ -134,7 +276,7 @@ const Dashboard = () => {
               Seller Dashboard Overview
             </span>
             <button
-              onClick={fetchDashboardData}
+              onClick={() => fetchDashboardData(false)}
               className="p-1.5 text-white/90 hover:text-white rounded-full bg-white/10 hover:bg-white/20 transition-all border-none cursor-pointer flex items-center justify-center"
               title="Refresh Real-time Data"
             >
@@ -202,7 +344,7 @@ const Dashboard = () => {
           <div>
             <h3 className="text-2xl sm:text-3xl font-black text-slate-900">₹{totalRevenue.toFixed(2)}</h3>
             <p className="text-xs font-semibold text-emerald-600 mt-1 flex items-center gap-1">
-              <TrendingUp size={14} /> Live Real-time Earnings
+              <TrendingUp size={14} /> Live Real-time Earnings ({timeRange})
             </p>
           </div>
         </div>
@@ -218,7 +360,7 @@ const Dashboard = () => {
           <div>
             <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{totalOrders}</h3>
             <p className="text-xs font-semibold text-emerald-600 mt-1 flex items-center gap-1">
-              <TrendingUp size={14} /> Customer Orders Received
+              <TrendingUp size={14} /> Customer Orders Received ({timeRange})
             </p>
           </div>
         </div>
@@ -264,8 +406,8 @@ const Dashboard = () => {
         <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
             <div>
-              <h3 className="text-lg font-extrabold text-slate-900">Weekly Revenue & Sales Trend</h3>
-              <p className="text-xs font-normal text-slate-400 mt-0.5">Real gross sales revenue by day</p>
+              <h3 className="text-lg font-extrabold text-slate-900">{chartTitle}</h3>
+              <p className="text-xs font-normal text-slate-400 mt-0.5">{chartSubtitle}</p>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
@@ -292,15 +434,15 @@ const Dashboard = () => {
                   ></div>
                 </div>
 
-                {/* Day Label */}
-                <span className="mt-3 text-xs font-extrabold text-slate-600">{item.day}</span>
+                {/* Interval / Day Label */}
+                <span className="mt-3 text-xs font-extrabold text-slate-600">{item.label}</span>
               </div>
             ))}
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs text-slate-500 font-normal gap-2">
-            <span>Peak Sales Day: <strong className="font-extrabold text-slate-900">{peakDay} (₹{peakVal.toFixed(2)})</strong></span>
-            <span>Avg. Daily Sales: <strong className="font-extrabold text-slate-900">₹{avgDailySales}</strong></span>
+            <span>Peak Sales Interval: <strong className="font-extrabold text-slate-900">{peakLabel} (₹{peakVal.toFixed(2)})</strong></span>
+            <span>Avg. Sales: <strong className="font-extrabold text-slate-900">₹{avgSales}</strong></span>
           </div>
         </div>
 
@@ -308,7 +450,7 @@ const Dashboard = () => {
         <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
           <div className="border-b border-slate-100 pb-4">
             <h3 className="text-lg font-extrabold text-slate-900">Order Fulfillment</h3>
-            <p className="text-xs font-normal text-slate-400 mt-0.5">Live status breakdown of customer orders</p>
+            <p className="text-xs font-normal text-slate-400 mt-0.5">Live status breakdown of customer orders ({timeRange})</p>
           </div>
 
           <div className="space-y-4">
@@ -361,7 +503,7 @@ const Dashboard = () => {
               </tr>
             </thead>
             <tbody className="text-sm font-normal text-slate-700 divide-y divide-slate-100">
-              {notifications.slice(0, 5).map((order) => (
+              {(activeNotifications.length > 0 ? activeNotifications : notifications).slice(0, 5).map((order) => (
                 <tr key={order._id || order.orderId} className="hover:bg-slate-50/80 transition-colors">
                   <td className="px-6 py-4 font-extrabold text-[#ff7526] font-mono">{order.orderId}</td>
                   <td className="px-6 py-4 font-bold text-slate-900">

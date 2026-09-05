@@ -940,13 +940,6 @@ export const SellerManagement = () => {
               <div className="bg-slate-50/70 p-5 rounded-2xl border border-slate-200 space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-bold text-slate-800 m-0">Tax Information</h4>
-                  <button 
-                    type="button"
-                    onClick={() => alert('Tax info updated')}
-                    className="px-3.5 py-1.5 bg-[#002625] hover:bg-[#003837] text-white font-bold rounded-xl border-none cursor-pointer"
-                  >
-                    Update Tax Info
-                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -954,26 +947,32 @@ export const SellerManagement = () => {
                     <label className="text-slate-500 font-medium block mb-1">PAN Card</label>
                     <input 
                       type="text"
+                      defaultValue={editingSellerModal.panNumber || 'N/A'}
+                      readOnly
                       placeholder="ABCDE1234F"
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none uppercase font-mono font-bold"
                     />
                   </div>
                   <div>
-                    <label className="text-slate-500 font-medium block mb-1">Tax Name (GST Name)</label>
+                    <label className="text-slate-500 font-medium block mb-1">FSSAI License</label>
                     <input 
                       type="text"
-                      placeholder="Enter registered GST Name"
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      defaultValue={editingSellerModal.fssaiLicense || 'N/A'}
+                      readOnly
+                      placeholder="14-digit License No."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none font-mono"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-slate-500 font-medium block mb-1">Tax Number (GST Number)</label>
+                  <label className="text-slate-500 font-medium block mb-1">GST Number</label>
                   <input 
                     type="text"
+                    defaultValue={editingSellerModal.gstNumber || 'N/A'}
+                    readOnly
                     placeholder="22AAAAA0000A1Z5"
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none uppercase font-mono font-bold"
                   />
                 </div>
               </div>
@@ -984,49 +983,48 @@ export const SellerManagement = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-slate-500 font-medium block mb-1">Account Name</label>
+                    <label className="text-slate-500 font-medium block mb-1">Account Holder Name</label>
                     <input 
                       type="text"
-                      placeholder="Enter Account Name"
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      defaultValue={editingSellerModal.ownerName || editingSellerModal.name || 'N/A'}
+                      readOnly
+                      placeholder="Account Holder Name"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none font-medium"
                     />
                   </div>
                   <div>
                     <label className="text-slate-500 font-medium block mb-1">Bank Name</label>
                     <input 
                       type="text"
-                      placeholder="State Bank of India / HDFC"
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      defaultValue={editingSellerModal.bankName || 'N/A'}
+                      readOnly
+                      placeholder="Bank Name"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none font-medium"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-slate-500 font-medium block mb-1">Branch</label>
-                    <input 
-                      type="text"
-                      placeholder="Main Branch Name"
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
-                    />
-                  </div>
-                  <div>
                     <label className="text-slate-500 font-medium block mb-1">Account Number</label>
                     <input 
                       type="text"
-                      placeholder="00000012345678"
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      defaultValue={editingSellerModal.accountNumber || 'N/A'}
+                      readOnly
+                      placeholder="Account Number"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none font-mono font-bold"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="text-slate-500 font-medium block mb-1">IFSC Code</label>
-                  <input 
-                    type="text"
-                    placeholder="SBIN0001234"
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
-                  />
+                  <div>
+                    <label className="text-slate-500 font-medium block mb-1">IFSC Code</label>
+                    <input 
+                      type="text"
+                      defaultValue={editingSellerModal.ifscCode || 'N/A'}
+                      readOnly
+                      placeholder="IFSC Code"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none uppercase font-mono font-bold"
+                    />
+                  </div>
                 </div>
               </div>
 

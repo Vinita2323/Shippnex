@@ -1,30 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { User, Store, Image as ImageIcon, CreditCard, Edit, CheckCircle2, Save, Check, MapPin, Loader2, Upload, AlertCircle, Search, Navigation } from 'lucide-react';
-import { authService } from '../../../services/authService';
+import { useNavigate } from 'react-router-dom';
+import { 
+  User, Store, Image as ImageIcon, CreditCard, Edit, CheckCircle2, Save, Check, MapPin, 
+  Loader2, Upload, AlertCircle, Search, Navigation, Crown, Zap, Star, Shield, Clock, XCircle, ArrowRight, ExternalLink, Receipt,
+  Eye, FileText, UploadCloud, X, FileCheck, Building2
+} from 'lucide-react';
+import { authService, membershipService, categoryService } from '../../../services/authService';
 import { MapService } from '../../../services/MapService';
 import LocationSearchModal from '../../../components/LocationSearchModal';
 
-const allStoreCategories = [
-  { id: 'cat-1', label: 'Chinese Fast Food' },
-  { id: 'cat-2', label: 'Beauty' },
-  { id: 'cat-3', label: 'Stationary' },
-  { id: 'cat-4', label: 'Toys' },
-  { id: 'cat-5', label: 'Pet' },
-  { id: 'cat-6', label: 'Sports' },
-  { id: 'cat-7', label: 'Fruits' },
-  { id: 'cat-8', label: 'Cake & Bakery' },
-  { id: 'cat-9', label: 'Vagitable' },
-  { id: 'cat-10', label: 'Restaurant & Food' },
-  { id: 'cat-11', label: 'Fast Food' },
-  { id: 'cat-13', label: 'Wedding' },
-  { id: 'cat-14', label: 'Winter' },
-  { id: 'cat-15', label: 'Electronics' },
-  { id: 'cat-16', label: 'Grocery' },
-  { id: 'cat-17', label: 'Fashion' },
+const durationLabel = (t) => ({ monthly: '1 Month', halfYearly: '6 Months', yearly: '12 Months' }[t] || t);
+const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const daysLeft = (exp) => {
+  if (!exp) return null;
+  const diff = new Date(exp) - new Date();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+};
+
+const defaultStoreCategories = [
+  { id: 'cat-1', label: 'Grocery Essentials' },
+  { id: 'cat-2', label: 'Grains & Flours' },
+  { id: 'cat-3', label: 'Oil & Ghee' },
+  { id: 'cat-4', label: 'Spices & Masala' },
+  { id: 'cat-5', label: 'Sugar & Sweeteners' },
+  { id: 'cat-6', label: 'Fruits' },
+  { id: 'cat-7', label: 'Vegetables' },
+  { id: 'cat-8', label: 'Ready-to-Cook' },
+  { id: 'cat-9', label: 'Cake & Bakery' },
+  { id: 'cat-10', label: 'Fast Food' },
+  { id: 'cat-11', label: 'Personal Care' },
+  { id: 'cat-12', label: 'Home Care' },
+  { id: 'cat-13', label: 'Stationary' },
+  { id: 'cat-14', label: 'Toys' },
+  { id: 'cat-15', label: 'Pet' },
+  { id: 'cat-16', label: 'Sports' },
+  { id: 'cat-17', label: 'Beauty' },
+  { id: 'cat-18', label: 'Electronics' },
+  { id: 'cat-19', label: 'Fashion' },
 ];
 
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState('store');
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -32,8 +49,13 @@ const Settings = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const [selectedCategories, setSelectedCategories] = useState(['Fruits', 'Fast Food', 'Grocery']);
+  const [membership, setMembership] = useState(null);
+  const [membershipHistory, setMembershipHistory] = useState([]);
+
+  const [availableCategories, setAvailableCategories] = useState(defaultStoreCategories);
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [previewDocModal, setPreviewDocModal] = useState({ isOpen: false, title: '', imageUrl: '' });
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -50,9 +72,13 @@ const Settings = () => {
     serviceRadius: '5',
     tagline: '',
     gstin: '',
+    panNumber: '',
     fssai: '',
     bankName: '',
     accountNumber: '',
+    ifscCode: '',
+    gstPhoto: '',
+    bankPassbookPhoto: '',
     storeLogo: '',
     status: 'pending',
     createdAt: '',
@@ -60,13 +86,47 @@ const Settings = () => {
 
   useEffect(() => {
     fetchProfile();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await categoryService.getCategories();
+      if (res?.categories && Array.isArray(res.categories) && res.categories.length > 0) {
+        const mapped = res.categories.map((c, idx) => ({
+          id: c._id || `cat-dyn-${idx}`,
+          label: c.name || c.label || String(c)
+        }));
+        setAvailableCategories(mapped);
+      }
+    } catch (err) {
+      console.warn('Using default store categories', err);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
       setLoading(true);
       setErrorMsg('');
-      const res = await authService.getSellerProfile();
+
+      const [res, memRes, histRes] = await Promise.all([
+        authService.getSellerProfile().catch(() => null),
+        membershipService.getSellerMembership().catch(() => ({ membership: null })),
+        membershipService.getSellerMembershipHistory().catch(() => ({ memberships: [] })),
+      ]);
+
+      if (memRes?.membership) {
+        setMembership(memRes.membership);
+      } else if (res?.seller?.membership) {
+        setMembership(res.seller.membership);
+      } else {
+        setMembership(null);
+      }
+
+      if (histRes?.memberships && Array.isArray(histRes.memberships)) {
+        setMembershipHistory(histRes.memberships);
+      }
+
       if (res && res.seller) {
         const s = res.seller;
         const coords = s.warehouseLocation?.location?.coordinates || [null, null];
@@ -85,20 +145,25 @@ const Settings = () => {
           serviceRadius: String(s.serviceRadius || '5'),
           tagline: s.tagline || '',
           gstin: s.gstNumber || '',
+          panNumber: s.panNumber || '',
           fssai: s.fssaiLicense || '',
           bankName: s.bankName || '',
           accountNumber: s.accountNumber || '',
+          ifscCode: s.ifscCode || '',
+          gstPhoto: s.gstPhoto || '',
+          bankPassbookPhoto: s.bankPassbookPhoto || '',
           storeLogo: s.storeLogo || '',
           status: s.status || 'approved',
           createdAt: s.createdAt ? new Date(s.createdAt).getFullYear() : '2026',
         });
-        if (s.categories && Array.isArray(s.categories) && s.categories.length > 0) {
+        if (s.categories && Array.isArray(s.categories)) {
           setSelectedCategories(s.categories);
+        } else {
+          setSelectedCategories([]);
         }
       }
     } catch (err) {
       console.error('Failed to fetch seller profile:', err);
-      // Fallback to local storage cache if network error
       const cached = localStorage.getItem('shippnex_seller_data');
       if (cached) {
         try {
@@ -137,6 +202,26 @@ const Settings = () => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleDocFileChange = (e, fieldName) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setErrorMsg('Document file size must be under 5MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, [fieldName]: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeDocFile = (fieldName) => {
+    if (!isEditing) return;
+    setFormData(prev => ({ ...prev, [fieldName]: '' }));
   };
 
   // Google Maps GPS Geolocation Auto-Detection
@@ -200,9 +285,13 @@ const Settings = () => {
         serviceRadius: formData.serviceRadius,
         tagline: formData.tagline,
         gstNumber: formData.gstin,
+        panNumber: formData.panNumber,
         fssaiLicense: formData.fssai,
         bankName: formData.bankName,
         accountNumber: formData.accountNumber,
+        ifscCode: formData.ifscCode,
+        gstPhoto: formData.gstPhoto,
+        bankPassbookPhoto: formData.bankPassbookPhoto,
         categories: selectedCategories,
         storeLogo: formData.storeLogo,
       };
@@ -229,9 +318,13 @@ const Settings = () => {
             serviceRadius: String(s.serviceRadius || prev.serviceRadius),
             tagline: s.tagline || prev.tagline,
             gstin: s.gstNumber || prev.gstin,
+            panNumber: s.panNumber || prev.panNumber,
             fssai: s.fssaiLicense || prev.fssai,
             bankName: s.bankName || prev.bankName,
             accountNumber: s.accountNumber || prev.accountNumber,
+            ifscCode: s.ifscCode || prev.ifscCode,
+            gstPhoto: s.gstPhoto || prev.gstPhoto,
+            bankPassbookPhoto: s.bankPassbookPhoto || prev.bankPassbookPhoto,
             storeLogo: s.storeLogo || prev.storeLogo,
           }));
         }
@@ -359,13 +452,40 @@ const Settings = () => {
               Bank & Tax
             </button>
 
+            <button
+              type="button"
+              onClick={() => setActiveTab('membership')}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer text-left border-none ${
+                activeTab === 'membership'
+                  ? 'bg-orange-50 text-[#ff7526] border border-orange-200/80 font-semibold'
+                  : 'bg-transparent text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Crown size={18} />
+                <span>Membership Plan</span>
+              </div>
+              {membership?.membershipStatus === 'active' && (
+                <span className="bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">
+                  Active
+                </span>
+              )}
+            </button>
+
           </div>
 
           {/* Account Status Card */}
           <div className="bg-gradient-to-br from-[#ff7526] to-[#ff5500] text-white rounded-xl p-5 shadow-sm space-y-3">
-            <span className="text-[11px] uppercase tracking-wider font-medium text-white/80 bg-white/20 px-2 py-0.5 rounded-md">
-              ACCOUNT STATUS
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] uppercase tracking-wider font-medium text-white/80 bg-white/20 px-2 py-0.5 rounded-md">
+                ACCOUNT STATUS
+              </span>
+              {membership && (
+                <span className="text-[10px] font-bold text-white bg-black/25 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Crown size={11} /> {membership.planName || 'Active Plan'}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-3 pt-1">
               <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-lg text-white shrink-0 overflow-hidden">
                 {formData.storeLogo ? (
@@ -436,35 +556,13 @@ const Settings = () => {
                         className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
                       />
                     </div>
-
-                    <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">Mobile Number (Verified Login)</label>
-                      <input 
-                        type="text" 
-                        disabled={true}
-                        value={formData.mobile}
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none bg-slate-100 text-slate-600 text-sm font-normal cursor-not-allowed" 
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">Account Status</label>
-                      <input 
-                        type="text" 
-                        disabled={true}
-                        value={formData.status.toUpperCase()}
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none bg-slate-100 text-slate-600 text-sm font-semibold cursor-not-allowed" 
-                      />
-                    </div>
                   </div>
-
                 </div>
               )}
 
               {/* TAB 2: STORE DETAILS */}
               {activeTab === 'store' && (
                 <div className="space-y-6">
-                  
                   {/* Store Name */}
                   <div className="space-y-1.5">
                     <label className="block text-sm font-medium text-slate-700">Store / Business Name</label>
@@ -483,7 +581,7 @@ const Settings = () => {
                     <label className="block text-sm font-medium text-slate-700">Store Categories (Multiple selection allowed)</label>
                     
                     <div className="p-5 border border-slate-200/80 rounded-xl bg-slate-50/50 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                      {allStoreCategories.map((cat) => {
+                      {availableCategories.map((cat) => {
                         const isChecked = selectedCategories.includes(cat.label);
                         return (
                           <div 
@@ -607,7 +705,6 @@ const Settings = () => {
                       />
                     </div>
                   </div>
-
                 </div>
               )}
 
@@ -652,57 +749,449 @@ const Settings = () => {
 
               {/* TAB 4: BANK & TAX */}
               {activeTab === 'bank' && (
-                <div className="space-y-5">
-                  <h3 className="text-lg font-semibold text-slate-900 pb-3 border-b border-slate-100">Bank & Tax Verification</h3>
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 pb-1 border-b border-slate-100 flex items-center gap-2">
+                      <CreditCard size={20} className="text-[#ff7526]" />
+                      Bank & Tax Verification
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Manage your GST, PAN, banking accounts and uploaded official verification documents
+                    </p>
+                  </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">GSTIN Number</label>
-                      <input 
-                        type="text" 
-                        disabled={!isEditing}
-                        value={formData.gstin}
-                        onChange={(e) => setFormData({ ...formData, gstin: e.target.value })}
-                        placeholder="e.g. 07AAAAA0000A1Z5"
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal font-mono disabled:bg-slate-50 disabled:text-slate-600 transition-all uppercase" 
-                      />
+                  {/* Tax Information */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Tax & Business ID</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-700">GSTIN Number</label>
+                        <input 
+                          type="text" 
+                          disabled={!isEditing}
+                          value={formData.gstin}
+                          onChange={(e) => setFormData({ ...formData, gstin: e.target.value })}
+                          placeholder="e.g. 22AAAAA0000A1Z5"
+                          className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal font-mono disabled:bg-slate-50 disabled:text-slate-600 transition-all uppercase" 
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-700">PAN Number</label>
+                        <input 
+                          type="text" 
+                          disabled={!isEditing}
+                          value={formData.panNumber}
+                          onChange={(e) => setFormData({ ...formData, panNumber: e.target.value })}
+                          placeholder="e.g. ABCDE1234F"
+                          className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal font-mono disabled:bg-slate-50 disabled:text-slate-600 transition-all uppercase" 
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-700">FSSAI License No.</label>
+                        <input 
+                          type="text" 
+                          disabled={!isEditing}
+                          value={formData.fssai}
+                          onChange={(e) => setFormData({ ...formData, fssai: e.target.value })}
+                          placeholder="e.g. 10020011004567"
+                          className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Banking Details */}
+                  <div className="space-y-3 pt-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Settlement Bank Account</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-700">Bank Name</label>
+                        <input 
+                          type="text" 
+                          disabled={!isEditing}
+                          value={formData.bankName}
+                          onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                          placeholder="e.g. HDFC Bank"
+                          className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-700">Account Number</label>
+                        <input 
+                          type="text" 
+                          disabled={!isEditing}
+                          value={formData.accountNumber}
+                          onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
+                          placeholder="Enter bank account number"
+                          className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal font-mono disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-700">IFSC Code</label>
+                        <input 
+                          type="text" 
+                          disabled={!isEditing}
+                          value={formData.ifscCode}
+                          onChange={(e) => setFormData({ ...formData, ifscCode: e.target.value })}
+                          placeholder="e.g. HDFC0001234"
+                          className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal font-mono disabled:bg-slate-50 disabled:text-slate-600 transition-all uppercase" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Uploaded Verification Documents */}
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Uploaded Verification Documents</h4>
+                      <span className="text-[11px] text-slate-500 font-medium">Used for seller identity & business onboarding</span>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">FSSAI License No.</label>
-                      <input 
-                        type="text" 
-                        disabled={!isEditing}
-                        value={formData.fssai}
-                        onChange={(e) => setFormData({ ...formData, fssai: e.target.value })}
-                        placeholder="e.g. 10020011004567"
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
-                      />
-                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      
+                      {/* GST Document Card */}
+                      <div className="p-4 bg-slate-50/70 border border-slate-200/90 rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-orange-100/70 text-[#ff7526] rounded-lg">
+                              <FileText size={16} />
+                            </div>
+                            <div>
+                              <h5 className="text-xs font-bold text-slate-800">GST Registration Certificate</h5>
+                              <p className="text-[10px] text-slate-400">Tax document proof</p>
+                            </div>
+                          </div>
+                          {formData.gstPhoto ? (
+                            <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              <FileCheck size={12} /> Uploaded
+                            </span>
+                          ) : (
+                            <span className="bg-slate-200 text-slate-600 text-[10px] font-medium px-2 py-0.5 rounded-full">
+                              Not Uploaded
+                            </span>
+                          )}
+                        </div>
 
-                    <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">Bank Name</label>
-                      <input 
-                        type="text" 
-                        disabled={!isEditing}
-                        value={formData.bankName}
-                        onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
-                        placeholder="e.g. HDFC Bank"
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
-                      />
-                    </div>
+                        {formData.gstPhoto ? (
+                          <div className="space-y-2">
+                            <div 
+                              onClick={() => setPreviewDocModal({ isOpen: true, title: 'GST Registration Certificate', imageUrl: formData.gstPhoto })}
+                              className="relative group cursor-pointer rounded-xl overflow-hidden border border-slate-200 bg-white aspect-video flex items-center justify-center shadow-2xs hover:border-[#ff7526] transition-all"
+                            >
+                              <img src={formData.gstPhoto} alt="GST Certificate" className="w-full h-full object-contain p-2 group-hover:scale-102 transition-transform duration-200" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-bold">
+                                <Eye size={16} />
+                                <span>Click to View Fullscreen</span>
+                              </div>
+                            </div>
 
-                    <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">Account Number</label>
-                      <input 
-                        type="text" 
-                        disabled={!isEditing}
-                        value={formData.accountNumber}
-                        onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
-                        placeholder="Enter bank account number"
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff7526] text-sm font-normal font-mono disabled:bg-slate-50 disabled:text-slate-600 transition-all" 
-                      />
+                            {isEditing && (
+                              <div className="flex items-center justify-between gap-2 pt-1">
+                                <label className="flex-1 cursor-pointer bg-white hover:bg-slate-100 text-slate-700 font-semibold py-1.5 px-3 rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 border border-slate-200 shadow-2xs">
+                                  <Upload size={13} />
+                                  <span>Change Document</span>
+                                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleDocFileChange(e, 'gstPhoto')} />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => removeDocFile('gstPhoto')}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-200 cursor-pointer"
+                                  title="Remove GST Photo"
+                                >
+                                  <X size={15} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            {isEditing ? (
+                              <label className="flex flex-col items-center justify-center p-6 bg-white border border-dashed border-slate-300 rounded-xl cursor-pointer hover:bg-orange-50/50 hover:border-[#ff7526] transition-all group">
+                                <UploadCloud size={24} className="text-slate-400 group-hover:text-[#ff7526] transition-colors mb-1.5" />
+                                <span className="text-xs font-bold text-slate-700 group-hover:text-[#ff7526]">Upload GST Certificate</span>
+                                <span className="text-[10px] text-slate-400 mt-0.5">JPG, PNG or WebP up to 5MB</span>
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleDocFileChange(e, 'gstPhoto')} />
+                              </label>
+                            ) : (
+                              <div className="p-6 bg-white/70 border border-slate-200 rounded-xl text-center">
+                                <p className="text-xs text-slate-400">No GST document uploaded.</p>
+                                <p className="text-[11px] text-[#ff7526] font-medium mt-1">Click "Edit Profile" to upload GST proof.</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Bank Passbook / Cheque Card */}
+                      <div className="p-4 bg-slate-50/70 border border-slate-200/90 rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-blue-100/70 text-blue-600 rounded-lg">
+                              <Building2 size={16} />
+                            </div>
+                            <div>
+                              <h5 className="text-xs font-bold text-slate-800">Passbook / Cancelled Cheque</h5>
+                              <p className="text-[10px] text-slate-400">Bank account verification</p>
+                            </div>
+                          </div>
+                          {formData.bankPassbookPhoto ? (
+                            <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              <FileCheck size={12} /> Uploaded
+                            </span>
+                          ) : (
+                            <span className="bg-slate-200 text-slate-600 text-[10px] font-medium px-2 py-0.5 rounded-full">
+                              Not Uploaded
+                            </span>
+                          )}
+                        </div>
+
+                        {formData.bankPassbookPhoto ? (
+                          <div className="space-y-2">
+                            <div 
+                              onClick={() => setPreviewDocModal({ isOpen: true, title: 'Bank Passbook / Cancelled Cheque', imageUrl: formData.bankPassbookPhoto })}
+                              className="relative group cursor-pointer rounded-xl overflow-hidden border border-slate-200 bg-white aspect-video flex items-center justify-center shadow-2xs hover:border-[#ff7526] transition-all"
+                            >
+                              <img src={formData.bankPassbookPhoto} alt="Bank Passbook" className="w-full h-full object-contain p-2 group-hover:scale-102 transition-transform duration-200" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-bold">
+                                <Eye size={16} />
+                                <span>Click to View Fullscreen</span>
+                              </div>
+                            </div>
+
+                            {isEditing && (
+                              <div className="flex items-center justify-between gap-2 pt-1">
+                                <label className="flex-1 cursor-pointer bg-white hover:bg-slate-100 text-slate-700 font-semibold py-1.5 px-3 rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 border border-slate-200 shadow-2xs">
+                                  <Upload size={13} />
+                                  <span>Change Document</span>
+                                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleDocFileChange(e, 'bankPassbookPhoto')} />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => removeDocFile('bankPassbookPhoto')}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-200 cursor-pointer"
+                                  title="Remove Passbook Photo"
+                                >
+                                  <X size={15} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            {isEditing ? (
+                              <label className="flex flex-col items-center justify-center p-6 bg-white border border-dashed border-slate-300 rounded-xl cursor-pointer hover:bg-orange-50/50 hover:border-[#ff7526] transition-all group">
+                                <UploadCloud size={24} className="text-slate-400 group-hover:text-[#ff7526] transition-colors mb-1.5" />
+                                <span className="text-xs font-bold text-slate-700 group-hover:text-[#ff7526]">Upload Passbook / Cheque</span>
+                                <span className="text-[10px] text-slate-400 mt-0.5">JPG, PNG or WebP up to 5MB</span>
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleDocFileChange(e, 'bankPassbookPhoto')} />
+                              </label>
+                            ) : (
+                              <div className="p-6 bg-white/70 border border-slate-200 rounded-xl text-center">
+                                <p className="text-xs text-slate-400">No bank passbook document uploaded.</p>
+                                <p className="text-[11px] text-[#ff7526] font-medium mt-1">Click "Edit Profile" to upload bank proof.</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
                     </div>
+                  </div>
+
+                  {/* Verification Notice */}
+                  <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-xl flex items-center gap-3">
+                    <Shield size={18} className="text-blue-600 shrink-0" />
+                    <span className="text-xs font-medium text-blue-900">
+                      All uploaded business & banking documents are encrypted and verified by Shippnex administrators for settlement and compliance.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 5: MEMBERSHIP PLAN */}
+              {activeTab === 'membership' && (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <Crown size={20} className="text-[#ff7526]" />
+                        Seller Membership Subscription
+                      </h3>
+                      <p className="text-xs font-normal text-slate-500 mt-0.5">
+                        Manage your active plan, benefits, billing receipts, and upgrade options
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/seller/membership')}
+                      className="px-4 py-2 bg-[#ff7526] hover:bg-[#e65507] text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-sm flex items-center gap-1.5 transition-colors"
+                    >
+                      <Zap size={14} />
+                      <span>{membership ? 'Upgrade / Renew Plan' : 'Buy Membership'}</span>
+                    </button>
+                  </div>
+
+                  {/* Active Plan Card */}
+                  {membership ? (
+                    <div className="bg-gradient-to-br from-orange-50/70 via-white to-amber-50/50 rounded-2xl border border-orange-200/80 p-6 shadow-xs space-y-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-orange-100">
+                        <div className="flex items-center gap-4">
+                          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#ff7526] to-[#ff9e66] text-white flex items-center justify-center shadow-sm shrink-0">
+                            <Crown size={28} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-xl font-bold text-slate-900">
+                                {membership.planName || membership.planId?.name || 'Seller Plan'}
+                              </h4>
+                              <span className={`inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                                membership.membershipStatus === 'active' 
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                                  : 'bg-amber-100 text-amber-800 border border-amber-300'
+                              }`}>
+                                {membership.membershipStatus === 'active' ? <CheckCircle2 size={13} /> : <Clock size={13} />}
+                                {membership.membershipStatus === 'active' ? 'Active' : 'Pending Confirmation'}
+                              </span>
+                            </div>
+                            <p className="text-xs font-medium text-slate-500 mt-1">
+                              Duration: <strong className="text-slate-800">{durationLabel(membership.durationType || 'monthly')}</strong>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-left sm:text-right">
+                          <span className="text-3xl font-black text-slate-900">
+                            ₹{membership.priceAtPurchase || membership.planId?.price || 0}
+                          </span>
+                          <span className="text-xs text-slate-400 block font-normal mt-0.5">Paid via {membership.paymentMethod?.toUpperCase() || 'UPI/Online'}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+                          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Activation Date</span>
+                          <p className="text-sm font-bold text-slate-800">{formatDate(membership.startDate || membership.createdAt)}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+                          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Expiration Date</span>
+                          <p className="text-sm font-bold text-slate-800">{formatDate(membership.expiryDate)}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+                          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Remaining Time</span>
+                          <p className="text-sm font-bold text-emerald-600">
+                            {membership.expiryDate ? `${daysLeft(membership.expiryDate)} Days Left` : 'Active'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+                          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Payment Ref</span>
+                          <p className="text-xs font-mono font-bold text-slate-800 truncate" title={membership.paymentReference || membership.transactionId}>
+                            {membership.paymentReference || membership.transactionId || 'Confirmed'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Included Features */}
+                      <div className="pt-2">
+                        <span className="text-xs font-bold text-slate-700 block mb-2">Enabled Privileges on your Store:</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="flex items-center gap-2 text-xs font-medium text-slate-700 bg-white p-2.5 rounded-lg border border-slate-200/60">
+                            <Check size={14} className="text-emerald-600 shrink-0" />
+                            <span>Verified Seller Badge on marketplace</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs font-medium text-slate-700 bg-white p-2.5 rounded-lg border border-slate-200/60">
+                            <Check size={14} className="text-emerald-600 shrink-0" />
+                            <span>Direct Customer Orders & Logistics Delivery</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs font-medium text-slate-700 bg-white p-2.5 rounded-lg border border-slate-200/60">
+                            <Check size={14} className="text-emerald-600 shrink-0" />
+                            <span>Reduced Platform Commission</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs font-medium text-slate-700 bg-white p-2.5 rounded-lg border border-slate-200/60">
+                            <Check size={14} className="text-emerald-600 shrink-0" />
+                            <span>Unlimited Inventory & Catalog Listings</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 border border-dashed border-slate-300 rounded-2xl p-8 text-center space-y-4">
+                      <div className="w-14 h-14 rounded-full bg-orange-100 text-[#ff7526] flex items-center justify-center mx-auto">
+                        <Crown size={28} />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-bold text-slate-800">No Active Membership Plan</h4>
+                        <p className="text-xs font-normal text-slate-500 max-w-md mx-auto mt-1">
+                          You are currently on the free tier. Subscribe to an official store membership plan to unlock order dispatches and store verification.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/seller/membership')}
+                        className="px-6 py-2.5 bg-[#ff7526] hover:bg-[#e65507] text-white font-bold text-xs rounded-xl border-none cursor-pointer shadow-sm inline-flex items-center gap-2 transition-all active:scale-95"
+                      >
+                        <Zap size={14} />
+                        Choose a Membership Plan
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Purchase & Invoice History */}
+                  <div className="pt-4 space-y-3">
+                    <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <Receipt size={16} className="text-[#ff7526]" />
+                      Membership Purchase & Invoices History
+                    </h4>
+
+                    {membershipHistory.length > 0 ? (
+                      <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-slate-50 text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                              <th className="px-4 py-3 font-bold">Plan Name</th>
+                              <th className="px-4 py-3 font-bold">Duration</th>
+                              <th className="px-4 py-3 font-bold">Amount</th>
+                              <th className="px-4 py-3 font-bold">Purchase Date</th>
+                              <th className="px-4 py-3 font-bold">Expiry Date</th>
+                              <th className="px-4 py-3 font-bold">Payment Status</th>
+                              <th className="px-4 py-3 font-bold">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 text-slate-700 font-normal">
+                            {membershipHistory.map((m, idx) => (
+                              <tr key={m._id || idx} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="px-4 py-3 font-bold text-slate-900">{m.planName || m.planId?.name || 'Seller Plan'}</td>
+                                <td className="px-4 py-3">{durationLabel(m.durationType)}</td>
+                                <td className="px-4 py-3 font-bold text-slate-900">₹{m.priceAtPurchase || m.planId?.price || 0}</td>
+                                <td className="px-4 py-3 text-slate-500">{formatDate(m.startDate || m.createdAt)}</td>
+                                <td className="px-4 py-3 text-slate-500">{formatDate(m.expiryDate)}</td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[10px] ${
+                                    m.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                  }`}>
+                                    {m.paymentStatus || 'Pending'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[10px] ${
+                                    m.membershipStatus === 'active' ? 'bg-emerald-100 text-emerald-700' : (m.membershipStatus === 'expired' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700')
+                                  }`}>
+                                    {m.membershipStatus || 'Pending'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-400 font-normal">
+                        No previous membership purchase invoices found.
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -757,6 +1246,52 @@ const Settings = () => {
         }
         accentColor="#ff7526"
       />
+
+      {/* Fullscreen Document Preview Modal */}
+      {previewDocModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText size={18} className="text-[#ff7526]" />
+                <h3 className="font-bold text-sm tracking-wide">{previewDocModal.title}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {previewDocModal.imageUrl && (
+                  <a
+                    href={previewDocModal.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors inline-flex items-center gap-1 text-xs"
+                    title="Open in new tab"
+                  >
+                    <ExternalLink size={15} />
+                    <span className="hidden sm:inline">New Tab</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPreviewDocModal({ isOpen: false, title: '', imageUrl: '' })}
+                  className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer border-none bg-transparent"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="p-4 bg-slate-950 flex items-center justify-center overflow-auto flex-1 min-h-[300px]">
+              {previewDocModal.imageUrl ? (
+                <img
+                  src={previewDocModal.imageUrl}
+                  alt={previewDocModal.title}
+                  className="max-h-[75vh] w-auto max-w-full object-contain rounded-lg shadow-md"
+                />
+              ) : (
+                <p className="text-slate-400 text-sm">No image available</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

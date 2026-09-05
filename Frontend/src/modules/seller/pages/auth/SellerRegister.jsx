@@ -1,9 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Store, MapPin, FileText, CheckCircle, Check, Loader2, Search, Navigation, AlertCircle, Crown, Zap, Star, CreditCard , Banknote, Wallet, Building2, Smartphone, UploadCloud, Image, X, FileCheck} from 'lucide-react';
-import { authService, membershipService } from '../../../../services/authService';
+import { Store, MapPin, FileText, CheckCircle, Check, Loader2, Search, Navigation, AlertCircle, Crown, Zap, Star, CreditCard , Banknote, Wallet, Building2, Smartphone, UploadCloud, Image, X, FileCheck, Layers} from 'lucide-react';
+import { authService, membershipService, categoryService } from '../../../../services/authService';
 import { MapService } from '../../../../services/MapService';
 import LocationSearchModal from '../../../../components/LocationSearchModal';
+
+const FALLBACK_CATEGORIES = [
+  'Grocery Essentials',
+  'Grains & Flours',
+  'Oil & Ghee',
+  'Spices & Masala',
+  'Sugar & Sweeteners',
+  'Fruits',
+  'Vegetables',
+  'Ready-to-Cook',
+  'Bakery & Cakes',
+  'Fast Food',
+  'Personal Care',
+  'Home Care',
+  'Stationary',
+  'Beauty',
+  'Electronics',
+  'Fashion'
+];
 
 const SellerRegister = () => {
   const navigate = useNavigate();
@@ -15,7 +34,27 @@ const SellerRegister = () => {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [plans, setPlans] = useState([]);
   const [loadingPlans, setLoadingPlans] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('upi');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('netbanking');
+
+  const [availableCategories, setAvailableCategories] = useState(FALLBACK_CATEGORIES);
+  const [selectedCategories, setSelectedCategories] = useState([]);
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const res = await categoryService.getCategories();
+        if (res?.categories && Array.isArray(res.categories) && res.categories.length > 0) {
+          const names = res.categories.map(c => c.name || c.label || c).filter(Boolean);
+          if (names.length > 0) {
+            setAvailableCategories(names);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch categories from server, using fallback list', err);
+      }
+    };
+    loadCategories();
+  }, []);
 
   const fetchPlans = async () => {
     setLoadingPlans(true);
@@ -63,6 +102,15 @@ const SellerRegister = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const toggleCategory = (catName) => {
+    setErrorMessage('');
+    if (selectedCategories.includes(catName)) {
+      setSelectedCategories(selectedCategories.filter(c => c !== catName));
+    } else {
+      setSelectedCategories([...selectedCategories, catName]);
+    }
   };
 
   const handleFileChange = (e) => {
@@ -135,9 +183,15 @@ const SellerRegister = () => {
 
   const nextStep = async (e) => {
     e.preventDefault();
-    if (step === 3 && !formData.gstNumber && !formData.panNumber) {
-      // Basic validation, but let HTML5 required handle it usually
+    setErrorMessage('');
+
+    if (step === 1) {
+      if (selectedCategories.length === 0) {
+        setErrorMessage('Please select at least one store category for your business.');
+        return;
+      }
     }
+
     if (step < 4) {
       setStep(step + 1);
     } else {
@@ -151,6 +205,7 @@ const SellerRegister = () => {
         email: formData.email,
         businessType: formData.businessType || 'Retail',
         storeLogo: formData.storeLogo,
+        categories: selectedCategories,
         serviceRadius: formData.serviceRadius ? Number(formData.serviceRadius) : 5,
         completeAddress: formData.completeAddress,
         city: formData.city,
@@ -170,60 +225,77 @@ const SellerRegister = () => {
         if (formData.planId) {
           const selectedPlan = plans.find(p => p._id === formData.planId);
           if (selectedPlan && selectedPlan.price > 0) {
-            if (selectedPaymentMethod === 'cod') {
-              // Direct submit as COD
-              const res = await authService.registerSeller({ ...basePayload, paymentMethod: 'cod' });
-              if (res && res.success) setIsSubmitted(true);
-              else setErrorMessage(res.message || 'Registration failed');
-              setIsSubmitting(false);
-              return;
-            } else {
-              // Razorpay path for all other digital methods
-              const orderRes = await membershipService.createRazorpayOrder(selectedPlan._id, 'seller');
-              if (!orderRes.success) throw new Error('Could not create payment order');
-              
-              const options = {
-                key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-                amount: orderRes.order.amount,
-                currency: orderRes.order.currency,
-                name: 'ShippNex',
-                description: 'Seller Membership Payment',
-                order_id: orderRes.order.id,
-                handler: async function (response) {
-                  try {
-                    setIsSubmitting(true);
-                    const finalPayload = {
-                      ...basePayload,
-                      razorpayPaymentId: response.razorpay_payment_id,
-                      razorpayOrderId: response.razorpay_order_id,
-                      razorpaySignature: response.razorpay_signature,
-                      paymentMethod: 'razorpay'
-                    };
-                    const res = await authService.registerSeller(finalPayload);
-                    if (res && res.success) setIsSubmitted(true);
-                    else setErrorMessage(res.message || 'Registration failed');
-                  } catch (err) {
-                    setErrorMessage(err.response?.data?.message || err.message || 'Server error occurred');
-                  } finally {
-                    setIsSubmitting(false);
+            // Razorpay online payment
+            const orderRes = await membershipService.createRazorpayOrder(selectedPlan._id, 'seller');
+            if (!orderRes.success || !orderRes.order) throw new Error(orderRes.message || 'Could not create payment order');
+            
+            const options = {
+              key: orderRes.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TRZdg2aAOYv4KK',
+              amount: orderRes.order.amount,
+              currency: orderRes.order.currency || 'INR',
+              name: 'ShippNex',
+              description: `${selectedPlan.name} Membership Payment`,
+              order_id: orderRes.order.id,
+              handler: async function (response) {
+                try {
+                  setIsSubmitting(true);
+                  const finalPayload = {
+                    ...basePayload,
+                    razorpayPaymentId: response.razorpay_payment_id,
+                    razorpayOrderId: response.razorpay_order_id,
+                    razorpaySignature: response.razorpay_signature,
+                    paymentMethod: 'razorpay'
+                  };
+                  const res = await authService.registerSeller(finalPayload);
+                  if (res && res.success) setIsSubmitted(true);
+                  else setErrorMessage(res.message || 'Registration failed');
+                } catch (err) {
+                  setErrorMessage(err.response?.data?.message || err.message || 'Server error occurred');
+                } finally {
+                  setIsSubmitting(false);
+                }
+              },
+              modal: {
+                ondismiss: function () {
+                  setIsSubmitting(false);
+                }
+              },
+              prefill: {
+                name: formData.ownerName || formData.businessName,
+                email: formData.email,
+                contact: formData.phone,
+                method: 'netbanking'
+              },
+              config: {
+                display: {
+                  blocks: {
+                    banks: {
+                      name: 'Pay via Net Banking',
+                      instruments: [
+                        {
+                          method: 'netbanking'
+                        }
+                      ]
+                    }
+                  },
+                  sequence: ['block.banks'],
+                  preferences: {
+                    show_default_blocks: false
                   }
-                },
-                prefill: {
-                  name: formData.ownerName,
-                  email: formData.email,
-                  contact: formData.phone
-                },
-                theme: { color: '#ff5500' }
-              };
-              
-              const rzp = new window.Razorpay(options);
-              rzp.on('payment.failed', function () {
-                setIsSubmitting(false);
-                setErrorMessage('Payment failed. Please try again.');
-              });
-              rzp.open();
-              return; // Exit early, submission happens in the handler
-            }
+                }
+              },
+              theme: {
+                color: '#ff5500'
+              }
+            };
+            
+            const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', function (response) {
+              setErrorMessage(response.error.description || 'Payment Failed');
+              setIsSubmitting(false);
+            });
+            rzp.open();
+            return; // Exit early, submission happens in the handler
           }
         }
         
@@ -354,6 +426,45 @@ const SellerRegister = () => {
                   <div className="col-span-2">
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">Store Logo / Image</label>
                     <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-[#ff5500] hover:file:bg-orange-100 cursor-pointer" />
+                  </div>
+
+                  {/* Store Categories Selection */}
+                  <div className="col-span-2 space-y-2 pt-2 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Store Product Categories <span className="text-red-500">*</span>
+                      </label>
+                      <span className="text-[11px] text-slate-400 font-medium">Multiple allowed</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                      {availableCategories.map((cat) => {
+                        const catLabel = typeof cat === 'string' ? cat : (cat.name || cat.label);
+                        const isSelected = selectedCategories.includes(catLabel);
+                        return (
+                          <div
+                            key={catLabel}
+                            onClick={() => toggleCategory(catLabel)}
+                            className={`p-2 rounded-lg border text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all select-none ${
+                              isSelected
+                                ? 'bg-orange-50 border-[#ff5500] text-[#ff5500]'
+                                : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                            }`}
+                          >
+                            <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border shrink-0 ${
+                              isSelected ? 'bg-[#ff5500] border-[#ff5500] text-white' : 'border-slate-300 bg-white'
+                            }`}>
+                              {isSelected && <Check size={10} strokeWidth={3} />}
+                            </div>
+                            <span className="truncate">{catLabel}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {selectedCategories.length === 0 ? (
+                      <p className="text-[11px] text-amber-600 font-medium">Please select at least 1 category for your store.</p>
+                    ) : (
+                      <p className="text-[11px] text-emerald-600 font-semibold">{selectedCategories.length} category(s) selected</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -617,21 +728,24 @@ const SellerRegister = () => {
 
                 {formData.planId && (
                   <div className="mt-6 animate-in fade-in duration-300">
-                    <h3 className="text-[15px] font-bold text-slate-900 mb-3 text-left">Select Payment Method</h3>
+                    <h3 className="text-[15px] font-bold text-slate-900 mb-3 text-left">Payment Method</h3>
                     <div className="space-y-3">
                       {[
-                        { id: 'cod', title: 'Cash on Delivery', subtitle: 'Pay cash upon delivery', icon: Banknote, color: 'text-orange-600', bg: 'bg-orange-50' },
-                        { id: 'upi', title: 'UPI (GPay / PhonePe / Paytm)', subtitle: 'Instant UPI payment', icon: Wallet, color: 'text-slate-600', bg: 'bg-slate-50' },
-                        { id: 'card', title: 'Credit / Debit Card', subtitle: 'Visa, Mastercard, RuPay', icon: CreditCard, color: 'text-slate-600', bg: 'bg-slate-50' },
-                        { id: 'netbanking', title: 'Net Banking', subtitle: 'All major banks supported', icon: Building2, color: 'text-slate-600', bg: 'bg-slate-50' },
-                        { id: 'wallet', title: 'Mobile Wallets', subtitle: 'Paytm Wallet, Mobikwik, etc.', icon: Smartphone, color: 'text-slate-600', bg: 'bg-slate-50' },
+                        { 
+                          id: 'netbanking', 
+                          title: 'Net Banking', 
+                          subtitle: 'Pay securely via Bank Account (SBI, HDFC, ICICI, Axis, PNB & more)', 
+                          icon: Building2, 
+                          color: 'text-[#ff5500]', 
+                          bg: 'bg-orange-50' 
+                        },
                       ].map(method => {
                         const isSelected = selectedPaymentMethod === method.id;
                         return (
                           <div
                             key={method.id}
                             onClick={() => setSelectedPaymentMethod(method.id)}
-                            className={`flex items-center justify-between p-4 rounded-[14px] border-2 cursor-pointer transition-all ${isSelected ? 'border-[#ff5500] bg-orange-50/10' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                            className={`flex items-center justify-between p-4 rounded-[14px] border-2 cursor-pointer transition-all ${isSelected ? 'border-[#ff5500] bg-orange-50/10 shadow-xs' : 'border-slate-100 bg-white hover:border-slate-200'}`}
                           >
                             <div className="flex items-center gap-4">
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isSelected ? 'bg-[#ff5500] text-white' : method.bg + ' ' + method.color}`}>

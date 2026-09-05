@@ -35,7 +35,8 @@ export const normalizePhoneNumber = (phone) => {
  * @returns {string} Exact approved message string
  */
 export const formatOtpMessage = (appName, otp) => {
-  const brand = appName || process.env.SMS_INDIA_HUB_APP_NAME || process.env.APP_NAME || DEFAULT_APP_NAME;
+  // Use registered DLT App Name first to guarantee 100% template match
+  const brand = process.env.SMS_INDIA_HUB_APP_NAME || appName || process.env.APP_NAME || DEFAULT_APP_NAME;
   return `Welcome to the ${brand} powered by Appzeto.Your OTP for registration is ${otp}.BGADEC`;
 };
 
@@ -69,6 +70,7 @@ export const sendOtpSMS = async ({ phone, otp, appName = DEFAULT_APP_NAME, role 
   const apiKey = process.env.SMS_INDIA_HUB_API_KEY || process.env.SMS_API_KEY;
   const senderId = process.env.SMS_INDIA_HUB_SENDER_ID || DEFAULT_SENDER_ID;
   const templateId = process.env.SMS_INDIA_HUB_TEMPLATE_ID || DEFAULT_TEMPLATE_ID;
+  const entityId = process.env.SMS_INDIA_HUB_ENTITY_ID || process.env.SMS_INDIA_HUB_PEID || process.env.DLT_PE_ID;
   const apiUrl = process.env.SMS_INDIA_HUB_API_URL || DEFAULT_API_URL;
   const providerMode = (process.env.SMS_PROVIDER_MODE || '').toLowerCase();
 
@@ -95,7 +97,7 @@ export const sendOtpSMS = async ({ phone, otp, appName = DEFAULT_APP_NAME, role 
 
   // Live Gateway Request
   try {
-    const params = new URLSearchParams({
+    const queryParams = {
       APIKey: apiKey,
       msisdn: cleanPhone,
       sid: senderId,
@@ -103,8 +105,14 @@ export const sendOtpSMS = async ({ phone, otp, appName = DEFAULT_APP_NAME, role 
       fl: '0',
       gwid: '2',
       templateid: templateId,
-    });
+    };
 
+    if (entityId) {
+      queryParams.entityid = entityId;
+      queryParams.peid = entityId;
+    }
+
+    const params = new URLSearchParams(queryParams);
     const targetUrl = `${apiUrl}?${params.toString()}`;
 
     const controller = new AbortController();

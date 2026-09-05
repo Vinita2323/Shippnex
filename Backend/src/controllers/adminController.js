@@ -163,7 +163,7 @@ export const getAllUsers = async (req, res, next) => {
 export const getAllSellers = async (req, res, next) => {
   try {
     const sellers = await Seller.find()
-      .select('-gstPhoto -bankPassbookPhoto -otp -otpExpiry')
+      .select('-otp -otpExpiry')
       .sort({ createdAt: -1 })
       .lean();
     return res.status(200).json({

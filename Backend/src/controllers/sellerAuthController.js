@@ -61,13 +61,22 @@ export const sendOtp = async (req, res, next) => {
     const smsResult = await sendOtpSMS({
       phone: cleanPhone,
       otp,
-      appName: 'ShippNex Seller',
+      appName: 'ShippNex',
       role: 'seller',
     });
 
+    if (!smsResult.success) {
+      return res.status(502).json({
+        success: false,
+        message: smsResult.message || 'Unable to deliver SMS OTP. Please verify phone number and try again.',
+        phone: cleanPhone,
+        otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
+      });
+    }
+
     res.status(200).json({
       success: true,
-      message: smsResult.message || 'OTP sent successfully. Use code 123456 or generated OTP.',
+      message: smsResult.message || 'OTP sent successfully to your mobile number',
       phone: cleanPhone,
       otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
     });
@@ -220,6 +229,7 @@ export const registerSeller = async (req, res, next) => {
       fssaiLicense,
       gstPhoto,
       bankPassbookPhoto,
+      categories,
       planId,
       razorpayPaymentId,
       razorpayOrderId,
@@ -284,6 +294,7 @@ export const registerSeller = async (req, res, next) => {
       fssaiLicense,
       gstPhoto: processedGstPhoto,
       bankPassbookPhoto: processedPassbookPhoto,
+      categories: Array.isArray(categories) && categories.length > 0 ? categories : [],
       warehouseLocation: {
         storeAddress: completeAddress,
         city,
@@ -371,9 +382,18 @@ export const getSellerProfile = async (req, res, next) => {
     if (!seller) {
       return res.status(404).json({ success: false, message: 'Seller profile not found' });
     }
+
+    const membership = await SellerMembership.findOne({
+      sellerId: seller._id,
+      membershipStatus: { $in: ['active', 'pending_payment'] },
+    }).populate('planId').sort({ createdAt: -1 });
+
+    const sellerObj = seller.toObject();
+    sellerObj.membership = membership || null;
+
     res.status(200).json({
       success: true,
-      seller,
+      seller: sellerObj,
     });
   } catch (error) {
     next(error);

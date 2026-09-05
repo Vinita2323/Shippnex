@@ -221,13 +221,22 @@ export const sendOtp = async (req, res, next) => {
     const smsResult = await sendOtpSMS({
       phone: cleanPhone,
       otp,
-      appName: 'ShippNex Captain',
+      appName: 'ShippNex',
       role: 'captain',
     });
 
+    if (!smsResult.success) {
+      return res.status(502).json({
+        success: false,
+        message: smsResult.message || 'Unable to deliver SMS OTP. Please verify phone number and try again.',
+        phone: cleanPhone,
+        otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
+      });
+    }
+
     res.status(200).json({
       success: true,
-      message: smsResult.message || 'OTP sent successfully',
+      message: smsResult.message || 'OTP sent successfully to your mobile number',
       phone: cleanPhone,
       otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
     });
