@@ -113,7 +113,13 @@ const productSchema = new mongoose.Schema(
     timestamps: true
   }
 );
-
+// Targeted indexes matching actual query patterns
+productSchema.index({ category: 1, status: 1 });
+productSchema.index({ subCategory: 1, status: 1 });
+productSchema.index({ sellerId: 1, status: 1 });
+productSchema.index({ homeSections: 1, status: 1 });
+productSchema.index({ sku: 1 });
+productSchema.index({ createdAt: -1 });
 
 const Product = mongoose.model('Product', productSchema);
 

@@ -690,6 +690,33 @@ export const adminService = {
   },
 };
 
+export const profileEditRequestService = {
+  submitEditRequest: async (payload) => {
+    const response = await API.post('/profile-edit-requests/submit', payload);
+    return response.data;
+  },
+  getMyPendingEditRequest: async () => {
+    const response = await API.get('/profile-edit-requests/my-pending');
+    return response.data;
+  },
+  getAdminEditRequests: async (params = {}) => {
+    const response = await API.get('/profile-edit-requests/admin', { params });
+    return response.data;
+  },
+  getAdminEditRequestById: async (id) => {
+    const response = await API.get(`/profile-edit-requests/admin/${id}`);
+    return response.data;
+  },
+  approveEditRequest: async (id) => {
+    const response = await API.put(`/profile-edit-requests/admin/${id}/approve`);
+    return response.data;
+  },
+  rejectEditRequest: async (id, adminNote = '') => {
+    const response = await API.put(`/profile-edit-requests/admin/${id}/reject`, { adminNote });
+    return response.data;
+  },
+};
+
 
 
 

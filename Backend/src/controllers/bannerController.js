@@ -29,7 +29,7 @@ const initialBanners = [
 // Get all banners (Public for User App)
 export const getBanners = async (req, res, next) => {
   try {
-    let banners = await Banner.find().sort({ priority: 1 });
+    let banners = await Banner.find().sort({ priority: 1 }).lean();
 
     // Seed default banners if empty
     if (banners.length === 0) {

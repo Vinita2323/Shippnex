@@ -15,7 +15,7 @@ const initialCategories = [
 // Get all categories (Public)
 export const getCategories = async (req, res, next) => {
   try {
-    let categories = await Category.find().sort({ priority: 1 });
+    let categories = await Category.find().sort({ priority: 1 }).lean();
 
     // Seed default categories if database is empty
     if (categories.length === 0) {

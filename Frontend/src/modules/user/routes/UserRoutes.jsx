@@ -1,39 +1,41 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../../../components/ProtectedRoute';
+import PageSkeleton from '../../../components/PageSkeleton';
 import Home from '../pages/Home';
-import Categories from '../pages/Categories';
-import Cart from '../pages/Cart';
-import Checkout from '../pages/Checkout';
-import Payment from '../pages/Payment';
-import TrackOrder from '../pages/TrackOrder';
-import Orders from '../pages/Orders';
-import Profile from '../pages/Profile';
-import Login from '../pages/Login';
-import VerifyOtp from '../pages/VerifyOtp';
-import ProductDetails from '../pages/ProductDetails';
-import Wishlist from '../pages/Wishlist';
-import FlashSale from '../pages/FlashSale';
-import BestSelling from '../pages/BestSelling';
-import AllSellers from '../pages/AllSellers';
-import SellerStore from '../pages/SellerStore';
-import LocationSelectionPage from '../pages/LocationSelectionPage';
-import Notifications from '../pages/Notifications';
 import BottomNav from '../components/BottomNav';
-import AccountInfo from '../pages/AccountInfo';
-import SavedAddresses from '../pages/SavedAddresses';
-import Security from '../pages/Security';
-import Terms from '../pages/Terms';
-import Faqs from '../pages/Faqs';
-import HelpSupport from '../pages/HelpSupport';
-import TransportHome from '../pages/transport/TransportHome';
-import LocationSelection from '../pages/transport/LocationSelection';
-import GoodsDetails from '../pages/transport/GoodsDetails';
-import VehicleSelection from '../pages/transport/VehicleSelection';
-import FareSummary from '../pages/transport/FareSummary';
-import BookingCompleted from '../pages/transport/BookingCompleted';
-import TransportBookingDetails from '../pages/transport/TransportBookingDetails';
-import TransportRegistration from '../pages/transport/TransportRegistration';
+
+const Categories = lazy(() => import('../pages/Categories'));
+const Cart = lazy(() => import('../pages/Cart'));
+const Checkout = lazy(() => import('../pages/Checkout'));
+const Payment = lazy(() => import('../pages/Payment'));
+const TrackOrder = lazy(() => import('../pages/TrackOrder'));
+const Orders = lazy(() => import('../pages/Orders'));
+const Profile = lazy(() => import('../pages/Profile'));
+const Login = lazy(() => import('../pages/Login'));
+const VerifyOtp = lazy(() => import('../pages/VerifyOtp'));
+const ProductDetails = lazy(() => import('../pages/ProductDetails'));
+const Wishlist = lazy(() => import('../pages/Wishlist'));
+const FlashSale = lazy(() => import('../pages/FlashSale'));
+const BestSelling = lazy(() => import('../pages/BestSelling'));
+const AllSellers = lazy(() => import('../pages/AllSellers'));
+const SellerStore = lazy(() => import('../pages/SellerStore'));
+const LocationSelectionPage = lazy(() => import('../pages/LocationSelectionPage'));
+const Notifications = lazy(() => import('../pages/Notifications'));
+const AccountInfo = lazy(() => import('../pages/AccountInfo'));
+const SavedAddresses = lazy(() => import('../pages/SavedAddresses'));
+const Security = lazy(() => import('../pages/Security'));
+const Terms = lazy(() => import('../pages/Terms'));
+const Faqs = lazy(() => import('../pages/Faqs'));
+const HelpSupport = lazy(() => import('../pages/HelpSupport'));
+const TransportHome = lazy(() => import('../pages/transport/TransportHome'));
+const LocationSelection = lazy(() => import('../pages/transport/LocationSelection'));
+const GoodsDetails = lazy(() => import('../pages/transport/GoodsDetails'));
+const VehicleSelection = lazy(() => import('../pages/transport/VehicleSelection'));
+const FareSummary = lazy(() => import('../pages/transport/FareSummary'));
+const BookingCompleted = lazy(() => import('../pages/transport/BookingCompleted'));
+const TransportBookingDetails = lazy(() => import('../pages/transport/TransportBookingDetails'));
+const TransportRegistration = lazy(() => import('../pages/transport/TransportRegistration'));
 
 const UserRoutes = () => {
   const location = useLocation();
@@ -59,48 +61,50 @@ const UserRoutes = () => {
 
   return (
     <>
-      <Routes>
-        {/* Public Browsing Routes (Accessible to Guests) */}
-        <Route path="/" element={<Home />} />
-        <Route path="/categories" element={<Categories />} />
-        <Route path="/sellers" element={<AllSellers />} />
-        <Route path="/store/:sellerId" element={<SellerStore />} />
-        <Route path="/product/:id" element={<ProductDetails />} />
-        <Route path="/wishlist" element={<Wishlist />} />
-        <Route path="/flash-sale" element={<FlashSale />} />
-        <Route path="/bestseller" element={<BestSelling />} />
-        <Route path="/location" element={<LocationSelectionPage />} />
-        <Route path="/notifications" element={<Notifications />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/verify-otp" element={<VerifyOtp />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/privacy" element={<Terms />} />
-        <Route path="/faqs" element={<Faqs />} />
-        <Route path="/support" element={<HelpSupport />} />
+      <Suspense fallback={<PageSkeleton />}>
+        <Routes>
+          {/* Public Browsing Routes (Accessible to Guests) */}
+          <Route path="/" element={<Home />} />
+          <Route path="/categories" element={<Categories />} />
+          <Route path="/sellers" element={<AllSellers />} />
+          <Route path="/store/:sellerId" element={<SellerStore />} />
+          <Route path="/product/:id" element={<ProductDetails />} />
+          <Route path="/wishlist" element={<Wishlist />} />
+          <Route path="/flash-sale" element={<FlashSale />} />
+          <Route path="/bestseller" element={<BestSelling />} />
+          <Route path="/location" element={<LocationSelectionPage />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/verify-otp" element={<VerifyOtp />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Terms />} />
+          <Route path="/faqs" element={<Faqs />} />
+          <Route path="/support" element={<HelpSupport />} />
 
-        {/* Protected User Routes (Requires User Authentication) */}
-        <Route element={<ProtectedRoute role="user" />}>
-          <Route path="/cart" element={<Cart />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/payment" element={<Payment />} />
-          <Route path="/track-order" element={<TrackOrder />} />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/account-information" element={<AccountInfo />} />
-          <Route path="/saved-addresses" element={<SavedAddresses />} />
-          <Route path="/security" element={<Security />} />
-          
-          {/* Transport Routes */}
-          <Route path="/transport" element={<TransportHome />} />
-          <Route path="/transport/register" element={<TransportRegistration />} />
-          <Route path="/transport/location" element={<LocationSelection />} />
-          <Route path="/transport/goods" element={<GoodsDetails />} />
-          <Route path="/transport/vehicle" element={<VehicleSelection />} />
-          <Route path="/transport/summary" element={<FareSummary />} />
-          <Route path="/transport/success" element={<BookingCompleted />} />
-          <Route path="/transport/booking-details" element={<TransportBookingDetails />} />
-        </Route>
-      </Routes>
+          {/* Protected User Routes (Requires User Authentication) */}
+          <Route element={<ProtectedRoute role="user" />}>
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/payment" element={<Payment />} />
+            <Route path="/track-order" element={<TrackOrder />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/account-information" element={<AccountInfo />} />
+            <Route path="/saved-addresses" element={<SavedAddresses />} />
+            <Route path="/security" element={<Security />} />
+            
+            {/* Transport Routes */}
+            <Route path="/transport" element={<TransportHome />} />
+            <Route path="/transport/register" element={<TransportRegistration />} />
+            <Route path="/transport/location" element={<LocationSelection />} />
+            <Route path="/transport/goods" element={<GoodsDetails />} />
+            <Route path="/transport/vehicle" element={<VehicleSelection />} />
+            <Route path="/transport/summary" element={<FareSummary />} />
+            <Route path="/transport/success" element={<BookingCompleted />} />
+            <Route path="/transport/booking-details" element={<TransportBookingDetails />} />
+          </Route>
+        </Routes>
+      </Suspense>
       
       {/* Shared Navigation */}
       {!hideBottomNav && <BottomNav />}

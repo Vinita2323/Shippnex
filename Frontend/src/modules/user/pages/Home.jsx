@@ -111,107 +111,97 @@ const Home = () => {
   const [bestsellerProducts, setBestsellerProducts] = useState([]);
 
   useEffect(() => {
-    const fetchBanners = async () => {
-      try {
-        const res = await bannerService.getBanners();
-        if (res.success && res.banners.length > 0) {
-          const active = res.banners.filter(b => b.status === 'Active');
-          setBanners(active);
-        }
-      } catch (err) {
-        console.error('Failed to load banners:', err);
-      }
-    };
-    const fetchCategories = async () => {
-      try {
-        const res = await categoryService.getCategories();
-        if (res.success && res.categories.length > 0) {
-          const active = res.categories.filter(c => c.status === 'Active');
-          const roots = active.filter(c => !c.parent);
-          setCategories(roots);
-        }
-      } catch (err) {
-        console.error('Failed to load categories:', err);
-      }
-    };
+    let isMounted = true;
 
-    const fetchSellers = async () => {
-      try {
-        const res = await sellerService.getPublicSellers();
-        if (res.success && Array.isArray(res.sellers) && res.sellers.length > 0) {
-          setSellers(res.sellers);
-        }
-      } catch (err) {
-        console.warn('Failed to fetch sellers:', err);
+    const formatItem = (p) => {
+      const salePrice = Number(p.salePrice || p.price || 0);
+      const mrp = Number(p.mrp || p.originalPrice || salePrice);
+      let discountStr = p.discount;
+      if (!discountStr && mrp > salePrice) {
+        const pct = Math.round(((mrp - salePrice) / mrp) * 100);
+        discountStr = `${pct}% OFF`;
       }
-    };
-
-    const fetchHomeProducts = async () => {
-      const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
-
-      const formatItem = (p) => {
-        const salePrice = Number(p.salePrice || p.price || 0);
-        const mrp = Number(p.mrp || p.originalPrice || salePrice);
-        let discountStr = p.discount;
-        if (!discountStr && mrp > salePrice) {
-          const pct = Math.round(((mrp - salePrice) / mrp) * 100);
-          discountStr = `${pct}% OFF`;
-        }
-        return {
-          id: p.id || p.sku || p._id || `p_${Math.random()}`,
-          name: p.name,
-          seller: p.seller || 'Fashion Hub',
-          price: salePrice,
-          originalPrice: mrp,
-          discount: discountStr || '',
-          image: p.image || p.mainImage || grainsImg,
-          unit: p.unit || `${p.unitValue || 1} ${p.unitType || 'kg'}`
-        };
+      return {
+        id: p.id || p.sku || p._id || `p_${Math.random()}`,
+        name: p.name,
+        seller: p.seller || 'Fashion Hub',
+        price: salePrice,
+        originalPrice: mrp,
+        discount: discountStr || '',
+        image: p.image || p.mainImage || grainsImg,
+        unit: p.unit || `${p.unitValue || 1} ${p.unitType || 'kg'}`
       };
-
-      // Flash sale products
-      let flashApi = [];
-      try {
-        const res = await productService.getProducts({ section: 'flash_sale' });
-        if (res && res.products && Array.isArray(res.products)) flashApi = res.products;
-      } catch (err) {}
-
-      const localFlash = localSaved.filter(p => Array.isArray(p.homeSections) && p.homeSections.includes('flash_sale'));
-      const combinedFlash = [];
-      flashApi.forEach(p => {
-        const item = formatItem(p);
-        combinedFlash.push(item);
-      });
-      localFlash.forEach(p => {
-        const item = formatItem(p);
-        if (!combinedFlash.some(c => c.id === item.id || c.name === item.name)) combinedFlash.push(item);
-      });
-      setFlashDeals(combinedFlash);
-
-      // Bestseller products
-      let bestApi = [];
-      try {
-        const res = await productService.getProducts({ section: 'bestseller' });
-        if (res && res.products && Array.isArray(res.products)) bestApi = res.products;
-      } catch (err) {}
-
-      const localBest = localSaved.filter(p => Array.isArray(p.homeSections) && p.homeSections.includes('bestseller'));
-      const combinedBest = [];
-      bestApi.forEach(p => {
-        const item = formatItem(p);
-        combinedBest.push(item);
-      });
-      localBest.forEach(p => {
-        const item = formatItem(p);
-        if (!combinedBest.some(c => c.id === item.id || c.name === item.name)) combinedBest.push(item);
-      });
-      setBestsellerProducts(combinedBest);
     };
 
-    fetchBanners();
-    fetchCategories();
-    fetchSellers();
-    fetchHomeProducts();
+    const loadAllHomeData = async () => {
+      try {
+        const [bannersRes, categoriesRes, sellersRes, flashRes, bestRes] = await Promise.allSettled([
+          bannerService.getBanners(),
+          categoryService.getCategories(),
+          sellerService.getPublicSellers(),
+          productService.getProducts({ section: 'flash_sale' }),
+          productService.getProducts({ section: 'bestseller' })
+        ]);
+
+        if (!isMounted) return;
+
+        // Process Banners
+        if (bannersRes.status === 'fulfilled' && bannersRes.value?.success && Array.isArray(bannersRes.value.banners)) {
+          const active = bannersRes.value.banners.filter(b => b.status === 'Active');
+          if (active.length > 0) setBanners(active);
+        }
+
+        // Process Categories
+        if (categoriesRes.status === 'fulfilled' && categoriesRes.value?.success && Array.isArray(categoriesRes.value.categories)) {
+          const active = categoriesRes.value.categories.filter(c => c.status === 'Active');
+          const roots = active.filter(c => !c.parent);
+          if (roots.length > 0) setCategories(roots);
+        }
+
+        // Process Sellers
+        if (sellersRes.status === 'fulfilled' && sellersRes.value?.success && Array.isArray(sellersRes.value.sellers) && sellersRes.value.sellers.length > 0) {
+          setSellers(sellersRes.value.sellers);
+        }
+
+        // Process Flash Deals
+        const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+        let flashApi = [];
+        if (flashRes.status === 'fulfilled' && flashRes.value?.products && Array.isArray(flashRes.value.products)) {
+          flashApi = flashRes.value.products;
+        }
+        const localFlash = localSaved.filter(p => Array.isArray(p.homeSections) && p.homeSections.includes('flash_sale'));
+        const combinedFlash = [];
+        flashApi.forEach(p => combinedFlash.push(formatItem(p)));
+        localFlash.forEach(p => {
+          const item = formatItem(p);
+          if (!combinedFlash.some(c => c.id === item.id || c.name === item.name)) combinedFlash.push(item);
+        });
+        setFlashDeals(combinedFlash);
+
+        // Process Bestsellers
+        let bestApi = [];
+        if (bestRes.status === 'fulfilled' && bestRes.value?.products && Array.isArray(bestRes.value.products)) {
+          bestApi = bestRes.value.products;
+        }
+        const localBest = localSaved.filter(p => Array.isArray(p.homeSections) && p.homeSections.includes('bestseller'));
+        const combinedBest = [];
+        bestApi.forEach(p => combinedBest.push(formatItem(p)));
+        localBest.forEach(p => {
+          const item = formatItem(p);
+          if (!combinedBest.some(c => c.id === item.id || c.name === item.name)) combinedBest.push(item);
+        });
+        setBestsellerProducts(combinedBest);
+
+      } catch (err) {
+        console.error('[Home] Failed to load home screen data:', err);
+      }
+    };
+
+    loadAllHomeData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Auto-scroll banners every 3.5 seconds with fade transition
@@ -348,7 +338,7 @@ const Home = () => {
               <div className="grid grid-cols-2 gap-3">
                 {searchResults.map(product => (
                   <div key={product.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-                    <img onClick={() => navigate(`/product/${product.id}`)} src={product.image} alt={product.name} className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
+                    <img onClick={() => navigate(`/product/${product.id}`)} src={product.image} alt={product.name} loading="lazy" decoding="async" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
                     <div className="flex flex-col p-3 pt-2">
                       <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{product.name}</h4>
                       <p className="text-[11px] text-slate-400 m-0 mb-0.5">{product.unit}</p>
@@ -454,6 +444,8 @@ const Home = () => {
                   <img 
                     src={getImageUrl(cat.image, grainsImg)} 
                     alt={cat.name} 
+                    loading="lazy"
+                    decoding="async"
                     className="w-10 h-10 object-contain" 
                     onError={(e) => {
                       e.currentTarget.onerror = null;
@@ -469,19 +461,19 @@ const Home = () => {
           ) : (
             <>
               <div className="flex flex-col items-center cursor-pointer group">
-                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={grainsImg} alt="Grains & Flours" className="w-10 h-10 object-contain" /></div>
+                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={grainsImg} alt="Grains & Flours" loading="lazy" decoding="async" className="w-10 h-10 object-contain" /></div>
                 <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Grains &<br/>Flours</span>
               </div>
               <div className="flex flex-col items-center cursor-pointer group">
-                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={oilGheeImg} alt="Oil & Ghee" className="w-10 h-10 object-contain" /></div>
+                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={oilGheeImg} alt="Oil & Ghee" loading="lazy" decoding="async" className="w-10 h-10 object-contain" /></div>
                 <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Oil & Ghee</span>
               </div>
               <div className="flex flex-col items-center cursor-pointer group">
-                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={masalaImg} alt="Spices & Masala" className="w-10 h-10 object-contain" /></div>
+                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={masalaImg} alt="Spices & Masala" loading="lazy" decoding="async" className="w-10 h-10 object-contain" /></div>
                 <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Spices &<br/>Masala</span>
               </div>
               <div className="flex flex-col items-center cursor-pointer group">
-                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={sugarImg} alt="Sugar & Sweeteners" className="w-10 h-10 object-contain" /></div>
+                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)]"><img src={sugarImg} alt="Sugar & Sweeteners" loading="lazy" decoding="async" className="w-10 h-10 object-contain" /></div>
                 <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">Sugar &<br/>Sweeteners</span>
               </div>
             </>
@@ -508,6 +500,8 @@ const Home = () => {
                 <img 
                   src={getImageUrl(prod.image, grainsImg)} 
                   alt={prod.name} 
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover" 
                   onError={(e) => {
                     e.currentTarget.onerror = null;
@@ -581,6 +575,8 @@ const Home = () => {
                 <img 
                   src={seller.banner || 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=600&auto=format&fit=crop&q=80'} 
                   alt={seller.businessName} 
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
@@ -596,6 +592,8 @@ const Home = () => {
                   <img 
                     src={seller.storeLogo || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=160&auto=format&fit=crop&q=80'} 
                     alt={seller.businessName} 
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover rounded-lg"
                   />
                 </div>
@@ -639,6 +637,8 @@ const Home = () => {
                 <img 
                   src={getImageUrl(prod.image, grainsImg)} 
                   alt={prod.name} 
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover" 
                   onError={(e) => {
                     e.currentTarget.onerror = null;
