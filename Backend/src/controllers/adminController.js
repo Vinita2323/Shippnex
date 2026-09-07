@@ -52,7 +52,7 @@ export const getDashboardStats = async (req, res, next) => {
       Order.countDocuments({ orderStatus: { $in: ['Placed', 'Processing', 'Out for Delivery'] } }).catch(() => 0),
       Order.countDocuments({ orderStatus: 'Cancelled' }).catch(() => 0),
       Seller.countDocuments().catch(() => 0),
-      Seller.countDocuments({ status: 'pending' }).catch(() => 0),
+      Seller.countDocuments({ $or: [{ status: 'pending' }, { status: 'under_review' }, { accountStatus: 'under_review' }] }).catch(() => 0),
       Captain.countDocuments().catch(() => 0),
       Captain.countDocuments({ isOnline: true }).catch(() => 0),
       Order.aggregate([
@@ -160,30 +160,50 @@ export const getAllUsers = async (req, res, next) => {
   }
 };
 
+// Fast In-Memory Cache for Admin Listings
+let sellersCache = { data: null, timestamp: 0 };
+let captainsCache = { data: null, timestamp: 0 };
+
+export const invalidateSellersCache = () => { sellersCache = { data: null, timestamp: 0 }; };
+export const invalidateCaptainsCache = () => { captainsCache = { data: null, timestamp: 0 }; };
+
 export const getAllSellers = async (req, res, next) => {
   try {
-    const sellers = await Seller.find()
-      .select('-otp -otpExpiry')
-      .sort({ createdAt: -1 })
-      .lean();
-    return res.status(200).json({
+    const now = Date.now();
+    // Cache for 15 seconds unless forced with ?fresh=true
+    if (!req.query.fresh && sellersCache.data && (now - sellersCache.timestamp < 15000)) {
+      return res.status(200).json(sellersCache.data);
+    }
+
+    const sellers = await Seller.find({})
+      .select('_id businessName ownerName phone email walletBalance pendingBalance totalEarnings commissionPercentage status accountStatus membershipStatus categories warehouseLocation isVerified role createdAt updatedAt')
+      .sort({ _id: -1 })
+      .lean()
+      .exec();
+
+    const payload = {
       success: true,
       count: sellers ? sellers.length : 0,
       sellers: sellers || []
-    });
+    };
+
+    sellersCache = { data: payload, timestamp: now };
+    return res.status(200).json(payload);
   } catch (error) {
+    console.error('[Admin] Error fetching sellers:', error);
     next(error);
   }
 };
 
-// Toggle seller status (Approve/Pending/Reject)
+// Toggle seller status (Approve / Pending / Under Review / Reject / Suspend)
 export const toggleSellerStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status } = req.body; // Expecting 'approved', 'pending', or 'rejected'
+    const rawStatus = (req.body.accountStatus || req.body.status || '').toLowerCase().trim();
 
-    if (!['approved', 'pending', 'rejected'].includes(status)) {
-      return res.status(400).json({ success: false, message: 'Invalid status' });
+    const validStatuses = ['approved', 'under_review', 'pending', 'rejected', 'suspended', 'pending_otp'];
+    if (!validStatuses.includes(rawStatus)) {
+      return res.status(400).json({ success: false, message: `Invalid status: ${rawStatus}` });
     }
 
     const seller = await Seller.findById(id);
@@ -191,12 +211,32 @@ export const toggleSellerStatus = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Seller not found' });
     }
 
-    seller.status = status;
+    if (rawStatus === 'approved') {
+      seller.accountStatus = 'approved';
+      seller.status = 'approved';
+      seller.isVerified = true;
+    } else if (rawStatus === 'rejected') {
+      seller.accountStatus = 'rejected';
+      seller.status = 'rejected';
+    } else if (rawStatus === 'suspended') {
+      seller.accountStatus = 'suspended';
+      seller.status = 'suspended';
+    } else if (rawStatus === 'under_review' || rawStatus === 'pending') {
+      seller.accountStatus = 'under_review';
+      seller.status = 'pending';
+    } else if (rawStatus === 'pending_otp') {
+      seller.accountStatus = 'pending_otp';
+      seller.status = 'pending';
+    }
+
     await seller.save();
+    invalidateSellersCache();
+
+    console.log(`[Admin] Updated Seller "${seller.businessName}" Status to "${seller.accountStatus.toUpperCase()}"`);
 
     res.status(200).json({
       success: true,
-      message: `Seller status updated to ${status}`,
+      message: `Seller status updated to ${seller.accountStatus.toUpperCase()}`,
       seller
     });
   } catch (error) {
@@ -222,6 +262,7 @@ export const updateSellerCommission = async (req, res, next) => {
 
     seller.commissionPercentage = commRate;
     await seller.save();
+    invalidateSellersCache();
 
     console.log(`[Admin] Updated Seller "${seller.businessName}" Commission Percentage to ${commRate}%`);
 
@@ -239,28 +280,43 @@ export const updateSellerCommission = async (req, res, next) => {
 // CAPTAIN (DRIVER) MANAGEMENT CONTROLLERS
 // ==========================================
 
-// Get all Captains
 export const getAllCaptains = async (req, res, next) => {
   try {
-    const captains = await Captain.find().sort({ createdAt: -1 });
-    res.status(200).json({
+    const now = Date.now();
+    // Cache for 15 seconds unless forced with ?fresh=true
+    if (!req.query.fresh && captainsCache.data && (now - captainsCache.timestamp < 15000)) {
+      return res.status(200).json(captainsCache.data);
+    }
+
+    const captains = await Captain.find({})
+      .select('_id name phone email currentAddress city state pinCode vehicleType walletBalance cashCollected status accountStatus membershipStatus isVerified isOnline liveLocation workingArea createdAt updatedAt')
+      .sort({ _id: -1 })
+      .lean()
+      .exec();
+
+    const payload = {
       success: true,
-      count: captains.length,
-      captains,
-    });
+      count: captains ? captains.length : 0,
+      captains: captains || [],
+    };
+
+    captainsCache = { data: payload, timestamp: now };
+    return res.status(200).json(payload);
   } catch (error) {
+    console.error('[Admin] Error fetching captains:', error);
     next(error);
   }
 };
 
-// Toggle Captain Status (Approve / Pending / Reject)
+// Toggle Captain Status (Approve / Pending / Under Review / Reject / Suspend)
 export const toggleCaptainStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status } = req.body; // Expecting 'approved', 'pending', or 'rejected'
+    const rawStatus = (req.body.accountStatus || req.body.status || '').toLowerCase().trim();
 
-    if (!['approved', 'pending', 'rejected'].includes(status)) {
-      return res.status(400).json({ success: false, message: 'Invalid status' });
+    const validStatuses = ['approved', 'under_review', 'pending', 'rejected', 'suspended', 'pending_otp'];
+    if (!validStatuses.includes(rawStatus)) {
+      return res.status(400).json({ success: false, message: `Invalid status: ${rawStatus}` });
     }
 
     const captain = await Captain.findById(id);
@@ -268,14 +324,32 @@ export const toggleCaptainStatus = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Captain not found' });
     }
 
-    captain.status = status;
-    await captain.save();
+    if (rawStatus === 'approved') {
+      captain.accountStatus = 'approved';
+      captain.status = 'approved';
+      captain.isVerified = true;
+    } else if (rawStatus === 'rejected') {
+      captain.accountStatus = 'rejected';
+      captain.status = 'rejected';
+    } else if (rawStatus === 'suspended') {
+      captain.accountStatus = 'suspended';
+      captain.status = 'suspended';
+    } else if (rawStatus === 'under_review' || rawStatus === 'pending') {
+      captain.accountStatus = 'under_review';
+      captain.status = 'pending';
+    } else if (rawStatus === 'pending_otp') {
+      captain.accountStatus = 'pending_otp';
+      captain.status = 'pending';
+    }
 
-    console.log(`[Admin] Updated Captain "${captain.name}" (${captain.phone}) Status to "${status.toUpperCase()}"`);
+    await captain.save();
+    invalidateCaptainsCache();
+
+    console.log(`[Admin] Updated Captain "${captain.name}" (${captain.phone}) Status to "${captain.accountStatus.toUpperCase()}"`);
 
     res.status(200).json({
       success: true,
-      message: `Captain "${captain.name}" status updated to ${status.toUpperCase()}`,
+      message: `Captain "${captain.name}" status updated to ${captain.accountStatus.toUpperCase()}`,
       captain,
     });
   } catch (error) {
@@ -291,6 +365,8 @@ export const deleteCaptain = async (req, res, next) => {
     if (!captain) {
       return res.status(404).json({ success: false, message: 'Captain not found' });
     }
+
+    invalidateCaptainsCache();
 
     res.status(200).json({
       success: true,

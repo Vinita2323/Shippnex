@@ -83,6 +83,18 @@ const userSchema = new mongoose.Schema(
         ref: 'Product',
       },
     ],
+    // Rating fields (Calculated from Captain reviews)
+    ratingAverage: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+    ratingCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     // FCM Push Notification Tokens (SOP Standard)
     fcmTokens: {
       type: [String],

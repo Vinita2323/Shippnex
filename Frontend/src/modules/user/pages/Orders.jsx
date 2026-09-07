@@ -1,10 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, Package, ArrowLeft, SlidersHorizontal, Check, Box, Truck, Loader2 } from 'lucide-react';
+import { Search, Package, ArrowLeft, SlidersHorizontal, Check, Box, Truck, Loader2, Star } from 'lucide-react';
 import { useOrder } from '../context/OrderContext';
-import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
-import { orderService } from '../../../services/authService';
+import { orderService, getCachedUserOrders } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
+import RatingModal from '../../../components/RatingModal';
+
+const formatRawOrdersData = (rawList = []) => {
+  return rawList.map(o => ({
+    id: o.orderId || o._id,
+    _id: o._id,
+    date: o.createdAt 
+      ? new Date(o.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      : 'Recent',
+    status: o.orderStatus || o.status || 'Placed',
+    rejectionReason: o.rejectionReason || '',
+    items: o.items || [],
+    total: o.grandTotal || o.total || 0,
+    itemCount: (o.items || []).reduce((acc, i) => acc + (i.quantity || 1), 0),
+    rawOrder: o,
+  }));
+};
 
 const Orders = () => {
   const navigate = useNavigate();
@@ -22,10 +38,22 @@ const Orders = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [serverOrders, setServerOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
+  
+  // Instant Initial State from Cache (0ms latency)
+  const [serverOrders, setServerOrders] = useState(() => {
+    const cached = getCachedUserOrders();
+    if (cached && Array.isArray(cached.orders) && cached.orders.length > 0) {
+      return formatRawOrdersData(cached.orders);
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = getCachedUserOrders();
+    return !(cached && Array.isArray(cached.orders) && cached.orders.length > 0);
+  });
   const [transportBookings, setTransportBookings] = useState([]);
   const [transportLoading, setTransportLoading] = useState(false);
+  const [ratingRide, setRatingRide] = useState(null);
 
   const filterOptions = ['All', 'Placed', 'Processing', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
@@ -34,20 +62,9 @@ const Orders = () => {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
-        setLoading(true);
         const res = await orderService.getOrders();
         if (res && res.success && res.orders) {
-          const formatted = res.orders.map(o => ({
-            id: o.orderId || o._id,
-            _id: o._id,
-            date: new Date(o.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-            status: o.orderStatus || 'Placed',
-            rejectionReason: o.rejectionReason || '',
-            items: o.items || [],
-            total: o.grandTotal || 0,
-            itemCount: (o.items || []).reduce((acc, i) => acc + (i.quantity || 1), 0),
-          }));
-          setServerOrders(formatted);
+          setServerOrders(formatRawOrdersData(res.orders));
         }
       } catch (err) {
         console.error('Failed to fetch backend orders:', err);
@@ -107,7 +124,7 @@ const Orders = () => {
       <header className="flex flex-col gap-0 py-4 px-5 bg-[#ffece1] z-10 pb-0">
         <div className="flex items-center gap-4 mb-4">
           <ArrowLeft size={24} className="text-[#1e1b4b] cursor-pointer" onClick={() => navigate(-1)} />
-          <h2 className="text-[20px] font-medium m-0 text-[#1e1b4b]">My Bookings</h2>
+          <h2 className="text-[20px] font-medium m-0 text-[#1e1b4b]">My Bookings & Orders</h2>
         </div>
         
         {/* Tabs */}
@@ -116,18 +133,32 @@ const Orders = () => {
             className={`pb-3 text-[14px] font-bold cursor-pointer relative ${activeTab === 'shopping' ? 'text-[#ff5500]' : 'text-slate-500'}`}
             onClick={() => setActiveTab('shopping')}
           >
-            Shopping
+            Shopping Orders
             {activeTab === 'shopping' && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#ff5500] rounded-t-md"></div>}
           </div>
           <div 
             className={`pb-3 text-[14px] font-bold cursor-pointer relative ${activeTab === 'transport' ? 'text-[#ff5500]' : 'text-slate-500'}`}
             onClick={() => setActiveTab('transport')}
           >
-            Vehicles
+            Vehicle Logistics
             {activeTab === 'transport' && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#ff5500] rounded-t-md"></div>}
           </div>
         </div>
       </header>
+
+      {/* Quick Link to Order History */}
+      <div className="bg-[#fff4ed] border-b border-orange-200/70 px-5 py-2.5 flex items-center justify-between text-xs shrink-0">
+        <div className="flex items-center gap-1.5 text-slate-700 font-semibold">
+          <Package size={14} className="text-[#ff5500]" />
+          <span>Looking for complete order history?</span>
+        </div>
+        <button 
+          onClick={() => navigate('/order-history')}
+          className="text-[#ff5500] hover:text-[#d97706] font-extrabold border-none bg-transparent cursor-pointer p-0 underline"
+        >
+          View Order History →
+        </button>
+      </div>
 
       {/* Search & Filters */}
       <div className="px-5 py-4 bg-[#f8fafc] flex gap-3 z-10">
@@ -135,7 +166,7 @@ const Orders = () => {
           <Search size={18} className="text-slate-400 shrink-0" />
           <input 
             type="text" 
-            placeholder="Search orders" 
+            placeholder="Search orders by ID..." 
             className="w-full bg-transparent border-none py-2.5 text-[14px] outline-none text-slate-700 placeholder:text-slate-400"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -185,16 +216,23 @@ const Orders = () => {
       <div className="flex-1 overflow-y-auto px-5 pb-[100px] pt-2 [&::-webkit-scrollbar]:hidden flex flex-col gap-3.5">
         
         {activeTab === 'shopping' ? (
-          filteredOrders.length > 0 ? (
-          filteredOrders.map((order, index) => (
+          loading ? (
+            <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400">
+              <Loader2 size={32} className="animate-spin text-[#ff5500]" />
+              <span className="text-sm font-bold text-slate-700">Loading your orders...</span>
+            </div>
+          ) : filteredOrders.length > 0 ? (
+          filteredOrders.map((order, index) => {
+            const firstItemImg = order.items?.[0]?.image || order.items?.[0]?.product?.mainImage || order.items?.[0]?.product?.image;
+            return (
             <div key={index} className="bg-white rounded-[16px] p-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col gap-3">
               
               {/* Top Row: Icon, ID/Date, Status */}
               <div className="flex items-start justify-between">
                 <div className="flex gap-3 items-center">
                   <div className="w-[44px] h-[44px] rounded-[12px] bg-[#f0f3f6] flex items-center justify-center shrink-0 overflow-hidden">
-                    {order.items[0]?.image ? (
-                      <img src={order.items[0].image} alt="Order Item" className="w-[85%] h-[85%] object-contain mix-blend-multiply" />
+                    {firstItemImg ? (
+                      <img src={firstItemImg} alt="Order Item" className="w-full h-full object-cover" />
                     ) : (
                       <Box size={20} className="text-slate-400" />
                     )}
@@ -218,7 +256,7 @@ const Orders = () => {
                 <div className="flex flex-col items-end gap-0.5">
                   <span className="text-[15px] font-extrabold text-slate-900">₹{order.total}.00</span>
                   <button 
-                    onClick={() => navigate('/track-order', { state: { order } })}
+                    onClick={() => navigate('/track-order', { state: { order: order.rawOrder || order } })}
                     className="bg-transparent border-none text-[#ff5500] hover:text-[#d97706] text-[12px] font-extrabold cursor-pointer p-0 transition-colors"
                   >
                     View Details →
@@ -227,11 +265,18 @@ const Orders = () => {
               </div>
 
             </div>
-          ))
+          );
+        })
         ) : (
           <div className="bg-white rounded-[20px] flex flex-col items-center justify-center py-16 shadow-[0_4px_24px_rgba(0,0,0,0.03)] border border-slate-100 mt-2">
             <Package size={48} className="text-slate-300 mb-4" strokeWidth={1.5} />
-            <span className="text-[15px] font-medium text-slate-600">No shopping orders found.</span>
+            <span className="text-[15px] font-medium text-slate-600">No active shopping orders found.</span>
+            <button 
+              onClick={() => navigate('/order-history')}
+              className="mt-3 px-4 py-2 bg-orange-50 text-[#ff5500] font-bold text-xs rounded-xl border border-orange-200 cursor-pointer"
+            >
+              View Full Order History
+            </button>
           </div>
         )
         ) : (
@@ -289,13 +334,29 @@ const Orders = () => {
 
                   <div className="flex items-center justify-between">
                     <span className="text-[13px] font-bold text-slate-500">{bVehicle}</span>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <span className="text-[14px] font-extrabold text-slate-900">₹{bFare}</span>
+                      {bStatus === 'RIDE_COMPLETED' && (
+                        booking.hasUserRated ? (
+                          <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200/80 px-2.5 py-1 rounded-lg text-[11px] font-extrabold">
+                            <Star size={11} className="fill-amber-400 text-amber-400" />
+                            <span>{booking.userRating}/5</span>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => setRatingRide(booking)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white border-none rounded-lg px-2.5 py-1 text-[11px] font-extrabold cursor-pointer transition-colors shadow-2xs flex items-center gap-1"
+                          >
+                            <Star size={11} className="fill-white" />
+                            <span>Rate</span>
+                          </button>
+                        )
+                      )}
                       <button
                         onClick={() => navigate('/transport/booking-details', { state: { bookingId: bId } })}
-                        className="bg-[#047857] text-white border-none rounded-lg px-3 py-1.5 text-[11px] font-bold cursor-pointer hover:bg-emerald-800 transition-colors"
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 border-none rounded-lg px-2.5 py-1.5 text-[11px] font-bold cursor-pointer transition-colors"
                       >
-                        View Details
+                        Details
                       </button>
                     </div>
                   </div>
@@ -310,6 +371,24 @@ const Orders = () => {
           )
         )}
       </div>
+
+      {/* Rating Modal for Vehicle Logistics */}
+      <RatingModal
+        isOpen={Boolean(ratingRide)}
+        onClose={() => setRatingRide(null)}
+        ride={ratingRide}
+        role="user"
+        onSuccess={(res) => {
+          setTransportBookings((prev) =>
+            prev.map((b) =>
+              (b.bookingId === ratingRide?.bookingId || b._id === ratingRide?._id)
+                ? { ...b, hasUserRated: true, userRating: res.rating?.rating || 5 }
+                : b
+            )
+          );
+          setRatingRide(null);
+        }}
+      />
 
     </div>
   );

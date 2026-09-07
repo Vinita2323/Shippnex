@@ -59,6 +59,26 @@ export const authService = {
     }
   },
 
+  sellerLogin: async (phone, password) => {
+    const response = await API.post('/auth/seller/login', { phone, password });
+    if (response.data.token) {
+      localStorage.setItem('shippnex_seller_token', response.data.token);
+      localStorage.setItem('shippnex_seller_data', JSON.stringify(response.data.seller));
+      registerFCMToken(true, 'seller').catch(() => {});
+    }
+    return response.data;
+  },
+
+  sellerResetPassword: async (phone, otp, newPassword) => {
+    const response = await API.post('/auth/seller/reset-password', { phone, otp, newPassword });
+    if (response.data.token) {
+      localStorage.setItem('shippnex_seller_token', response.data.token);
+      localStorage.setItem('shippnex_seller_data', JSON.stringify(response.data.seller));
+      registerFCMToken(true, 'seller').catch(() => {});
+    }
+    return response.data;
+  },
+
   getSellerProfile: async () => {
     const response = await API.get('/auth/seller/profile');
     if (response.data.seller) {
@@ -88,11 +108,38 @@ export const authService = {
   },
 
   verifyCaptainOtp: async (phone, otp) => {
-    const response = await API.post('/auth/captain/verify-otp', { phone, otp });
+    try {
+      const response = await API.post('/auth/captain/verify-otp', { phone, otp });
+      if (response.data.token) {
+        localStorage.setItem('shippnex_captain_token', response.data.token);
+        localStorage.setItem('shippnex_captain_data', JSON.stringify(response.data.captain));
+        // Register FCM Push Token on login (SOP Step 7)
+        registerFCMToken(true, 'captain').catch(() => {});
+      }
+      return response.data;
+    } catch (error) {
+      if (error.response && error.response.data) {
+        return error.response.data;
+      }
+      throw error;
+    }
+  },
+
+  captainLogin: async (phone, password) => {
+    const response = await API.post('/auth/captain/login', { phone, password });
     if (response.data.token) {
       localStorage.setItem('shippnex_captain_token', response.data.token);
       localStorage.setItem('shippnex_captain_data', JSON.stringify(response.data.captain));
-      // Register FCM Push Token on login (SOP Step 7)
+      registerFCMToken(true, 'captain').catch(() => {});
+    }
+    return response.data;
+  },
+
+  captainResetPassword: async (phone, otp, newPassword) => {
+    const response = await API.post('/auth/captain/reset-password', { phone, otp, newPassword });
+    if (response.data.token) {
+      localStorage.setItem('shippnex_captain_token', response.data.token);
+      localStorage.setItem('shippnex_captain_data', JSON.stringify(response.data.captain));
       registerFCMToken(true, 'captain').catch(() => {});
     }
     return response.data;
@@ -275,13 +322,49 @@ export const addressService = {
   },
 };
 
+// Fast Client-Side Cache for User Orders
+let userOrdersClientCache = { data: null, timestamp: 0 };
+
+export const clearUserOrdersCache = () => {
+  userOrdersClientCache = { data: null, timestamp: 0 };
+  try {
+    sessionStorage.removeItem('shippnex_user_orders_cache');
+  } catch (e) {}
+};
+
+export const getCachedUserOrders = () => {
+  if (userOrdersClientCache.data) return userOrdersClientCache.data;
+  try {
+    const raw = sessionStorage.getItem('shippnex_user_orders_cache');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.orders)) {
+        userOrdersClientCache = { data: parsed, timestamp: Date.now() };
+        return parsed;
+      }
+    }
+  } catch (e) {}
+  return null;
+};
+
 export const orderService = {
   placeOrder: async (orderData) => {
+    clearUserOrdersCache();
     const response = await API.post('/orders', orderData);
     return response.data;
   },
-  getOrders: async () => {
+  getOrders: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && userOrdersClientCache.data && (now - userOrdersClientCache.timestamp < 30000)) {
+      return userOrdersClientCache.data;
+    }
     const response = await API.get('/orders');
+    if (response.data && response.data.success) {
+      userOrdersClientCache = { data: response.data, timestamp: now };
+      try {
+        sessionStorage.setItem('shippnex_user_orders_cache', JSON.stringify(response.data));
+      } catch (e) {}
+    }
     return response.data;
   },
   getOrderById: async (id) => {
@@ -337,18 +420,89 @@ export const walletService = {
   },
 };
 
+// Fast Client-Side In-Memory Cache for Instant UI Rendering
+const adminClientCache = {
+  sellers: { data: null, timestamp: 0 },
+  captains: { data: null, timestamp: 0 },
+  users: { data: null, timestamp: 0 },
+};
+
+export const clearAdminClientCache = (key) => {
+  if (key && adminClientCache[key]) {
+    adminClientCache[key] = { data: null, timestamp: 0 };
+  } else {
+    Object.keys(adminClientCache).forEach(k => {
+      adminClientCache[k] = { data: null, timestamp: 0 };
+    });
+  }
+};
+
+// Fast Client-Side Cache for Captain Dashboard
+let captainDashboardClientCache = {
+  data: (() => {
+    try {
+      const saved = sessionStorage.getItem('shippnex_captain_dashboard_cache');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  })(),
+  timestamp: 0,
+};
+
+export const clearCaptainDashboardClientCache = () => {
+  captainDashboardClientCache = { data: null, timestamp: 0 };
+  try {
+    sessionStorage.removeItem('shippnex_captain_dashboard_cache');
+  } catch (e) {}
+};
+
+export const getCachedCaptainDashboard = () => {
+  if (captainDashboardClientCache.data) return captainDashboardClientCache.data;
+  try {
+    const saved = sessionStorage.getItem('shippnex_captain_dashboard_cache');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      captainDashboardClientCache = { data: parsed, timestamp: Date.now() };
+      return parsed;
+    }
+  } catch (e) {}
+  return null;
+};
+
 export const captainService = {
   // Auth (existing)
-  getAllCaptains: async () => {
+  getAllCaptains: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && adminClientCache.captains.data && (now - adminClientCache.captains.timestamp < 30000)) {
+      return adminClientCache.captains.data;
+    }
     const response = await API.get('/admin/captains');
+    if (response.data && response.data.success) {
+      adminClientCache.captains = { data: response.data, timestamp: now };
+    }
     return response.data;
   },
   toggleCaptainStatus: async (id, status) => {
+    clearAdminClientCache('captains');
+    clearCaptainDashboardClientCache();
+    const response = await API.put(`/admin/captains/${id}/status`, { status });
+    return response.data;
+  },
+  updateCaptainStatus: async (id, status) => {
+    clearAdminClientCache('captains');
+    clearCaptainDashboardClientCache();
     const response = await API.put(`/admin/captains/${id}/status`, { status });
     return response.data;
   },
   deleteCaptain: async (id) => {
+    clearAdminClientCache('captains');
+    clearCaptainDashboardClientCache();
     const response = await API.delete(`/admin/captains/${id}`);
+    return response.data;
+  },
+  getAvailableCaptains: async () => {
+    const response = await API.get('/admin/captains/available');
     return response.data;
   },
 
@@ -358,12 +512,14 @@ export const captainService = {
     return response.data;
   },
   updateProfile: async (data) => {
+    clearCaptainDashboardClientCache();
     const response = await API.put('/captain/profile', data);
     return response.data;
   },
 
   // Status & Location
   updateOnlineStatus: async (isOnline) => {
+    clearCaptainDashboardClientCache();
     const response = await API.put('/captain/status', { isOnline });
     return response.data;
   },
@@ -373,8 +529,18 @@ export const captainService = {
   },
 
   // Dashboard
-  getDashboardStats: async () => {
+  getDashboardStats: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && captainDashboardClientCache.data && (now - captainDashboardClientCache.timestamp < 15000)) {
+      return captainDashboardClientCache.data;
+    }
     const response = await API.get('/captain/dashboard');
+    if (response.data && response.data.success) {
+      captainDashboardClientCache = { data: response.data, timestamp: now };
+      try {
+        sessionStorage.setItem('shippnex_captain_dashboard_cache', JSON.stringify(response.data));
+      } catch (e) {}
+    }
     return response.data;
   },
 
@@ -384,14 +550,17 @@ export const captainService = {
     return response.data;
   },
   acceptJob: async (orderId) => {
+    clearCaptainDashboardClientCache();
     const response = await API.put(`/captain/jobs/${orderId}/accept`);
     return response.data;
   },
   rejectJob: async (orderId) => {
+    clearCaptainDashboardClientCache();
     const response = await API.put(`/captain/jobs/${orderId}/reject`);
     return response.data;
   },
   updateDeliveryStatus: async (orderId, status, payload = {}) => {
+    clearCaptainDashboardClientCache();
     const response = await API.put(`/captain/jobs/${orderId}/status`, { status, ...payload });
     return response.data;
   },
@@ -668,21 +837,46 @@ export const adminService = {
     const response = await API.get('/admin/orders');
     return response.data;
   },
-  getUsers: async () => {
+  getUsers: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && adminClientCache.users.data && (now - adminClientCache.users.timestamp < 30000)) {
+      return adminClientCache.users.data;
+    }
     const response = await API.get('/admin/users');
+    if (response.data && response.data.success) {
+      adminClientCache.users = { data: response.data, timestamp: now };
+    }
     return response.data;
   },
-  getSellers: async () => {
+  getSellers: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && adminClientCache.sellers.data && (now - adminClientCache.sellers.timestamp < 30000)) {
+      return adminClientCache.sellers.data;
+    }
     const response = await API.get('/admin/sellers');
+    if (response.data && response.data.success) {
+      adminClientCache.sellers = { data: response.data, timestamp: now };
+    }
     return response.data;
   },
   toggleSellerStatus: async (id, status) => {
+    clearAdminClientCache('sellers');
     const response = await API.put(`/admin/sellers/${id}/status`, { status });
     return response.data;
   },
   updateSellerCommission: async (id, commissionPercentage) => {
+    clearAdminClientCache('sellers');
     const response = await API.put(`/admin/sellers/${id}/commission`, { commissionPercentage });
     return response.data;
+  },
+  getCaptains: async (forceRefresh = false) => {
+    return captainService.getAllCaptains(forceRefresh);
+  },
+  toggleCaptainStatus: async (id, status) => {
+    return captainService.toggleCaptainStatus(id, status);
+  },
+  deleteCaptain: async (id) => {
+    return captainService.deleteCaptain(id);
   },
   assignCaptainToOrder: async (orderId, captainId, captainEarnings = 0) => {
     const response = await API.put(`/admin/orders/${orderId}/assign-captain`, { captainId, captainEarnings });

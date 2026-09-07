@@ -107,6 +107,17 @@ const productSchema = new mongoose.Schema(
     returnPolicy: {
       type: String,
       default: '7 Days Returnable'
+    },
+    ratingAverage: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+    ratingCount: {
+      type: Number,
+      default: 0,
+      min: 0,
     }
   },
   {

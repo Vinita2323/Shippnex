@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import { captainService } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
+import RatingModal from '../../../components/RatingModal';
 
 const TRANSPORT_STEP_MAP = {
   SEARCHING_CAPTAIN: 1,
@@ -62,6 +63,7 @@ const ActiveDelivery = () => {
   const [proofUploading, setProofUploading] = useState(false);
   const [proofUrl, setProofUrl] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showCaptainRatingModal, setShowCaptainRatingModal] = useState(false);
   const fileInputRef = useRef(null);
 
   const fetchActiveDelivery = useCallback(async () => {
@@ -850,23 +852,41 @@ const ActiveDelivery = () => {
             </p>
             <div className="space-y-2 pt-2">
               <button
-                onClick={() => navigate('/captain/dashboard')}
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  setShowCaptainRatingModal(true);
+                }}
                 className="w-full py-3 bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-xl shadow-md cursor-pointer transition-all text-xs flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-base">star</span>
+                <span>Rate Customer ({recipientName})</span>
+              </button>
+              <button
+                onClick={() => navigate('/captain/dashboard')}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer transition-colors text-xs flex items-center justify-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-base">home</span>
                 <span>Back to Dashboard</span>
-              </button>
-              <button
-                onClick={() => navigate('/captain/jobs?tab=completed')}
-                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer transition-colors text-xs flex items-center justify-center gap-1.5"
-              >
-                <span className="material-symbols-outlined text-base">history</span>
-                <span>View in Completed Trips</span>
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Captain Rates User Modal */}
+      <RatingModal
+        isOpen={showCaptainRatingModal}
+        onClose={() => {
+          setShowCaptainRatingModal(false);
+          navigate('/captain/dashboard');
+        }}
+        ride={activeItem}
+        role="captain"
+        onSuccess={() => {
+          setShowCaptainRatingModal(false);
+          navigate('/captain/dashboard');
+        }}
+      />
 
       {/* Calling Modal */}
       {showCallingModal && (

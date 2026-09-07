@@ -4,6 +4,7 @@ import Captain from '../models/Captain.model.js';
 import CaptainNotification from '../models/CaptainNotification.model.js';
 import CaptainTransaction from '../models/CaptainTransaction.model.js';
 import { getVehicleMatchPattern } from './transportBookingController.js';
+import { invalidateCaptainDashboardCache } from './captainController.js';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -204,6 +205,8 @@ export const acceptTransportRequest = async (req, res, next) => {
       icon: 'local_shipping',
     });
 
+    invalidateCaptainDashboardCache(captainId);
+
     res.status(200).json({
       success: true,
       message: 'Transport request accepted successfully! Please proceed to the pickup location.',
@@ -249,6 +252,7 @@ export const rejectTransportRequest = async (req, res, next) => {
     }
 
     console.log(`[CaptainTransport] Captain ${captainId} rejected Booking ${booking.bookingId}`);
+    invalidateCaptainDashboardCache(captainId);
 
     res.status(200).json({
       success: true,
@@ -413,6 +417,7 @@ export const updateTransportStatus = async (req, res, next) => {
       .populate('vehicleTypeId', 'name slug icon');
 
     console.log(`[CaptainTransport] Booking ${booking.bookingId} status updated to "${status}"`);
+    invalidateCaptainDashboardCache(captainId);
 
     res.status(200).json({
       success: true,
@@ -524,6 +529,7 @@ export const verifyPickupOtp = async (req, res, next) => {
     console.log(
       `[CaptainTransport] Booking ${booking.bookingId} Pickup OTP verified. Ride started. Drop OTP: ${dropOtp}`
     );
+    invalidateCaptainDashboardCache(captainId);
 
     res.status(200).json({
       success: true,
@@ -656,6 +662,7 @@ export const verifyDropOtp = async (req, res, next) => {
     console.log(
       `[CaptainTransport] Booking ${booking.bookingId} completed! Payout ₹${earnings} credited to Captain ${captainId}`
     );
+    invalidateCaptainDashboardCache(captainId);
 
     res.status(200).json({
       success: true,

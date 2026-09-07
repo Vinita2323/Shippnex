@@ -11,10 +11,12 @@ import {
   X,
   ShieldCheck,
   MapPin,
-  FileText
+  FileText,
+  Star,
 } from 'lucide-react';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import { captainService, authService } from '../../../services/authService';
+import RatingBreakdownModal from '../../../components/RatingBreakdownModal';
 
 const CaptainProfile = () => {
   const navigate = useNavigate();
@@ -25,6 +27,7 @@ const CaptainProfile = () => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
+  const [showBreakdownModal, setShowBreakdownModal] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -71,6 +74,8 @@ const CaptainProfile = () => {
       navigate('/captain/personal-details');
     } else if (id === 'wallet') {
       navigate('/captain/wallet');
+    } else if (id === 'ratings') {
+      setShowBreakdownModal(true);
     } else if (id === 'service-areas') {
       navigate('/captain/service-areas');
     } else {
@@ -86,6 +91,16 @@ const CaptainProfile = () => {
       icon: User,
       badge: 'Verified',
       badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    },
+    {
+      id: 'ratings',
+      label: 'Captain Rating & Reviews',
+      sub: profile?.ratingCount > 0
+        ? `⭐ ${profile.ratingAverage.toFixed(1)} based on ${profile.ratingCount} ratings`
+        : 'No customer ratings yet',
+      icon: Star,
+      badge: profile?.ratingCount > 0 ? `⭐ ${profile.ratingAverage.toFixed(1)}` : 'New',
+      badgeColor: 'bg-amber-50 text-amber-800 border-amber-200',
     },
     {
       id: 'wallet',
@@ -141,8 +156,21 @@ const CaptainProfile = () => {
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#002625] to-[#15803d] flex items-center justify-center text-white text-lg font-black shadow-xs shrink-0">
               {captainName.charAt(0).toUpperCase()}
             </div>
-            <div className="min-w-0">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Partner Account</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Partner Account</span>
+                {profile?.ratingCount > 0 && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowBreakdownModal(true);
+                    }}
+                    className="inline-flex items-center gap-0.5 bg-amber-50 text-amber-800 border border-amber-200/80 px-1.5 py-0.2 rounded-full text-[10px] font-black cursor-pointer hover:bg-amber-100"
+                  >
+                    <span>⭐</span> {profile.ratingAverage.toFixed(1)} ({profile.ratingCount})
+                  </span>
+                )}
+              </div>
               <span className="text-sm font-black text-slate-900 block truncate leading-tight mt-0.5">{captainName}</span>
               <span className="text-[11px] text-slate-500 font-medium block">{captainPhone}</span>
             </div>
@@ -283,6 +311,15 @@ const CaptainProfile = () => {
           </div>
         </div>
       )}
+
+      {/* Rating Breakdown Modal */}
+      <RatingBreakdownModal
+        isOpen={showBreakdownModal}
+        onClose={() => setShowBreakdownModal(false)}
+        targetId={profile?._id}
+        targetType="captain"
+        targetName={captainName}
+      />
 
       {/* Bottom Navigation */}
       {!activeModal && <CaptainBottomNav />}

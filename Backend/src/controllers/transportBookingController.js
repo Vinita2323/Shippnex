@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import TransportBooking from '../models/TransportBooking.model.js';
 import VehicleType from '../models/VehicleType.model.js';
 import Captain from '../models/Captain.model.js';
+import Rating from '../models/Rating.model.js';
 import CaptainNotification from '../models/CaptainNotification.model.js';
 import CaptainTransaction from '../models/CaptainTransaction.model.js';
 import { haversineDistance, estimateDuration } from '../utils/haversine.js';
@@ -482,14 +483,38 @@ export const getUserBookings = async (req, res, next) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('captainId', 'name phone vehicleType liveLocation')
+      .populate('captainId', 'name phone vehicleType liveLocation documents.profilePhoto ratingAverage ratingCount')
       .select('-statusHistory -__v');
 
     const total = await TransportBooking.countDocuments(query);
 
+    // Look up ratings submitted by this user for these bookings
+    const bookingIds = bookings.map((b) => b._id);
+    const userRatings = await Rating.find({
+      ride: { $in: bookingIds },
+      reviewerId: new mongoose.Types.ObjectId(userId),
+    }).select('ride rating review feedbackTags createdAt');
+
+    const ratingMap = new Map();
+    userRatings.forEach((r) => {
+      ratingMap.set(r.ride.toString(), r);
+    });
+
+    const enrichedBookings = bookings.map((b) => {
+      const bObj = b.toObject();
+      const userRating = ratingMap.get(b._id.toString());
+      return {
+        ...bObj,
+        hasUserRated: Boolean(userRating),
+        userRating: userRating ? userRating.rating : null,
+        userReview: userRating ? userRating.review : '',
+        userFeedbackTags: userRating ? userRating.feedbackTags : [],
+      };
+    });
+
     res.status(200).json({
       success: true,
-      bookings,
+      bookings: enrichedBookings,
       pagination: {
         total,
         page: parseInt(page),
@@ -516,7 +541,7 @@ export const getActiveBooking = async (req, res, next) => {
       status: { $in: ACTIVE_STATUSES },
     })
       .sort({ createdAt: -1 })
-      .populate('captainId', 'name phone vehicleType liveLocation isOnline')
+      .populate('captainId', 'name phone vehicleType liveLocation isOnline documents.profilePhoto ratingAverage ratingCount')
       .select('-__v');
 
     res.status(200).json({
@@ -545,7 +570,7 @@ export const getBookingById = async (req, res, next) => {
       : { bookingId, user: userId };
 
     const booking = await TransportBooking.findOne(query)
-      .populate('captainId', 'name phone vehicleType documents.profilePhoto liveLocation isOnline')
+      .populate('captainId', 'name phone vehicleType documents.profilePhoto liveLocation isOnline ratingAverage ratingCount')
       .populate('vehicleTypeId', 'name slug icon')
       .select('-__v');
 
@@ -553,7 +578,18 @@ export const getBookingById = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    res.status(200).json({ success: true, booking });
+    const userRating = await Rating.findOne({
+      ride: booking._id,
+      reviewerId: new mongoose.Types.ObjectId(userId),
+    });
+
+    const bObj = booking.toObject();
+    bObj.hasUserRated = Boolean(userRating);
+    bObj.userRating = userRating ? userRating.rating : null;
+    bObj.userReview = userRating ? userRating.review : '';
+    bObj.userFeedbackTags = userRating ? userRating.feedbackTags : [];
+
+    res.status(200).json({ success: true, booking: bObj });
   } catch (error) {
     next(error);
   }

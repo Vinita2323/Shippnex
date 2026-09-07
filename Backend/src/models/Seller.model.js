@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 const sellerSchema = new mongoose.Schema(
   {
@@ -12,6 +13,9 @@ const sellerSchema = new mongoose.Schema(
       required: true,
       unique: true,
       trim: true,
+    },
+    password: {
+      type: String,
     },
     ownerName: { type: String, trim: true },
     email: { type: String, trim: true, lowercase: true },
@@ -66,9 +70,14 @@ const sellerSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    accountStatus: {
+      type: String,
+      enum: ['pending_otp', 'under_review', 'approved', 'rejected', 'suspended'],
+      default: 'pending_otp',
+    },
     status: {
       type: String,
-      enum: ['pending', 'approved', 'rejected'],
+      enum: ['pending', 'approved', 'rejected', 'under_review', 'pending_otp', 'suspended'],
       default: 'pending',
     },
     membershipStatus: {
@@ -104,6 +113,19 @@ const sellerSchema = new mongoose.Schema(
 );
 
 sellerSchema.index({ 'warehouseLocation.location': '2dsphere' }, { sparse: true });
+
+// Hash password before saving
+sellerSchema.pre('save', async function () {
+  if (!this.isModified('password') || !this.password) return;
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+});
+
+// Match password method
+sellerSchema.methods.matchPassword = async function (enteredPassword) {
+  if (!this.password) return false;
+  return await bcrypt.compare(enteredPassword, this.password);
+};
 
 const Seller = mongoose.model('Seller', sellerSchema);
 export default Seller;

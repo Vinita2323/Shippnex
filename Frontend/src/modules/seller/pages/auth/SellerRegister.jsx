@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Store, MapPin, FileText, CheckCircle, Check, Loader2, Search, Navigation, AlertCircle, Crown, Zap, Star, CreditCard , Banknote, Wallet, Building2, Smartphone, UploadCloud, Image, X, FileCheck, Layers} from 'lucide-react';
+import { Store, MapPin, FileText, CheckCircle, Check, Loader2, Search, Navigation, AlertCircle, Crown, Zap, Star, CreditCard, Banknote, Wallet, Building2, Smartphone, UploadCloud, Image, X, FileCheck, Layers, Eye, EyeOff, Lock, ShieldCheck, RotateCcw } from 'lucide-react';
 import { authService, membershipService, categoryService } from '../../../../services/authService';
 import { MapService } from '../../../../services/MapService';
 import LocationSearchModal from '../../../../components/LocationSearchModal';
@@ -38,6 +38,16 @@ const SellerRegister = () => {
 
   const [availableCategories, setAvailableCategories] = useState(FALLBACK_CATEGORIES);
   const [selectedCategories, setSelectedCategories] = useState([]);
+
+  // Password Visibility States
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // OTP Verification States (Step 5)
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [isResendingOtp, setIsResendingOtp] = useState(false);
+  const [resendSuccessMsg, setResendSuccessMsg] = useState('');
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -81,6 +91,8 @@ const SellerRegister = () => {
     businessName: '',
     ownerName: '',
     phone: '',
+    password: '',
+    confirmPassword: '',
     email: '',
     businessType: '',
     storeLogo: '',
@@ -181,11 +193,89 @@ const SellerRegister = () => {
     }));
   };
 
+  // OTP Input Handlers
+  const handleOtpChange = (index, value) => {
+    const clean = value.replace(/\D/g, '');
+    if (clean.length > 1) {
+      const newOtp = [...otp];
+      for (let i = 0; i < clean.length && index + i < 6; i++) {
+        newOtp[index + i] = clean[i];
+      }
+      setOtp(newOtp);
+      const nextIdx = Math.min(index + clean.length, 5);
+      const nextInput = document.getElementById(`seller-reg-otp-${nextIdx}`);
+      if (nextInput) nextInput.focus();
+      return;
+    }
+
+    const newOtp = [...otp];
+    newOtp[index] = clean;
+    setOtp(newOtp);
+
+    if (clean && index < 5) {
+      const nextInput = document.getElementById(`seller-reg-otp-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      const prevInput = document.getElementById(`seller-reg-otp-${index - 1}`);
+      if (prevInput) prevInput.focus();
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setErrorMessage('');
+    setResendSuccessMsg('');
+    try {
+      setIsResendingOtp(true);
+      await authService.sendSellerOtp(formData.phone);
+      setResendSuccessMsg('A new OTP has been sent to your mobile number.');
+    } catch (err) {
+      setErrorMessage(err.response?.data?.message || 'Failed to resend OTP. Please try again.');
+    } finally {
+      setIsResendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtpSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+    const enteredOtp = otp.join('').trim();
+    if (enteredOtp.length < 6) {
+      setErrorMessage('Please enter the full 6-digit verification code');
+      return;
+    }
+
+    try {
+      setIsVerifyingOtp(true);
+      const res = await authService.verifySellerOtp(formData.phone, enteredOtp);
+      if (res && res.success) {
+        setIsSubmitted(true);
+      } else {
+        setErrorMessage(res?.message || 'OTP verification failed. Please try again.');
+      }
+    } catch (err) {
+      setErrorMessage(err.response?.data?.message || err.message || 'Verification failed. Please check the code.');
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
   const nextStep = async (e) => {
     e.preventDefault();
     setErrorMessage('');
 
     if (step === 1) {
+      if (!formData.password || formData.password.length < 6) {
+        setErrorMessage('Password is required and must be at least 6 characters long.');
+        return;
+      }
+      if (formData.password !== formData.confirmPassword) {
+        setErrorMessage('Passwords do not match. Please verify.');
+        return;
+      }
       if (selectedCategories.length === 0) {
         setErrorMessage('Please select at least one store category for your business.');
         return;
@@ -202,6 +292,7 @@ const SellerRegister = () => {
         businessName: formData.businessName,
         ownerName: formData.ownerName,
         phone: formData.phone,
+        password: formData.password,
         email: formData.email,
         businessType: formData.businessType || 'Retail',
         storeLogo: formData.storeLogo,
@@ -247,8 +338,11 @@ const SellerRegister = () => {
                     paymentMethod: 'razorpay'
                   };
                   const res = await authService.registerSeller(finalPayload);
-                  if (res && res.success) setIsSubmitted(true);
-                  else setErrorMessage(res.message || 'Registration failed');
+                  if (res && res.success) {
+                    setStep(5); // Move to OTP Verification
+                  } else {
+                    setErrorMessage(res.message || 'Registration failed');
+                  }
                 } catch (err) {
                   setErrorMessage(err.response?.data?.message || err.message || 'Server error occurred');
                 } finally {
@@ -266,24 +360,6 @@ const SellerRegister = () => {
                 contact: formData.phone,
                 method: 'netbanking'
               },
-              config: {
-                display: {
-                  blocks: {
-                    banks: {
-                      name: 'Pay via Net Banking',
-                      instruments: [
-                        {
-                          method: 'netbanking'
-                        }
-                      ]
-                    }
-                  },
-                  sequence: ['block.banks'],
-                  preferences: {
-                    show_default_blocks: false
-                  }
-                }
-              },
               theme: {
                 color: '#ff5500'
               }
@@ -295,14 +371,14 @@ const SellerRegister = () => {
               setIsSubmitting(false);
             });
             rzp.open();
-            return; // Exit early, submission happens in the handler
+            return;
           }
         }
         
-        // If no plan selected or price is 0, submit directly
+        // Submit directly to register and receive OTP
         const res = await authService.registerSeller(basePayload);
         if (res && res.success) {
-          setIsSubmitted(true);
+          setStep(5); // Move to OTP verification
         } else {
           setErrorMessage(res.message || 'Registration failed');
         }
@@ -317,7 +393,7 @@ const SellerRegister = () => {
 
   const prevStep = () => {
     setErrorMessage('');
-    if (step > 1) setStep(step - 1);
+    if (step > 1 && step <= 4) setStep(step - 1);
   };
 
   return (
@@ -333,53 +409,62 @@ const SellerRegister = () => {
       <div className="sm:mx-auto sm:w-full sm:max-w-xl">
         <div className="bg-white py-8 px-6 shadow-xl sm:rounded-2xl sm:px-10 border border-slate-100">
           {isSubmitted ? (
-            <div className="text-center py-6 animate-in zoom-in-95 duration-300">
-              <div className="w-16 h-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-100">
+            <div className="text-center py-6 animate-in zoom-in-95 duration-300 space-y-4">
+              <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto border border-amber-200">
                 <CheckCircle size={32} />
               </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">Application Submitted!</h3>
-              <p className="text-sm text-slate-500 leading-relaxed mb-6 font-medium">
-                Thank you for applying to sell on ShippNex. Your account application has been received and is currently <strong className="text-slate-800">Under Review</strong> by our admin team.
+              <h3 className="text-2xl font-bold text-slate-800">Registration Successful</h3>
+              <p className="text-sm text-slate-600 leading-relaxed font-normal max-w-md mx-auto">
+                Your account is currently <strong className="text-slate-900 font-semibold">under review</strong>. Once the admin approves your account, you will be able to log in using your <strong className="text-slate-900 font-semibold">mobile number and password</strong>.
               </p>
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-left mb-6 space-y-2">
+              
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-left space-y-2.5 my-4">
                 <div className="flex justify-between text-xs text-slate-600">
-                  <span className="font-semibold">Business Name:</span>
-                  <span className="font-bold text-slate-800">{formData.businessName}</span>
+                  <span className="font-semibold">Business / Store Name:</span>
+                  <span className="font-bold text-slate-900">{formData.businessName}</span>
                 </div>
                 <div className="flex justify-between text-xs text-slate-600">
-                  <span className="font-semibold">Registered Phone:</span>
-                  <span className="font-bold text-slate-800">{formData.phone}</span>
+                  <span className="font-semibold">Registered Phone Number:</span>
+                  <span className="font-bold text-slate-900">+91 {formData.phone}</span>
                 </div>
                 <div className="flex justify-between text-xs text-slate-600">
-                  <span className="font-semibold">Status:</span>
-                  <span className="font-bold text-amber-600 uppercase">Pending Approval</span>
+                  <span className="font-semibold">Account Status:</span>
+                  <span className="font-bold text-amber-600 uppercase">Under Review (Pending Approval)</span>
                 </div>
               </div>
-              <Link to="/seller/login" className="inline-block w-full py-3 bg-[#ff5500] text-white rounded-xl font-bold text-sm shadow-md hover:bg-[#e64d00] transition-colors">
+
+              <Link
+                to="/seller/login"
+                className="inline-flex items-center justify-center w-full py-3 px-4 bg-[#ff5500] text-white rounded-xl font-bold text-sm shadow-md hover:bg-[#e64d00] transition-colors no-underline cursor-pointer"
+              >
                 Go to Seller Login
               </Link>
             </div>
           ) : (
-          <form onSubmit={nextStep}>
+          <form onSubmit={step === 5 ? handleVerifyOtpSubmit : nextStep}>
             {/* Step Indicators */}
             <div className="flex items-center justify-between mb-8 relative">
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-slate-100 -z-0"></div>
               <div className="flex items-center justify-between w-full z-10">
                 <div className={`flex flex-col items-center gap-1.5`}>
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${step >= 1 ? 'bg-[#ff5500] text-white ring-4 ring-orange-50' : 'bg-slate-100 text-slate-400'}`}>1</div>
-                  <span className={`text-xs font-semibold ${step >= 1 ? 'text-[#ff5500]' : 'text-slate-500'}`}>Store Details</span>
+                  <span className={`text-[11px] font-semibold ${step >= 1 ? 'text-[#ff5500]' : 'text-slate-500'}`}>Store</span>
                 </div>
                 <div className={`flex flex-col items-center gap-1.5`}>
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${step >= 2 ? 'bg-[#ff5500] text-white ring-4 ring-orange-50' : 'bg-slate-100 text-slate-400'}`}>2</div>
-                  <span className={`text-xs font-semibold ${step >= 2 ? 'text-[#ff5500]' : 'text-slate-500'}`}>Address</span>
+                  <span className={`text-[11px] font-semibold ${step >= 2 ? 'text-[#ff5500]' : 'text-slate-500'}`}>Address</span>
                 </div>
                 <div className={`flex flex-col items-center gap-1.5`}>
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${step >= 3 ? 'bg-[#ff5500] text-white ring-4 ring-orange-50' : 'bg-slate-100 text-slate-400'}`}>3</div>
-                  <span className={`text-xs font-semibold ${step >= 3 ? 'text-[#ff5500]' : 'text-slate-500'}`}>Documents</span>
+                  <span className={`text-[11px] font-semibold ${step >= 3 ? 'text-[#ff5500]' : 'text-slate-500'}`}>Legal</span>
                 </div>
                 <div className={`flex flex-col items-center gap-1.5`}>
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${step >= 4 ? 'bg-[#ff5500] text-white ring-4 ring-orange-50' : 'bg-slate-100 text-slate-400'}`}>4</div>
-                  <span className={`text-xs font-semibold ${step >= 4 ? 'text-[#ff5500]' : 'text-slate-500'}`}>Membership</span>
+                  <span className={`text-[11px] font-semibold ${step >= 4 ? 'text-[#ff5500]' : 'text-slate-500'}`}>Plan</span>
+                </div>
+                <div className={`flex flex-col items-center gap-1.5`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${step >= 5 ? 'bg-[#ff5500] text-white ring-4 ring-orange-50' : 'bg-slate-100 text-slate-400'}`}>5</div>
+                  <span className={`text-[11px] font-semibold ${step >= 5 ? 'text-[#ff5500]' : 'text-slate-500'}`}>Verify OTP</span>
                 </div>
               </div>
             </div>
@@ -391,19 +476,27 @@ const SellerRegister = () => {
               </div>
             )}
 
+            {resendSuccessMsg && (
+              <div className="mb-5 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-xs font-medium flex items-center gap-2">
+                <CheckCircle size={16} className="text-emerald-500 shrink-0" />
+                <span>{resendSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* STEP 1: STORE & CREDENTIALS */}
             {step === 1 && (
               <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100">
                   <div className="p-2 bg-orange-50 text-[#ff5500] rounded-lg"><Store size={20} /></div>
-                  <h3 className="text-lg font-bold text-slate-800 m-0">Store Information</h3>
+                  <h3 className="text-lg font-bold text-slate-800 m-0">Store Information & Password</h3>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Business / Store Name</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Business / Store Name *</label>
                     <input type="text" name="businessName" value={formData.businessName} onChange={handleInputChange} required className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-[#ff5500] font-medium text-sm transition-all" placeholder="e.g. Super Mart Online" />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Owner Full Name</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Owner Full Name *</label>
                     <input type="text" name="ownerName" value={formData.ownerName} onChange={handleInputChange} required className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-[#ff5500] font-medium text-sm transition-all" placeholder="Your Name" />
                   </div>
                   <div>
@@ -416,13 +509,62 @@ const SellerRegister = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Phone Number</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Registered Mobile Number *</label>
                     <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} required maxLength={10} className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-[#ff5500] font-medium text-sm transition-all" placeholder="10-digit mobile" />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Email Address</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Email Address *</label>
                     <input type="email" name="email" value={formData.email} onChange={handleInputChange} required className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-[#ff5500] font-medium text-sm transition-all" placeholder="store@example.com" />
                   </div>
+
+                  {/* Password Field */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Create Password *</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        name="password"
+                        value={formData.password}
+                        onChange={handleInputChange}
+                        required
+                        minLength={6}
+                        className="w-full px-3.5 py-2.5 pr-10 border border-slate-200 rounded-xl outline-none focus:border-[#ff5500] font-medium text-sm transition-all"
+                        placeholder="At least 6 characters"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer p-0"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Confirm Password Field */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Confirm Password *</label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleInputChange}
+                        required
+                        minLength={6}
+                        className="w-full px-3.5 py-2.5 pr-10 border border-slate-200 rounded-xl outline-none focus:border-[#ff5500] font-medium text-sm transition-all"
+                        placeholder="Re-enter password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer p-0"
+                      >
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="col-span-2">
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">Store Logo / Image</label>
                     <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-[#ff5500] hover:file:bg-orange-100 cursor-pointer" />
@@ -470,6 +612,7 @@ const SellerRegister = () => {
               </div>
             )}
 
+            {/* STEP 2: ADDRESS */}
             {step === 2 && (
               <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
@@ -480,7 +623,6 @@ const SellerRegister = () => {
                   <span className="text-xs font-semibold text-slate-400">Powered by Google Maps</span>
                 </div>
 
-                {/* Map Quick Action Buttons */}
                 <div className="grid grid-cols-2 gap-2.5">
                   <button 
                     type="button" 
@@ -527,6 +669,7 @@ const SellerRegister = () => {
               </div>
             )}
 
+            {/* STEP 3: LEGAL DOCUMENTS */}
             {step === 3 && (
               <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100">
@@ -538,7 +681,6 @@ const SellerRegister = () => {
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
-                  {/* GST Details & Photo */}
                   <div className="col-span-2 space-y-2 p-3.5 bg-slate-50/70 border border-slate-200 rounded-2xl">
                     <label className="block text-sm font-bold text-slate-800">
                       GST Registration <span className="text-slate-400 font-normal">(Optional)</span>
@@ -552,7 +694,6 @@ const SellerRegister = () => {
                       placeholder="e.g. 22AAAAA0000A1Z5" 
                     />
                     
-                    {/* GST Document / Photo Upload */}
                     <div>
                       <span className="block text-xs font-semibold text-slate-600 mb-1.5">GST Certificate / Document Photo</span>
                       {formData.gstPhoto ? (
@@ -591,7 +732,6 @@ const SellerRegister = () => {
                     </div>
                   </div>
 
-                  {/* PAN Number */}
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">PAN Number *</label>
                     <input 
@@ -605,7 +745,6 @@ const SellerRegister = () => {
                     />
                   </div>
 
-                  {/* FSSAI License */}
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">FSSAI License <span className="text-slate-400 font-normal">(Optional)</span></label>
                     <input 
@@ -618,7 +757,6 @@ const SellerRegister = () => {
                     />
                   </div>
 
-                  {/* Bank Passbook / Cheque Photo */}
                   <div className="col-span-2 space-y-2 p-3.5 bg-slate-50/70 border border-slate-200 rounded-2xl">
                     <label className="block text-sm font-bold text-slate-800">
                       Bank Account Proof <span className="text-[#ff5500]">*</span>
@@ -659,18 +797,11 @@ const SellerRegister = () => {
                       </label>
                     )}
                   </div>
-
-                  {/* Verification Notice */}
-                  <div className="col-span-2 p-3 bg-blue-50/60 border border-blue-100 rounded-xl flex items-center gap-2.5">
-                    <CheckCircle size={18} className="text-blue-500 shrink-0" />
-                    <span className="text-xs font-medium text-blue-800">
-                      All uploaded business & banking documents are securely stored and verified during admin onboarding.
-                    </span>
-                  </div>
                 </div>
               </div>
             )}
 
+            {/* STEP 4: MEMBERSHIP */}
             {step === 4 && (
               <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
@@ -694,7 +825,7 @@ const SellerRegister = () => {
                   </div>
                 ) : plans.length === 0 ? (
                   <div className="p-4 bg-slate-50 text-slate-500 text-sm text-center rounded-xl border border-slate-200">
-                    No membership plans available right now. You can skip this step and purchase later.
+                    No membership plans available right now. You can skip this step and proceed with registration.
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
@@ -725,69 +856,98 @@ const SellerRegister = () => {
                     })}
                   </div>
                 )}
+              </div>
+            )}
 
-                {formData.planId && (
-                  <div className="mt-6 animate-in fade-in duration-300">
-                    <h3 className="text-[15px] font-bold text-slate-900 mb-3 text-left">Payment Method</h3>
-                    <div className="space-y-3">
-                      {[
-                        { 
-                          id: 'netbanking', 
-                          title: 'Net Banking', 
-                          subtitle: 'Pay securely via Bank Account (SBI, HDFC, ICICI, Axis, PNB & more)', 
-                          icon: Building2, 
-                          color: 'text-[#ff5500]', 
-                          bg: 'bg-orange-50' 
-                        },
-                      ].map(method => {
-                        const isSelected = selectedPaymentMethod === method.id;
-                        return (
-                          <div
-                            key={method.id}
-                            onClick={() => setSelectedPaymentMethod(method.id)}
-                            className={`flex items-center justify-between p-4 rounded-[14px] border-2 cursor-pointer transition-all ${isSelected ? 'border-[#ff5500] bg-orange-50/10 shadow-xs' : 'border-slate-100 bg-white hover:border-slate-200'}`}
-                          >
-                            <div className="flex items-center gap-4">
-                              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isSelected ? 'bg-[#ff5500] text-white' : method.bg + ' ' + method.color}`}>
-                                <method.icon size={20} strokeWidth={isSelected ? 2.5 : 2} />
-                              </div>
-                              <div className="text-left">
-                                <h4 className="text-[15px] font-bold text-slate-900">{method.title}</h4>
-                                <p className="text-[13px] text-slate-500 font-medium">{method.subtitle}</p>
-                              </div>
-                            </div>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-[#ff5500] bg-[#ff5500]' : 'border-slate-200'}`}>
-                              {isSelected && <Check size={14} strokeWidth={3} className="text-white" />}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+            {/* STEP 5: IN-FLOW OTP VERIFICATION SCREEN */}
+            {step === 5 && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 py-2">
+                <div className="text-center space-y-1.5">
+                  <div className="w-12 h-12 bg-orange-50 text-[#ff5500] rounded-full mx-auto flex items-center justify-center border border-orange-200 mb-2">
+                    <ShieldCheck size={26} />
                   </div>
-                )}
+                  <h3 className="text-xl font-bold text-slate-900">Verify Mobile Number</h3>
+                  <p className="text-xs text-slate-500 font-normal">
+                    Enter the 6-digit OTP sent to <strong className="font-semibold text-slate-800">+91 {formData.phone}</strong>
+                  </p>
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtp(['1', '2', '3', '4', '5', '6']);
+                        setErrorMessage('');
+                      }}
+                      title="Click to fill test OTP 123456"
+                      className="text-[11px] text-orange-600 bg-orange-50 border border-orange-200/80 px-2.5 py-1 rounded-md font-mono hover:bg-orange-100 transition-colors cursor-pointer"
+                    >
+                      ⚡ Test OTP: 123456 (Click to fill)
+                    </button>
+                  </div>
+                </div>
+
+                {/* 6 Digit OTP Boxes */}
+                <div className="flex justify-between gap-2 py-2">
+                  {otp.map((digit, index) => (
+                    <input
+                      key={index}
+                      id={`seller-reg-otp-${index}`}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleOtpChange(index, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                      className="flex-1 min-w-0 aspect-square max-h-[52px] text-center text-xl font-bold text-slate-900 border border-slate-200 rounded-xl outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-orange-100 bg-slate-50 transition-all"
+                    />
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-500 font-normal">
+                  <span>Didn't receive code?</span>
+                  <button
+                    type="button"
+                    disabled={isResendingOtp}
+                    onClick={handleResendOtp}
+                    className="text-[#ff5500] font-bold hover:underline flex items-center gap-1 bg-transparent border-none cursor-pointer disabled:opacity-50"
+                  >
+                    <RotateCcw size={12} className={isResendingOtp ? 'animate-spin' : ''} />
+                    {isResendingOtp ? 'Sending...' : 'Resend OTP'}
+                  </button>
+                </div>
               </div>
             )}
 
             <div className="mt-8 flex justify-between gap-4">
-              {step > 1 ? (
+              {step > 1 && step <= 4 ? (
                 <button type="button" onClick={prevStep} disabled={isSubmitting} className="flex-1 py-2.5 px-4 border-2 border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50">
                   Back
+                </button>
+              ) : step === 5 ? (
+                <button type="button" onClick={() => setStep(1)} className="flex-1 py-2.5 px-4 border-2 border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors text-center cursor-pointer">
+                  Edit Details
                 </button>
               ) : (
                 <Link to="/seller/login" className="flex-1 py-2.5 px-4 border-2 border-slate-200 rounded-xl shadow-sm text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors text-center cursor-pointer">
                   Cancel
                 </Link>
               )}
-              <button type="submit" disabled={isSubmitting} className="flex-1 py-2.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-[#ff5500] hover:bg-[#e64d00] transition-colors cursor-pointer disabled:opacity-70 flex justify-center items-center gap-2">
+              
+              <button
+                type="submit"
+                disabled={isSubmitting || isVerifyingOtp || (step === 5 && otp.join('').length < 6)}
+                className="flex-1 py-2.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-[#ff5500] hover:bg-[#e64d00] transition-colors cursor-pointer disabled:opacity-70 flex justify-center items-center gap-2"
+              >
                 {isSubmitting ? (
                   <><Loader2 size={16} className="animate-spin" /> Submitting...</>
+                ) : isVerifyingOtp ? (
+                  <><Loader2 size={16} className="animate-spin" /> Verifying OTP...</>
                 ) : (
-                  step === 4 ? 'Submit Application' : 'Continue'
+                  step === 4 ? 'Submit Application' : (step === 5 ? 'Verify OTP & Complete' : 'Continue')
                 )}
               </button>
             </div>
           </form>
-          )}
+        )}
         </div>
       </div>
 

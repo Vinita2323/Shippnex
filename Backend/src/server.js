@@ -28,6 +28,8 @@ import policyRoutes from './routes/policyRoutes.js';
 import fcmTokenRoutes from './routes/fcmTokenRoutes.js';
 import sellerRoutes from './routes/sellerRoutes.js';
 import profileEditRequestRoutes from './routes/profileEditRequestRoutes.js';
+import ratingRoutes from './routes/ratingRoutes.js';
+import reviewRoutes from './routes/reviewRoutes.js';
 import compression from 'compression';
 
 import { fileURLToPath } from 'url';
@@ -90,6 +92,9 @@ const registerRoutes = (prefix = '') => {
   app.use(`${prefix}/transport/vehicles`, vehicleTypeRoutes);
   app.use(`${prefix}/transport/bookings`, transportBookingRoutes);
   app.use(`${prefix}/profile-edit-requests`, profileEditRequestRoutes);
+  app.use(`${prefix}/ratings`, ratingRoutes);
+  app.use(`${prefix}/transport/ratings`, ratingRoutes);
+  app.use(`${prefix}/reviews`, reviewRoutes);
 };
 
 app.use('', healthRoutes);

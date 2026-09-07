@@ -15,11 +15,18 @@ export const protect = (requiredRole) => {
           process.env.JWT_SECRET || 'shippnex_secret'
         );
 
-        if (requiredRole && decoded.role !== requiredRole) {
-          return res.status(403).json({
-            success: false,
-            message: `Forbidden: Access restricted to ${requiredRole}`,
-          });
+        if (requiredRole) {
+          const isAllowed = Array.isArray(requiredRole)
+            ? requiredRole.includes(decoded.role)
+            : decoded.role === requiredRole;
+
+          if (!isAllowed) {
+            const roleStr = Array.isArray(requiredRole) ? requiredRole.join(' or ') : requiredRole;
+            return res.status(403).json({
+              success: false,
+              message: `Forbidden: Access restricted to ${roleStr}`,
+            });
+          }
         }
 
         req.user = decoded;

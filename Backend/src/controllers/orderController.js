@@ -495,6 +495,8 @@ export const placeOrder = async (req, res, next) => {
       }
     }
 
+    invalidateUserOrdersCache(userId);
+
     res.status(201).json({
       success: true,
       message: 'Order placed successfully!',
@@ -516,16 +518,45 @@ export const placeOrder = async (req, res, next) => {
   }
 };
 
-// Get User Orders
+// In-memory cache for user orders
+const userOrdersCache = new Map();
+
+export const invalidateUserOrdersCache = (userId) => {
+  if (userId) {
+    userOrdersCache.delete(String(userId));
+  } else {
+    userOrdersCache.clear();
+  }
+};
+
+// Get User Orders (Ultra-Fast Response with In-Memory Caching & Lean Projection)
 export const getUserOrders = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const orders = await Order.find({ user: userId }).sort({ createdAt: -1 }).lean();
+    const userId = String(req.user.id);
+    const now = Date.now();
 
-    res.status(200).json({
+    // Cache hit (15 seconds TTL)
+    if (!req.query.fresh && userOrdersCache.has(userId)) {
+      const cached = userOrdersCache.get(userId);
+      if (now - cached.timestamp < 15000) {
+        return res.status(200).json(cached.data);
+      }
+    }
+
+    const orders = await Order.find({ user: userId })
+      .select('orderId items shippingAddress deliverySlot paymentMethod paymentStatus orderStatus sellerStatus rejectionReason itemsTotal shippingFee discount gst grandTotal createdAt updatedAt')
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+
+    const responsePayload = {
       success: true,
-      orders,
-    });
+      orders: orders || [],
+    };
+
+    userOrdersCache.set(userId, { data: responsePayload, timestamp: now });
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
   }

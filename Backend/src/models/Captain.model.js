@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 const captainSchema = new mongoose.Schema(
   {
@@ -12,6 +13,9 @@ const captainSchema = new mongoose.Schema(
       required: true,
       unique: true,
       trim: true,
+    },
+    password: {
+      type: String,
     },
     email: { type: String, trim: true, lowercase: true },
     alternateMobile: { type: String, trim: true },
@@ -73,9 +77,14 @@ const captainSchema = new mongoose.Schema(
       panCardNumber: { type: String, trim: true },
     },
 
+    accountStatus: {
+      type: String,
+      enum: ['pending_otp', 'under_review', 'approved', 'rejected', 'suspended'],
+      default: 'pending_otp',
+    },
     status: {
       type: String,
-      enum: ['pending', 'approved', 'rejected'],
+      enum: ['pending', 'approved', 'rejected', 'under_review', 'pending_otp', 'suspended'],
       default: 'pending',
     },
     membershipStatus: {
@@ -121,6 +130,18 @@ const captainSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Rating fields (Calculated from User reviews)
+    ratingAverage: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+    ratingCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     // FCM Push Notification Tokens (SOP Standard)
     fcmTokens: {
       type: [String],
@@ -138,6 +159,19 @@ const captainSchema = new mongoose.Schema(
 );
 
 captainSchema.index({ liveLocation: '2dsphere' });
+
+// Hash password before saving
+captainSchema.pre('save', async function () {
+  if (!this.isModified('password') || !this.password) return;
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+});
+
+// Match password method
+captainSchema.methods.matchPassword = async function (enteredPassword) {
+  if (!this.password) return false;
+  return await bcrypt.compare(enteredPassword, this.password);
+};
 
 const Captain = mongoose.model('Captain', captainSchema);
 export default Captain;

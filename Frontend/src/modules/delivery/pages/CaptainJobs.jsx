@@ -4,6 +4,7 @@ import CaptainBottomNav from '../components/CaptainBottomNav';
 import { captainService } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
 import { markJobAsDismissed } from '../utils/jobDismissal';
+import RatingModal from '../../../components/RatingModal';
 
 const CaptainJobs = () => {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ const CaptainJobs = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [acceptedJob, setAcceptedJob] = useState(null);
   const [selectedDetailJob, setSelectedDetailJob] = useState(null);
+  const [ratingJob, setRatingJob] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [transportRequests, setTransportRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -496,16 +498,40 @@ const CaptainJobs = () => {
 
                     {/* Actions */}
                     <div className="flex gap-2 pt-0.5">
-                      <button
-                        onClick={() => setSelectedDetailJob(order)}
-                        className={`${activeTab === 'completed' ? 'w-full' : 'w-1/2'} bg-slate-50 hover:bg-slate-100 border border-slate-200/90 py-2 rounded-lg text-xs font-bold text-slate-800 flex items-center justify-center gap-1 transition-colors cursor-pointer`}
-                      >
-                        <span className="material-symbols-outlined text-[16px]">info</span>
-                        <span>View Details</span>
-                      </button>
-
-                      {activeTab !== 'completed' && (
+                      {activeTab === 'completed' ? (
                         <>
+                          <button
+                            onClick={() => setSelectedDetailJob(order)}
+                            className="flex-1 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 py-2 rounded-lg text-xs font-bold text-slate-800 flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">info</span>
+                            <span>Details</span>
+                          </button>
+                          {isTransport && (
+                            order.hasCaptainRated ? (
+                              <span className="px-3 py-2 bg-amber-50 text-amber-800 border border-amber-200/80 rounded-lg text-xs font-bold flex items-center gap-1 shrink-0">
+                                <span>⭐</span> Rated {order.captainRating}/5
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => setRatingJob(order)}
+                                className="flex-1 bg-[#15803d] hover:bg-[#166534] text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 shadow-2xs transition-colors cursor-pointer border-none"
+                              >
+                                <span className="material-symbols-outlined text-sm">star</span>
+                                <span>Rate User</span>
+                              </button>
+                            )
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setSelectedDetailJob(order)}
+                            className="w-1/2 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 py-2 rounded-lg text-xs font-bold text-slate-800 flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">info</span>
+                            <span>View Details</span>
+                          </button>
                           {job.captainStatus === 'Assigned' ? (
                             <button
                               onClick={() => handleAcceptOrder(order)}
@@ -747,6 +773,24 @@ const CaptainJobs = () => {
           </div>
         </div>
       )}
+
+      {/* Rating Modal for Captain rating user */}
+      <RatingModal
+        isOpen={Boolean(ratingJob)}
+        onClose={() => setRatingJob(null)}
+        ride={ratingJob}
+        role="captain"
+        onSuccess={(res) => {
+          setJobs((prev) =>
+            prev.map((j) =>
+              (j.bookingId === ratingJob?.bookingId || j._id === ratingJob?._id)
+                ? { ...j, hasCaptainRated: true, captainRating: res.rating?.rating || 5 }
+                : j
+            )
+          );
+          setRatingJob(null);
+        }}
+      />
 
       <CaptainBottomNav />
     </div>

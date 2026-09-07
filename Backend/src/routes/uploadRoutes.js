@@ -7,7 +7,7 @@ import { uploadToCloudinary } from '../config/cloudinary.js';
 const router = express.Router();
 
 // Supported subfolders for clean organization
-const ALLOWED_FOLDERS = ['banners', 'products', 'categories', 'profiles', 'misc'];
+const ALLOWED_FOLDERS = ['banners', 'products', 'categories', 'profiles', 'reviews', 'misc'];
 
 // Configure Multer dynamic storage destination based on folder parameter
 const storage = multer.diskStorage({

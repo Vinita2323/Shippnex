@@ -7,6 +7,7 @@ import {
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { productService } from '../../../services/authService';
+import productReviewService from '../../../services/productReviewService';
 import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
 import oilGheeImg from '../../../assets/user/categories/OilGhee-removebg-preview.png';
 import masalaImg from '../../../assets/user/categories/masala-removebg-preview.png';
@@ -39,6 +40,8 @@ const ProductDetails = () => {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [reviewsData, setReviewsData] = useState(null);
+  const [loadingReviews, setLoadingReviews] = useState(true);
 
   React.useEffect(() => {
     const fetchProductDetails = async () => {
@@ -57,7 +60,24 @@ const ProductDetails = () => {
         setLoading(false);
       }
     };
+    
+    const fetchReviews = async () => {
+      if (!id) return;
+      try {
+        setLoadingReviews(true);
+        const res = await productReviewService.getProductReviews(id);
+        if (res && res.success) {
+          setReviewsData(res);
+        }
+      } catch (err) {
+        console.warn('Failed to load product reviews:', err);
+      } finally {
+        setLoadingReviews(false);
+      }
+    };
+
     fetchProductDetails();
+    fetchReviews();
   }, [id]);
 
   const similarProducts = [
@@ -223,9 +243,13 @@ const ProductDetails = () => {
           </div>
 
           <div className="flex items-center gap-1 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md shrink-0">
-            <span className="text-[11px] font-bold text-amber-800">4.5</span>
+            <span className="text-[11px] font-bold text-amber-800">
+              {reviewsData?.averageRating ? reviewsData.averageRating.toFixed(1) : (product.ratingAverage ? Number(product.ratingAverage).toFixed(1) : '4.8')}
+            </span>
             <Star size={11} className="text-amber-500 fill-amber-500" />
-            <span className="text-[10px] text-amber-600 font-medium">(128)</span>
+            <span className="text-[10px] text-amber-600 font-medium">
+              ({reviewsData?.totalRatings !== undefined ? reviewsData.totalRatings : (product.ratingCount || 0)})
+            </span>
           </div>
         </div>
 
@@ -341,6 +365,137 @@ const ProductDetails = () => {
             )}
           </div>
 
+        </div>
+
+        {/* Ratings & Customer Reviews Section */}
+        <div className="pt-2 border-t border-slate-100 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-[13px] font-bold text-slate-900 m-0">Ratings & Reviews</h3>
+              <p className="text-[11px] text-slate-400 m-0">Verified customer feedback</p>
+            </div>
+            {reviewsData && reviewsData.totalRatings > 0 && (
+              <span className="text-xs font-bold text-[#ff5500] bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200/60">
+                {reviewsData.totalRatings} {reviewsData.totalRatings === 1 ? 'Review' : 'Reviews'}
+              </span>
+            )}
+          </div>
+
+          {/* Overall Rating & Breakdown Score Card */}
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-4">
+            <div className="flex flex-col items-center justify-center pr-3 border-r border-slate-200/70 shrink-0 min-w-[75px]">
+              <span className="text-2xl font-black text-slate-900 leading-none">
+                {reviewsData?.averageRating ? reviewsData.averageRating.toFixed(1) : (product.ratingAverage ? Number(product.ratingAverage).toFixed(1) : '4.8')}
+              </span>
+              <div className="flex items-center gap-0.5 my-1">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star
+                    key={s}
+                    size={11}
+                    className={
+                      s <= Math.round(reviewsData?.averageRating || product.ratingAverage || 4.8)
+                        ? 'fill-amber-400 text-amber-400'
+                        : 'fill-slate-200 text-slate-200'
+                    }
+                  />
+                ))}
+              </div>
+              <span className="text-[10px] text-slate-400 font-medium">
+                {reviewsData?.totalRatings !== undefined ? reviewsData.totalRatings : (product.ratingCount || 0)} Ratings
+              </span>
+            </div>
+
+            {/* Distribution Progress Bars */}
+            <div className="flex-1 space-y-1">
+              {[5, 4, 3, 2, 1].map((stars) => {
+                const count = reviewsData?.breakdown?.[stars] || 0;
+                const total = reviewsData?.totalRatings || 0;
+                const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+
+                return (
+                  <div key={stars} className="flex items-center gap-2 text-[10px]">
+                    <span className="font-bold text-slate-600 w-3 text-right">{stars}★</span>
+                    <div className="flex-1 h-1.5 rounded-full bg-slate-200/80 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-amber-400 transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="text-slate-400 font-medium w-5 text-right">{count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Customer Reviews List */}
+          {reviewsData && reviewsData.reviews && reviewsData.reviews.length > 0 ? (
+            <div className="space-y-2.5 mt-1">
+              {reviewsData.reviews.slice(0, 5).map((rev, rIdx) => (
+                <div key={rIdx} className="p-3 rounded-xl bg-white border border-slate-100 shadow-2xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-orange-100 text-[#ff5500] font-bold text-[10px] flex items-center justify-center">
+                        {(rev.user?.name || 'U').charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-xs font-bold text-slate-800">{rev.user?.name || 'Verified Customer'}</span>
+                    </div>
+
+                    <span className="text-[10px] text-slate-400 font-medium">{rev.date}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          size={11}
+                          className={s <= rev.rating ? 'fill-amber-400 text-amber-400' : 'fill-slate-200 text-slate-200'}
+                        />
+                      ))}
+                    </div>
+                    {rev.isVerifiedPurchase && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/70 flex items-center gap-0.5">
+                        <Check size={10} strokeWidth={3} /> Verified Purchase
+                      </span>
+                    )}
+                  </div>
+
+                  {rev.review && (
+                    <p className="text-xs text-slate-600 m-0 leading-relaxed font-normal">{rev.review}</p>
+                  )}
+
+                  {rev.feedbackTags && rev.feedbackTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {rev.feedbackTags.map((t, tIdx) => (
+                        <span key={tIdx} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {rev.images && rev.images.length > 0 && (
+                    <div className="flex gap-1.5 pt-1 overflow-x-auto">
+                      {rev.images.map((imgUrl, iIdx) => (
+                        <a key={iIdx} href={imgUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                          <img
+                            src={imgUrl}
+                            alt={`Review photo ${iIdx + 1}`}
+                            className="w-12 h-12 rounded-lg object-cover border border-slate-200"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-4 px-3 text-center bg-slate-50/70 rounded-xl border border-dashed border-slate-200">
+              <p className="text-xs text-slate-500 m-0">No customer reviews yet. Be the first to review after purchasing!</p>
+            </div>
+          )}
         </div>
 
         {/* Similar Items Carousel */}

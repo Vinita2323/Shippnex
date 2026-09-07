@@ -2,31 +2,47 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import IncomingGigModal from '../components/IncomingGigModal';
-import { captainService } from '../../../services/authService';
+import { captainService, getCachedCaptainDashboard } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
 import { markJobAsDismissed, isJobDismissed } from '../utils/jobDismissal';
 import { MapService } from '../../../services/MapService';
 
 const CaptainDashboard = () => {
   const navigate = useNavigate();
+  const cachedInit = getCachedCaptainDashboard();
+
   const [isOnline, setIsOnline] = useState(() => {
+    if (cachedInit?.stats?.isOnline !== undefined) return cachedInit.stats.isOnline;
     const saved = localStorage.getItem('shippnex_captain_online');
     return saved !== null ? saved === 'true' : true;
   });
-  const [activeDay, setActiveDay] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
+  const [activeDay, setActiveDay] = useState(() => {
+    const today = new Date();
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return days[today.getDay()];
+  });
+  const [loading, setLoading] = useState(!cachedInit);
+  const [stats, setStats] = useState(() => cachedInit?.stats || {
     todayEarnings: 0,
     totalBookings: 0,
     deliveredToday: 0,
     pendingCount: 0,
   });
-  const [pendingOrders, setPendingOrders] = useState([]);
-  const [transportRequests, setTransportRequests] = useState([]);
-  const [activeTransport, setActiveTransport] = useState(null);
+  const [pendingOrders, setPendingOrders] = useState(() => cachedInit?.pendingOrders || []);
+  const [transportRequests, setTransportRequests] = useState(() => cachedInit?.transportRequests || []);
+  const [activeTransport, setActiveTransport] = useState(() => cachedInit?.activeTransport || null);
   const [taskFilter, setTaskFilter] = useState('all');
   const [cardActionLoading, setCardActionLoading] = useState(null);
-  const [weeklyEarnings, setWeeklyEarnings] = useState([]);
+  const [weeklyEarnings, setWeeklyEarnings] = useState(() => {
+    const wData = cachedInit?.weeklyEarnings || [];
+    if (!wData.length) return [];
+    const maxVal = Math.max(...wData.map((d) => d.value), 500);
+    return wData.map((d, i) => ({
+      ...d,
+      fillPercent: d.value > 0 ? Math.max(Math.round((d.value / maxVal) * 100), 16) : 10,
+      current: i === wData.length - 1,
+    }));
+  });
   const [selectedDetailTask, setSelectedDetailTask] = useState(null);
 
   // ── Incoming Gig Overlay Modal State (Queue + Dismiss tracking) ──
@@ -65,9 +81,10 @@ const CaptainDashboard = () => {
 
   // ── Fetch Dashboard Stats & Incoming Requests ─────────────────
   const fetchDashboard = useCallback(async (isBackground = false) => {
-    if (!isBackground) setLoading(true);
+    const hasCached = !!getCachedCaptainDashboard();
+    if (!isBackground && !hasCached) setLoading(true);
     try {
-      const res = await captainService.getDashboardStats();
+      const res = await captainService.getDashboardStats(isBackground);
       if (res.success) {
         setStats(res.stats);
         const orders = res.pendingOrders || [];
@@ -113,7 +130,7 @@ const CaptainDashboard = () => {
     } catch (err) {
       console.error('Dashboard fetch error:', err);
     } finally {
-      if (!isBackground) setLoading(false);
+      setLoading(false);
     }
   }, [incomingJob]);
 

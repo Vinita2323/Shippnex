@@ -34,7 +34,7 @@ const SellerUnderReview = () => {
           <ShieldAlert size={20} className="text-amber-600 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-900 space-y-1">
             <p className="font-semibold">What happens next?</p>
-            <p className="text-amber-700">Verification usually takes 24–48 hours. Once approved, you will be able to log in to your dashboard using your registered phone number.</p>
+            <p className="text-amber-700">Verification usually takes 24–48 hours. Once approved, you will be able to log in to your dashboard using your registered mobile number and password.</p>
           </div>
         </div>
 

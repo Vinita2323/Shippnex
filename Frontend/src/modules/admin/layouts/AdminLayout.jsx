@@ -71,10 +71,13 @@ export const AdminLayout = () => {
       case 'seller':
         return <SellersOverview />;
       case 'manage_sellers':
+      case 'manage-sellers':
       case 'seller_list':
         return <SellerManagement />;
       case 'captains':
+      case 'captain':
       case 'delivery_boy':
+      case 'delivery-boy':
         return <CaptainManagement />;
       case 'categories':
         return <CategoryManagement initialSubcategoriesOnly={false} />;

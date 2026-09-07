@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, HelpCircle, ChevronRight, Check, Truck, MapPin, CreditCard, Box, ShieldCheck, Clock, User, Phone, KeyRound } from 'lucide-react';
+import { ChevronLeft, HelpCircle, ChevronRight, Check, Truck, MapPin, CreditCard, Box, ShieldCheck, Clock, User, Phone, KeyRound, Star } from 'lucide-react';
 import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
 import { orderService } from '../../../services/authService';
+import productReviewService from '../../../services/productReviewService';
+import ProductRatingModal from '../../../components/ProductRatingModal';
 
 const TrackOrder = () => {
   const navigate = useNavigate();
@@ -11,6 +13,25 @@ const TrackOrder = () => {
 
   const [liveOrder, setLiveOrder] = useState(initialOrder || null);
   const [loadingOrder, setLoadingOrder] = useState(!initialOrder);
+
+  // Reviews State
+  const [orderReviews, setOrderReviews] = useState({});
+  const [selectedProductToRate, setSelectedProductToRate] = useState(null);
+  const [selectedReviewToEdit, setSelectedReviewToEdit] = useState(null);
+  const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
+
+  // Fetch reviews for this delivered order
+  const fetchOrderReviews = async (targetOrderId) => {
+    if (!targetOrderId) return;
+    try {
+      const res = await productReviewService.getOrderReviewStatus(targetOrderId);
+      if (res && res.success && res.reviews) {
+        setOrderReviews(res.reviews);
+      }
+    } catch (err) {
+      console.warn('TrackOrder fetch reviews error:', err.message);
+    }
+  };
 
   // Poll for live status update every 4 seconds
   useEffect(() => {
@@ -23,6 +44,9 @@ const TrackOrder = () => {
         const res = await orderService.getOrderById(targetId);
         if (isMounted && res.success && res.order) {
           setLiveOrder(res.order);
+          if (res.order.orderStatus === 'Delivered' || res.order.captainStatus === 'Delivered') {
+            fetchOrderReviews(res.order.orderId || res.order._id);
+          }
         }
       } catch (err) {
         console.warn('TrackOrder fetch error:', err.message);
@@ -40,6 +64,38 @@ const TrackOrder = () => {
   }, []);
 
   const order = liveOrder || initialOrder;
+
+  useEffect(() => {
+    const targetOrderId = order?.orderId || order?._id || order?.id;
+    const isDelivered = order?.orderStatus === 'Delivered' || order?.captainStatus === 'Delivered' || order?.status === 'Delivered';
+    if (targetOrderId && isDelivered) {
+      fetchOrderReviews(targetOrderId);
+    }
+  }, [order?.orderStatus, order?.captainStatus, order?.status]);
+
+  const handleOpenRateModal = (item, existingRev = null) => {
+    const prodObj = {
+      _id: item.product?._id || item.product || item.productId || item.id,
+      id: item.product?._id || item.product || item.productId || item.id,
+      name: item.name || item.product?.name || 'Product Item',
+      image: item.image || item.product?.mainImage || item.product?.image || '',
+      price: item.price || item.product?.price || 0,
+    };
+    setSelectedProductToRate(prodObj);
+    setSelectedReviewToEdit(existingRev || null);
+    setIsRatingModalOpen(true);
+  };
+
+  const handleReviewSuccess = (reviewData) => {
+    if (reviewData && reviewData.productId) {
+      setOrderReviews((prev) => ({
+        ...prev,
+        [reviewData.productId]: reviewData,
+      }));
+    }
+    const targetOrderId = order?.orderId || order?._id || order?.id;
+    if (targetOrderId) fetchOrderReviews(targetOrderId);
+  };
 
   // Order Details
   const orderId = order?.id || order?.orderId || order?._id || 'ORD-849201';
@@ -217,21 +273,57 @@ const TrackOrder = () => {
               const itemPrice = Number(item.price || item.product?.salePrice || 0);
               const qty = item.quantity || 1;
               const itemSubtotal = itemPrice * qty;
+              const prodId = item.product?._id || item.product || item.productId || item.id;
+              const itemReview = prodId ? orderReviews[prodId] : null;
+              const isDelivered = orderStatus === 'Delivered' || captainStatus === 'Delivered' || order?.status === 'Delivered';
 
               return (
-                <div key={idx} className="py-3 flex gap-3 items-center first:pt-0 last:pb-0">
-                  <div className="w-[54px] h-[54px] rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
-                    <img src={itemImg} alt={itemName} className="w-[85%] h-[85%] object-contain" />
-                  </div>
-                  <div className="flex-1 flex flex-col gap-0.5">
-                    <h4 className="text-[13px] font-bold text-slate-900 m-0 line-clamp-1">{itemName}</h4>
-                    <span className="text-[12px] font-semibold text-slate-500">
-                      ₹{itemPrice.toFixed(2)} × {qty}
+                <div key={idx} className="py-3 flex flex-col gap-2 first:pt-0 last:pb-0">
+                  <div className="flex gap-3 items-center">
+                    <div className="w-[54px] h-[54px] rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
+                      <img src={itemImg} alt={itemName} className="w-[85%] h-[85%] object-contain" />
+                    </div>
+                    <div className="flex-1 flex flex-col gap-0.5">
+                      <h4 className="text-[13px] font-bold text-slate-900 m-0 line-clamp-1">{itemName}</h4>
+                      <span className="text-[12px] font-semibold text-slate-500">
+                        ₹{itemPrice.toFixed(2)} × {qty}
+                      </span>
+                    </div>
+                    <span className="text-[14px] font-extrabold text-slate-900 shrink-0">
+                      ₹{itemSubtotal.toFixed(2)}
                     </span>
                   </div>
-                  <span className="text-[14px] font-extrabold text-slate-900 shrink-0">
-                    ₹{itemSubtotal.toFixed(2)}
-                  </span>
+
+                  {/* Rating CTA for delivered orders */}
+                  {isDelivered && (
+                    <div className="pt-2 border-t border-dashed border-slate-100 flex items-center justify-between">
+                      {itemReview ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                            <Star size={10} className="fill-amber-500 text-amber-500" /> Rated {itemReview.rating}/5
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-0.5">
+                            <ShieldCheck size={11} /> Verified
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 font-medium">How was this product?</span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRateModal(item, itemReview)}
+                        className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border cursor-pointer flex items-center gap-1 transition-all active:scale-95 shadow-2xs ${
+                          itemReview
+                            ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                            : 'bg-orange-50 hover:bg-orange-100 text-[#ea580c] border-orange-200/80'
+                        }`}
+                      >
+                        <Star size={11} className={itemReview ? 'text-slate-500' : 'fill-[#ea580c] text-[#ea580c]'} />
+                        {itemReview ? 'Edit Review' : 'Rate Product'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -293,6 +385,20 @@ const TrackOrder = () => {
         </div>
 
       </div>
+
+      {/* Product Rating Modal */}
+      <ProductRatingModal
+        isOpen={isRatingModalOpen}
+        onClose={() => {
+          setIsRatingModalOpen(false);
+          setSelectedProductToRate(null);
+          setSelectedReviewToEdit(null);
+        }}
+        product={selectedProductToRate}
+        orderId={order?.orderId || order?._id || order?.id}
+        existingReview={selectedReviewToEdit}
+        onSuccess={handleReviewSuccess}
+      />
     </div>
   );
 };

@@ -13,8 +13,10 @@ import {
   ShieldCheck,
   MapPin,
   RefreshCw,
+  Star,
 } from 'lucide-react';
 import { transportService } from '../../../../services/transportService';
+import RatingModal from '../../../../components/RatingModal';
 
 // Map backend status to human-readable labels
 const STATUS_LABELS = {
@@ -61,6 +63,8 @@ const TransportBookingDetails = () => {
   const [loading, setLoading] = useState(!location.state?.booking);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [hasAutoOpenedRating, setHasAutoOpenedRating] = useState(false);
 
   const fetchBooking = useCallback(async (isSilent = false) => {
     if (!bookingId) return;
@@ -69,17 +73,31 @@ const TransportBookingDetails = () => {
       const data = await transportService.getBookingDetails(bookingId);
       setBooking(data.booking);
       setError(null);
+
+      // Auto-open rating modal if ride is completed and user hasn't rated yet
+      if (data.booking?.status === 'RIDE_COMPLETED' && !data.booking?.hasUserRated && !hasAutoOpenedRating) {
+        setShowRatingModal(true);
+        setHasAutoOpenedRating(true);
+      }
     } catch (err) {
       if (!isSilent) setError('Could not load booking details.');
     } finally {
       if (!isSilent) setLoading(false);
       setRefreshing(false);
     }
-  }, [bookingId]);
+  }, [bookingId, hasAutoOpenedRating]);
 
   useEffect(() => {
     fetchBooking();
   }, [fetchBooking]);
+
+  // Check initial booking state on mount to auto-open rating modal if already completed
+  useEffect(() => {
+    if (booking?.status === 'RIDE_COMPLETED' && !booking?.hasUserRated && !hasAutoOpenedRating) {
+      setShowRatingModal(true);
+      setHasAutoOpenedRating(true);
+    }
+  }, [booking, hasAutoOpenedRating]);
 
   // Auto-poll active bookings every 5 seconds for live captain progression & OTP triggers
   useEffect(() => {
@@ -89,6 +107,16 @@ const TransportBookingDetails = () => {
     }, 5000);
     return () => clearInterval(interval);
   }, [booking, fetchBooking]);
+
+  const handleRatingSuccess = (res) => {
+    setBooking((prev) => ({
+      ...prev,
+      hasUserRated: true,
+      userRating: res.rating?.rating || 5,
+      userReview: res.rating?.review || '',
+      userFeedbackTags: res.rating?.feedbackTags || [],
+    }));
+  };
 
   if (!bookingId) return <Navigate to="/orders" replace />;
 
@@ -339,6 +367,62 @@ const TransportBookingDetails = () => {
           </div>
         </div>
 
+        {/* ── STAGE 3: POST-RIDE RATING CARD ── */}
+        {bStatus === 'RIDE_COMPLETED' && (
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-100 flex flex-col gap-3">
+            {booking.hasUserRated ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-500 border border-amber-200 flex items-center justify-center font-bold">
+                    <Star size={20} className="fill-amber-400 text-amber-400" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 block">
+                      You rated {captain?.name || 'Captain'} {booking.userRating}/5 ⭐
+                    </span>
+                    {booking.userReview ? (
+                      <span className="text-[11px] text-slate-500 italic block mt-0.5 line-clamp-1">
+                        "{booking.userReview}"
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-emerald-600 font-medium block">
+                        Rating submitted successfully
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowRatingModal(true)}
+                  className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl border border-slate-200 cursor-pointer transition-colors"
+                >
+                  View
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center font-bold">
+                    <Star size={20} className="fill-amber-400 text-amber-400" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 block">Rate Your Captain</span>
+                    <span className="text-[11px] text-slate-500 font-medium">How was your trip experience?</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowRatingModal(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-extrabold rounded-xl shadow-xs cursor-pointer border-none transition-all flex items-center gap-1.5"
+                >
+                  <Star size={13} className="fill-white" />
+                  <span>Rate Captain</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Goods Information Card */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
           <h3 className="text-[14px] font-bold text-slate-800 mb-3 flex items-center gap-2">
@@ -366,6 +450,15 @@ const TransportBookingDetails = () => {
           )}
         </div>
       </div>
+
+      {/* ── RATING MODAL POPUP ── */}
+      <RatingModal
+        isOpen={showRatingModal}
+        onClose={() => setShowRatingModal(false)}
+        ride={booking}
+        role="user"
+        onSuccess={handleRatingSuccess}
+      />
     </div>
   );
 };

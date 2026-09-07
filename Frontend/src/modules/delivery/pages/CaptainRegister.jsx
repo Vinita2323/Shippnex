@@ -13,7 +13,13 @@ import {
   RotateCcw, 
   AlertCircle, 
   Sparkles,
-  ArrowLeft 
+  ArrowLeft,
+  Lock,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 import { authService } from '../../../services/authService';
 
@@ -63,7 +69,19 @@ const CaptainRegister = () => {
     ifscCode: '',
     branchName: '',
     upiId: '',
+
+    // Password
+    password: '',
+    confirmPassword: '',
   });
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [registrationStep, setRegistrationStep] = useState('form'); // 'form' | 'otp' | 'under_review'
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [isResendingOtp, setIsResendingOtp] = useState(false);
+  const [otpSuccessMsg, setOtpSuccessMsg] = useState('');
 
   const [files, setFiles] = useState({
     drivingLicense: null,
@@ -229,12 +247,118 @@ const CaptainRegister = () => {
     });
   };
 
+  const handleOtpPaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!pasted) return;
+    const newOtp = ['', '', '', '', '', ''];
+    for (let i = 0; i < pasted.length; i++) {
+      newOtp[i] = pasted[i];
+    }
+    setOtp(newOtp);
+    const focusIdx = Math.min(pasted.length, 5);
+    const targetInput = document.getElementById(`captain-reg-otp-${focusIdx}`);
+    if (targetInput) targetInput.focus();
+  };
+
+  const handleOtpChange = (index, value) => {
+    const clean = value.replace(/\D/g, '');
+    if (clean.length > 1) {
+      const newOtp = [...otp];
+      for (let i = 0; i < clean.length && index + i < 6; i++) {
+        newOtp[index + i] = clean[i];
+      }
+      setOtp(newOtp);
+      const nextIdx = Math.min(index + clean.length, 5);
+      const nextInput = document.getElementById(`captain-reg-otp-${nextIdx}`);
+      if (nextInput) nextInput.focus();
+      return;
+    }
+
+    const newOtp = [...otp];
+    newOtp[index] = clean;
+    setOtp(newOtp);
+
+    if (clean && index < 5) {
+      const nextInput = document.getElementById(`captain-reg-otp-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      const prevInput = document.getElementById(`captain-reg-otp-${index - 1}`);
+      if (prevInput) prevInput.focus();
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setErrorMsg('');
+    setOtpSuccessMsg('');
+    const cleanPhone = formData.mobileNumber.replace(/\D/g, '').slice(-10);
+    try {
+      setIsResendingOtp(true);
+      await authService.sendCaptainOtp(cleanPhone);
+      setOtpSuccessMsg('A new OTP has been sent to your registered mobile number.');
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Failed to resend OTP. Please try again.');
+    } finally {
+      setIsResendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setOtpSuccessMsg('');
+
+    const enteredOtp = otp.join('').trim();
+    if (enteredOtp.length < 6) {
+      setErrorMsg('Please enter the complete 6-digit OTP');
+      return;
+    }
+
+    const cleanPhone = formData.mobileNumber.replace(/\D/g, '').slice(-10);
+
+    try {
+      setIsVerifyingOtp(true);
+      const res = await authService.verifyCaptainOtp(cleanPhone, enteredOtp);
+
+      if (res.success || res.accountStatus === 'under_review') {
+        setRegistrationStep('under_review');
+      } else {
+        setErrorMsg(res.message || 'Verification failed. Please try again.');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'OTP verification failed.';
+      setErrorMsg(msg);
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
 
     if (!formData.fullName || !formData.mobileNumber) {
-      alert('Full Name and Mobile Number are required.');
+      setErrorMsg('Full Name and Mobile Number are required.');
+      return;
+    }
+
+    const cleanPhone = formData.mobileNumber.replace(/\D/g, '').slice(-10);
+    if (cleanPhone.length < 10) {
+      setErrorMsg('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    if (!formData.password || formData.password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setErrorMsg('Passwords do not match. Please re-enter your password.');
       return;
     }
 
@@ -269,6 +393,7 @@ const CaptainRegister = () => {
 
       const payload = {
         ...formData,
+        mobileNumber: cleanPhone,
         documents: {
           drivingLicense: dl,
           rcDocument: rc,
@@ -286,7 +411,7 @@ const CaptainRegister = () => {
 
       const res = await authService.registerCaptain(payload);
       if (res.success) {
-        setSubmitted(true);
+        setRegistrationStep('otp');
       } else {
         setErrorMsg(res.message || 'Failed to submit registration');
       }
@@ -323,21 +448,137 @@ const CaptainRegister = () => {
           </p>
         </div>
 
-        {submitted ? (
-          <div className="text-center py-10 space-y-4">
-            <div className="w-16 h-16 bg-[#15803d]/10 text-[#15803d] rounded-full flex items-center justify-center mx-auto">
-              <span className="material-symbols-outlined text-4xl">verified</span>
+        {registrationStep === 'under_review' ? (
+          <div className="text-center py-10 space-y-6">
+            <div className="w-20 h-20 bg-emerald-50 text-[#15803d] rounded-full flex items-center justify-center mx-auto border-2 border-emerald-200 animate-pulse">
+              <ShieldCheck size={44} />
             </div>
-            <h2 className="text-xl font-bold text-[#002625]">Registration Submitted!</h2>
-            <p className="text-xs text-slate-500 max-w-md mx-auto">
-              Your application and documents are under review. Our onboarding team will contact you shortly.
-            </p>
-            <button
-              onClick={() => navigate('/captain/login')}
-              className="mt-4 px-6 py-2.5 bg-[#97fc43] text-[#002625] font-bold text-xs rounded-xl hover:bg-[#86e835] transition-all cursor-pointer"
-            >
-              Back to Login
-            </button>
+            
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold text-[#002625]">Registration Successful!</h2>
+              <p className="text-base font-semibold text-emerald-700">Your Account is Currently Under Review</p>
+              <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed pt-1">
+                Your captain registration application and documents have been submitted and your mobile number is verified. Once the Shippnex admin team approves your account, you will be able to log in using your registered mobile number and password.
+              </p>
+            </div>
+
+            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 max-w-md mx-auto text-left flex items-start gap-3">
+              <CheckCircle2 size={20} className="text-[#15803d] shrink-0 mt-0.5" />
+              <div className="text-xs text-emerald-950 space-y-1">
+                <p className="font-bold">Next Steps:</p>
+                <p className="text-emerald-800 leading-relaxed">
+                  Verification usually takes 24–48 hours. Our team will review your driving license, RC, and background details. Once approved, you can directly log in with your password.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={() => navigate('/captain/login')}
+                className="w-full sm:w-auto px-8 py-3.5 bg-[#97fc43] hover:bg-[#86e835] text-[#002625] font-extrabold text-xs rounded-2xl shadow-md transition-all cursor-pointer"
+              >
+                Go to Captain Login
+              </button>
+            </div>
+          </div>
+        ) : registrationStep === 'otp' ? (
+          <div className="py-6 space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 bg-emerald-50 text-[#15803d] rounded-full mx-auto flex items-center justify-center border border-emerald-200 mb-1">
+                <ShieldCheck size={28} />
+              </div>
+              <h2 className="text-xl font-bold text-[#002625]">Verify Your Mobile Number</h2>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                We sent a 6-digit OTP to <strong className="text-slate-800">+91 {formData.mobileNumber}</strong> to complete your application.
+              </p>
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtp(['1', '2', '3', '4', '5', '6']);
+                    setErrorMsg('');
+                  }}
+                  title="Click to fill test OTP 123456"
+                  className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-lg font-mono hover:bg-emerald-100 transition-colors cursor-pointer"
+                >
+                  ⚡ Test OTP: 123456 (Click to fill)
+                </button>
+              </div>
+            </div>
+
+            {errorMsg && (
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-600 flex items-center gap-2.5">
+                <AlertCircle size={18} className="shrink-0 text-rose-500" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            {otpSuccessMsg && (
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-bold text-emerald-700 flex items-center gap-2.5">
+                <CheckCircle2 size={18} className="shrink-0 text-emerald-600" />
+                <span>{otpSuccessMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyOtp} className="space-y-6">
+              {/* 6 Digit OTP Boxes */}
+              <div className="flex justify-between gap-2 py-1 max-w-sm mx-auto" onPaste={handleOtpPaste}>
+                {otp.map((digit, index) => (
+                  <input
+                    key={index}
+                    id={`captain-reg-otp-${index}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleOtpChange(index, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                    className="flex-1 min-w-0 aspect-square max-h-[52px] text-center text-xl font-bold text-slate-900 border border-slate-200 rounded-xl outline-none focus:border-[#15803d] focus:ring-2 focus:ring-emerald-100 bg-slate-50 transition-all"
+                  />
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-slate-500 max-w-sm mx-auto">
+                <span>Didn't receive code?</span>
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={isResendingOtp}
+                  className="text-[#15803d] font-bold hover:underline flex items-center gap-1 bg-transparent border-none cursor-pointer disabled:opacity-50"
+                >
+                  <RotateCcw size={13} />
+                  {isResendingOtp ? 'Resending...' : 'Resend OTP'}
+                </button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2 max-w-sm mx-auto">
+                <button
+                  type="button"
+                  onClick={() => setRegistrationStep('form')}
+                  className="order-2 sm:order-1 sm:w-1/3 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 border border-slate-200"
+                >
+                  <ArrowLeft size={15} />
+                  <span>Edit Form</span>
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isVerifyingOtp || otp.join('').length < 6}
+                  className="order-1 sm:order-2 flex-1 py-3.5 bg-[#15803d] hover:bg-[#166534] text-white font-extrabold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isVerifyingOtp ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" /> Verifying...
+                    </>
+                  ) : (
+                    <>
+                      Verify OTP & Finish
+                      <CheckCircle2 size={16} />
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -1150,6 +1391,61 @@ const CaptainRegister = () => {
               </div>
             </div>
 
+            {/* 6. ACCOUNT SECURITY & PASSWORD SETUP */}
+            <div className="space-y-4 pt-2">
+              <h2 className="text-xs font-black text-[#15803d] uppercase tracking-wider border-b pb-2 border-slate-100 flex items-center justify-between">
+                <span>Account Security & Password</span>
+                <span className="text-[10px] font-semibold text-slate-400">Used for Login</span>
+              </h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Create Password *</label>
+                  <div className="relative">
+                    <input
+                      required
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleTextChange}
+                      placeholder="Min 6 characters"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d] pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 bg-transparent border-none cursor-pointer p-1"
+                    >
+                      {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Confirm Password *</label>
+                  <div className="relative">
+                    <input
+                      required
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={handleTextChange}
+                      placeholder="Re-enter password"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d] pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 bg-transparent border-none cursor-pointer p-1"
+                    >
+                      {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400 m-0">You will use your registered mobile number and this password to log in to your Captain account once approved.</p>
+            </div>
+
             {/* Error Message Display */}
             {errorMsg && (
               <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-600 flex items-center gap-2.5">
@@ -1176,10 +1472,10 @@ const CaptainRegister = () => {
               >
                 {isSubmitting ? (
                   <>
-                    <span className="animate-spin material-symbols-outlined">sync</span> Submitting...
+                    <Loader2 size={16} className="animate-spin" /> Submitting Application...
                   </>
                 ) : (
-                  'Submit Application'
+                  'Submit & Verify Mobile'
                 )}
               </button>
             </div>

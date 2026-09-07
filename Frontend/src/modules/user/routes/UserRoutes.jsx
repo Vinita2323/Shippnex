@@ -11,6 +11,7 @@ const Checkout = lazy(() => import('../pages/Checkout'));
 const Payment = lazy(() => import('../pages/Payment'));
 const TrackOrder = lazy(() => import('../pages/TrackOrder'));
 const Orders = lazy(() => import('../pages/Orders'));
+const OrderHistory = lazy(() => import('../pages/OrderHistory'));
 const Profile = lazy(() => import('../pages/Profile'));
 const Login = lazy(() => import('../pages/Login'));
 const VerifyOtp = lazy(() => import('../pages/VerifyOtp'));
@@ -43,6 +44,7 @@ const UserRoutes = () => {
   const isCheckout = location.pathname === '/checkout';
   const isPayment = location.pathname === '/payment';
   const isTrackOrder = location.pathname === '/track-order';
+  const isOrderHistory = location.pathname === '/order-history';
   const isProfile = location.pathname === '/profile';
   const isLogin = location.pathname === '/login';
   const isVerifyOtp = location.pathname === '/verify-otp';
@@ -57,7 +59,7 @@ const UserRoutes = () => {
   // Transport flow routes that should hide the bottom nav
   const isTransportFlow = ['/transport/register', '/transport/location', '/transport/goods', '/transport/vehicle', '/transport/summary', '/transport/success', '/transport/booking-details'].includes(location.pathname);
   
-  const hideBottomNav = isCart || isCheckout || isPayment || isTrackOrder || isProfile || isLogin || isVerifyOtp || isProductDetails || isSellerStore || isWishlist || isFlashSale || isNotifications || isLocation || isPlaceholder || isTransportFlow;
+  const hideBottomNav = isCart || isCheckout || isPayment || isTrackOrder || isOrderHistory || isProfile || isLogin || isVerifyOtp || isProductDetails || isSellerStore || isWishlist || isFlashSale || isNotifications || isLocation || isPlaceholder || isTransportFlow;
 
   return (
     <>
@@ -88,6 +90,7 @@ const UserRoutes = () => {
             <Route path="/payment" element={<Payment />} />
             <Route path="/track-order" element={<TrackOrder />} />
             <Route path="/orders" element={<Orders />} />
+            <Route path="/order-history" element={<OrderHistory />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/account-information" element={<AccountInfo />} />
             <Route path="/saved-addresses" element={<SavedAddresses />} />

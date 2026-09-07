@@ -249,42 +249,64 @@ export const SellerManagement = () => {
   const [sellers, setSellers] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
 
-  React.useEffect(() => {
-    fetchSellers();
-  }, []);
-
-  const fetchSellers = async (retryCount = 0) => {
+  const fetchSellers = React.useCallback(async (retryCount = 0) => {
     setLoading(true);
     try {
       const data = await adminService.getSellers();
-      if (data && data.success) {
-        const mappedSellers = (data.sellers || []).map(s => ({
-          ...s,
-          id: s._id,
-          name: s.ownerName || s.businessName,
-          storeName: s.businessName,
-          contactPhone: s.phone,
-          contactEmail: s.email || '-',
-          logoText: (s.businessName || 'SN').substring(0, 2).toUpperCase(),
-          logoBg: 'bg-emerald-500',
-          balance: `₹${Number(s.walletBalance || 0).toFixed(2)}`,
-          commission: `${s.commissionPercentage || 0}%`,
-          categoriesCount: Array.isArray(s.categories) ? s.categories.length : 0,
-          assignedCategories: s.categories || [],
-          status: s.status === 'pending' ? 'Pending' : (s.status === 'approved' ? 'Approved' : 'Rejected'),
-          needApproval: s.status === 'pending' ? 'Yes' : 'No'
-        }));
+      if (data && (data.success || Array.isArray(data.sellers) || Array.isArray(data))) {
+        const rawList = data.sellers || (Array.isArray(data) ? data : []);
+        const mappedSellers = rawList.map(s => {
+          const rawStatus = (s.accountStatus || s.status || 'under_review').toLowerCase();
+          let displayStatus = 'Under Review';
+          if (rawStatus === 'approved') displayStatus = 'Approved';
+          else if (rawStatus === 'rejected') displayStatus = 'Rejected';
+          else if (rawStatus === 'suspended') displayStatus = 'Suspended';
+          else if (rawStatus === 'pending_otp') displayStatus = 'Pending OTP';
+
+          const sellerIdStr = String(s._id || s.id || '');
+          const bName = s.businessName || s.ownerName || 'Seller Store';
+
+          return {
+            ...s,
+            _id: sellerIdStr,
+            id: sellerIdStr,
+            name: s.ownerName || s.businessName || 'Seller Partner',
+            storeName: bName,
+            contactPhone: s.phone || '-',
+            contactEmail: s.email || '-',
+            logoText: (bName || 'SN').substring(0, 2).toUpperCase(),
+            logoBg: 'bg-emerald-500',
+            balance: Number(s.walletBalance || 0).toFixed(2),
+            commission: `${s.commissionPercentage != null ? s.commissionPercentage : 10}%`,
+            categoriesCount: Array.isArray(s.categories) ? s.categories.length : 0,
+            assignedCategories: s.categories || [],
+            status: displayStatus,
+            rawStatus: rawStatus,
+            needApproval: displayStatus === 'Approved' ? 'No' : 'Yes'
+          };
+        });
         setSellers(mappedSellers);
       }
     } catch (err) {
       console.error('Error fetching sellers:', err);
       if (retryCount < 2) {
-        setTimeout(() => fetchSellers(retryCount + 1), 3500);
+        setTimeout(() => fetchSellers(retryCount + 1), 2500);
+      } else if (Array.isArray(mockSellers) && mockSellers.length > 0) {
+        setSellers(mockSellers.map(s => ({
+          ...s,
+          _id: String(s.id || s._id || ''),
+          id: String(s.id || s._id || ''),
+          rawStatus: String(s.status || '').toLowerCase()
+        })));
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  React.useEffect(() => {
+    fetchSellers();
+  }, [fetchSellers]);
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const [entriesPerPage, setEntriesPerPage] = React.useState('10');
@@ -312,7 +334,7 @@ export const SellerManagement = () => {
   const handleExportCSV = () => {
     const rows = [['Seller ID', 'Name', 'Store Name', 'Contact Phone', 'Contact Email', 'Balance', 'Commission', 'Status', 'Need Approval'].join(',')];
     sellers.forEach(s => {
-      rows.push([`"${s.id}"`, `"${s.name}"`, `"${s.storeName}"`, `"${s.contactPhone}"`, `"${s.contactEmail}"`, `"${s.balance}"`, `"${s.commission}"`, `"${s.status}"`, `"${s.needApproval}"`].join(','));
+      rows.push([`"${s.id}"`, `"${s.name}"`, `"${s.storeName}"`, `"${s.contactPhone}"`, `"${s.contactEmail}"`, `"₹${s.balance}"`, `"${s.commission}"`, `"${s.status}"`, `"${s.needApproval}"`].join(','));
     });
     const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -388,11 +410,13 @@ export const SellerManagement = () => {
 
   // Filtered & Sorted Sellers
   const filteredSellers = React.useMemo(() => {
-    let result = sellers.filter(s => 
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      s.storeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.contactEmail.toLowerCase().includes(searchQuery.toLowerCase())
+    const q = String(searchQuery || '').toLowerCase().trim();
+    let result = (sellers || []).filter(s => 
+      String(s.name || '').toLowerCase().includes(q) || 
+      String(s.storeName || '').toLowerCase().includes(q) ||
+      String(s.id || '').toLowerCase().includes(q) ||
+      String(s.contactPhone || '').toLowerCase().includes(q) ||
+      String(s.contactEmail || '').toLowerCase().includes(q)
     );
 
     result.sort((a, b) => {
@@ -430,9 +454,15 @@ export const SellerManagement = () => {
             <ChevronRight size={18} className="text-[#ff5500]" />
             View Seller List
           </h2>
-          <span className="text-[10px] uppercase font-extrabold tracking-wider bg-[#ff5500] text-white px-3 py-1 rounded-full shadow-2xs">
-            {sellers.length} Registered Sellers
-          </span>
+          {loading ? (
+            <span className="text-[10px] uppercase font-extrabold tracking-wider bg-amber-500 text-white px-3 py-1 rounded-full shadow-2xs animate-pulse flex items-center gap-1.5">
+              <RefreshCw size={11} className="animate-spin" /> Loading Sellers...
+            </span>
+          ) : (
+            <span className="text-[10px] uppercase font-extrabold tracking-wider bg-[#ff5500] text-white px-3 py-1 rounded-full shadow-2xs">
+              {sellers.length} Registered Sellers
+            </span>
+          )}
         </div>
 
         <div className="p-6 space-y-4">
@@ -456,6 +486,15 @@ export const SellerManagement = () => {
             </div>
 
             <div className="flex items-center gap-3">
+              <button 
+                onClick={() => fetchSellers(0)}
+                disabled={loading}
+                className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 border-none cursor-pointer transition-all active:scale-95"
+                title="Reload Latest Sellers"
+              >
+                <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
+              </button>
+
               <button 
                 onClick={handleExportCSV}
                 className="px-4 py-1.5 bg-[#002625] hover:bg-[#003837] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 border-none cursor-pointer shadow-2xs transition-all active:scale-95"
@@ -495,7 +534,19 @@ export const SellerManagement = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {displayedSellers.length > 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan="11" className="py-16 text-center">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-9 h-9 border-3 border-orange-500/20 border-t-[#ff5500] rounded-full animate-spin"></div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800 tracking-tight">Loading Sellers...</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Fetching registered seller records from database</p>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : displayedSellers.length > 0 ? (
                   displayedSellers.map((seller) => (
                     <tr key={seller.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3.5 px-4 font-mono font-medium text-slate-500" title={seller.id}>
@@ -529,6 +580,12 @@ export const SellerManagement = () => {
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                           seller.status === 'Approved' 
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                            : seller.status === 'Rejected'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : seller.status === 'Suspended'
+                            ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                            : seller.status === 'Pending OTP'
+                            ? 'bg-sky-50 text-sky-700 border border-sky-200'
                             : 'bg-amber-50 text-amber-700 border border-amber-200'
                         }`}>
                           {seller.status}
@@ -551,6 +608,38 @@ export const SellerManagement = () => {
                           >
                             <Eye size={13} /> View
                           </button>
+                          {seller.status !== 'Approved' && (
+                            <button 
+                              onClick={async () => {
+                                try {
+                                  const data = await adminService.toggleSellerStatus(seller.id, 'approved');
+                                  if (data && data.success) {
+                                    setSellers(prev => prev.map(s => s.id === seller.id ? { ...s, status: 'Approved', needApproval: 'No' } : s));
+                                  }
+                                } catch (err) { console.error(err); }
+                              }}
+                              className="p-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg border border-emerald-200 cursor-pointer transition-colors text-[10px] font-bold px-1.5"
+                              title="Approve Seller"
+                            >
+                              ✓
+                            </button>
+                          )}
+                          {seller.status !== 'Rejected' && (
+                            <button 
+                              onClick={async () => {
+                                try {
+                                  const data = await adminService.toggleSellerStatus(seller.id, 'rejected');
+                                  if (data && data.success) {
+                                    setSellers(prev => prev.map(s => s.id === seller.id ? { ...s, status: 'Rejected', needApproval: 'Yes' } : s));
+                                  }
+                                } catch (err) { console.error(err); }
+                              }}
+                              className="p-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg border border-rose-200 cursor-pointer transition-colors text-[10px] font-bold px-1.5"
+                              title="Reject Seller"
+                            >
+                              ✕
+                            </button>
+                          )}
                           <button 
                             onClick={() => {
                               setEditFormData({ name: seller.name, storeName: seller.storeName, commission: seller.commission, balance: seller.balance });
@@ -683,13 +772,19 @@ export const SellerManagement = () => {
             {/* Scrollable Content Body */}
             <div className="p-6 space-y-6 overflow-y-auto flex-1 text-xs">
               
-              {/* Status Bar with Approve & Reject */}
+              {/* Status Bar with Approve, Reject & Suspend */}
               <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-slate-700">Status:</span>
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                     editingSellerModal.status === 'Approved' 
                       ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                      : editingSellerModal.status === 'Rejected'
+                      ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                      : editingSellerModal.status === 'Suspended'
+                      ? 'bg-slate-200 text-slate-800 border border-slate-300'
+                      : editingSellerModal.status === 'Pending OTP'
+                      ? 'bg-sky-100 text-sky-800 border border-sky-300'
                       : 'bg-amber-100 text-amber-800 border border-amber-300'
                   }`}>
                     {editingSellerModal.status}
@@ -697,42 +792,66 @@ export const SellerManagement = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button 
-                    onClick={async () => {
-                      try {
-                        const data = await adminService.toggleSellerStatus(editingSellerModal.id, 'approved');
-                        if (data && data.success) {
-                          setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, status: 'Approved', needApproval: 'No' } : s));
-                          setEditingSellerModal(prev => ({ ...prev, status: 'Approved', needApproval: 'No' }));
-                          alert('Seller has been approved successfully!');
+                  {editingSellerModal.status !== 'Approved' && (
+                    <button 
+                      onClick={async () => {
+                        try {
+                          const data = await adminService.toggleSellerStatus(editingSellerModal.id, 'approved');
+                          if (data && data.success) {
+                            setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, status: 'Approved', needApproval: 'No' } : s));
+                            setEditingSellerModal(prev => ({ ...prev, status: 'Approved', needApproval: 'No' }));
+                            alert('Seller has been approved successfully!');
+                          }
+                        } catch (err) { 
+                          console.error(err); 
+                          alert(err.response?.data?.message || 'Failed to approve seller');
                         }
-                      } catch (err) { 
-                        console.error(err); 
-                        alert(err.response?.data?.message || 'Failed to approve seller');
-                      }
-                    }}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all"
-                  >
-                    ✓ Approve
-                  </button>
-                  <button 
-                    onClick={async () => {
-                      try {
-                        const data = await adminService.toggleSellerStatus(editingSellerModal.id, 'rejected');
-                        if (data && data.success) {
-                          setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, status: 'Rejected', needApproval: 'Yes' } : s));
-                          setEditingSellerModal(prev => ({ ...prev, status: 'Rejected', needApproval: 'Yes' }));
-                          alert('Seller application has been rejected.');
+                      }}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all"
+                    >
+                      ✓ Approve
+                    </button>
+                  )}
+                  {editingSellerModal.status !== 'Rejected' && (
+                    <button 
+                      onClick={async () => {
+                        try {
+                          const data = await adminService.toggleSellerStatus(editingSellerModal.id, 'rejected');
+                          if (data && data.success) {
+                            setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, status: 'Rejected', needApproval: 'Yes' } : s));
+                            setEditingSellerModal(prev => ({ ...prev, status: 'Rejected', needApproval: 'Yes' }));
+                            alert('Seller application has been rejected.');
+                          }
+                        } catch (err) { 
+                          console.error(err); 
+                          alert(err.response?.data?.message || 'Failed to reject seller');
                         }
-                      } catch (err) { 
-                        console.error(err); 
-                        alert(err.response?.data?.message || 'Failed to reject seller');
-                      }
-                    }}
-                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all"
-                  >
-                    ✕ Reject
-                  </button>
+                      }}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all"
+                    >
+                      ✕ Reject
+                    </button>
+                  )}
+                  {editingSellerModal.status !== 'Suspended' && (
+                    <button 
+                      onClick={async () => {
+                        try {
+                          const data = await adminService.toggleSellerStatus(editingSellerModal.id, 'suspended');
+                          if (data && data.success) {
+                            setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, status: 'Suspended', needApproval: 'Yes' } : s));
+                            setEditingSellerModal(prev => ({ ...prev, status: 'Suspended', needApproval: 'Yes' }));
+                            alert('Seller account has been suspended.');
+                          }
+                        } catch (err) { 
+                          console.error(err); 
+                          alert(err.response?.data?.message || 'Failed to suspend seller');
+                        }
+                      }}
+                      className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all"
+                    >
+                      ⊘ Suspend
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1195,30 +1314,52 @@ export const CaptainManagement = () => {
   const [previewDocImage, setPreviewDocImage] = React.useState(null);
 
   // Fetch Live Captains from Backend API
-  const fetchCaptains = React.useCallback(async () => {
+  const fetchCaptains = React.useCallback(async (retryCount = 0) => {
     setLoading(true);
     try {
-      const res = await captainService.getAllCaptains();
-      if (res && res.success) {
-        const mapped = (res.captains || []).map(c => ({
-          _id: c._id,
-          id: c._id.slice(-6).toUpperCase(),
-          name: c.name || 'Captain Partner',
-          mobile: c.phone || '',
-          email: c.email || 'N/A',
-          address: c.currentAddress || c.workingArea?.city || 'N/A',
-          city: c.city || c.workingArea?.city || 'N/A',
-          commission: 'Standard',
-          balance: `₹${Number(c.walletBalance || 0).toFixed(2)}`,
-          cashCollected: `₹${Number(c.cashCollected || 0).toFixed(2)}`,
-          status: c.status || 'pending',
-          available: c.isOnline ? 'Online' : 'Offline',
-          raw: c,
-        }));
+      const res = await (captainService?.getAllCaptains ? captainService.getAllCaptains() : adminService.getCaptains());
+      if (res && (res.success || Array.isArray(res.captains) || Array.isArray(res))) {
+        const rawList = res.captains || (Array.isArray(res) ? res : []);
+        const mapped = rawList.map(c => {
+          const rawStatus = (c.accountStatus || c.status || 'under_review').toLowerCase();
+          let displayStatus = 'Under Review';
+          if (rawStatus === 'approved') displayStatus = 'Approved';
+          else if (rawStatus === 'rejected') displayStatus = 'Rejected';
+          else if (rawStatus === 'suspended') displayStatus = 'Suspended';
+          else if (rawStatus === 'pending_otp') displayStatus = 'Pending OTP';
+
+          const captainIdStr = String(c._id || c.id || '');
+          return {
+            _id: captainIdStr,
+            id: captainIdStr ? captainIdStr.slice(-6).toUpperCase() : 'CAP',
+            name: c.name || 'Captain Partner',
+            mobile: c.phone || '',
+            email: c.email || 'N/A',
+            address: c.currentAddress || c.workingArea?.city || (c.city ? c.city : 'N/A'),
+            city: c.city || c.workingArea?.city || 'N/A',
+            commission: 'Standard',
+            balance: `₹${Number(c.walletBalance || 0).toFixed(2)}`,
+            cashCollected: `₹${Number(c.cashCollected || 0).toFixed(2)}`,
+            status: displayStatus,
+            rawStatus: rawStatus,
+            available: c.isOnline ? 'Online' : 'Offline',
+            raw: c,
+          };
+        });
         setCaptains(mapped);
       }
     } catch (err) {
       console.error('Error fetching captains:', err);
+      if (retryCount < 2) {
+        setTimeout(() => fetchCaptains(retryCount + 1), 2500);
+      } else if (Array.isArray(mockCaptains) && mockCaptains.length > 0) {
+        setCaptains(mockCaptains.map(c => ({
+          ...c,
+          _id: String(c.id || c._id || ''),
+          id: String(c.id || '').slice(-6).toUpperCase(),
+          rawStatus: String(c.status || '').toLowerCase()
+        })));
+      }
     } finally {
       setLoading(false);
     }
@@ -1239,36 +1380,43 @@ export const CaptainManagement = () => {
   };
 
   // Filtered & Sorted Captains
-  const filteredCaptains = captains.filter(d => {
-    const statusUpper = (d.status || '').toUpperCase();
-    const filterUpper = statusFilter.toUpperCase();
-    
-    const matchesStatus = 
-      statusFilter === 'All' || 
-      statusUpper === filterUpper;
+  const filteredCaptains = React.useMemo(() => {
+    return (captains || []).filter(d => {
+      const statusUpper = String(d.status || '').toUpperCase();
+      const filterUpper = String(statusFilter || 'ALL').toUpperCase();
+      
+      const matchesStatus = 
+        statusFilter === 'All' || 
+        statusUpper === filterUpper;
 
-    const matchesAvailability = availabilityFilter === 'All' || d.available === availabilityFilter;
-    const matchesSearch = 
-      (d.name || '').toLowerCase().includes(search.toLowerCase()) ||
-      (d.mobile || '').toLowerCase().includes(search.toLowerCase()) ||
-      (d.address || '').toLowerCase().includes(search.toLowerCase()) ||
-      (d.city || '').toLowerCase().includes(search.toLowerCase()) ||
-      (d.id || '').toLowerCase().includes(search.toLowerCase());
-    return matchesStatus && matchesAvailability && matchesSearch;
-  });
+      const matchesAvailability = availabilityFilter === 'All' || d.available === availabilityFilter;
+      const q = String(search || '').toLowerCase().trim();
+      const matchesSearch = 
+        String(d.name || '').toLowerCase().includes(q) ||
+        String(d.mobile || '').toLowerCase().includes(q) ||
+        String(d.address || '').toLowerCase().includes(q) ||
+        String(d.city || '').toLowerCase().includes(q) ||
+        String(d.id || '').toLowerCase().includes(q);
+      return matchesStatus && matchesAvailability && matchesSearch;
+    });
+  }, [captains, statusFilter, availabilityFilter, search]);
 
-  const sortedCaptains = [...filteredCaptains].sort((a, b) => {
-    if (!sortField) return 0;
-    let valA = a[sortField] || '';
-    let valB = b[sortField] || '';
-    if (typeof valA === 'string' && valA.startsWith('₹')) {
-      valA = parseFloat(valA.replace('₹', '').replace(',', '')) || 0;
-      valB = parseFloat(valB.replace('₹', '').replace(',', '')) || 0;
-    }
-    if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
-    if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
-    return 0;
-  });
+  const sortedCaptains = React.useMemo(() => {
+    return [...filteredCaptains].sort((a, b) => {
+      if (!sortField) return 0;
+      let valA = a[sortField] != null ? a[sortField] : '';
+      let valB = b[sortField] != null ? b[sortField] : '';
+      const strA = String(valA);
+      const strB = String(valB);
+      if (strA.startsWith('₹')) {
+        valA = parseFloat(strA.replace('₹', '').replace(',', '')) || 0;
+        valB = parseFloat(strB.replace('₹', '').replace(',', '')) || 0;
+      }
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredCaptains, sortField, sortOrder]);
 
   // Pagination Math
   const totalPages = Math.ceil(sortedCaptains.length / entriesPerPage) || 1;
@@ -1336,6 +1484,15 @@ export const CaptainManagement = () => {
             <ChevronRight size={18} className="text-[#ff5500]" />
             View Captain List
           </h2>
+          {loading ? (
+            <span className="text-[10px] uppercase font-extrabold tracking-wider bg-amber-500 text-white px-3 py-1 rounded-full shadow-2xs animate-pulse flex items-center gap-1.5">
+              <RefreshCw size={11} className="animate-spin" /> Loading Captains...
+            </span>
+          ) : (
+            <span className="text-[10px] uppercase font-extrabold tracking-wider bg-[#ff5500] text-white px-3 py-1 rounded-full shadow-2xs">
+              {captains.length} Registered Captains
+            </span>
+          )}
         </div>
 
         {/* Filter Toolbar Section */}
@@ -1352,8 +1509,11 @@ export const CaptainManagement = () => {
                   className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-[#ff5500] cursor-pointer"
                 >
                   <option value="All">All Status</option>
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Under Review">Under Review</option>
+                  <option value="Rejected">Rejected</option>
+                  <option value="Suspended">Suspended</option>
+                  <option value="Pending OTP">Pending OTP</option>
                 </select>
               </div>
 
@@ -1365,8 +1525,8 @@ export const CaptainManagement = () => {
                   className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-[#ff5500] cursor-pointer"
                 >
                   <option value="All">All Availability</option>
-                  <option value="Available">Available</option>
-                  <option value="Not Available">Not Available</option>
+                  <option value="Online">Online</option>
+                  <option value="Offline">Offline</option>
                 </select>
               </div>
 
@@ -1401,7 +1561,7 @@ export const CaptainManagement = () => {
                 onClick={handleExportCSV}
                 className="px-4 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 shrink-0"
               >
-                <Download size={14} /> Export v
+                <Download size={14} /> Export
               </button>
             </div>
           </div>
@@ -1443,7 +1603,19 @@ export const CaptainManagement = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
-                {paginatedCaptains.length > 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan="11" className="py-16 text-center">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-9 h-9 border-3 border-orange-500/20 border-t-[#ff5500] rounded-full animate-spin"></div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800 tracking-tight">Loading Captains...</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Fetching registered captain records from database</p>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : paginatedCaptains.length > 0 ? (
                   paginatedCaptains.map((captain) => (
                     <tr key={captain.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-3 font-mono text-slate-500">{captain.id}</td>
@@ -1458,13 +1630,17 @@ export const CaptainManagement = () => {
                       {/* Status Badge */}
                       <td className="py-3 px-3">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          (captain.status || '').toLowerCase() === 'approved' 
+                          captain.status === 'Approved' 
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                            : (captain.status || '').toLowerCase() === 'pending'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : captain.status === 'Rejected'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : captain.status === 'Suspended'
+                            ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                            : captain.status === 'Pending OTP'
+                            ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
                         }`}>
-                          {(captain.status || 'pending').toUpperCase()}
+                          {captain.status}
                         </span>
                       </td>
 
@@ -1492,7 +1668,7 @@ export const CaptainManagement = () => {
                           </button>
 
                           {/* Approve Button */}
-                          {(captain.status || '').toLowerCase() !== 'approved' && (
+                          {captain.status !== 'Approved' && (
                             <button 
                               onClick={() => handleToggleCaptainStatus(captain._id, 'approved')}
                               className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 cursor-pointer transition-colors text-[10px] font-bold flex items-center gap-1"
@@ -1504,14 +1680,25 @@ export const CaptainManagement = () => {
                           )}
 
                           {/* Reject Button */}
-                          {(captain.status || '').toLowerCase() !== 'rejected' && (
+                          {captain.status !== 'Rejected' && (
                             <button 
                               onClick={() => handleToggleCaptainStatus(captain._id, 'rejected')}
-                              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 cursor-pointer transition-colors text-[10px] font-bold flex items-center gap-1"
+                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 cursor-pointer transition-colors text-[10px] font-bold flex items-center gap-1"
                               title="Reject Captain"
                             >
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                               Reject
+                            </button>
+                          )}
+
+                          {/* Suspend Button */}
+                          {captain.status !== 'Suspended' && (
+                            <button 
+                              onClick={() => handleToggleCaptainStatus(captain._id, 'suspended')}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 cursor-pointer transition-colors text-[10px] font-bold flex items-center gap-1"
+                              title="Suspend Captain"
+                            >
+                              Suspend
                             </button>
                           )}
 
@@ -1529,7 +1716,7 @@ export const CaptainManagement = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="11" className="py-8 text-center text-slate-400 font-medium">
+                    <td colSpan="11" className="py-12 text-center text-slate-400 font-medium text-xs">
                       No captains found matching your criteria.
                     </td>
                   </tr>
@@ -1605,29 +1792,57 @@ export const CaptainManagement = () => {
                   <div className="flex items-center gap-2">
                     <h3 className="text-lg font-extrabold text-[#002625] m-0">{selectedCaptain.name}</h3>
                     <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                      (selectedCaptain.status || '').toLowerCase() === 'approved' 
+                      selectedCaptain.status === 'Approved' 
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                        : (selectedCaptain.status || '').toLowerCase() === 'pending'
-                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                        : 'bg-rose-50 text-rose-700 border border-rose-200'
+                        : selectedCaptain.status === 'Rejected'
+                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                        : selectedCaptain.status === 'Suspended'
+                        ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                        : selectedCaptain.status === 'Pending OTP'
+                        ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200'
                     }`}>
-                      {(selectedCaptain.status || 'pending').toUpperCase()}
+                      {selectedCaptain.status}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 font-mono mt-0.5 m-0">ID: {selectedCaptain.id} • Mobile: {selectedCaptain.mobile}</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                {(selectedCaptain.status || '').toLowerCase() !== 'approved' && (
+              <div className="flex items-center gap-2">
+                {selectedCaptain.status !== 'Approved' && (
                   <button 
                     onClick={() => {
                       handleToggleCaptainStatus(selectedCaptain._id, 'approved');
                       setSelectedCaptain(null);
                     }}
-                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-colors text-xs font-bold flex items-center gap-1.5 shadow-sm border-none"
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-colors text-xs font-bold flex items-center gap-1 shadow-sm border-none"
                   >
-                    Approve Application
+                    ✓ Approve
+                  </button>
+                )}
+
+                {selectedCaptain.status !== 'Rejected' && (
+                  <button 
+                    onClick={() => {
+                      handleToggleCaptainStatus(selectedCaptain._id, 'rejected');
+                      setSelectedCaptain(null);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white cursor-pointer transition-colors text-xs font-bold flex items-center gap-1 shadow-sm border-none"
+                  >
+                    ✕ Reject
+                  </button>
+                )}
+
+                {selectedCaptain.status !== 'Suspended' && (
+                  <button 
+                    onClick={() => {
+                      handleToggleCaptainStatus(selectedCaptain._id, 'suspended');
+                      setSelectedCaptain(null);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-600 hover:bg-slate-700 text-white cursor-pointer transition-colors text-xs font-bold flex items-center gap-1 shadow-sm border-none"
+                  >
+                    ⊘ Suspend
                   </button>
                 )}
 
@@ -6840,48 +7055,52 @@ export const SkuAuditManagement = () => {
    18. SELLERS OVERVIEW PAGE (WITH FULL SELLER DETAILS VIEW)
    ========================================================================= */
 export const SellersOverview = () => {
-  const [sellersList] = React.useState([
-    {
-      id: '14301495',
-      name: 'ankit keshri',
-      email: 'mahadeokeshri9065036488@gmail.com',
-      storeName: 'Keshari Vagitl Shope',
-      logoText: 'AK',
-      logoBg: 'bg-lime-500',
-      status: 'Pending',
-      joinedOn: '12/7/2026',
-      mobile: '9065036488',
-      businessType: 'Vagitable',
-      areaRadius: 'Dakra (5.1km)',
-      taxInfo: 'None',
-      address: 'Dakra, Churi, Jharkhand 829210, India',
-      products: [
-        { id: 'p1', name: 'Aalu', price: 25, stock: 1000, img: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=500&auto=format&fit=crop&q=80' },
-        { id: 'p2', name: 'Khira', price: 60, stock: 100, img: 'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=500&auto=format&fit=crop&q=80' },
-        { id: 'p3', name: 'Pyaaj', price: 1000, stock: 40, img: 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?w=500&auto=format&fit=crop&q=80' },
-        { id: 'p4', name: 'Tamatar', price: 70, stock: 500, img: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=500&auto=format&fit=crop&q=80' }
-      ]
-    },
-    {
-      id: '11305875',
-      name: 'Deepanshu Kumar',
-      email: 'live11media@gmail.com',
-      storeName: 'Rahi hot food',
-      logoText: 'DK',
-      logoBg: 'bg-[#a3e635]',
-      status: 'Approved',
-      joinedOn: '23/6/2026',
-      mobile: '9798996821',
-      businessType: 'Fast Food',
-      areaRadius: 'Ranchi (10km)',
-      taxInfo: 'GST18290',
-      address: 'Main Road, Ranchi, Jharkhand',
-      products: [
-        { id: 'p5', name: 'Burger', price: 99, stock: 200, img: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500&auto=format&fit=crop&q=80' },
-        { id: 'p6', name: 'Pizza', price: 249, stock: 150, img: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500&auto=format&fit=crop&q=80' }
-      ]
-    }
-  ]);
+  const [sellersList, setSellersList] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    const loadLiveSellers = async () => {
+      setLoading(true);
+      try {
+        const data = await adminService.getSellers();
+        if (data && (data.success || Array.isArray(data.sellers))) {
+          const raw = data.sellers || (Array.isArray(data) ? data : []);
+          const mapped = raw.map(s => {
+            const rawStatus = s.accountStatus || s.status || 'under_review';
+            let displayStatus = 'Pending';
+            if (rawStatus === 'approved') displayStatus = 'Approved';
+            else if (rawStatus === 'rejected') displayStatus = 'Rejected';
+            else if (rawStatus === 'suspended') displayStatus = 'Suspended';
+
+            const bName = s.businessName || s.ownerName || 'Seller Store';
+            return {
+              id: String(s._id || s.id || ''),
+              name: s.ownerName || s.businessName || 'Seller',
+              email: s.email || 'N/A',
+              storeName: bName,
+              logoText: (bName || 'SN').substring(0, 2).toUpperCase(),
+              logoBg: 'bg-emerald-500',
+              status: displayStatus,
+              joinedOn: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'Recent',
+              mobile: s.phone || 'N/A',
+              businessType: s.businessType || 'Retail',
+              areaRadius: `${s.warehouseLocation?.city || 'Local'} (${s.serviceRadius || 5}km)`,
+              taxInfo: s.gstNumber || s.panNumber || 'None',
+              address: s.warehouseLocation?.storeAddress || `${s.warehouseLocation?.city || ''} ${s.warehouseLocation?.state || ''}`,
+              products: Array.isArray(s.products) ? s.products : [],
+              raw: s
+            };
+          });
+          setSellersList(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load sellers in overview:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadLiveSellers();
+  }, []);
 
   const [search, setSearch] = React.useState('');
   const [selectedSeller, setSelectedSeller] = React.useState(null);
@@ -6889,11 +7108,15 @@ export const SellersOverview = () => {
   const [isAddProductModalOpen, setIsAddProductModalOpen] = React.useState(false);
   const [newProduct, setNewProduct] = React.useState({ name: '', price: '', stock: '' });
 
-  const filtered = sellersList.filter(s => 
-    s.name.toLowerCase().includes(search.toLowerCase()) || 
-    s.storeName.toLowerCase().includes(search.toLowerCase()) ||
-    s.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = React.useMemo(() => {
+    const q = String(search || '').toLowerCase().trim();
+    return (sellersList || []).filter(s => 
+      String(s.name || '').toLowerCase().includes(q) || 
+      String(s.storeName || '').toLowerCase().includes(q) ||
+      String(s.email || '').toLowerCase().includes(q) ||
+      String(s.mobile || '').toLowerCase().includes(q)
+    );
+  }, [sellersList, search]);
 
   const fileInputRef = React.useRef(null);
   const [productImagePreview, setProductImagePreview] = React.useState(null);
@@ -7300,49 +7523,69 @@ export const SellersOverview = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filtered.map((seller) => (
-                  <tr key={seller.id} className="hover:bg-slate-50/80 transition-colors">
-                    {/* LOGO */}
-                    <td className="py-3.5 px-4 text-center">
-                      <span className={`w-8 h-8 rounded-full ${seller.logoBg} text-white font-extrabold flex items-center justify-center mx-auto text-xs shadow-2xs`}>
-                        {seller.logoText}
-                      </span>
-                    </td>
-
-                    {/* SELLER INFO */}
-                    <td className="py-3.5 px-4 space-y-0.5">
-                      <p className="font-bold text-slate-900 text-xs">{seller.name}</p>
-                      <p className="text-[11px] text-slate-400 font-mono">{seller.email}</p>
-                    </td>
-
-                    {/* STORE NAME */}
-                    <td className="py-3.5 px-4 font-semibold text-slate-800">{seller.storeName}</td>
-
-                    {/* STATUS */}
-                    <td className="py-3.5 px-4">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${
-                        seller.status === 'Approved' 
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                          : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}>
-                        {seller.status}
-                      </span>
-                    </td>
-
-                    {/* JOINED ON */}
-                    <td className="py-3.5 px-4 font-mono text-slate-600 font-medium">{seller.joinedOn}</td>
-
-                    {/* ACTIONS */}
-                    <td className="py-3.5 px-4 text-right">
-                      <button 
-                        onClick={() => setSelectedSeller(seller)}
-                        className="text-[#ff5500] hover:text-[#e04a00] font-bold text-xs cursor-pointer border-none bg-transparent hover:underline"
-                      >
-                        View Details
-                      </button>
+                {loading ? (
+                  <tr>
+                    <td colSpan="6" className="py-16 text-center">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-9 h-9 border-3 border-orange-500/20 border-t-[#ff5500] rounded-full animate-spin"></div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800 tracking-tight">Loading Sellers...</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Fetching registered seller overview records</p>
+                        </div>
+                      </div>
                     </td>
                   </tr>
-                ))}
+                ) : filtered.length > 0 ? (
+                  filtered.map((seller) => (
+                    <tr key={seller.id} className="hover:bg-slate-50/80 transition-colors">
+                      {/* LOGO */}
+                      <td className="py-3.5 px-4 text-center">
+                        <span className={`w-8 h-8 rounded-full ${seller.logoBg} text-white font-extrabold flex items-center justify-center mx-auto text-xs shadow-2xs`}>
+                          {seller.logoText}
+                        </span>
+                      </td>
+
+                      {/* SELLER INFO */}
+                      <td className="py-3.5 px-4 space-y-0.5">
+                        <p className="font-bold text-slate-900 text-xs">{seller.name}</p>
+                        <p className="text-[11px] text-slate-400 font-mono">{seller.email}</p>
+                      </td>
+
+                      {/* STORE NAME */}
+                      <td className="py-3.5 px-4 font-semibold text-slate-800">{seller.storeName}</td>
+
+                      {/* STATUS */}
+                      <td className="py-3.5 px-4">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${
+                          seller.status === 'Approved' 
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          {seller.status}
+                        </span>
+                      </td>
+
+                      {/* JOINED ON */}
+                      <td className="py-3.5 px-4 font-mono text-slate-600 font-medium">{seller.joinedOn}</td>
+
+                      {/* ACTIONS */}
+                      <td className="py-3.5 px-4 text-right">
+                        <button 
+                          onClick={() => setSelectedSeller(seller)}
+                          className="text-[#ff5500] hover:text-[#e04a00] font-bold text-xs cursor-pointer border-none bg-transparent hover:underline"
+                        >
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="py-12 text-center text-slate-400 font-medium text-xs">
+                      No sellers found matching your criteria.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
