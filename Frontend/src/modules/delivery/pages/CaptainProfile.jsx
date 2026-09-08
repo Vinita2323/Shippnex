@@ -79,6 +79,8 @@ const CaptainProfile = () => {
       setShowBreakdownModal(true);
     } else if (id === 'service-areas') {
       navigate('/captain/service-areas');
+    } else if (id === 'privacy') {
+      navigate('/captain/privacy');
     } else if (id === 'help') {
       navigate('/captain/support');
     } else if (id === 'delete-account') {
@@ -130,6 +132,12 @@ const CaptainProfile = () => {
       label: 'Help & 24/7 Support',
       sub: 'Toll-free dispatch helpline',
       icon: HelpCircle,
+    },
+    {
+      id: 'privacy',
+      label: 'Privacy Policy',
+      sub: 'Driver data & platform privacy terms',
+      icon: ShieldCheck,
     },
     {
       id: 'about',

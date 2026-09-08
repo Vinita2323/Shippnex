@@ -31,7 +31,7 @@ const DeliveryRoutes = () => {
           <Route path="/" element={<Navigate to="/captain/dashboard" replace />} />
           <Route path="/login" element={<CaptainLogin />} />
           <Route path="/register" element={<CaptainRegister />} />
-          <Route path="/terms" element={<CaptainPolicyPage />} />
+          <Route path="/terms" element={<Navigate to="/captain/privacy" replace />} />
           <Route path="/privacy" element={<CaptainPolicyPage />} />
           <Route path="/support" element={<CaptainSupport />} />
           <Route path="/faqs" element={<CaptainSupport />} />
@@ -52,6 +52,7 @@ const DeliveryRoutes = () => {
             <Route path="/service-areas" element={<CaptainServiceAreas />} />
             <Route path="/membership" element={<CaptainMembership />} />
             <Route path="/help" element={<CaptainSupport />} />
+            <Route path="/privacy" element={<CaptainPolicyPage />} />
             <Route path="/delete-account" element={<CaptainDeleteAccount />} />
           </Route>
         </Routes>

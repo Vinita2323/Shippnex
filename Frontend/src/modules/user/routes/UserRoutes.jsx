@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import PageSkeleton from '../../../components/PageSkeleton';
 import Home from '../pages/Home';
@@ -78,7 +78,7 @@ const UserRoutes = () => {
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/login" element={<Login />} />
           <Route path="/verify-otp" element={<VerifyOtp />} />
-          <Route path="/terms" element={<Terms />} />
+          <Route path="/terms" element={<Navigate to="/privacy" replace />} />
           <Route path="/privacy" element={<Terms />} />
           <Route path="/faqs" element={<Faqs />} />
           <Route path="/support" element={<HelpSupport />} />

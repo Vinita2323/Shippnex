@@ -110,10 +110,6 @@ const Login = () => {
         {/* Footer info */}
         <p className="text-[11px] text-center text-slate-400 font-normal mt-6 leading-relaxed">
           By continuing, you agree to Shippnex's{' '}
-          <Link to="/terms" className="text-[#ea580c] hover:underline font-semibold">
-            Terms of Service
-          </Link>{' '}
-          &{' '}
           <Link to="/privacy" className="text-[#ea580c] hover:underline font-semibold">
             Privacy Policy
           </Link>

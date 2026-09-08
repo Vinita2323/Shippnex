@@ -42,9 +42,9 @@ const CaptainPolicyPage = () => {
         <header className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between sticky top-0 z-10 shadow-xs">
           <div className="flex items-center gap-2.5">
             <button 
-              onClick={() => navigate('/captain/login')}
+              onClick={() => navigate(-1)}
               className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center border-none cursor-pointer transition-colors"
-              title="Back to Login"
+              title="Go Back"
             >
               <ArrowLeft size={16} />
             </button>
@@ -117,10 +117,10 @@ const CaptainPolicyPage = () => {
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-[10px] text-slate-400">
             <span>Effective: {policyData?.effectiveDate || 'Sep 1, 2026'}</span>
             <button
-              onClick={() => navigate('/captain/login')}
+              onClick={() => navigate(-1)}
               className="text-[#15803d] font-bold hover:underline bg-transparent border-none p-0 cursor-pointer text-[10px]"
             >
-              Back to Login
+              Done
             </button>
           </div>
 

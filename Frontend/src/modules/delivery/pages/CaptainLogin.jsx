@@ -502,16 +502,8 @@ const CaptainLogin = () => {
                 By continuing, you agree to our{' '}
                 <button 
                   type="button" 
-                  onClick={() => navigate('/captain/terms')} 
-                  className="text-[#15803d] hover:underline font-medium bg-transparent border-none p-0 cursor-pointer text-[11px]"
-                >
-                  Terms of Service
-                </button>
-                {' '}&{' '}
-                <button 
-                  type="button" 
                   onClick={() => navigate('/captain/privacy')} 
-                  className="text-[#15803d] hover:underline font-medium bg-transparent border-none p-0 cursor-pointer text-[11px]"
+                  className="text-[#15803d] hover:underline font-semibold bg-transparent border-none p-0 cursor-pointer text-[11px]"
                 >
                   Privacy Policy
                 </button>

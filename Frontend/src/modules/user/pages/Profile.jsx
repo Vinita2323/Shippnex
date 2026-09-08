@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, Pencil, Camera, Package, Heart, Gift, Headphones, 
   ChevronRight, Wallet, User, MapPin, Lock, FileText, HelpCircle, 
-  PhoneCall, LogOut, Trash2, Sparkles, Clock, ShoppingBag, Loader2, Star 
+  PhoneCall, LogOut, Trash2, Sparkles, Clock, ShoppingBag, Loader2, Star, ShieldCheck 
 } from 'lucide-react';
 import { authService, orderService, getCachedUserOrders } from '../../../services/authService';
 import RatingBreakdownModal from '../../../components/RatingBreakdownModal';
@@ -399,11 +399,11 @@ const Profile = () => {
           <div className="flex flex-col">
             <div 
               className="flex items-center justify-between py-3 border-b border-slate-50 cursor-pointer group"
-              onClick={() => navigate('/terms')}
+              onClick={() => navigate('/privacy')}
             >
               <div className="flex items-center gap-3">
-                <FileText size={16} className="text-[#1e1b4b]" />
-                <span className="text-[14px] font-bold text-[#1e1b4b]">Terms, Policies and Licenses</span>
+                <ShieldCheck size={16} className="text-[#1e1b4b]" />
+                <span className="text-[14px] font-bold text-[#1e1b4b]">Privacy Policy</span>
               </div>
               <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
             </div>
