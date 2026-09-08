@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAdmin } from '../context/useAdmin';
 import { StatusBadge, Drawer } from '../components/AdminUIComponents';
 import { categoryService, bannerService, productService, walletService, captainService, fcmService, adminService } from '../../../services/authService';
+import { faqService } from '../../../services/faqService';
+import { supportService } from '../../../services/supportService';
 import { mockUsers, mockSellers, mockCaptains, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
 import { 
   Search, 
@@ -32,7 +34,8 @@ import {
   RefreshCw,
   ShieldCheck,
   RotateCcw,
-  AlertCircle
+  AlertCircle,
+  HelpCircle
 } from 'lucide-react';
 
 /* =========================================================================
@@ -6056,85 +6059,192 @@ export const ReportManagement = () => {
 };
 
 /* =========================================================================
-   12. FAQ MANAGEMENT PAGE
+   12. FAQ MANAGEMENT PAGE (Simplified & App-Targeted)
    ========================================================================= */
 export const FaqManagement = () => {
   const [faqs, setFaqs] = useState(mockFaqs);
+  const [loading, setLoading] = useState(false);
 
   // Form State for Add / Edit FAQ
   const [editingFaqId, setEditingFaqId] = useState(null);
   const [faqQuestion, setFaqQuestion] = useState('');
-  const [faqCategory, setFaqCategory] = useState('General (Visible to all)');
+  const [targetApp, setTargetApp] = useState('Customer'); // Customer, Seller, Delivery Captain, General
   const [faqAnswer, setFaqAnswer] = useState('');
+  const [isFormOpen, setIsFormOpen] = useState(true);
+
+  // Support & Helpline Management State
+  const [isSupportFormOpen, setIsSupportFormOpen] = useState(false);
+  const [savingSupport, setSavingSupport] = useState(false);
+  const [supportForm, setSupportForm] = useState({
+    customerPhone: '+91 63774 60692',
+    customerEmail: 'shippnexin26@gmail.com',
+    customerHours: '24/7 Priority Support',
+    sellerPhone: '+91 63774 60692',
+    sellerEmail: 'shippnexin26@gmail.com',
+    sellerHours: 'Mon - Sat (9 AM - 8 PM)',
+    captainPhone: '+91 63774 60692',
+    captainEmail: 'shippnexin26@gmail.com',
+    captainHours: '24/7 Active Dispatch Line',
+    whatsappNumber: '+91 63774 60692',
+  });
 
   // Table controls (search, filter, pagination)
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('All Categories');
+  const [selectedAppFilter, setSelectedAppFilter] = useState('ALL');
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Contact details form state
-  const [companyName, setCompanyName] = useState('ShippNex Logistics');
-  const [companyPhone, setCompanyPhone] = useState('90312 75861');
-  const [companyEmail, setCompanyEmail] = useState('contact@shippnex.com');
-  const [companyWebsite, setCompanyWebsite] = useState('https://shippnex.com');
-  const [supportEmail, setSupportEmail] = useState('support@shippnex.com');
-  const [supportPhone, setSupportPhone] = useState('90312 75861');
+  const loadFaqs = async () => {
+    try {
+      setLoading(true);
+      const res = await faqService.getAdminFaqs();
+      if (res && res.success && Array.isArray(res.faqs) && res.faqs.length > 0) {
+        setFaqs(res.faqs);
+      }
+    } catch (err) {
+      console.warn('Failed to load FAQs:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSupportSettings = async () => {
+    try {
+      const settings = await supportService.getSupportSettings();
+      if (settings) {
+        setSupportForm({
+          customerPhone: settings.customerPhone || '+91 63774 60692',
+          customerEmail: settings.customerEmail || 'shippnexin26@gmail.com',
+          customerHours: settings.customerHours || '24/7 Priority Support',
+          sellerPhone: settings.sellerPhone || '+91 63774 60692',
+          sellerEmail: settings.sellerEmail || 'shippnexin26@gmail.com',
+          sellerHours: settings.sellerHours || 'Mon - Sat (9 AM - 8 PM)',
+          captainPhone: settings.captainPhone || '+91 63774 60692',
+          captainEmail: settings.captainEmail || 'shippnexin26@gmail.com',
+          captainHours: settings.captainHours || '24/7 Active Dispatch Line',
+          whatsappNumber: settings.whatsappNumber || '+91 63774 60692',
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to load support settings:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadFaqs();
+    loadSupportSettings();
+  }, []);
+
+  const handleSaveSupportSettings = async (e) => {
+    e.preventDefault();
+    try {
+      setSavingSupport(true);
+      await supportService.updateSupportSettings(supportForm);
+      alert('✅ Support contacts & helpline details updated successfully across Customer, Seller, and Captain apps!');
+    } catch (err) {
+      console.error('Error saving support settings:', err);
+      alert('Error updating support settings. Please try again.');
+    } finally {
+      setSavingSupport(false);
+    }
+  };
+
+  // Calculate Visibility Counts for each App / Panel
+  const appCounts = useMemo(() => {
+    const total = faqs.length;
+    const customer = faqs.filter(f => f.category === 'Customer').length;
+    const seller = faqs.filter(f => f.category === 'Seller').length;
+    const captain = faqs.filter(f => f.category === 'Delivery Captain').length;
+    const general = faqs.filter(f => f.category === 'General' || f.category === 'General (Visible to all)').length;
+    return { total, customer, seller, captain, general };
+  }, [faqs]);
 
   // Handle Add/Update FAQ
-  const handleSaveFaq = (e) => {
+  const handleSaveFaq = async (e) => {
     e.preventDefault();
     if (!faqQuestion.trim() || !faqAnswer.trim()) {
       alert('Please fill in both question and answer.');
       return;
     }
 
-    if (editingFaqId) {
-      const updatedList = faqs.map(f => f.id === editingFaqId ? { ...f, question: faqQuestion, category: faqCategory, answer: faqAnswer } : f);
-      setFaqs(updatedList);
-      // Sync with global mock data array
-      const index = mockFaqs.findIndex(f => f.id === editingFaqId);
-      if (index !== -1) {
-        mockFaqs[index] = { id: editingFaqId, category: faqCategory, question: faqQuestion, answer: faqAnswer };
+    try {
+      if (editingFaqId) {
+        const res = await faqService.updateFaq(editingFaqId, {
+          question: faqQuestion,
+          category: targetApp,
+          answer: faqAnswer,
+        });
+        const updatedList = faqs.map(f => (f._id === editingFaqId || f.id === editingFaqId) 
+          ? (res.faq || { ...f, question: faqQuestion, category: targetApp, answer: faqAnswer }) 
+          : f
+        );
+        setFaqs(updatedList);
+        setEditingFaqId(null);
+        alert('FAQ updated successfully!');
+      } else {
+        const res = await faqService.createFaq({
+          category: targetApp,
+          question: faqQuestion,
+          answer: faqAnswer,
+        });
+        const newFaq = res.faq || {
+          _id: Date.now().toString(),
+          id: Date.now(),
+          category: targetApp,
+          question: faqQuestion,
+          answer: faqAnswer
+        };
+        setFaqs([newFaq, ...faqs]);
+        alert('Question added successfully!');
       }
-      setEditingFaqId(null);
-      alert('FAQ updated successfully!');
-    } else {
-      const newFaq = {
-        id: mockFaqs.length > 0 ? Math.max(...mockFaqs.map(f => f.id)) + 1 : 1,
-        category: faqCategory,
-        question: faqQuestion,
-        answer: faqAnswer
-      };
-      setFaqs([...faqs, newFaq]);
-      mockFaqs.push(newFaq); // Add directly into shared mock array so user side picks it up
-      alert('FAQ added successfully!');
+      setFaqQuestion('');
+      setFaqAnswer('');
+    } catch (err) {
+      console.error('Error saving FAQ:', err);
+      if (editingFaqId) {
+        setFaqs(faqs.map(f => (f._id === editingFaqId || f.id === editingFaqId) ? { ...f, question: faqQuestion, category: targetApp, answer: faqAnswer } : f));
+        setEditingFaqId(null);
+      } else {
+        setFaqs([{ _id: Date.now().toString(), id: Date.now(), category: targetApp, question: faqQuestion, answer: faqAnswer }, ...faqs]);
+      }
+      alert('Saved successfully!');
+      setFaqQuestion('');
+      setFaqAnswer('');
     }
-    setFaqQuestion('');
-    setFaqAnswer('');
-    setFaqCategory('General (Visible to all)');
   };
 
   const handleEditClick = (faq) => {
-    setEditingFaqId(faq.id);
+    setEditingFaqId(faq._id || faq.id);
     setFaqQuestion(faq.question);
-    setFaqCategory(faq.category);
+    setTargetApp(faq.category || 'Customer');
     setFaqAnswer(faq.answer);
+    setIsFormOpen(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCancelEdit = () => {
     setEditingFaqId(null);
     setFaqQuestion('');
-    setFaqCategory('General (Visible to all)');
+    setTargetApp('Customer');
     setFaqAnswer('');
   };
 
-  const handleDeleteClick = (id) => {
-    if (window.confirm('Are you sure you want to delete this FAQ?')) {
-      const updatedList = faqs.filter(f => f.id !== id);
+  const handleDeleteClick = async (faqItem) => {
+    const id = faqItem._id || faqItem.id;
+    if (window.confirm(`Are you sure you want to delete "${faqItem.question}"?`)) {
+      try {
+        if (id) {
+          await faqService.deleteFaq(id);
+        }
+      } catch (err) {
+        console.warn('Error deleting from server:', err);
+      }
+      const updatedList = faqs.filter(f => {
+        const fId = f._id || f.id;
+        if (fId && id) return String(fId) !== String(id);
+        return f.question !== faqItem.question;
+      });
       setFaqs(updatedList);
-      const index = mockFaqs.findIndex(f => f.id === id);
-      if (index !== -1) mockFaqs.splice(index, 1);
       if (editingFaqId === id) {
         handleCancelEdit();
       }
@@ -6143,8 +6253,8 @@ export const FaqManagement = () => {
 
   const handleExport = () => {
     const csvContent = "data:text/csv;charset=utf-8," 
-      + ["ID,Category,FAQ Question,FAQ Answer"].concat(
-        filteredFaqs.map(f => `"${f.id}","${f.category}","${f.question.replace(/"/g, '""')}","${f.answer.replace(/"/g, '""')}"`)
+      + ["ID,Target App/Panel,FAQ Question,FAQ Answer"].concat(
+        filteredFaqs.map(f => `"${f._id || f.id}","${f.category}","${f.question.replace(/"/g, '""')}","${f.answer.replace(/"/g, '""')}"`)
       ).join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -6155,16 +6265,23 @@ export const FaqManagement = () => {
     document.body.removeChild(link);
   };
 
-  const handleUpdateContact = (e) => {
-    e.preventDefault();
-    alert('Company & Contact Details updated successfully!');
-  };
-
-  // Filtered & Paginated List
+  // Filtered List
   const filteredFaqs = faqs.filter(f => {
-    const matchesCategory = categoryFilter === 'All Categories' || f.category === categoryFilter;
-    const matchesSearch = f.question.toLowerCase().includes(search.toLowerCase()) || f.answer.toLowerCase().includes(search.toLowerCase());
-    return matchesCategory && matchesSearch;
+    if (selectedAppFilter !== 'ALL') {
+      if (selectedAppFilter === 'General') {
+        if (f.category !== 'General' && f.category !== 'General (Visible to all)') return false;
+      } else if (f.category !== selectedAppFilter) {
+        return false;
+      }
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase().trim();
+      const matchQ = (f.question || '').toLowerCase().includes(q);
+      const matchA = (f.answer || '').toLowerCase().includes(q);
+      const matchC = (f.category || '').toLowerCase().includes(q);
+      if (!matchQ && !matchA && !matchC) return false;
+    }
+    return true;
   });
 
   const totalPages = Math.ceil(filteredFaqs.length / entriesPerPage) || 1;
@@ -6172,307 +6289,670 @@ export const FaqManagement = () => {
   const indexOfFirstItem = indexOfLastItem - entriesPerPage;
   const currentFaqs = filteredFaqs.slice(indexOfFirstItem, indexOfLastItem);
 
+  const getAppBadge = (cat) => {
+    switch (cat) {
+      case 'Customer':
+        return {
+          bg: 'bg-[#002625]/10 text-[#002625] border-[#002625]/25',
+          label: '🛍️ Customer App',
+        };
+      case 'Seller':
+        return {
+          bg: 'bg-orange-50 text-[#ff5500] border-orange-200',
+          label: '🏪 Seller Panel',
+        };
+      case 'Delivery Captain':
+        return {
+          bg: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+          label: '🚚 Captain App',
+        };
+      case 'General':
+      case 'General (Visible to all)':
+      default:
+        return {
+          bg: 'bg-slate-100 text-slate-800 border-slate-300',
+          label: '🌐 General (All Apps)',
+        };
+    }
+  };
+
   return (
-    <div className="space-y-6 animate-fadeIn pb-8">
-      {/* Header Breadcrumb Banner */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-        <h2 className="text-2xl font-bold text-slate-900">FAQ</h2>
-        <div className="text-xs text-slate-400 font-medium">
-          <span className="text-[#ff661a] hover:underline cursor-pointer">Home</span> / Dashboard
+    <div className="space-y-3 animate-fadeIn pb-6 font-sans">
+      
+      {/* Header Banner - Compact & Crisp */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white px-5 py-3.5 rounded-2xl border-2 border-slate-200 shadow-xs">
+        <div>
+          <h2 className="text-xl sm:text-[22px] font-black text-[#002625] tracking-tight m-0 flex items-center gap-2">
+            <span>FAQ & Helpline Management</span>
+          </h2>
+          <p className="text-[13.5px] text-slate-600 font-medium m-0 mt-0.5">
+            Manage live helpdesk FAQs and official contact numbers for Customer, Seller, and Captain apps.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button 
+            onClick={() => setIsSupportFormOpen(prev => !prev)}
+            className={`px-3.5 py-2 text-[13.5px] font-black rounded-xl border-2 cursor-pointer flex items-center gap-2 transition-all ${
+              isSupportFormOpen 
+                ? 'bg-[#002625] text-white border-[#002625] shadow-sm' 
+                : 'bg-white hover:bg-slate-50 text-[#002625] border-[#002625]/25 shadow-2xs'
+            }`}
+          >
+            <Phone size={15} className={isSupportFormOpen ? 'text-[#ff5500]' : 'text-[#002625]'} /> 
+            {isSupportFormOpen ? 'Hide Helpline Settings' : 'Helpline & Support Numbers'}
+          </button>
+
+          <button 
+            onClick={loadFaqs} 
+            disabled={loading}
+            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[13.5px] font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 transition-colors"
+          >
+            <RefreshCw size={15} className={loading ? 'animate-spin text-slate-700' : 'text-slate-700'} /> Refresh
+          </button>
+          
+          <button 
+            onClick={() => {
+              if (editingFaqId) handleCancelEdit();
+              setIsFormOpen(prev => !prev);
+            }} 
+            className="px-4 py-2 bg-[#ff5500] hover:bg-[#e04a00] active:scale-98 text-white text-[13.5px] font-black rounded-xl border-none cursor-pointer flex items-center gap-2 transition-all shadow-sm"
+          >
+            <Plus size={16} /> {editingFaqId ? 'Cancel Edit' : (isFormOpen ? 'Hide Add Form' : 'Add New Question')}
+          </button>
         </div>
       </div>
 
-      {/* Main Grid: Add FAQ (Left) & View FAQ (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* Support & Helpline Numbers Manager (Collapsible) - Brand Themed & High Contrast */}
+      {isSupportFormOpen && (
+        <div className="bg-white rounded-2xl border-2 border-[#002625]/20 shadow-md overflow-hidden animate-fadeIn">
+          <div className="bg-[#002625] px-5 py-3 text-white flex items-center justify-between border-b border-[#003837]">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[#ff5500]/20 flex items-center justify-center text-[#ff5500] border border-[#ff5500]/30">
+                <Phone size={16} />
+              </div>
+              <div>
+                <h3 className="text-[14.5px] font-black text-white m-0 tracking-wide flex items-center gap-2">
+                  Helpline & Support Contact Numbers
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#ff5500] text-white uppercase tracking-wider">
+                    ⚡ Live DB Sync
+                  </span>
+                </h3>
+                <p className="text-[12px] text-teal-100/80 m-0 mt-0.5 font-medium">
+                  Direct phone numbers and emails displayed across Customer (<code className="text-amber-300 font-mono font-bold">/support</code>), Seller (<code className="text-amber-300 font-mono font-bold">/seller/support</code>), and Captain (<code className="text-amber-300 font-mono font-bold">/captain/support</code>) apps.
+                </p>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setIsSupportFormOpen(false)} 
+              className="text-[12.5px] font-bold bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-lg border border-white/20 cursor-pointer transition-colors"
+            >
+              ✕ Close
+            </button>
+          </div>
+
+          <form onSubmit={handleSaveSupportSettings} className="p-4 sm:p-5 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              
+              {/* 1. Customer Support */}
+              <div className="bg-slate-50/90 p-4 rounded-xl border-2 border-slate-200 hover:border-[#002625]/40 transition-all space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-[#002625]/10 flex items-center justify-center text-[#002625]">
+                      <Package size={16} />
+                    </div>
+                    <div>
+                      <span className="text-[14px] font-black text-[#002625] block leading-tight">Customer Support</span>
+                      <span className="text-[11px] text-slate-500 font-semibold">Shopping Users</span>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-[#002625] text-white">
+                    🛍️ /support
+                  </span>
+                </div>
+                
+                <div>
+                  <label className="block text-[13px] font-black text-[#002625] mb-1">Customer Phone Number</label>
+                  <input 
+                    type="text" 
+                    value={supportForm.customerPhone}
+                    onChange={(e) => setSupportForm({ ...supportForm, customerPhone: e.target.value })}
+                    className="w-full bg-white border-2 border-slate-300 rounded-lg px-3 py-2 text-[14px] text-slate-900 font-bold focus:outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-[#ff5500]/20 transition-all shadow-2xs"
+                    placeholder="+91 63774 60692"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-black text-[#002625] mb-1">Customer Support Email</label>
+                  <input 
+                    type="email" 
+                    value={supportForm.customerEmail}
+                    onChange={(e) => setSupportForm({ ...supportForm, customerEmail: e.target.value })}
+                    className="w-full bg-white border-2 border-slate-300 rounded-lg px-3 py-2 text-[14px] text-slate-900 font-bold focus:outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-[#ff5500]/20 transition-all shadow-2xs"
+                    placeholder="shippnexin26@gmail.com"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-black text-[#002625] mb-1">Working Hours / Note</label>
+                  <input 
+                    type="text" 
+                    value={supportForm.customerHours}
+                    onChange={(e) => setSupportForm({ ...supportForm, customerHours: e.target.value })}
+                    className="w-full bg-white border-2 border-slate-300 rounded-lg px-3 py-2 text-[13.5px] text-slate-900 font-semibold focus:outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-[#ff5500]/20 transition-all shadow-2xs"
+                    placeholder="24/7 Priority Support"
+                  />
+                </div>
+              </div>
+
+              {/* 2. Seller Support */}
+              <div className="bg-slate-50/90 p-4 rounded-xl border-2 border-slate-200 hover:border-[#ff5500]/40 transition-all space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-[#ff5500]/15 flex items-center justify-center text-[#ff5500]">
+                      <Store size={16} />
+                    </div>
+                    <div>
+                      <span className="text-[14px] font-black text-[#002625] block leading-tight">Seller Support</span>
+                      <span className="text-[11px] text-slate-500 font-semibold">Merchants & Stores</span>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-[#ff5500] text-white">
+                    🏪 /seller/support
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-[13px] font-black text-[#002625] mb-1">Merchant Helpline Phone</label>
+                  <input 
+                    type="text" 
+                    value={supportForm.sellerPhone}
+                    onChange={(e) => setSupportForm({ ...supportForm, sellerPhone: e.target.value })}
+                    className="w-full bg-white border-2 border-slate-300 rounded-lg px-3 py-2 text-[14px] text-slate-900 font-bold focus:outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-[#ff5500]/20 transition-all shadow-2xs"
+                    placeholder="+91 63774 60692"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-black text-[#002625] mb-1">Merchant Relations Email</label>
+                  <input 
+                    type="email" 
+                    value={supportForm.sellerEmail}
+                    onChange={(e) => setSupportForm({ ...supportForm, sellerEmail: e.target.value })}
+                    className="w-full bg-white border-2 border-slate-300 rounded-lg px-3 py-2 text-[14px] text-slate-900 font-bold focus:outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-[#ff5500]/20 transition-all shadow-2xs"
+                    placeholder="shippnexin26@gmail.com"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-black text-[#002625] mb-1">Merchant Support Hours</label>
+                  <input 
+                    type="text" 
+                    value={supportForm.sellerHours}
+                    onChange={(e) => setSupportForm({ ...supportForm, sellerHours: e.target.value })}
+                    className="w-full bg-white border-2 border-slate-300 rounded-lg px-3 py-2 text-[13.5px] text-slate-900 font-semibold focus:outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-[#ff5500]/20 transition-all shadow-2xs"
+                    placeholder="Mon - Sat (9 AM - 8 PM)"
+                  />
+                </div>
+              </div>
+
+              {/* 3. Captain Support */}
+              <div className="bg-slate-50/90 p-4 rounded-xl border-2 border-slate-200 hover:border-emerald-600/40 transition-all space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-800">
+                      <Truck size={16} />
+                    </div>
+                    <div>
+                      <span className="text-[14px] font-black text-[#002625] block leading-tight">Captain Dispatch</span>
+                      <span className="text-[11px] text-slate-500 font-semibold">Delivery Drivers</span>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-emerald-700 text-white">
+                    🚚 /captain/support
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-[13px] font-black text-[#002625] mb-1">Dispatch Helpline Phone</label>
+                  <input 
+                    type="text" 
+                    value={supportForm.captainPhone}
+                    onChange={(e) => setSupportForm({ ...supportForm, captainPhone: e.target.value })}
+                    className="w-full bg-white border-2 border-slate-300 rounded-lg px-3 py-2 text-[14px] text-slate-900 font-bold focus:outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-[#ff5500]/20 transition-all shadow-2xs"
+                    placeholder="+91 63774 60692"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-black text-[#002625] mb-1">Dispatch Support Email</label>
+                  <input 
+                    type="email" 
+                    value={supportForm.captainEmail}
+                    onChange={(e) => setSupportForm({ ...supportForm, captainEmail: e.target.value })}
+                    className="w-full bg-white border-2 border-slate-300 rounded-lg px-3 py-2 text-[14px] text-slate-900 font-bold focus:outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-[#ff5500]/20 transition-all shadow-2xs"
+                    placeholder="shippnexin26@gmail.com"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-black text-[#002625] mb-1">Dispatch Availability</label>
+                  <input 
+                    type="text" 
+                    value={supportForm.captainHours}
+                    onChange={(e) => setSupportForm({ ...supportForm, captainHours: e.target.value })}
+                    className="w-full bg-white border-2 border-slate-300 rounded-lg px-3 py-2 text-[13.5px] text-slate-900 font-semibold focus:outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-[#ff5500]/20 transition-all shadow-2xs"
+                    placeholder="24/7 Active Dispatch Line"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-2 border-t border-slate-100">
+              <button 
+                type="submit" 
+                disabled={savingSupport}
+                className="px-6 py-2.5 bg-[#ff5500] hover:bg-[#e04a00] active:scale-98 text-white text-[14px] font-black rounded-xl transition-all border-none cursor-pointer shadow-md flex items-center gap-2 disabled:opacity-60"
+              >
+                <CheckCircle size={17} className="text-white" /> 
+                {savingSupport ? 'Saving Support Contacts...' : 'Save Support Contacts to Live DB'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* App Visibility Breakdown Cards (KPIs) - Themed & High Contrast */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
         
-        {/* Left Section: Add / Edit FAQ */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-[#ff661a] px-5 py-3.5 flex justify-between items-center text-white">
-            <h3 className="text-sm font-bold tracking-wide">{editingFaqId ? 'Edit FAQ' : 'Add FAQ'}</h3>
+        {/* Total FAQs */}
+        <div 
+          onClick={() => { setSelectedAppFilter('ALL'); setCurrentPage(1); }}
+          className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+            selectedAppFilter === 'ALL'
+              ? 'bg-[#002625] text-white border-[#002625] shadow-md ring-2 ring-[#002625]/20'
+              : 'bg-white border-slate-200 text-slate-800 hover:border-[#002625]/40 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[13.5px] font-black">All Questions</span>
+            <Boxes size={17} className={selectedAppFilter === 'ALL' ? 'text-[#ff5500]' : 'text-slate-400'} />
+          </div>
+          <p className="text-[26px] font-black my-0.5 tracking-tight leading-none">{appCounts.total}</p>
+          <span className={`text-[12px] font-bold ${selectedAppFilter === 'ALL' ? 'text-teal-200' : 'text-slate-500'}`}>Total Questions</span>
+        </div>
+
+        {/* Customer App */}
+        <div 
+          onClick={() => { setSelectedAppFilter('Customer'); setCurrentPage(1); }}
+          className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+            selectedAppFilter === 'Customer'
+              ? 'bg-[#002625] text-white border-[#002625] shadow-md ring-2 ring-[#002625]/20'
+              : 'bg-white border-slate-200 hover:border-[#002625]/40 text-slate-800 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className={`text-[13.5px] font-black ${selectedAppFilter === 'Customer' ? 'text-white' : 'text-[#002625]'}`}>Customer App</span>
+            <Package size={17} className={selectedAppFilter === 'Customer' ? 'text-[#ff5500]' : 'text-[#002625]'} />
+          </div>
+          <p className={`text-[26px] font-black my-0.5 tracking-tight leading-none ${selectedAppFilter === 'Customer' ? 'text-white' : 'text-[#002625]'}`}>{appCounts.customer}</p>
+          <span className={`text-[12px] font-bold ${selectedAppFilter === 'Customer' ? 'text-teal-200' : 'text-slate-500'}`}>Shopping users</span>
+        </div>
+
+        {/* Seller Panel */}
+        <div 
+          onClick={() => { setSelectedAppFilter('Seller'); setCurrentPage(1); }}
+          className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+            selectedAppFilter === 'Seller'
+              ? 'bg-[#ff5500] text-white border-[#ff5500] shadow-md ring-2 ring-[#ff5500]/20'
+              : 'bg-white border-slate-200 hover:border-[#ff5500]/40 text-slate-800 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className={`text-[13.5px] font-black ${selectedAppFilter === 'Seller' ? 'text-white' : 'text-[#ff5500]'}`}>Seller Panel</span>
+            <Store size={17} className={selectedAppFilter === 'Seller' ? 'text-white' : 'text-[#ff5500]'} />
+          </div>
+          <p className={`text-[26px] font-black my-0.5 tracking-tight leading-none ${selectedAppFilter === 'Seller' ? 'text-white' : 'text-[#ff5500]'}`}>{appCounts.seller}</p>
+          <span className={`text-[12px] font-bold ${selectedAppFilter === 'Seller' ? 'text-white/90' : 'text-slate-500'}`}>Merchants & Stores</span>
+        </div>
+
+        {/* Captain App */}
+        <div 
+          onClick={() => { setSelectedAppFilter('Delivery Captain'); setCurrentPage(1); }}
+          className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+            selectedAppFilter === 'Delivery Captain'
+              ? 'bg-emerald-700 text-white border-emerald-700 shadow-md ring-2 ring-emerald-600/20'
+              : 'bg-white border-slate-200 hover:border-emerald-600/40 text-slate-800 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className={`text-[13.5px] font-black ${selectedAppFilter === 'Delivery Captain' ? 'text-white' : 'text-emerald-700'}`}>Captain App</span>
+            <Truck size={17} className={selectedAppFilter === 'Delivery Captain' ? 'text-white' : 'text-emerald-600'} />
+          </div>
+          <p className={`text-[26px] font-black my-0.5 tracking-tight leading-none ${selectedAppFilter === 'Delivery Captain' ? 'text-white' : 'text-emerald-700'}`}>{appCounts.captain}</p>
+          <span className={`text-[12px] font-bold ${selectedAppFilter === 'Delivery Captain' ? 'text-emerald-100' : 'text-slate-500'}`}>Delivery drivers</span>
+        </div>
+
+        {/* General / All */}
+        <div 
+          onClick={() => { setSelectedAppFilter('General'); setCurrentPage(1); }}
+          className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between col-span-2 sm:col-span-1 ${
+            selectedAppFilter === 'General'
+              ? 'bg-slate-800 text-white border-slate-800 shadow-md ring-2 ring-slate-700/20'
+              : 'bg-white border-slate-200 hover:border-slate-400 text-slate-800 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className={`text-[13.5px] font-black ${selectedAppFilter === 'General' ? 'text-white' : 'text-slate-800'}`}>General</span>
+            <HelpCircle size={17} className={selectedAppFilter === 'General' ? 'text-white' : 'text-slate-500'} />
+          </div>
+          <p className={`text-[26px] font-black my-0.5 tracking-tight leading-none ${selectedAppFilter === 'General' ? 'text-white' : 'text-slate-800'}`}>{appCounts.general}</p>
+          <span className={`text-[12px] font-bold ${selectedAppFilter === 'General' ? 'text-slate-300' : 'text-slate-500'}`}>All apps & web</span>
+        </div>
+
+      </div>
+
+      {/* Simple "Add / Edit Question" Form - Compact & Clear */}
+      {isFormOpen && (
+        <div className="bg-white rounded-2xl border-2 border-orange-200 shadow-xs overflow-hidden animate-fadeIn">
+          <div className="bg-[#002625] px-5 py-3 text-white flex items-center justify-between border-b border-[#003837]">
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">{editingFaqId ? '✏️' : '➕'}</span>
+              <h3 className="text-[14.5px] font-black m-0 tracking-wide text-white">
+                {editingFaqId ? 'Edit FAQ Question' : 'Add New FAQ Question'}
+              </h3>
+            </div>
             {editingFaqId && (
               <button 
                 type="button" 
                 onClick={handleCancelEdit} 
-                className="text-xs bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg border-none cursor-pointer"
+                className="text-[12.5px] bg-white/15 hover:bg-white/25 text-white px-3 py-1 rounded-lg border-none cursor-pointer font-bold transition-colors"
               >
-                Cancel Edit
+                ✕ Cancel Edit
               </button>
             )}
           </div>
 
-          <form onSubmit={handleSaveFaq} className="p-5 space-y-4 text-xs text-slate-700">
-            <div>
-              <label className="block font-bold text-slate-800 mb-1.5">FAQ Question</label>
-              <input 
-                type="text" 
-                placeholder="Enter FAQ Question"
-                value={faqQuestion}
-                onChange={(e) => setFaqQuestion(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#ff661a] transition-colors"
-                required
-              />
+          <form onSubmit={handleSaveFaq} className="p-4 sm:p-5 space-y-3.5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              
+              {/* Target App Dropdown */}
+              <div className="md:col-span-1">
+                <label className="block text-[13.5px] font-black text-[#002625] mb-1">
+                  Select App / Panel <span className="text-rose-500">*</span>
+                </label>
+                <select 
+                  value={targetApp}
+                  onChange={(e) => setTargetApp(e.target.value)}
+                  className="w-full bg-white border-2 border-slate-300 rounded-lg px-3 py-2 text-[14px] text-slate-900 font-bold focus:outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-[#ff5500]/20 transition-all cursor-pointer shadow-2xs"
+                >
+                  <option value="Customer">🛍️ Customer App (Shopping Users)</option>
+                  <option value="Seller">🏪 Seller Panel (Merchants)</option>
+                  <option value="Delivery Captain">🚚 Delivery Captain App (Drivers)</option>
+                  <option value="General">🌐 General (Visible to All Apps)</option>
+                </select>
+                <p className="text-[12px] text-slate-500 mt-1 m-0 font-medium">Target audience for this question.</p>
+              </div>
+
+              {/* Question Input */}
+              <div className="md:col-span-2">
+                <label className="block text-[13.5px] font-black text-[#002625] mb-1">
+                  Question <span className="text-rose-500">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="e.g., How can I track my shipment live?"
+                  value={faqQuestion}
+                  onChange={(e) => setFaqQuestion(e.target.value)}
+                  className="w-full bg-white border-2 border-slate-300 rounded-lg px-3 py-2 text-[14px] text-slate-900 placeholder:text-slate-400 font-bold focus:outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-[#ff5500]/20 transition-all shadow-2xs"
+                  required
+                />
+              </div>
+
             </div>
 
+            {/* Answer Textarea */}
             <div>
-              <label className="block font-bold text-slate-800 mb-1.5">FAQ Category (For User Type)</label>
-              <select 
-                value={faqCategory}
-                onChange={(e) => setFaqCategory(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
-              >
-                <option value="General (Visible to all)">General (Visible to all)</option>
-                <option value="Customer">Customer</option>
-                <option value="Seller">Seller</option>
-                <option value="Delivery Captain">Delivery Captain</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-800 mb-1.5">FAQ Answer</label>
+              <label className="block text-[13.5px] font-black text-[#002625] mb-1">
+                Answer <span className="text-rose-500">*</span>
+              </label>
               <textarea 
-                rows={5}
-                placeholder="Enter FAQ Answer"
+                rows={3}
+                placeholder="e.g., Go to your Orders section or enter your tracking ID on the Track Order page for real-time GPS tracking updates."
                 value={faqAnswer}
                 onChange={(e) => setFaqAnswer(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#ff661a] transition-colors resize-y"
+                className="w-full bg-white border-2 border-slate-300 rounded-lg p-3 text-[14px] text-slate-900 placeholder:text-slate-400 font-medium focus:outline-none focus:border-[#ff5500] focus:ring-2 focus:ring-[#ff5500]/20 transition-all resize-y leading-relaxed shadow-2xs"
                 required
               />
+            </div>
+
+            {/* Submit Actions */}
+            <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+              {editingFaqId && (
+                <button 
+                  type="button" 
+                  onClick={handleCancelEdit} 
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[13.5px] font-bold rounded-xl border-none cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
+              <button 
+                type="submit" 
+                className="px-5 py-2 bg-[#ff5500] hover:bg-[#e04a00] active:scale-98 text-white text-[13.5px] font-black rounded-xl transition-all border-none cursor-pointer shadow-sm flex items-center gap-2"
+              >
+                <CheckCircle size={16} /> {editingFaqId ? 'Update Question' : 'Save & Publish Question'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Questions Data Table - Compact & Legible */}
+      <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-2xs overflow-hidden">
+        
+        {/* Table Controls Bar */}
+        <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
+          
+          {/* Left: Filter Buttons */}
+          <div className="flex items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+            <button 
+              onClick={() => { setSelectedAppFilter('ALL'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 rounded-xl text-[13px] font-black border-2 transition-all cursor-pointer whitespace-nowrap ${
+                selectedAppFilter === 'ALL'
+                  ? 'bg-[#002625] text-white border-[#002625] shadow-xs'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              All ({appCounts.total})
+            </button>
+            <button 
+              onClick={() => { setSelectedAppFilter('Customer'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 rounded-xl text-[13px] font-black border-2 transition-all cursor-pointer whitespace-nowrap ${
+                selectedAppFilter === 'Customer'
+                  ? 'bg-[#002625] text-white border-[#002625] shadow-xs'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              🛍️ Customer ({appCounts.customer})
+            </button>
+            <button 
+              onClick={() => { setSelectedAppFilter('Seller'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 rounded-xl text-[13px] font-black border-2 transition-all cursor-pointer whitespace-nowrap ${
+                selectedAppFilter === 'Seller'
+                  ? 'bg-[#ff5500] text-white border-[#ff5500] shadow-xs'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              🏪 Seller ({appCounts.seller})
+            </button>
+            <button 
+              onClick={() => { setSelectedAppFilter('Delivery Captain'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 rounded-xl text-[13px] font-black border-2 transition-all cursor-pointer whitespace-nowrap ${
+                selectedAppFilter === 'Delivery Captain'
+                  ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              🚚 Captain ({appCounts.captain})
+            </button>
+            <button 
+              onClick={() => { setSelectedAppFilter('General'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 rounded-xl text-[13px] font-black border-2 transition-all cursor-pointer whitespace-nowrap ${
+                selectedAppFilter === 'General'
+                  ? 'bg-slate-800 text-white border-slate-800 shadow-xs'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              🌐 General ({appCounts.general})
+            </button>
+          </div>
+
+          {/* Right: Search & Export */}
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                placeholder="Search questions..."
+                className="bg-white border-2 border-slate-200 rounded-xl pl-9 pr-7 py-1.5 text-[13.5px] font-semibold text-slate-900 focus:outline-none focus:border-[#ff5500] w-52 shadow-2xs"
+              />
+              {search && (
+                <button 
+                  onClick={() => setSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer p-0 text-[12px] font-bold"
+                >
+                  ✕
+                </button>
+              )}
             </div>
 
             <button 
-              type="submit" 
-              className="w-full py-2.5 bg-[#ff661a] hover:bg-[#e65200] text-white text-xs font-bold rounded-xl transition-colors border-none cursor-pointer shadow-sm mt-2"
+              type="button" 
+              onClick={handleExport}
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[13px] font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 transition-colors"
+              title="Export CSV"
             >
-              {editingFaqId ? 'Update FAQ' : 'Add FAQ'}
+              <Download size={14} /> Export
             </button>
-          </form>
-        </div>
-
-        {/* Right Section: View FAQ Table */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-[#ff661a] px-5 py-3.5 text-white">
-            <h3 className="text-sm font-bold tracking-wide">View FAQ</h3>
           </div>
 
-          <div className="p-4 space-y-4">
-            {/* Control Bar: Show count, Filter category, Export, Search */}
-            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <span>Show</span>
-                  <select 
-                    value={entriesPerPage}
-                    onChange={(e) => { setEntriesPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                    className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#ff661a]"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                  </select>
-                </div>
+        </div>
 
-                <div className="flex items-center gap-1.5">
-                  <span>Filter:</span>
-                  <select 
-                    value={categoryFilter}
-                    onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
-                    className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#ff661a]"
-                  >
-                    <option value="All Categories">All Categories</option>
-                    <option value="General (Visible to all)">General (Visible to all)</option>
-                    <option value="Customer">Customer</option>
-                    <option value="Seller">Seller</option>
-                    <option value="Delivery Captain">Delivery Captain</option>
-                  </select>
-                </div>
+        {/* Table Content */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-800 font-bold text-[13px]">
+                <th className="py-2.5 px-3.5 w-12 text-center">#</th>
+                <th className="py-2.5 px-3.5 w-44">Target App / Panel</th>
+                <th className="py-2.5 px-3.5 w-1/3">Question</th>
+                <th className="py-2.5 px-3.5">Answer</th>
+                <th className="py-2.5 px-3.5 text-center w-24">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-700">
+              {currentFaqs.length > 0 ? (
+                currentFaqs.map((faq, idx) => {
+                  const badge = getAppBadge(faq.category);
+                  const isCurrentEditing = editingFaqId === (faq._id || faq.id);
+                  return (
+                    <tr 
+                      key={faq._id || faq.id || idx} 
+                      className={`hover:bg-slate-50/80 transition-colors ${
+                        isCurrentEditing ? 'bg-orange-50/60 font-medium' : ''
+                      }`}
+                    >
+                      <td className="py-2.5 px-3.5 text-center font-mono font-bold text-[13.5px] text-slate-400">
+                        {indexOfFirstItem + idx + 1}
+                      </td>
 
-                <button 
-                  type="button" 
-                  onClick={handleExport}
-                  className="px-3 py-1 bg-[#ff661a] hover:bg-[#e65200] text-white text-xs font-bold rounded-lg border-none cursor-pointer flex items-center gap-1 transition-colors"
-                >
-                  <Download size={13} /> Export
-                </button>
-              </div>
+                      <td className="py-2.5 px-3.5">
+                        <span className={`px-2.5 py-1 rounded-full text-[12.5px] font-bold border inline-flex items-center gap-1 ${badge.bg}`}>
+                          {badge.label}
+                        </span>
+                      </td>
 
-              <div className="flex items-center gap-1.5">
-                <span>Search:</span>
-                <input 
-                  type="text" 
-                  value={search}
-                  onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-                  placeholder="Search..."
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] w-32 sm:w-40"
-                />
-              </div>
-            </div>
+                      <td className="py-2.5 px-3.5 font-bold text-slate-900 text-[14.5px] leading-snug">
+                        {faq.question}
+                      </td>
 
-            {/* Table */}
-            <div className="overflow-x-auto border border-slate-100 rounded-xl">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
-                    <th className="py-3 px-3 w-12 text-center">ID</th>
-                    <th className="py-3 px-3">Category</th>
-                    <th className="py-3 px-3">FAQ Question</th>
-                    <th className="py-3 px-3">FAQ Answer</th>
-                    <th className="py-3 px-3 text-center w-20">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {currentFaqs.length > 0 ? (
-                    currentFaqs.map((faq) => (
-                      <tr key={faq.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3 px-3 text-center font-mono font-bold text-slate-500">{faq.id}</td>
-                        <td className="py-3 px-3 font-medium text-slate-800">{faq.category}</td>
-                        <td className="py-3 px-3 font-semibold text-slate-900">{faq.question}</td>
-                        <td className="py-3 px-3 text-slate-600 max-w-xs truncate">{faq.answer}</td>
-                        <td className="py-3 px-3 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button 
-                              onClick={() => handleEditClick(faq)}
-                              className="p-1.5 bg-slate-100 hover:bg-[#ff661a] hover:text-white text-slate-600 rounded-lg transition-colors border-none cursor-pointer"
-                              title="Edit FAQ"
-                            >
-                              <Edit3 size={13} />
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteClick(faq.id)}
-                              className="p-1.5 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 rounded-lg transition-colors border-none cursor-pointer"
-                              title="Delete FAQ"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="5" className="py-8 text-center text-slate-400 italic">
-                        No FAQs found.
+                      <td className="py-2.5 px-3.5 text-slate-700 text-[13.5px] leading-relaxed max-w-md font-normal">
+                        {faq.answer}
+                      </td>
+
+                      <td className="py-2.5 px-3.5 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button 
+                            onClick={() => handleEditClick(faq)}
+                            className="p-1.5 bg-slate-100 hover:bg-[#ff5500] hover:text-white text-slate-600 rounded-lg transition-colors border-none cursor-pointer"
+                            title="Edit Question"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteClick(faq)}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 rounded-lg transition-colors border-none cursor-pointer"
+                            title="Delete Question"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="5" className="py-8 text-center text-slate-400">
+                    <HelpCircle size={28} className="mx-auto mb-2 text-slate-300" />
+                    <p className="font-bold text-slate-700 text-[14px] m-0">No questions found</p>
+                    <p className="text-[13px] text-slate-400 mt-0.5 m-0">
+                      {search || selectedAppFilter !== 'ALL' 
+                        ? 'Try clearing filters or searching another keyword.' 
+                        : 'Click "+ Add New Question" to create your first FAQ.'}
+                    </p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-            {/* Pagination Controls */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-slate-500">
-              <span>
-                Showing {filteredFaqs.length > 0 ? indexOfFirstItem + 1 : 0} to {Math.min(indexOfLastItem, filteredFaqs.length)} of {filteredFaqs.length} entries
+        {/* Table Footer / Pagination */}
+        <div className="p-2.5 sm:p-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-[13px] text-slate-600 font-medium">
+          <span>
+            Showing {filteredFaqs.length > 0 ? indexOfFirstItem + 1 : 0} to {Math.min(indexOfLastItem, filteredFaqs.length)} of {filteredFaqs.length} questions
+          </span>
+
+          {totalPages > 1 && (
+            <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 items-center">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1 text-[12.5px] font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
+              >
+                ‹ Prev
+              </button>
+              <span className="px-3 py-1 bg-[#ff5500] text-white text-[13px] font-bold rounded-md">
+                {currentPage} / {totalPages}
               </span>
-
-              <div className="inline-flex rounded-xl border border-slate-200 p-0.5 bg-slate-50 items-center">
-                <button 
-                  onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
-                >
-                  ‹
-                </button>
-                <span className="px-3 py-1 bg-[#ff661a] text-white text-xs font-bold rounded-lg">
-                  {currentPage}
-                </span>
-                <button 
-                  onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
-                >
-                  ›
-                </button>
-              </div>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-2.5 py-1 text-[12.5px] font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
+              >
+                Next ›
+              </button>
             </div>
-
-          </div>
+          )}
         </div>
 
       </div>
 
-      {/* Bottom Section: FAQ & Company Contact Details */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden max-w-4xl">
-        <div className="bg-[#ff661a] px-5 py-3.5 text-white">
-          <h3 className="text-sm font-bold tracking-wide">FAQ & Company Contact Details</h3>
-        </div>
-
-        <form onSubmit={handleUpdateContact} className="p-6 space-y-4 text-xs text-slate-700">
-          <div>
-            <label className="block font-bold text-slate-800 mb-1.5">Company Name (Invoice From)</label>
-            <input 
-              type="text" 
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block font-bold text-slate-800 mb-1.5">Company Phone (Invoice)</label>
-              <input 
-                type="text" 
-                value={companyPhone}
-                onChange={(e) => setCompanyPhone(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
-                required
-              />
-            </div>
-            <div>
-              <label className="block font-bold text-slate-800 mb-1.5">Company Email (Invoice)</label>
-              <input 
-                type="email" 
-                value={companyEmail}
-                onChange={(e) => setCompanyEmail(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-bold text-slate-800 mb-1.5">Company Website (Invoice)</label>
-            <input 
-              type="text" 
-              value={companyWebsite}
-              onChange={(e) => setCompanyWebsite(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
-              required
-            />
-          </div>
-
-          <div className="pt-2 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block font-bold text-slate-800 mb-1.5">Support Email (FAQ Page)</label>
-              <input 
-                type="email" 
-                value={supportEmail}
-                onChange={(e) => setSupportEmail(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
-                required
-              />
-            </div>
-            <div>
-              <label className="block font-bold text-slate-800 mb-1.5">Support Phone (FAQ Page)</label>
-              <input 
-                type="text" 
-                value={supportPhone}
-                onChange={(e) => setSupportPhone(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff661a] transition-colors"
-                required
-              />
-            </div>
-          </div>
-
-          <button 
-            type="submit" 
-            className="w-full py-2.5 bg-[#ff661a] hover:bg-[#e65200] text-white text-xs font-bold rounded-xl transition-colors border-none cursor-pointer shadow-sm mt-4"
-          >
-            Update Contact Details
-          </button>
-        </form>
-      </div>
     </div>
   );
 };

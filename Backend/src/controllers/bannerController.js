@@ -26,9 +26,21 @@ const initialBanners = [
   },
 ];
 
+// In-memory cache for ultra-fast banner lookups (TTL: 60s)
+let bannerCache = { data: null, timestamp: 0 };
+
+export const invalidateBannerCache = () => {
+  bannerCache = { data: null, timestamp: 0 };
+};
+
 // Get all banners (Public for User App)
 export const getBanners = async (req, res, next) => {
   try {
+    const now = Date.now();
+    if (!req.query.fresh && bannerCache.data && now - bannerCache.timestamp < 60000) {
+      return res.status(200).json(bannerCache.data);
+    }
+
     let banners = await Banner.find().sort({ priority: 1 }).lean();
 
     // Seed default banners if empty
@@ -36,11 +48,15 @@ export const getBanners = async (req, res, next) => {
       banners = await Banner.insertMany(initialBanners);
     }
 
-    res.status(200).json({
+    const payload = {
       success: true,
       count: banners.length,
       banners,
-    });
+    };
+
+    bannerCache = { data: payload, timestamp: now };
+
+    res.status(200).json(payload);
   } catch (error) {
     next(error);
   }
@@ -63,6 +79,8 @@ export const createBanner = async (req, res, next) => {
       status: status || 'Active',
     });
 
+    invalidateBannerCache();
+
     res.status(201).json({
       success: true,
       message: 'Banner created successfully',
@@ -82,6 +100,8 @@ export const updateBanner = async (req, res, next) => {
     if (!banner) {
       return res.status(404).json({ success: false, message: 'Banner not found' });
     }
+
+    invalidateBannerCache();
 
     res.status(200).json({
       success: true,
@@ -103,6 +123,8 @@ export const deleteBanner = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Banner not found' });
     }
 
+    invalidateBannerCache();
+
     res.status(200).json({
       success: true,
       message: 'Banner deleted successfully',
@@ -111,3 +133,4 @@ export const deleteBanner = async (req, res, next) => {
     next(error);
   }
 };
+

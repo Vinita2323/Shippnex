@@ -30,7 +30,10 @@ import sellerRoutes from './routes/sellerRoutes.js';
 import profileEditRequestRoutes from './routes/profileEditRequestRoutes.js';
 import ratingRoutes from './routes/ratingRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
+import faqRoutes from './routes/faqRoutes.js';
+import supportRoutes from './routes/supportRoutes.js';
 import compression from 'compression';
+import performanceLogger from './middleware/performanceMiddleware.js';
 
 import { fileURLToPath } from 'url';
 
@@ -40,6 +43,9 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
+
+// Performance Timing Middleware (Logs latency & attaches X-Response-Time header)
+app.use(performanceLogger);
 
 // Middlewares
 app.use(compression({
@@ -95,6 +101,9 @@ const registerRoutes = (prefix = '') => {
   app.use(`${prefix}/ratings`, ratingRoutes);
   app.use(`${prefix}/transport/ratings`, ratingRoutes);
   app.use(`${prefix}/reviews`, reviewRoutes);
+  app.use(`${prefix}/faqs`, faqRoutes);
+  app.use(`${prefix}/support-settings`, supportRoutes);
+  app.use(`${prefix}/support`, supportRoutes);
 };
 
 app.use('', healthRoutes);

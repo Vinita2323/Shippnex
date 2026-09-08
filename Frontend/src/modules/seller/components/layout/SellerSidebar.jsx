@@ -15,7 +15,8 @@ import {
   RotateCcw,
   LogOut, 
   ChevronDown, 
-  ChevronUp 
+  ChevronUp,
+  HelpCircle
 } from 'lucide-react';
 
 const SellerSidebar = ({ isOpen, setIsOpen }) => {
@@ -212,6 +213,20 @@ const SellerSidebar = ({ isOpen, setIsOpen }) => {
         >
           <RotateCcw size={20} className="shrink-0 text-white" />
           {isOpen && <span>Return</span>}
+        </Link>
+
+        {/* 9. Help & Support */}
+        <Link
+          to="/seller/support"
+          className={`flex items-center ${isOpen ? 'gap-3 px-4' : 'justify-center px-2'} py-3 rounded-xl transition-all cursor-pointer font-semibold text-[15px] ${
+            isActive('/seller/support') || isActive('/seller/faqs') || isActive('/seller/help')
+              ? 'bg-[#0b3d3b] text-white shadow-sm font-bold border-l-4 border-[#ff5500]'
+              : 'text-slate-200 hover:bg-[#0b3d3b]/60'
+          }`}
+          title={!isOpen ? 'Help & Support' : undefined}
+        >
+          <HelpCircle size={20} className="shrink-0 text-white" />
+          {isOpen && <span>Help & Support</span>}
         </Link>
 
       </nav>

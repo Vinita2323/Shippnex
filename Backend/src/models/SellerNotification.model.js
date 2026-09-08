@@ -117,5 +117,11 @@ const sellerNotificationSchema = new mongoose.Schema(
   }
 );
 
+sellerNotificationSchema.index({ sellerId: 1, status: 1, createdAt: -1 });
+sellerNotificationSchema.index({ sellerId: 1, settlementStatus: 1 });
+sellerNotificationSchema.index({ order: 1 });
+sellerNotificationSchema.index({ orderId: 1 });
+sellerNotificationSchema.index({ createdAt: -1 });
+
 const SellerNotification = mongoose.model('SellerNotification', sellerNotificationSchema);
 export default SellerNotification;

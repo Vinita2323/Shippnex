@@ -111,6 +111,9 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.index({ 'addresses.location': '2dsphere' });
+userSchema.index({ role: 1, createdAt: -1 });
+userSchema.index({ email: 1 });
+userSchema.index({ createdAt: -1 });
 
 const User = mongoose.model('User', userSchema);
 export default User;

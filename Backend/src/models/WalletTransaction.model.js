@@ -72,5 +72,9 @@ const walletTransactionSchema = new mongoose.Schema(
   }
 );
 
+walletTransactionSchema.index({ sellerId: 1, createdAt: -1 });
+walletTransactionSchema.index({ orderId: 1 });
+walletTransactionSchema.index({ createdAt: -1 });
+
 const WalletTransaction = mongoose.model('WalletTransaction', walletTransactionSchema);
 export default WalletTransaction;

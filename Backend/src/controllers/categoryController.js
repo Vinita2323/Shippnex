@@ -12,21 +12,40 @@ const initialCategories = [
   { name: 'Personal Care', icon: 'Heart', image: '/uploads/categories/personalcare-removebg-preview.png', priority: 8, status: 'Active' },
 ];
 
+// In-memory cache for ultra-fast category lookups (TTL: 60s)
+let categoriesCache = { data: null, timestamp: 0 };
+
+export const invalidateCategoriesCache = () => {
+  categoriesCache = { data: null, timestamp: 0 };
+};
+
 // Get all categories (Public)
 export const getCategories = async (req, res, next) => {
   try {
-    let categories = await Category.find().sort({ priority: 1 }).lean();
+    const now = Date.now();
+    if (!req.query.fresh && categoriesCache.data && now - categoriesCache.timestamp < 60000) {
+      return res.status(200).json(categoriesCache.data);
+    }
+
+    let categories = await Category.find()
+      .select('name slug icon image parent status priority')
+      .sort({ priority: 1 })
+      .lean();
 
     // Seed default categories if database is empty
     if (categories.length === 0) {
       categories = await Category.insertMany(initialCategories);
     }
 
-    res.status(200).json({
+    const payload = {
       success: true,
       count: categories.length,
       categories,
-    });
+    };
+
+    categoriesCache = { data: payload, timestamp: now };
+
+    res.status(200).json(payload);
   } catch (error) {
     next(error);
   }
@@ -55,6 +74,8 @@ export const createCategory = async (req, res, next) => {
       parent: parent || null,
     });
 
+    invalidateCategoriesCache();
+
     res.status(201).json({
       success: true,
       message: 'Category created successfully',
@@ -75,6 +96,8 @@ export const updateCategory = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Category not found' });
     }
 
+    invalidateCategoriesCache();
+
     res.status(200).json({
       success: true,
       message: 'Category updated successfully',
@@ -94,6 +117,8 @@ export const deleteCategory = async (req, res, next) => {
     if (!category) {
       return res.status(404).json({ success: false, message: 'Category not found' });
     }
+
+    invalidateCategoriesCache();
 
     res.status(200).json({
       success: true,

@@ -13,6 +13,7 @@ import {
   MapPin,
   FileText,
   Star,
+  Trash2,
 } from 'lucide-react';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import { captainService, authService } from '../../../services/authService';
@@ -78,6 +79,10 @@ const CaptainProfile = () => {
       setShowBreakdownModal(true);
     } else if (id === 'service-areas') {
       navigate('/captain/service-areas');
+    } else if (id === 'help') {
+      navigate('/captain/support');
+    } else if (id === 'delete-account') {
+      navigate('/captain/delete-account');
     } else {
       setActiveModal(id);
     }
@@ -137,6 +142,13 @@ const CaptainProfile = () => {
       label: 'Logout Account',
       sub: 'Sign out of partner session',
       icon: LogOut,
+      isDanger: true,
+    },
+    {
+      id: 'delete-account',
+      label: 'Delete Account',
+      sub: 'Permanently remove captain profile & data',
+      icon: Trash2,
       isDanger: true,
     },
   ];

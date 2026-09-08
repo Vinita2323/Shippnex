@@ -4,14 +4,18 @@ import { Search, Heart, Star, Filter, Plus, Minus, Check, Trash2 } from 'lucide-
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { categoryService, productService } from '../../../services/authService';
-import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
-import oilGheeImg from '../../../assets/user/categories/OilGhee-removebg-preview.png';
-import masalaImg from '../../../assets/user/categories/masala-removebg-preview.png';
-import sugarImg from '../../../assets/user/categories/Sugar-removebg-preview.png';
-import groceryImg from '../../../assets/user/categories/Grocery-removebg-preview.png';
-import readyCookImg from '../../../assets/user/categories/readyfoot-removebg-preview.png';
-import homeCareImg from '../../../assets/user/categories/homecare-removebg-preview.png';
-import personalCareImg from '../../../assets/user/categories/personalcare-removebg-preview.png';
+import { 
+  getImageUrl, 
+  getCategoryFallbackImage,
+  grainsImg,
+  oilGheeImg,
+  masalaImg,
+  sugarImg,
+  groceryImg,
+  readyCookImg,
+  homeCareImg,
+  personalCareImg 
+} from '../../../utils/imageUtils';
 
 const fallbackCategories = [
   { name: 'Grains & Flours', image: grainsImg },
@@ -156,6 +160,8 @@ const Categories = () => {
         <div className="w-[82px] bg-white border-r border-slate-100 overflow-y-auto shrink-0 [&::-webkit-scrollbar]:hidden">
           {sidebarCategories.map((cat, idx) => {
             const isActive = activeCategory === cat.name;
+            const fallbackImg = getCategoryFallbackImage(cat.name);
+            const imgSrc = getImageUrl(cat.image, fallbackImg);
             return (
               <div 
                 key={cat._id || idx}
@@ -173,7 +179,15 @@ const Categories = () => {
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-1.5 mb-1 transition-transform ${
                   isActive ? 'scale-105' : 'opacity-80'
                 }`}>
-                  <img src={cat.image || grainsImg} alt={cat.name} className="w-full h-full object-contain" />
+                  <img 
+                    src={imgSrc} 
+                    alt={cat.name} 
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = fallbackImg;
+                    }}
+                  />
                 </div>
                 <span className={`text-[9.5px] text-center font-bold leading-tight ${
                   isActive ? 'text-[#ff5500]' : 'text-slate-600'
@@ -228,22 +242,34 @@ const Categories = () => {
                     activeSubCategory === null ? 'text-[#ff5500]' : 'text-slate-600 group-hover:text-[#ff5500]'
                   }`}>All</span>
                 </div>
-                {subCategories.map(sub => (
-                  <div 
-                    key={sub._id || sub.name} 
-                    className="flex flex-col items-center flex-shrink-0 cursor-pointer group"
-                    onClick={() => setActiveSubCategory(sub.name === activeSubCategory ? null : sub.name)}
-                  >
-                    <div className={`w-[55px] h-[55px] rounded-[14px] bg-white border flex justify-center items-center overflow-hidden mb-1.5 shadow-sm transition-all ${
-                      activeSubCategory === sub.name ? 'border-[#ff5500] shadow-md' : 'border-slate-100 group-hover:border-[#ff5500] group-hover:shadow-md'
-                    }`}>
-                      <img src={sub.image || grainsImg} alt={sub.name} className="w-[40px] h-[40px] object-contain" />
+                {subCategories.map(sub => {
+                  const subFallbackImg = getCategoryFallbackImage(sub.name || activeCategory);
+                  const subImgSrc = getImageUrl(sub.image, subFallbackImg);
+                  return (
+                    <div 
+                      key={sub._id || sub.name} 
+                      className="flex flex-col items-center flex-shrink-0 cursor-pointer group"
+                      onClick={() => setActiveSubCategory(sub.name === activeSubCategory ? null : sub.name)}
+                    >
+                      <div className={`w-[55px] h-[55px] rounded-[14px] bg-white border flex justify-center items-center overflow-hidden mb-1.5 shadow-sm transition-all ${
+                        activeSubCategory === sub.name ? 'border-[#ff5500] shadow-md' : 'border-slate-100 group-hover:border-[#ff5500] group-hover:shadow-md'
+                      }`}>
+                        <img 
+                          src={subImgSrc} 
+                          alt={sub.name} 
+                          className="w-[40px] h-[40px] object-contain"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = subFallbackImg;
+                          }} 
+                        />
+                      </div>
+                      <span className={`text-[10px] font-bold text-center w-16 leading-tight transition-colors ${
+                        activeSubCategory === sub.name ? 'text-[#ff5500]' : 'text-slate-600 group-hover:text-[#ff5500]'
+                      }`}>{sub.name}</span>
                     </div>
-                    <span className={`text-[10px] font-bold text-center w-16 leading-tight transition-colors ${
-                      activeSubCategory === sub.name ? 'text-[#ff5500]' : 'text-slate-600 group-hover:text-[#ff5500]'
-                    }`}>{sub.name}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             );
           })()}
@@ -274,7 +300,15 @@ const Categories = () => {
                     <Heart size={13} className={isInWishlist(item._id || item.id) ? "text-emerald-600 fill-emerald-600" : "text-slate-600"} />
                   </div>
                   
-                  <img src={item.mainImage || grainsImg} alt={item.name} className="w-full h-full object-cover" />
+                  <img 
+                    src={getImageUrl(item.mainImage || item.image, grainsImg)} 
+                    alt={item.name} 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = grainsImg;
+                    }} 
+                  />
                   
                   {/* Rating Pill */}
                   <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1">

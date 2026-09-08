@@ -93,12 +93,21 @@ const fallbackSellers = [
   }
 ];
 
+// In-memory cache for public sellers listing (TTL: 30s)
+let publicSellersCache = { data: null, timestamp: 0 };
+
 // @desc    Get all public sellers
 // @route   GET /api/sellers
 // @access  Public
 router.get('/', async (req, res) => {
   try {
     const { category, search } = req.query;
+    const now = Date.now();
+
+    // Cache hit for unfiltered list
+    if (!category && !search && !req.query.fresh && publicSellersCache.data && now - publicSellersCache.timestamp < 30000) {
+      return res.status(200).json(publicSellersCache.data);
+    }
 
     let dbQuery = {};
     if (search) {
@@ -110,16 +119,16 @@ router.get('/', async (req, res) => {
 
     const dbSellers = await Seller.find(dbQuery)
       .select('businessName ownerName businessType storeLogo tagline warehouseLocation categories isVerified status rating createdAt')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     // Combine DB sellers with fallback sellers
     const combined = [];
     
     // Add DB sellers
-    dbSellers.forEach(s => {
-      const plain = s.toObject();
+    dbSellers.forEach(plain => {
       combined.push({
-        _id: plain._id.toString(),
+        _id: String(plain._id),
         businessName: plain.businessName || 'Store',
         ownerName: plain.ownerName || '',
         businessType: plain.businessType || 'Retail Store',
@@ -149,11 +158,17 @@ router.get('/', async (req, res) => {
       }
     });
 
-    res.status(200).json({
+    const payload = {
       success: true,
       count: combined.length,
       sellers: combined
-    });
+    };
+
+    if (!category && !search) {
+      publicSellersCache = { data: payload, timestamp: now };
+    }
+
+    res.status(200).json(payload);
   } catch (error) {
     console.error('[PUBLIC SELLERS FETCH ERROR]', error);
     res.status(500).json({

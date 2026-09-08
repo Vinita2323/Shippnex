@@ -20,6 +20,7 @@ const Wallet = lazy(() => import('../pages/Wallet'));
 const Return = lazy(() => import('../pages/Return'));
 const SellerMembership = lazy(() => import('../pages/SellerMembership'));
 const SellerPolicyPage = lazy(() => import('../pages/SellerPolicyPage'));
+const SellerSupport = lazy(() => import('../pages/SellerSupport'));
 
 const SellerRoutes = () => {
   return (
@@ -31,6 +32,8 @@ const SellerRoutes = () => {
         <Route path="under-review" element={<SellerUnderReview />} />
         <Route path="terms" element={<SellerPolicyPage />} />
         <Route path="privacy" element={<SellerPolicyPage />} />
+        <Route path="support" element={<SellerSupport />} />
+        <Route path="faqs" element={<SellerSupport />} />
         
         {/* Protected Layout Routes */}
         <Route element={<ProtectedRoute role="seller" redirectPath="/seller/login" />}>
@@ -63,6 +66,7 @@ const SellerRoutes = () => {
             <Route path="dispatch" element={<Dispatch />} />
             <Route path="customers" element={<Customers />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="help" element={<SellerSupport />} />
             
             {/* Redirect root to dashboard */}
             <Route index element={<Navigate to="dashboard" replace />} />

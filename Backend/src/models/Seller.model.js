@@ -113,6 +113,10 @@ const sellerSchema = new mongoose.Schema(
 );
 
 sellerSchema.index({ 'warehouseLocation.location': '2dsphere' }, { sparse: true });
+sellerSchema.index({ accountStatus: 1, createdAt: -1 });
+sellerSchema.index({ status: 1, createdAt: -1 });
+sellerSchema.index({ businessName: 1 });
+sellerSchema.index({ createdAt: -1 });
 
 // Hash password before saving
 sellerSchema.pre('save', async function () {

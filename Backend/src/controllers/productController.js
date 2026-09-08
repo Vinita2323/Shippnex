@@ -162,11 +162,31 @@ export const getProducts = async (req, res) => {
       query.name = { $regex: search, $options: 'i' };
     }
 
-    const products = await Product.find(query).sort({ createdAt: -1 }).lean();
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = req.query.limit !== undefined 
+      ? (Number(req.query.limit) === 0 ? 0 : Math.min(100, Math.max(1, Number(req.query.limit))))
+      : 50;
+
+    let dbQuery = Product.find(query)
+      .select('name category subCategory brand unitValue unitType unit seller sellerId mrp salePrice stock mainImage homeSections status isFeatured isReturnable sku createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (limit > 0) {
+      dbQuery = dbQuery.skip((page - 1) * limit).limit(limit);
+    }
+
+    const [products, total] = await Promise.all([
+      dbQuery,
+      Product.countDocuments(query),
+    ]);
 
     res.status(200).json({
       success: true,
       count: products.length,
+      total,
+      page,
+      limit: limit || total,
       products
     });
   } catch (error) {

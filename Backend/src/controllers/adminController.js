@@ -147,12 +147,29 @@ export const getDashboardStats = async (req, res, next) => {
 
 export const getAllUsers = async (req, res, next) => {
   try {
-    const users = await User.find({ role: { $ne: 'admin' } })
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = req.query.limit ? Number(req.query.limit) : 50;
+
+    let dbQuery = User.find({ role: { $ne: 'admin' } })
       .select('-otp -otpExpiry')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (limit > 0) {
+      dbQuery = dbQuery.skip((page - 1) * limit).limit(limit);
+    }
+
+    const [users, total] = await Promise.all([
+      dbQuery,
+      User.countDocuments({ role: { $ne: 'admin' } }),
+    ]);
+
     res.status(200).json({
       success: true,
       count: users.length,
+      total,
+      page,
+      limit: limit || total,
       users
     });
   } catch (error) {
@@ -386,7 +403,8 @@ export const getAvailableCaptains = async (req, res, next) => {
   try {
     const captains = await Captain.find({ status: 'approved', isOnline: true })
       .select('name phone vehicleType city workingArea liveLocation walletBalance')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.status(200).json({ success: true, captains, count: captains.length });
   } catch (error) {
@@ -470,7 +488,8 @@ export const getAdminOrders = async (req, res, next) => {
       .populate('user', 'name phone email')
       .populate('captainId', 'name phone vehicleType')
       .sort({ createdAt: -1 })
-      .limit(100);
+      .limit(100)
+      .lean();
 
     res.status(200).json({ success: true, orders, count: orders.length });
   } catch (error) {

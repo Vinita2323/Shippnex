@@ -1042,3 +1042,55 @@ export const getServiceAreas = async (req, res, next) => {
     next(error);
   }
 };
+
+// ──────────────────────────────────────────────
+// DELETE /api/captain/account
+// ──────────────────────────────────────────────
+export const deleteAccount = async (req, res, next) => {
+  try {
+    const captainId = req.user.id;
+    const { reason, feedback } = req.body || {};
+
+    const captain = await Captain.findById(captainId);
+    if (!captain) {
+      return res.status(404).json({ success: false, message: 'Captain account not found.' });
+    }
+
+    // Check if captain has active orders
+    const activeOrder = await Order.findOne({
+      assignedCaptain: captainId,
+      status: { $in: ['assigned', 'out_for_delivery', 'picked_up', 'in_transit'] },
+    });
+
+    if (activeOrder) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete account while you have active deliveries in progress. Please complete or cancel ongoing orders first.',
+      });
+    }
+
+    const activeTransport = await TransportBooking.findOne({
+      captainId: captainId,
+      status: { $in: ['accepted', 'arrived', 'in_transit'] },
+    });
+
+    if (activeTransport) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete account while you have active transport rides in progress. Please finish ongoing trips first.',
+      });
+    }
+
+    // Permanently remove captain record and clean cache
+    await Captain.findByIdAndDelete(captainId);
+    invalidateCaptainDashboardCache(captainId);
+
+    res.json({
+      success: true,
+      message: 'Your Captain Partner account and associated data have been permanently deleted.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

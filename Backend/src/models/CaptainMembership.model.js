@@ -29,5 +29,9 @@ const captainMembershipSchema = new mongoose.Schema(
   { timestamps: true, collection: 'captainmemberships' }
 );
 
+captainMembershipSchema.index({ captainId: 1, membershipStatus: 1, expiryDate: 1 });
+captainMembershipSchema.index({ membershipStatus: 1, expiryDate: 1 });
+captainMembershipSchema.index({ createdAt: -1 });
+
 const CaptainMembership = mongoose.model('CaptainMembership', captainMembershipSchema);
 export default CaptainMembership;

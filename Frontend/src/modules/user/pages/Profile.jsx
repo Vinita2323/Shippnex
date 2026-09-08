@@ -199,12 +199,12 @@ const Profile = () => {
             <Heart size={18} className="text-[#ea580c]" />
             <span className="text-[13px] font-bold text-[#1e1b4b]">My Picks</span>
           </button>
-          <button className="flex items-center gap-2 bg-white border border-slate-100 rounded-[12px] p-3 shadow-sm cursor-pointer hover:border-orange-100 transition-colors">
+          <button className="flex items-center gap-2 bg-white border border-slate-100 rounded-[12px] p-3 shadow-sm cursor-pointer hover:border-orange-100 transition-colors" onClick={() => navigate('/cart')}>
             <Gift size={18} className="text-[#ea580c]" />
             <span className="text-[13px] font-bold text-[#1e1b4b]">Coupons</span>
           </button>
-          <button className="flex items-center gap-2 bg-white border border-slate-100 rounded-[12px] p-3 shadow-sm cursor-pointer hover:border-indigo-100 transition-colors">
-            <Headphones size={18} className="text-[#1e1b4b]" />
+          <button className="flex items-center gap-2 bg-white border border-slate-100 rounded-[12px] p-3 shadow-sm cursor-pointer hover:border-orange-100 transition-colors" onClick={() => navigate('/support')}>
+            <Headphones size={18} className="text-[#ea580c]" />
             <span className="text-[13px] font-bold text-[#1e1b4b]">Help Center</span>
           </button>
         </div>

@@ -159,6 +159,10 @@ const captainSchema = new mongoose.Schema(
 );
 
 captainSchema.index({ liveLocation: '2dsphere' });
+captainSchema.index({ status: 1, isOnline: 1 });
+captainSchema.index({ vehicleType: 1, status: 1, isOnline: 1 });
+captainSchema.index({ accountStatus: 1, createdAt: -1 });
+captainSchema.index({ createdAt: -1 });
 
 // Hash password before saving
 captainSchema.pre('save', async function () {

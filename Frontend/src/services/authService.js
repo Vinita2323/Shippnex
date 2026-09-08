@@ -184,20 +184,60 @@ export const authService = {
   },
 };
 
+// Client-side in-memory cache and request deduplication for frequently fetched static data
+const clientMemCache = {
+  banners: { data: null, timestamp: 0, promise: null },
+  categories: { data: null, timestamp: 0, promise: null },
+  sellerPlans: { data: null, timestamp: 0, promise: null },
+  captainPlans: { data: null, timestamp: 0, promise: null },
+};
+
+export const clearClientCache = (key) => {
+  if (key && clientMemCache[key]) {
+    clientMemCache[key] = { data: null, timestamp: 0, promise: null };
+  } else if (!key) {
+    Object.keys(clientMemCache).forEach((k) => {
+      clientMemCache[k] = { data: null, timestamp: 0, promise: null };
+    });
+  }
+};
+
 export const bannerService = {
-  getBanners: async () => {
-    const response = await API.get('/banners');
-    return response.data;
+  getBanners: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && clientMemCache.banners.data && (now - clientMemCache.banners.timestamp < 60000)) {
+      return clientMemCache.banners.data;
+    }
+    if (clientMemCache.banners.promise) {
+      return clientMemCache.banners.promise;
+    }
+
+    clientMemCache.banners.promise = API.get('/banners')
+      .then((response) => {
+        clientMemCache.banners.data = response.data;
+        clientMemCache.banners.timestamp = Date.now();
+        clientMemCache.banners.promise = null;
+        return response.data;
+      })
+      .catch((err) => {
+        clientMemCache.banners.promise = null;
+        throw err;
+      });
+
+    return clientMemCache.banners.promise;
   },
   createBanner: async (data) => {
+    clearClientCache('banners');
     const response = await API.post('/banners', data);
     return response.data;
   },
   updateBanner: async (id, data) => {
+    clearClientCache('banners');
     const response = await API.put(`/banners/${id}`, data);
     return response.data;
   },
   deleteBanner: async (id) => {
+    clearClientCache('banners');
     const response = await API.delete(`/banners/${id}`);
     return response.data;
   },
@@ -212,23 +252,44 @@ export const bannerService = {
 };
 
 export const categoryService = {
-  getCategories: async () => {
-    const response = await API.get('/categories');
-    return response.data;
+  getCategories: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && clientMemCache.categories.data && (now - clientMemCache.categories.timestamp < 60000)) {
+      return clientMemCache.categories.data;
+    }
+    if (clientMemCache.categories.promise) {
+      return clientMemCache.categories.promise;
+    }
+
+    clientMemCache.categories.promise = API.get('/categories')
+      .then((response) => {
+        clientMemCache.categories.data = response.data;
+        clientMemCache.categories.timestamp = Date.now();
+        clientMemCache.categories.promise = null;
+        return response.data;
+      })
+      .catch((err) => {
+        clientMemCache.categories.promise = null;
+        throw err;
+      });
+
+    return clientMemCache.categories.promise;
   },
-  getAllCategories: async () => {
-    const response = await API.get('/categories');
-    return response.data;
+  getAllCategories: async (forceRefresh = false) => {
+    return categoryService.getCategories(forceRefresh);
   },
   createCategory: async (data) => {
+    clearClientCache('categories');
     const response = await API.post('/categories', data);
     return response.data;
   },
   updateCategory: async (id, data) => {
+    clearClientCache('categories');
     const response = await API.put(`/categories/${id}`, data);
     return response.data;
   },
   deleteCategory: async (id) => {
+    clearClientCache('categories');
     const response = await API.delete(`/categories/${id}`);
     return response.data;
   },
@@ -506,7 +567,7 @@ export const captainService = {
     return response.data;
   },
 
-  // Profile
+  // Profile & Account
   getProfile: async () => {
     const response = await API.get('/captain/profile');
     return response.data;
@@ -514,6 +575,11 @@ export const captainService = {
   updateProfile: async (data) => {
     clearCaptainDashboardClientCache();
     const response = await API.put('/captain/profile', data);
+    return response.data;
+  },
+  deleteAccount: async (reason = '', feedback = '') => {
+    clearCaptainDashboardClientCache();
+    const response = await API.delete('/captain/account', { data: { reason, feedback } });
     return response.data;
   },
 
@@ -645,9 +711,28 @@ export const userService = {
 
 export const membershipService = {
   // ── Seller (user-facing) ──────────────────────────────────
-  getSellerPlans: async () => {
-    const response = await API.get('/membership/seller/plans');
-    return response.data;
+  getSellerPlans: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && clientMemCache.sellerPlans.data && (now - clientMemCache.sellerPlans.timestamp < 60000)) {
+      return clientMemCache.sellerPlans.data;
+    }
+    if (clientMemCache.sellerPlans.promise) {
+      return clientMemCache.sellerPlans.promise;
+    }
+
+    clientMemCache.sellerPlans.promise = API.get('/membership/seller/plans')
+      .then((response) => {
+        clientMemCache.sellerPlans.data = response.data;
+        clientMemCache.sellerPlans.timestamp = Date.now();
+        clientMemCache.sellerPlans.promise = null;
+        return response.data;
+      })
+      .catch((err) => {
+        clientMemCache.sellerPlans.promise = null;
+        throw err;
+      });
+
+    return clientMemCache.sellerPlans.promise;
   },
   createRazorpayOrder: async (planId, userType = 'seller') => {
     const response = await API.post('/membership/razorpay/create-order', { planId, userType });
@@ -671,9 +756,28 @@ export const membershipService = {
   },
 
   // ── Captain (user-facing) ─────────────────────────────────
-  getCaptainPlans: async () => {
-    const response = await API.get('/membership/captain/plans');
-    return response.data;
+  getCaptainPlans: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && clientMemCache.captainPlans.data && (now - clientMemCache.captainPlans.timestamp < 60000)) {
+      return clientMemCache.captainPlans.data;
+    }
+    if (clientMemCache.captainPlans.promise) {
+      return clientMemCache.captainPlans.promise;
+    }
+
+    clientMemCache.captainPlans.promise = API.get('/membership/captain/plans')
+      .then((response) => {
+        clientMemCache.captainPlans.data = response.data;
+        clientMemCache.captainPlans.timestamp = Date.now();
+        clientMemCache.captainPlans.promise = null;
+        return response.data;
+      })
+      .catch((err) => {
+        clientMemCache.captainPlans.promise = null;
+        throw err;
+      });
+
+    return clientMemCache.captainPlans.promise;
   },
   getCaptainMembership: async () => {
     const response = await API.get('/membership/captain/current');
@@ -698,18 +802,22 @@ export const membershipService = {
     return response.data;
   },
   adminCreateSellerPlan: async (data) => {
+    clearClientCache('sellerPlans');
     const response = await API.post('/membership/admin/seller/plans', data);
     return response.data;
   },
   adminUpdateSellerPlan: async (id, data) => {
+    clearClientCache('sellerPlans');
     const response = await API.put(`/membership/admin/seller/plans/${id}`, data);
     return response.data;
   },
   adminToggleSellerPlan: async (id) => {
+    clearClientCache('sellerPlans');
     const response = await API.put(`/membership/admin/seller/plans/${id}/toggle`);
     return response.data;
   },
   adminDeleteSellerPlan: async (id) => {
+    clearClientCache('sellerPlans');
     const response = await API.delete(`/membership/admin/seller/plans/${id}`);
     return response.data;
   },
@@ -720,18 +828,22 @@ export const membershipService = {
     return response.data;
   },
   adminCreateCaptainPlan: async (data) => {
+    clearClientCache('captainPlans');
     const response = await API.post('/membership/admin/captain/plans', data);
     return response.data;
   },
   adminUpdateCaptainPlan: async (id, data) => {
+    clearClientCache('captainPlans');
     const response = await API.put(`/membership/admin/captain/plans/${id}`, data);
     return response.data;
   },
   adminToggleCaptainPlan: async (id) => {
+    clearClientCache('captainPlans');
     const response = await API.put(`/membership/admin/captain/plans/${id}/toggle`);
     return response.data;
   },
   adminDeleteCaptainPlan: async (id) => {
+    clearClientCache('captainPlans');
     const response = await API.delete(`/membership/admin/captain/plans/${id}`);
     return response.data;
   },

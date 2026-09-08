@@ -20,6 +20,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   getServiceAreas,
+  deleteAccount,
 } from '../controllers/captainController.js';
 import {
   getTransportRequests,
@@ -37,9 +38,10 @@ const router = express.Router();
 // All routes require captain auth
 const captainAuth = protect('captain');
 
-// Profile
+// Profile & Account Management
 router.get('/profile', captainAuth, getProfile);
 router.put('/profile', captainAuth, updateProfile);
+router.delete('/account', captainAuth, deleteAccount);
 
 // Status & Location
 router.put('/status', captainAuth, updateOnlineStatus);

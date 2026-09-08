@@ -48,8 +48,8 @@ const SellerUnderReview = () => {
             Back to Seller Login
           </button>
 
-          <a
-            href="mailto:support@shippnex.com"
+          <a 
+            href="mailto:shippnexin26@gmail.com"
             className="w-full flex justify-center items-center gap-2 text-xs text-[#ff7526] font-semibold hover:underline no-underline"
           >
             <Mail size={14} />

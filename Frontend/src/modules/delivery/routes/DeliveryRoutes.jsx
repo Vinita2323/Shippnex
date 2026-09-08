@@ -19,6 +19,8 @@ const CaptainNotifications = lazy(() => import('../pages/CaptainNotifications'))
 const CaptainServiceAreas = lazy(() => import('../pages/CaptainServiceAreas'));
 const CaptainMembership = lazy(() => import('../pages/CaptainMembership'));
 const CaptainPolicyPage = lazy(() => import('../pages/CaptainPolicyPage'));
+const CaptainSupport = lazy(() => import('../pages/CaptainSupport'));
+const CaptainDeleteAccount = lazy(() => import('../pages/CaptainDeleteAccount'));
 
 const DeliveryRoutes = () => {
   return (
@@ -31,6 +33,8 @@ const DeliveryRoutes = () => {
           <Route path="/register" element={<CaptainRegister />} />
           <Route path="/terms" element={<CaptainPolicyPage />} />
           <Route path="/privacy" element={<CaptainPolicyPage />} />
+          <Route path="/support" element={<CaptainSupport />} />
+          <Route path="/faqs" element={<CaptainSupport />} />
           
           {/* Protected Captain Routes */}
           <Route element={<ProtectedRoute role="captain" redirectPath="/captain/login" />}>
@@ -47,6 +51,8 @@ const DeliveryRoutes = () => {
             <Route path="/notifications" element={<CaptainNotifications />} />
             <Route path="/service-areas" element={<CaptainServiceAreas />} />
             <Route path="/membership" element={<CaptainMembership />} />
+            <Route path="/help" element={<CaptainSupport />} />
+            <Route path="/delete-account" element={<CaptainDeleteAccount />} />
           </Route>
         </Routes>
       </Suspense>

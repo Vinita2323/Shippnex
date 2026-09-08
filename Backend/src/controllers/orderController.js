@@ -230,15 +230,20 @@ export const placeOrder = async (req, res, next) => {
       });
     }
 
+    // Parallel server-side validation of products, pricing, and stock
+    const resolvedItems = await Promise.all(
+      itemsToProcess.map(async (item) => {
+        const targetProdId = item.product?._id || item.product || item.productId || item.id;
+        const product = await findOrCreateProduct(targetProdId, item.product || item);
+        return { item, product };
+      })
+    );
+
     let itemsTotal = 0;
     let totalOriginalPrice = 0;
     const orderItems = [];
 
-    // Server-side validation of products, pricing, and stock
-    for (const item of itemsToProcess) {
-      const targetProdId = item.product?._id || item.product || item.productId || item.id;
-      const product = await findOrCreateProduct(targetProdId, item.product || item);
-
+    for (const { item, product } of resolvedItems) {
       if (!product) {
         return res.status(404).json({
           success: false,
@@ -302,12 +307,12 @@ export const placeOrder = async (req, res, next) => {
 
     console.log(`[OrderController] Successfully created Order in MongoDB: OrderID=${order.orderId}, UserID=${userId}, GrandTotal=₹${grandTotal}`);
 
-    // Reduce inventory for ordered items
-    for (const orderItem of orderItems) {
-      await Product.findByIdAndUpdate(orderItem.product, {
+    // Parallel stock reduction for all ordered items
+    const stockUpdates = orderItems.map((orderItem) =>
+      Product.findByIdAndUpdate(orderItem.product, {
         $inc: { stock: -orderItem.quantity },
-      });
-    }
+      })
+    );
 
     // -------------------------------------------------------------
     // MULTI-SELLER ORDER SPLITTING & SELLER NOTIFICATION CREATION
@@ -321,13 +326,13 @@ export const placeOrder = async (req, res, next) => {
       sellerGroups[sellerName].push(item);
     }
 
-    for (const [sellerName, groupItems] of Object.entries(sellerGroups)) {
+    const sellerNotificationPromises = Object.entries(sellerGroups).map(async ([sellerName, groupItems]) => {
       const groupSubtotal = groupItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
-      
-      // Try to find matching seller in Seller model (by ObjectId, phone, businessName, ownerName)
+
+      // Try to find matching seller in Seller model
       let sellerDoc = null;
       if (mongoose.Types.ObjectId.isValid(sellerName)) {
-        sellerDoc = await Seller.findById(sellerName);
+        sellerDoc = await Seller.findById(sellerName).lean();
       }
       if (!sellerDoc) {
         sellerDoc = await Seller.findOne({
@@ -335,8 +340,8 @@ export const placeOrder = async (req, res, next) => {
             { phone: sellerName },
             { businessName: sellerName },
             { ownerName: sellerName },
-          ]
-        });
+          ],
+        }).lean();
       }
 
       const assignedSellerId = sellerDoc ? String(sellerDoc._id) : sellerName;
@@ -345,7 +350,7 @@ export const placeOrder = async (req, res, next) => {
       const commAmount = Number(((groupSubtotal * commRate) / 100).toFixed(2));
       const netAmount = Number((groupSubtotal - commAmount).toFixed(2));
 
-      await SellerNotification.create({
+      const notification = await SellerNotification.create({
         sellerId: assignedSellerId,
         sellerName: actualSellerName,
         order: order._id,
@@ -368,30 +373,38 @@ export const placeOrder = async (req, res, next) => {
         status: 'NEW',
       });
 
-      // Trigger FCM Push Notification to Seller
-      sendNotificationToSeller(assignedSellerId, {
-        title: '🔔 New Order Received!',
-        body: `Order #${order.orderId} from ${shippingAddress.fullName || 'Customer'} (₹${groupSubtotal.toFixed(2)}). Open to accept.`,
-        data: {
-          type: 'new_order',
-          orderId: order.orderId,
-          link: '/seller/orders',
-        },
-      }).catch(() => {});
+      // Asynchronous non-blocking push notification to seller
+      setImmediate(() => {
+        sendNotificationToSeller(assignedSellerId, {
+          title: '🔔 New Order Received!',
+          body: `Order #${order.orderId} from ${shippingAddress.fullName || 'Customer'} (₹${groupSubtotal.toFixed(2)}). Open to accept.`,
+          data: {
+            type: 'new_order',
+            orderId: order.orderId,
+            link: '/seller/orders',
+          },
+        }).catch(() => {});
+      });
 
       console.log(`[SellerNotification] Created notification for Seller "${actualSellerName}" (SellerID: ${assignedSellerId}, Gross: ₹${groupSubtotal}, Comm: ${commRate}% = ₹${commAmount}, Net: ₹${netAmount}) for Order ${order.orderId}`);
-    }
+      return notification;
+    });
 
-    // Trigger FCM Push Notification to Customer
-    sendNotificationToUser(userId, {
-      title: 'Order Placed Successfully! 🎉',
-      body: `Your order #${order.orderId} of ₹${grandTotal} has been placed. We are assigning the store.`,
-      data: {
-        type: 'order_placed',
-        orderId: order.orderId,
-        link: '/profile',
-      },
-    }).catch(() => {});
+    // Execute stock updates and seller notifications concurrently
+    await Promise.all([...stockUpdates, ...sellerNotificationPromises]);
+
+    // Asynchronous non-blocking push notification to user
+    setImmediate(() => {
+      sendNotificationToUser(userId, {
+        title: 'Order Placed Successfully! 🎉',
+        body: `Your order #${order.orderId} of ₹${grandTotal} has been placed. We are assigning the store.`,
+        data: {
+          type: 'order_placed',
+          orderId: order.orderId,
+          link: '/profile',
+        },
+      }).catch(() => {});
+    });
 
     // Clear user cart array in User collection after successful order creation
     let isUserUpdated = false;
@@ -609,7 +622,7 @@ export const getSellerNotifications = async (req, res, next) => {
     let sellerDoc = null;
 
     if (sellerId && mongoose.Types.ObjectId.isValid(sellerId)) {
-      sellerDoc = await Seller.findById(sellerId);
+      sellerDoc = await Seller.findById(sellerId).lean();
     }
 
     const possibleSellerKeys = [
@@ -620,14 +633,25 @@ export const getSellerNotifications = async (req, res, next) => {
       sellerDoc?.phone
     ].filter(Boolean);
 
-    const notifications = await SellerNotification.find({
+    const query = {
       $or: [
         { sellerId: { $in: possibleSellerKeys } },
         { sellerName: { $in: possibleSellerKeys } },
       ],
-    }).sort({ createdAt: -1 }).lean();
+    };
 
-    const newNotificationsCount = notifications.filter(n => n.status === 'NEW').length;
+    const limit = req.query.limit ? Number(req.query.limit) : 0;
+    const page = req.query.page ? Number(req.query.page) : 1;
+
+    let dbQuery = SellerNotification.find(query).sort({ createdAt: -1 }).lean();
+    if (limit > 0) {
+      dbQuery = dbQuery.skip((page - 1) * limit).limit(limit);
+    }
+
+    const [notifications, newNotificationsCount] = await Promise.all([
+      dbQuery,
+      SellerNotification.countDocuments({ ...query, status: 'NEW' }),
+    ]);
 
     res.status(200).json({
       success: true,

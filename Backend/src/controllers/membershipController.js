@@ -8,6 +8,20 @@ import Captain from '../models/Captain.model.js';
 import { razorpayInstance } from '../config/razorpay.js';
 
 // ============================================================
+// In-memory cache for ultra-fast plan lookups (TTL: 60s)
+// ============================================================
+let sellerPlansCache = { data: null, timestamp: 0 };
+let captainPlansCache = { data: null, timestamp: 0 };
+
+export const invalidateSellerPlansCache = () => {
+  sellerPlansCache = { data: null, timestamp: 0 };
+};
+
+export const invalidateCaptainPlansCache = () => {
+  captainPlansCache = { data: null, timestamp: 0 };
+};
+
+// ============================================================
 // HELPER: Generate unique transaction ID
 // ============================================================
 const generateTransactionId = (prefix = 'TXN') => {
@@ -24,30 +38,45 @@ const calcExpiryDate = (startDate, durationMonths) => {
 };
 
 // ============================================================
-// HELPER: Check and auto-expire memberships
+// HELPER: Targeted sync for single seller/captain
 // ============================================================
-const autoExpireMemberships = async () => {
+const syncSellerMembershipStatus = async (sellerId) => {
   const now = new Date();
   await SellerMembership.updateMany(
-    { membershipStatus: 'active', expiryDate: { $lt: now } },
+    { sellerId, membershipStatus: 'active', expiryDate: { $lt: now } },
     { $set: { membershipStatus: 'expired', paymentStatus: 'paid' } }
   );
+  const active = await SellerMembership.exists({ sellerId, membershipStatus: 'active' });
+  if (!active) {
+    await Seller.findByIdAndUpdate(sellerId, { membershipStatus: 'expired' });
+  }
+};
+
+const syncCaptainMembershipStatus = async (captainId) => {
+  const now = new Date();
   await CaptainMembership.updateMany(
-    { membershipStatus: 'active', expiryDate: { $lt: now } },
+    { captainId, membershipStatus: 'active', expiryDate: { $lt: now } },
     { $set: { membershipStatus: 'expired', paymentStatus: 'paid' } }
   );
-  // Sync membershipStatus on Seller docs
-  const expiredSellerMems = await SellerMembership.find({ membershipStatus: 'expired' }).distinct('sellerId');
-  for (const sid of expiredSellerMems) {
-    const hasActive = await SellerMembership.findOne({ sellerId: sid, membershipStatus: 'active' });
-    if (!hasActive) await Seller.findByIdAndUpdate(sid, { membershipStatus: 'expired' });
+  const active = await CaptainMembership.exists({ captainId, membershipStatus: 'active' });
+  if (!active) {
+    await Captain.findByIdAndUpdate(captainId, { membershipStatus: 'expired' });
   }
-  // Sync membershipStatus on Captain docs
-  const expiredCaptainMems = await CaptainMembership.find({ membershipStatus: 'expired' }).distinct('captainId');
-  for (const cid of expiredCaptainMems) {
-    const hasActive = await CaptainMembership.findOne({ captainId: cid, membershipStatus: 'active' });
-    if (!hasActive) await Captain.findByIdAndUpdate(cid, { membershipStatus: 'expired' });
-  }
+};
+
+// Global background auto-expire (used by admin or background cron)
+const autoExpireMemberships = async () => {
+  const now = new Date();
+  await Promise.all([
+    SellerMembership.updateMany(
+      { membershipStatus: 'active', expiryDate: { $lt: now } },
+      { $set: { membershipStatus: 'expired', paymentStatus: 'paid' } }
+    ),
+    CaptainMembership.updateMany(
+      { membershipStatus: 'active', expiryDate: { $lt: now } },
+      { $set: { membershipStatus: 'expired', paymentStatus: 'paid' } }
+    ),
+  ]);
 };
 
 // ============================================================
@@ -55,8 +84,16 @@ const autoExpireMemberships = async () => {
 // ============================================================
 export const getSellerPlans = async (req, res, next) => {
   try {
-    const plans = await SellerMembershipPlan.find({ status: 'active' }).sort({ displayOrder: 1, price: 1 });
-    res.status(200).json({ success: true, plans });
+    const now = Date.now();
+    if (!req.query.fresh && sellerPlansCache.data && now - sellerPlansCache.timestamp < 60000) {
+      return res.status(200).json(sellerPlansCache.data);
+    }
+    const plans = await SellerMembershipPlan.find({ status: 'active' })
+      .sort({ displayOrder: 1, price: 1 })
+      .lean();
+    const payload = { success: true, plans };
+    sellerPlansCache = { data: payload, timestamp: now };
+    res.status(200).json(payload);
   } catch (error) {
     next(error);
   }
@@ -67,8 +104,16 @@ export const getSellerPlans = async (req, res, next) => {
 // ============================================================
 export const getCaptainPlans = async (req, res, next) => {
   try {
-    const plans = await CaptainMembershipPlan.find({ status: 'active' }).sort({ displayOrder: 1, price: 1 });
-    res.status(200).json({ success: true, plans });
+    const now = Date.now();
+    if (!req.query.fresh && captainPlansCache.data && now - captainPlansCache.timestamp < 60000) {
+      return res.status(200).json(captainPlansCache.data);
+    }
+    const plans = await CaptainMembershipPlan.find({ status: 'active' })
+      .sort({ displayOrder: 1, price: 1 })
+      .lean();
+    const payload = { success: true, plans };
+    captainPlansCache = { data: payload, timestamp: now };
+    res.status(200).json(payload);
   } catch (error) {
     next(error);
   }
@@ -79,11 +124,11 @@ export const getCaptainPlans = async (req, res, next) => {
 // ============================================================
 export const getSellerMembership = async (req, res, next) => {
   try {
-    await autoExpireMemberships();
+    await syncSellerMembershipStatus(req.user.id);
     const membership = await SellerMembership.findOne({
       sellerId: req.user.id,
       membershipStatus: { $in: ['active', 'pending_payment'] },
-    }).populate('planId').sort({ createdAt: -1 });
+    }).populate('planId').sort({ createdAt: -1 }).lean();
 
     res.status(200).json({ success: true, membership: membership || null });
   } catch (error) {
@@ -96,11 +141,11 @@ export const getSellerMembership = async (req, res, next) => {
 // ============================================================
 export const getCaptainMembership = async (req, res, next) => {
   try {
-    await autoExpireMemberships();
+    await syncCaptainMembershipStatus(req.user.id);
     const membership = await CaptainMembership.findOne({
       captainId: req.user.id,
       membershipStatus: { $in: ['active', 'pending_payment'] },
-    }).populate('planId').sort({ createdAt: -1 });
+    }).populate('planId').sort({ createdAt: -1 }).lean();
 
     res.status(200).json({ success: true, membership: membership || null });
   } catch (error) {
@@ -115,7 +160,8 @@ export const getSellerMembershipHistory = async (req, res, next) => {
   try {
     const memberships = await SellerMembership.find({ sellerId: req.user.id })
       .populate('planId')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
     res.status(200).json({ success: true, memberships });
   } catch (error) {
     next(error);
@@ -129,7 +175,8 @@ export const getCaptainMembershipHistory = async (req, res, next) => {
   try {
     const memberships = await CaptainMembership.find({ captainId: req.user.id })
       .populate('planId')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
     res.status(200).json({ success: true, memberships });
   } catch (error) {
     next(error);
@@ -524,6 +571,7 @@ export const adminCreateSellerPlan = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'name, durationType, durationMonths, price are required' });
     }
     const plan = await SellerMembershipPlan.create({ name, durationType, durationMonths, price, description, features: features || [], status: status || 'active', displayOrder: displayOrder || 0 });
+    invalidateSellerPlansCache();
     res.status(201).json({ success: true, message: 'Seller plan created', plan });
   } catch (error) {
     next(error);
@@ -540,6 +588,7 @@ export const adminCreateCaptainPlan = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'name, durationType, durationMonths, price are required' });
     }
     const plan = await CaptainMembershipPlan.create({ name, durationType, durationMonths, price, description, features: features || [], status: status || 'active', displayOrder: displayOrder || 0 });
+    invalidateCaptainPlansCache();
     res.status(201).json({ success: true, message: 'Captain plan created', plan });
   } catch (error) {
     next(error);
@@ -553,6 +602,7 @@ export const adminUpdateSellerPlan = async (req, res, next) => {
   try {
     const plan = await SellerMembershipPlan.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
+    invalidateSellerPlansCache();
     res.status(200).json({ success: true, message: 'Seller plan updated', plan });
   } catch (error) {
     next(error);
@@ -566,6 +616,7 @@ export const adminUpdateCaptainPlan = async (req, res, next) => {
   try {
     const plan = await CaptainMembershipPlan.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
+    invalidateCaptainPlansCache();
     res.status(200).json({ success: true, message: 'Captain plan updated', plan });
   } catch (error) {
     next(error);
@@ -581,6 +632,7 @@ export const adminToggleSellerPlan = async (req, res, next) => {
     if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
     plan.status = plan.status === 'active' ? 'inactive' : 'active';
     await plan.save();
+    invalidateSellerPlansCache();
     res.status(200).json({ success: true, message: `Plan ${plan.status}d`, plan });
   } catch (error) {
     next(error);
@@ -596,6 +648,7 @@ export const adminToggleCaptainPlan = async (req, res, next) => {
     if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
     plan.status = plan.status === 'active' ? 'inactive' : 'active';
     await plan.save();
+    invalidateCaptainPlansCache();
     res.status(200).json({ success: true, message: `Plan ${plan.status}d`, plan });
   } catch (error) {
     next(error);
@@ -613,6 +666,7 @@ export const adminDeleteSellerPlan = async (req, res, next) => {
     }
     const plan = await SellerMembershipPlan.findByIdAndDelete(req.params.id);
     if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
+    invalidateSellerPlansCache();
     res.status(200).json({ success: true, message: 'Seller plan deleted' });
   } catch (error) {
     next(error);
@@ -630,6 +684,7 @@ export const adminDeleteCaptainPlan = async (req, res, next) => {
     }
     const plan = await CaptainMembershipPlan.findByIdAndDelete(req.params.id);
     if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
+    invalidateCaptainPlansCache();
     res.status(200).json({ success: true, message: 'Captain plan deleted' });
   } catch (error) {
     next(error);
@@ -651,7 +706,8 @@ export const adminGetSellerSubscriptions = async (req, res, next) => {
       .populate('planId', 'name durationType price')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
-      .limit(Number(limit));
+      .limit(Number(limit))
+      .lean();
 
     if (search) {
       const s = search.toLowerCase();
@@ -685,7 +741,8 @@ export const adminGetCaptainSubscriptions = async (req, res, next) => {
       .populate('planId', 'name durationType price')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
-      .limit(Number(limit));
+      .limit(Number(limit))
+      .lean();
 
     if (search) {
       const s = search.toLowerCase();

@@ -29,5 +29,9 @@ const sellerMembershipSchema = new mongoose.Schema(
   { timestamps: true, collection: 'sellermemberships' }
 );
 
+sellerMembershipSchema.index({ sellerId: 1, membershipStatus: 1, expiryDate: 1 });
+sellerMembershipSchema.index({ membershipStatus: 1, expiryDate: 1 });
+sellerMembershipSchema.index({ createdAt: -1 });
+
 const SellerMembership = mongoose.model('SellerMembership', sellerMembershipSchema);
 export default SellerMembership;

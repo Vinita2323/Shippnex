@@ -40,7 +40,7 @@ import groceryImg from '../../../assets/user/categories/Grocery-removebg-preview
 import readyCookImg from '../../../assets/user/categories/readyfoot-removebg-preview.png';
 import homeCareImg from '../../../assets/user/categories/homecare-removebg-preview.png';
 import personalCareImg from '../../../assets/user/categories/personalcare-removebg-preview.png';
-import { getImageUrl } from '../../../utils/imageUtils';
+import { getImageUrl, getCategoryFallbackImage } from '../../../utils/imageUtils';
 
 const allProducts = [
   { id: 'p1', name: 'Basmati Rice', price: 75, originalPrice: 95, discount: '21% OFF', image: grainsImg, unit: '1kg' },
@@ -434,30 +434,34 @@ const Home = () => {
         </div>
         <div className="grid grid-cols-4 gap-y-4 gap-x-3 mb-8">
           {categories.length > 0 ? (
-            categories.slice(0, 8).map((cat) => (
-              <div 
-                key={cat._id || cat.name} 
-                onClick={() => navigate('/categories')}
-                className="flex flex-col items-center cursor-pointer group"
-              >
-                <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)] overflow-hidden p-1.5">
-                  <img 
-                    src={getImageUrl(cat.image, grainsImg)} 
-                    alt={cat.name} 
-                    loading="lazy"
-                    decoding="async"
-                    className="w-10 h-10 object-contain" 
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = grainsImg;
-                    }}
-                  />
+            categories.slice(0, 8).map((cat) => {
+              const fallbackImg = getCategoryFallbackImage(cat.name);
+              const imgSrc = getImageUrl(cat.image, fallbackImg);
+              return (
+                <div 
+                  key={cat._id || cat.name} 
+                  onClick={() => navigate('/categories')}
+                  className="flex flex-col items-center cursor-pointer group"
+                >
+                  <div className="bg-white border border-slate-100 rounded-xl w-14 h-14 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.03)] mb-2 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_6px_16px_rgba(0,0,0,0.06)] overflow-hidden p-1.5">
+                    <img 
+                      src={imgSrc} 
+                      alt={cat.name} 
+                      loading="lazy"
+                      decoding="async"
+                      className="w-10 h-10 object-contain" 
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = fallbackImg;
+                      }}
+                    />
+                  </div>
+                  <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">
+                    {cat.name}
+                  </span>
                 </div>
-                <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">
-                  {cat.name}
-                </span>
-              </div>
-            ))
+              );
+            })
           ) : (
             <>
               <div className="flex flex-col items-center cursor-pointer group">

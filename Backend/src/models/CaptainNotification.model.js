@@ -48,5 +48,8 @@ const captainNotificationSchema = new mongoose.Schema(
   }
 );
 
+captainNotificationSchema.index({ captainId: 1, read: 1, createdAt: -1 });
+captainNotificationSchema.index({ createdAt: -1 });
+
 const CaptainNotification = mongoose.model('CaptainNotification', captainNotificationSchema);
 export default CaptainNotification;
