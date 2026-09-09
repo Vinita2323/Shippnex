@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, MapPin, Check, Plus, Clock, ChevronRight, X, CreditCard, Wallet, Banknote, Building2, ShieldCheck, Loader2
+  ArrowLeft, MapPin, Check, Plus, ChevronRight, X, Loader2, Banknote
+  // Clock, CreditCard, Wallet, Building2, ShieldCheck
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useLocationContext } from '../../../context/LocationContext';
@@ -14,12 +15,15 @@ const availableSlots = [
   { id: 's4', date: 'Tomorrow', time: '04:00 PM - 06:00 PM' },
 ];
 
+// Only Cash on Delivery option available
 const paymentMethods = [
   { id: 'COD', name: 'Cash on Delivery', icon: Banknote, description: 'Pay cash upon delivery' },
+  /*
   { id: 'UPI', name: 'UPI (GPay / PhonePe / Paytm)', icon: Wallet, description: 'Instant UPI payment' },
   { id: 'CARD', name: 'Credit / Debit Card', icon: CreditCard, description: 'Visa, Mastercard, RuPay' },
   { id: 'NETBANKING', name: 'Net Banking', icon: Building2, description: 'All major banks supported' },
   { id: 'WALLET', name: 'Mobile Wallets', icon: Wallet, description: 'Paytm Wallet, Mobikwik, etc.' },
+  */
 ];
 
 const Checkout = () => {
