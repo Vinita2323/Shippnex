@@ -221,11 +221,36 @@ const Home = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
-      recognition.onstart = () => setToastMessage('Listening...');
-      recognition.onresult = (e) => {
-        setSearchQuery(e.results[0][0].transcript);
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setToastMessage('Listening...');
       };
-      recognition.start();
+
+      recognition.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
+        setSearchQuery(transcript);
+        setToastMessage(''); // Clear toast on success
+      };
+
+      recognition.onerror = (e) => {
+        console.error("Speech recognition error:", e.error);
+        setToastMessage(`Mic error: ${e.error}`);
+        setTimeout(() => setToastMessage(''), 3000);
+      };
+
+      recognition.onend = () => {
+        // Only clear if it's still 'Listening...' (in case it finished without result or error)
+        setToastMessage(prev => prev === 'Listening...' ? '' : prev);
+      };
+
+      try {
+        recognition.start();
+      } catch (err) {
+        console.error("Error starting speech recognition:", err);
+      }
     } else {
       setToastMessage('Mic not supported in your browser.');
       setTimeout(() => setToastMessage(''), 3000);
