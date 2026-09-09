@@ -720,7 +720,7 @@ export const membershipService = {
       return clientMemCache.sellerPlans.promise;
     }
 
-    clientMemCache.sellerPlans.promise = API.get('/membership/seller/plans')
+    clientMemCache.sellerPlans.promise = API.get(`/membership/seller/plans${forceRefresh ? '?fresh=true' : ''}`)
       .then((response) => {
         clientMemCache.sellerPlans.data = response.data;
         clientMemCache.sellerPlans.timestamp = Date.now();
@@ -765,7 +765,7 @@ export const membershipService = {
       return clientMemCache.captainPlans.promise;
     }
 
-    clientMemCache.captainPlans.promise = API.get('/membership/captain/plans')
+    clientMemCache.captainPlans.promise = API.get(`/membership/captain/plans${forceRefresh ? '?fresh=true' : ''}`)
       .then((response) => {
         clientMemCache.captainPlans.data = response.data;
         clientMemCache.captainPlans.timestamp = Date.now();

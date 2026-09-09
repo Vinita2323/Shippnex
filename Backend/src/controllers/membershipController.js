@@ -269,11 +269,11 @@ export const purchaseSellerMembership = async (req, res, next) => {
 };
 
 // ============================================================
-// CAPTAIN: Purchase (Online via Razorpay -> Instant Active)
+// CAPTAIN: Purchase (Online via Razorpay or Manual Payment Request)
 // ============================================================
 export const purchaseCaptainMembership = async (req, res, next) => {
   try {
-    const { planId, razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body;
+    const { planId, razorpayPaymentId, razorpayOrderId, razorpaySignature, paymentReference, paymentMethod } = req.body;
     if (!planId) return res.status(400).json({ success: false, message: 'Plan ID is required' });
 
     const plan = await CaptainMembershipPlan.findById(planId);
@@ -281,46 +281,74 @@ export const purchaseCaptainMembership = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Plan not found or inactive' });
     }
 
-    if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
-      return res.status(400).json({
-        success: false,
-        message: 'Online payment via Razorpay is required.',
+    const isOnlineRazorpay = Boolean(razorpayPaymentId && razorpayOrderId && razorpaySignature);
+
+    if (isOnlineRazorpay) {
+      // Verify Razorpay HMAC-SHA256 signature
+      const generatedSignature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
+        .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+        .digest('hex');
+
+      if (generatedSignature !== razorpaySignature) {
+        return res.status(400).json({
+          success: false,
+          message: 'Payment verification failed: Invalid Razorpay signature.',
+        });
+      }
+
+      const existingActive = await CaptainMembership.findOne({
+        captainId: req.user.id,
+        membershipStatus: 'active',
+        expiryDate: { $gt: new Date() },
+      });
+
+      const startDate = existingActive ? existingActive.expiryDate : new Date();
+      const expiryDate = calcExpiryDate(startDate, plan.durationMonths);
+
+      // Cancel any existing pending payments for this captain
+      await CaptainMembership.updateMany(
+        { captainId: req.user.id, membershipStatus: 'pending_payment' },
+        { $set: { membershipStatus: 'cancelled', paymentStatus: 'cancelled' } }
+      );
+
+      if (existingActive) {
+        existingActive.membershipStatus = 'expired';
+        await existingActive.save();
+      }
+
+      const membership = await CaptainMembership.create({
+        captainId: req.user.id,
+        planId: plan._id,
+        planName: plan.name,
+        durationType: plan.durationType,
+        durationMonths: plan.durationMonths,
+        priceAtPurchase: plan.price,
+        membershipStatus: 'active',
+        paymentStatus: 'paid',
+        transactionId: razorpayOrderId,
+        paymentReference: razorpayPaymentId,
+        paymentMethod: 'razorpay',
+        startDate,
+        expiryDate,
+      });
+
+      await Captain.findByIdAndUpdate(req.user.id, { membershipStatus: 'active' });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Payment verified and captain membership activated successfully!',
+        membership,
       });
     }
 
-    // Verify Razorpay HMAC-SHA256 signature
-    const generatedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
-      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
-      .digest('hex');
-
-    if (generatedSignature !== razorpaySignature) {
-      return res.status(400).json({
-        success: false,
-        message: 'Payment verification failed: Invalid Razorpay signature.',
-      });
-    }
-
-    const existingActive = await CaptainMembership.findOne({
-      captainId: req.user.id,
-      membershipStatus: 'active',
-      expiryDate: { $gt: new Date() },
-    });
-
-    const startDate = existingActive ? existingActive.expiryDate : new Date();
-    const expiryDate = calcExpiryDate(startDate, plan.durationMonths);
-
-    // Cancel any existing pending payments for this captain
+    // Manual / Offline payment request (Pending admin confirmation)
     await CaptainMembership.updateMany(
       { captainId: req.user.id, membershipStatus: 'pending_payment' },
       { $set: { membershipStatus: 'cancelled', paymentStatus: 'cancelled' } }
     );
 
-    if (existingActive) {
-      existingActive.membershipStatus = 'expired';
-      await existingActive.save();
-    }
-
+    const transactionId = generateTransactionId('TXN-CAP');
     const membership = await CaptainMembership.create({
       captainId: req.user.id,
       planId: plan._id,
@@ -328,20 +356,16 @@ export const purchaseCaptainMembership = async (req, res, next) => {
       durationType: plan.durationType,
       durationMonths: plan.durationMonths,
       priceAtPurchase: plan.price,
-      membershipStatus: 'active',
-      paymentStatus: 'paid',
-      transactionId: razorpayOrderId,
-      paymentReference: razorpayPaymentId,
-      paymentMethod: 'razorpay',
-      startDate,
-      expiryDate,
+      membershipStatus: 'pending_payment',
+      paymentStatus: 'pending',
+      transactionId,
+      paymentReference: paymentReference || '',
+      paymentMethod: paymentMethod || 'Cash on Delivery',
     });
-
-    await Captain.findByIdAndUpdate(req.user.id, { membershipStatus: 'active' });
 
     res.status(201).json({
       success: true,
-      message: 'Payment verified and captain membership activated successfully!',
+      message: 'Payment request submitted! Admin will verify and activate your membership within 24 hours.',
       membership,
     });
   } catch (error) {
@@ -438,11 +462,11 @@ export const renewSellerMembership = async (req, res, next) => {
 };
 
 // ============================================================
-// CAPTAIN: Renew membership (Online via Razorpay -> Instant Active)
+// CAPTAIN: Renew membership (Online via Razorpay or Manual Payment Request)
 // ============================================================
 export const renewCaptainMembership = async (req, res, next) => {
   try {
-    const { planId, razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body;
+    const { planId, razorpayPaymentId, razorpayOrderId, razorpaySignature, paymentReference, paymentMethod } = req.body;
     if (!planId) return res.status(400).json({ success: false, message: 'Plan ID is required' });
 
     const plan = await CaptainMembershipPlan.findById(planId);
@@ -450,49 +474,78 @@ export const renewCaptainMembership = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Plan not found or inactive' });
     }
 
-    if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
-      return res.status(400).json({
-        success: false,
-        message: 'Online payment via Razorpay is required.',
-      });
-    }
-
-    const generatedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
-      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
-      .digest('hex');
-
-    if (generatedSignature !== razorpaySignature) {
-      return res.status(400).json({
-        success: false,
-        message: 'Payment verification failed: Invalid Razorpay signature.',
-      });
-    }
-
     const currentMembership = await CaptainMembership.findOne({
       captainId: req.user.id,
       membershipStatus: { $in: ['active', 'expired'] },
     }).sort({ createdAt: -1 });
 
-    const existingActive = await CaptainMembership.findOne({
-      captainId: req.user.id,
-      membershipStatus: 'active',
-      expiryDate: { $gt: new Date() },
-    });
+    const isOnlineRazorpay = Boolean(razorpayPaymentId && razorpayOrderId && razorpaySignature);
 
-    const startDate = existingActive ? existingActive.expiryDate : new Date();
-    const expiryDate = calcExpiryDate(startDate, plan.durationMonths);
+    if (isOnlineRazorpay) {
+      const generatedSignature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
+        .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+        .digest('hex');
 
+      if (generatedSignature !== razorpaySignature) {
+        return res.status(400).json({
+          success: false,
+          message: 'Payment verification failed: Invalid Razorpay signature.',
+        });
+      }
+
+      const existingActive = await CaptainMembership.findOne({
+        captainId: req.user.id,
+        membershipStatus: 'active',
+        expiryDate: { $gt: new Date() },
+      });
+
+      const startDate = existingActive ? existingActive.expiryDate : new Date();
+      const expiryDate = calcExpiryDate(startDate, plan.durationMonths);
+
+      await CaptainMembership.updateMany(
+        { captainId: req.user.id, membershipStatus: 'pending_payment' },
+        { $set: { membershipStatus: 'cancelled', paymentStatus: 'cancelled' } }
+      );
+
+      if (existingActive) {
+        existingActive.membershipStatus = 'expired';
+        await existingActive.save();
+      }
+
+      const membership = await CaptainMembership.create({
+        captainId: req.user.id,
+        planId: plan._id,
+        planName: plan.name,
+        durationType: plan.durationType,
+        durationMonths: plan.durationMonths,
+        priceAtPurchase: plan.price,
+        membershipStatus: 'active',
+        paymentStatus: 'paid',
+        transactionId: razorpayOrderId,
+        paymentReference: razorpayPaymentId,
+        paymentMethod: 'razorpay',
+        startDate,
+        expiryDate,
+        renewedFromId: currentMembership?._id || null,
+      });
+
+      await Captain.findByIdAndUpdate(req.user.id, { membershipStatus: 'active' });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Renewal successful! Your captain membership is active.',
+        membership,
+      });
+    }
+
+    // Manual / Offline payment request for renewal
     await CaptainMembership.updateMany(
       { captainId: req.user.id, membershipStatus: 'pending_payment' },
       { $set: { membershipStatus: 'cancelled', paymentStatus: 'cancelled' } }
     );
 
-    if (existingActive) {
-      existingActive.membershipStatus = 'expired';
-      await existingActive.save();
-    }
-
+    const transactionId = generateTransactionId('TXN-CAP');
     const membership = await CaptainMembership.create({
       captainId: req.user.id,
       planId: plan._id,
@@ -500,21 +553,17 @@ export const renewCaptainMembership = async (req, res, next) => {
       durationType: plan.durationType,
       durationMonths: plan.durationMonths,
       priceAtPurchase: plan.price,
-      membershipStatus: 'active',
-      paymentStatus: 'paid',
-      transactionId: razorpayOrderId,
-      paymentReference: razorpayPaymentId,
-      paymentMethod: 'razorpay',
-      startDate,
-      expiryDate,
+      membershipStatus: 'pending_payment',
+      paymentStatus: 'pending',
+      transactionId,
+      paymentReference: paymentReference || '',
+      paymentMethod: paymentMethod || 'Cash on Delivery',
       renewedFromId: currentMembership?._id || null,
     });
 
-    await Captain.findByIdAndUpdate(req.user.id, { membershipStatus: 'active' });
-
     res.status(200).json({
       success: true,
-      message: 'Renewal successful! Your captain membership is active.',
+      message: 'Renewal payment request submitted! Admin will verify and activate your membership within 24 hours.',
       membership,
     });
   } catch (error) {

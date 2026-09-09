@@ -160,7 +160,7 @@ const ConfirmPaymentModal = ({ sub, onConfirm, onClose, accentColor }) => {
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-600 mb-1.5 uppercase tracking-wide">Admin Note (Optional)</label>
-          <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Verified via UPI..." className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-emerald-400 transition-colors" />
+          <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Verified cash payment..." className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-emerald-400 transition-colors" />
         </div>
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl cursor-pointer border-none hover:bg-slate-200 transition-colors">Cancel</button>

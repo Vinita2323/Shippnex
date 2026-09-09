@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Clock, XCircle, AlertTriangle, Star, Zap, Shield, CreditCard, RefreshCw, ChevronRight, Crown, Calendar, Receipt } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, AlertTriangle, Star, Zap, Shield, CreditCard, RefreshCw, ChevronRight, Crown, Calendar, Receipt, Banknote } from 'lucide-react';
 import { membershipService } from '../../../services/authService';
 
 const STATUS_CONFIG = {
@@ -29,7 +29,7 @@ const CaptainMembership = () => {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentRef, setPaymentRef] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('UPI');
+  const [paymentMethod, setPaymentMethod] = useState('Cash on Delivery');
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -43,7 +43,7 @@ const CaptainMembership = () => {
     setLoading(true);
     try {
       const [plansRes, memRes, histRes] = await Promise.all([
-        membershipService.getCaptainPlans().catch(() => ({ plans: [] })),
+        membershipService.getCaptainPlans(true).catch(() => ({ plans: [] })),
         membershipService.getCaptainMembership().catch(() => ({ membership: null })),
         membershipService.getCaptainMembershipHistory().catch(() => ({ memberships: [] })),
       ]);
@@ -67,7 +67,7 @@ const CaptainMembership = () => {
       const fn = isRenewal ? membershipService.renewCaptainMembership : membershipService.purchaseCaptainMembership;
       const res = await fn(payload);
       if (res.success) {
-        setSuccessMsg('Payment request submitted! Admin will verify and activate your membership within 24 hours.');
+        setSuccessMsg('Cash on Delivery request submitted! Admin will verify and activate your membership.');
         setShowPaymentForm(false); setPaymentRef('');
         await loadData();
         setActiveTab('history');
@@ -274,27 +274,40 @@ const CaptainMembership = () => {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Payment Method</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {['UPI', 'Bank Transfer', 'Cash'].map((m) => (
-                    <button key={m} onClick={() => setPaymentMethod(m)} className={`py-2.5 rounded-xl text-xs font-bold border-2 transition-all cursor-pointer ${paymentMethod === m ? 'border-[#0ea5e9] bg-sky-50 text-[#0ea5e9]' : 'border-slate-200 text-slate-600 bg-transparent hover:border-slate-300'}`}>{m}</button>
-                  ))}
+                <div className="p-3.5 bg-sky-50/70 border-2 border-[#0ea5e9] rounded-2xl flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#0ea5e9] text-white flex items-center justify-center shrink-0 shadow-md shadow-sky-200">
+                      <Banknote size={20} />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900 text-sm">Cash on Delivery</p>
+                      <p className="text-xs text-slate-500 font-medium">Pay cash directly upon confirmation</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-black bg-[#0ea5e9] text-white px-3 py-1 rounded-full uppercase tracking-wider">Selected</span>
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Transaction Reference / UTR <span className="text-slate-400 font-normal">(Optional)</span>
+                  Contact / Remarks <span className="text-slate-400 font-normal">(Optional)</span>
                 </label>
-                <input type="text" value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} placeholder="Enter UTR, UPI ref, or transaction ID..." className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-[#0ea5e9] transition-colors" />
+                <input 
+                  type="text" 
+                  value={paymentRef} 
+                  onChange={(e) => setPaymentRef(e.target.value)} 
+                  placeholder="Enter phone number or remarks..." 
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-[#0ea5e9] transition-colors" 
+                />
               </div>
-              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                <p className="text-xs text-blue-700 font-medium leading-relaxed">
-                  <span className="font-bold block mb-1">📋 How it works:</span>
-                  Submit this form after making payment of <strong>₹{selectedPlan.price?.toLocaleString()}</strong> to our account. Admin will verify and activate your membership within 24 hours.
+              <div className="bg-sky-50 border border-sky-100 rounded-xl p-4">
+                <p className="text-xs text-sky-800 font-medium leading-relaxed">
+                  <span className="font-bold block mb-1">💵 Cash on Delivery:</span>
+                  Submit this request to choose Cash on Delivery. Pay <strong>₹{selectedPlan.price?.toLocaleString()}</strong> in cash. The admin will verify and activate your membership plan.
                 </p>
               </div>
               {errorMsg && <p className="text-red-600 text-sm font-medium bg-red-50 p-3 rounded-xl">{errorMsg}</p>}
-              <button onClick={handleSubmitPayment} disabled={submitting} className="w-full py-4 bg-[#0ea5e9] hover:bg-[#0369a1] text-white font-black rounded-xl transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2 border-none shadow-lg shadow-sky-200">
-                {submitting ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Submitting...</> : <><CreditCard size={16} />Submit Payment Request</>}
+              <button onClick={handleSubmitPayment} disabled={submitting} className="w-full py-4 bg-[#0ea5e9] hover:bg-[#0369a1] text-white font-black rounded-xl transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2 border-none shadow-lg shadow-sky-200 active:scale-[0.99]">
+                {submitting ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Submitting...</> : <><Banknote size={18} />Confirm Cash on Delivery Request</>}
               </button>
             </div>
           </div>
