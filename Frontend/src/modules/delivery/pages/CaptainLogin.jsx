@@ -56,11 +56,7 @@ const CaptainLogin = () => {
       const res = await authService.captainLogin(cleanPhone, password);
 
       if (res.success && res.token) {
-        if (res.requiresMembership) {
-          navigate('/captain/membership');
-        } else {
-          navigate('/captain/dashboard');
-        }
+        navigate('/captain/dashboard');
       } else if (res.requiresPasswordSetup) {
         // Existing captain with no password set
         setForgotPhone(cleanPhone);

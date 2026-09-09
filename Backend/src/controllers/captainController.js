@@ -9,6 +9,7 @@ import CaptainNotification from '../models/CaptainNotification.model.js';
 import SellerNotification from '../models/SellerNotification.model.js';
 import TransportBooking from '../models/TransportBooking.model.js';
 import Rating from '../models/Rating.model.js';
+import CaptainMembership from '../models/CaptainMembership.model.js';
 import { getVehicleMatchPattern } from './transportBookingController.js';
 
 // In-memory fast cache for Captain Dashboard stats
@@ -45,7 +46,43 @@ export const getProfile = async (req, res, next) => {
     if (!captain) {
       return res.status(404).json({ success: false, message: 'Captain not found' });
     }
-    res.json({ success: true, captain });
+
+    // Auto-sync current active/pending membership
+    const now = new Date();
+    const activeMembership = await CaptainMembership.findOne({
+      captainId: captain._id,
+      membershipStatus: 'active',
+      expiryDate: { $gt: now },
+    }).populate('planId');
+
+    const captainObj = captain.toObject();
+    if (activeMembership) {
+      captainObj.membershipStatus = 'active';
+      captainObj.activeMembership = activeMembership;
+      if (captain.membershipStatus !== 'active') {
+        captain.membershipStatus = 'active';
+        await captain.save();
+      }
+    } else {
+      const pendingMembership = await CaptainMembership.findOne({
+        captainId: captain._id,
+        membershipStatus: 'pending_payment',
+      }).populate('planId');
+
+      if (pendingMembership) {
+        captainObj.membershipStatus = 'pending_payment';
+        captainObj.pendingMembership = pendingMembership;
+      } else {
+        const expiredOrNone = captainObj.membershipStatus === 'active' ? 'expired' : (captainObj.membershipStatus || 'none');
+        captainObj.membershipStatus = expiredOrNone;
+        if (captain.membershipStatus === 'active') {
+          captain.membershipStatus = 'expired';
+          await captain.save();
+        }
+      }
+    }
+
+    res.json({ success: true, captain: captainObj });
   } catch (error) {
     next(error);
   }
