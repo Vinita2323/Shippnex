@@ -14,6 +14,7 @@ import {
   FileText,
   Star,
   Trash2,
+  Crown,
 } from 'lucide-react';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import { captainService, authService } from '../../../services/authService';
@@ -71,7 +72,9 @@ const CaptainProfile = () => {
   };
 
   const handleItemClick = (id) => {
-    if (id === 'personal-info') {
+    if (id === 'membership') {
+      navigate('/captain/membership');
+    } else if (id === 'personal-info') {
       navigate('/captain/personal-details');
     } else if (id === 'wallet') {
       navigate('/captain/wallet');
@@ -98,6 +101,16 @@ const CaptainProfile = () => {
       icon: User,
       badge: 'Verified',
       badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    },
+    {
+      id: 'membership',
+      label: 'Captain Membership',
+      sub: profile?.membershipStatus === 'active'
+        ? 'Active Plan • View details & benefits'
+        : 'Choose a plan to activate captain perks',
+      icon: Crown,
+      badge: profile?.membershipStatus === 'active' ? 'Active' : 'Plans',
+      badgeColor: profile?.membershipStatus === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-sky-50 text-sky-700 border-sky-200',
     },
     {
       id: 'ratings',

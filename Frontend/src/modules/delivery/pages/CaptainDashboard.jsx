@@ -698,15 +698,23 @@ const CaptainDashboard = () => {
                       {stats.todayEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigate('/captain/membership')}
+                    className="px-3 py-1.5 rounded-full bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-sky-100"
+                  >
+                    <span className="material-symbols-outlined text-sm">workspace_premium</span>
+                    <span>Plans</span>
+                  </button>
+                  <button
+                    onClick={() => navigate('/captain/wallet')}
+                    className="px-3.5 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100/80 text-[#15803d] text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">account_balance_wallet</span>
+                    <span>Wallet</span>
+                    <span className="material-symbols-outlined text-xs">chevron_right</span>
+                  </button>
                 </div>
-                <button
-                  onClick={() => navigate('/captain/wallet')}
-                  className="px-3.5 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100/80 text-[#15803d] text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-sm">account_balance_wallet</span>
-                  <span>Wallet</span>
-                  <span className="material-symbols-outlined text-xs">chevron_right</span>
-                </button>
               </div>
 
               <div className="pt-3 border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100 text-center">
