@@ -102,16 +102,16 @@ const CaptainOrderNotifier = () => {
 
   const handleRejectJob = async (job) => {
     if (!job) return;
+    markJobAsDismissed(job);
+    setIncomingJob(null);
     setActionLoading(true);
     try {
-      markJobAsDismissed(job);
       const id = job.bookingId || job.orderId || job._id;
       if (job.isTransport) {
         await transportService.captainRejectRequest(id);
       } else {
         await captainService.rejectJob(id);
       }
-      setIncomingJob(null);
     } catch (err) {
       console.error('Reject job error:', err);
     } finally {

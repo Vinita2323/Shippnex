@@ -213,16 +213,16 @@ const CaptainDashboard = () => {
   // ── Reject Job (Hides Modal & Never Reappears on Any Screen) ────
   const handleRejectJob = async (job) => {
     if (!job) return;
+    markJobAsDismissed(job);
+    setIncomingJob(null); // Modal closes immediately
     setActionLoading(true);
     try {
-      markJobAsDismissed(job);
       const id = job.bookingId || job.orderId || job._id;
       if (job.isTransport) {
         await transportService.captainRejectRequest(id);
       } else {
         await captainService.rejectJob(id);
       }
-      setIncomingJob(null); // Modal closes immediately
       await fetchDashboard(true);
     } catch (err) {
       console.error('Reject job error:', err);

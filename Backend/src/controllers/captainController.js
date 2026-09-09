@@ -252,9 +252,10 @@ export const getDashboardStats = async (req, res, next) => {
 
       // 4. Pending & Active Orders
       Order.find({
+        orderStatus: { $nin: ['Delivered', 'Cancelled', 'Rejected'] },
         $or: [
           { captainId: captainQuery, captainStatus: { $in: ['Assigned', 'Accepted', 'Reached Store', 'At Pickup', 'Picked Up', 'In Transit', 'Out for Delivery'] } },
-          { captainStatus: 'Assigned' },
+          { captainId: null, captainStatus: 'Assigned' },
         ],
       })
         .populate('user', 'name phone email')
@@ -556,22 +557,20 @@ export const rejectJob = async (req, res, next) => {
     const { orderId } = req.params;
     const captainId = req.user.id;
 
-    const query = buildOrderQuery(orderId, { captainId });
+    const isMongoId = mongoose.Types.ObjectId.isValid(orderId);
+    const query = isMongoId ? { $or: [{ _id: orderId }, { orderId }] } : { orderId };
 
-    const order = await Order.findOneAndUpdate(
-      query,
-      {
-        $set: {
-          captainStatus: 'Rejected',
-          captainId: null,
-        },
-      },
-      { new: true }
-    );
+    const order = await Order.findOne(query);
 
     if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found or not assigned to you' });
+      return res.status(404).json({ success: false, message: 'Order not found' });
     }
+
+    order.captainStatus = 'Rejected';
+    if (!order.captainId || String(order.captainId) === String(captainId)) {
+      order.captainId = null;
+    }
+    await order.save();
 
     console.log(`[Captain rejectJob] Captain ${captainId} rejected Order #${order.orderId}`);
     invalidateCaptainDashboardCache(captainId);
