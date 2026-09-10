@@ -424,6 +424,8 @@ export const loginCaptain = async (req, res, next) => {
     delete captainSafe.password;
     delete captainSafe.otp;
     delete captainSafe.otpExpiry;
+    // Strip large base64 documents from auth response to keep payload tiny and prevent localStorage quota errors
+    delete captainSafe.documents;
 
     if (!activeMembership) {
       const pendingMembership = await CaptainMembership.findOne({
@@ -559,6 +561,8 @@ export const resetPassword = async (req, res, next) => {
     delete captainSafe.password;
     delete captainSafe.otp;
     delete captainSafe.otpExpiry;
+    // Strip large base64 documents from auth response to keep payload tiny and prevent localStorage quota errors
+    delete captainSafe.documents;
 
     return res.status(200).json({
       success: true,

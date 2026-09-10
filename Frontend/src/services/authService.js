@@ -1,6 +1,54 @@
 import API from './api';
 import { registerFCMToken, removeFCMToken } from './pushNotificationService';
 
+const saveCaptainAuthSession = (token, captain) => {
+  if (token) {
+    try {
+      localStorage.setItem('shippnex_captain_token', token);
+    } catch (e) {
+      // Storage quota reached: remove bulky items and retry
+      try {
+        localStorage.removeItem('shippnex_captain_data');
+        localStorage.setItem('shippnex_captain_token', token);
+      } catch (innerErr) {
+        console.error('Failed to set captain token in localStorage:', innerErr);
+      }
+    }
+  }
+
+  if (captain) {
+    try {
+      // Strip any heavy base64 strings or sensitive props
+      const safeData = { ...captain };
+      delete safeData.documents;
+      delete safeData.password;
+      delete safeData.otp;
+      delete safeData.otpExpiry;
+
+      localStorage.setItem('shippnex_captain_data', JSON.stringify(safeData));
+      if (safeData.name) localStorage.setItem('shippnex_captain_name', safeData.name);
+      if (safeData.phone) localStorage.setItem('shippnex_captain_phone', safeData.phone);
+    } catch (err) {
+      console.warn('LocalStorage quota reached when saving captain data; falling back to minimal record:', err);
+      try {
+        const minimalData = {
+          _id: captain._id || captain.id,
+          name: captain.name,
+          phone: captain.phone,
+          accountStatus: captain.accountStatus,
+          status: captain.status,
+          role: captain.role || 'captain',
+        };
+        localStorage.setItem('shippnex_captain_data', JSON.stringify(minimalData));
+        if (captain.name) localStorage.setItem('shippnex_captain_name', captain.name);
+        if (captain.phone) localStorage.setItem('shippnex_captain_phone', captain.phone);
+      } catch (fallbackErr) {
+        console.error('Failed to store minimal captain data in localStorage:', fallbackErr);
+      }
+    }
+  }
+};
+
 export const authService = {
   // User Auth
   sendUserOtp: async (phone) => {
@@ -111,8 +159,7 @@ export const authService = {
     try {
       const response = await API.post('/auth/captain/verify-otp', { phone, otp });
       if (response.data.token) {
-        localStorage.setItem('shippnex_captain_token', response.data.token);
-        localStorage.setItem('shippnex_captain_data', JSON.stringify(response.data.captain));
+        saveCaptainAuthSession(response.data.token, response.data.captain);
         // Register FCM Push Token on login (SOP Step 7)
         registerFCMToken(true, 'captain').catch(() => {});
       }
@@ -128,8 +175,7 @@ export const authService = {
   captainLogin: async (phone, password) => {
     const response = await API.post('/auth/captain/login', { phone, password });
     if (response.data.token) {
-      localStorage.setItem('shippnex_captain_token', response.data.token);
-      localStorage.setItem('shippnex_captain_data', JSON.stringify(response.data.captain));
+      saveCaptainAuthSession(response.data.token, response.data.captain);
       registerFCMToken(true, 'captain').catch(() => {});
     }
     return response.data;
@@ -138,8 +184,7 @@ export const authService = {
   captainResetPassword: async (phone, otp, newPassword) => {
     const response = await API.post('/auth/captain/reset-password', { phone, otp, newPassword });
     if (response.data.token) {
-      localStorage.setItem('shippnex_captain_token', response.data.token);
-      localStorage.setItem('shippnex_captain_data', JSON.stringify(response.data.captain));
+      saveCaptainAuthSession(response.data.token, response.data.captain);
       registerFCMToken(true, 'captain').catch(() => {});
     }
     return response.data;

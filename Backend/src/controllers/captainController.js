@@ -134,13 +134,23 @@ export const updateProfile = async (req, res, next) => {
 export const updateOnlineStatus = async (req, res, next) => {
   try {
     const { isOnline } = req.body;
+    const targetStatus = Boolean(isOnline);
+
     const captain = await Captain.findByIdAndUpdate(
       req.user.id,
-      { isOnline: Boolean(isOnline) },
+      { isOnline: targetStatus },
       { new: true }
-    ).select('isOnline name');
+    ).select('isOnline name status accountStatus');
 
-    res.json({ success: true, isOnline: captain.isOnline });
+    if (!captain) {
+      return res.status(404).json({ success: false, message: 'Captain not found' });
+    }
+
+    res.json({
+      success: true,
+      isOnline: captain.isOnline,
+      message: `Status updated to ${captain.isOnline ? 'Online' : 'Offline'}`,
+    });
   } catch (error) {
     next(error);
   }

@@ -28,6 +28,8 @@ const CaptainProfile = () => {
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
+  const [toggleLoading, setToggleLoading] = useState(false);
+  const [toggleError, setToggleError] = useState('');
 
   useEffect(() => {
     fetchProfile();
@@ -52,15 +54,29 @@ const CaptainProfile = () => {
     }
   };
 
-  const handleOnlineToggle = async () => {
+  const handleOnlineToggle = async (e) => {
+    e?.stopPropagation?.();
+    if (toggleLoading) return;
     const newStatus = !isOnline;
     setIsOnline(newStatus);
     localStorage.setItem('shippnex_captain_online', String(newStatus));
+    setToggleLoading(true);
+    setToggleError('');
     try {
-      await captainService.updateOnlineStatus(newStatus);
+      const res = await captainService.updateOnlineStatus(newStatus);
+      if (res && res.isOnline !== undefined) {
+        setIsOnline(Boolean(res.isOnline));
+        localStorage.setItem('shippnex_captain_online', String(res.isOnline));
+      }
     } catch (err) {
+      console.error('Failed to update online status:', err);
       setIsOnline(!newStatus);
       localStorage.setItem('shippnex_captain_online', String(!newStatus));
+      const msg = err?.response?.data?.message || err?.message || 'Failed to update online status';
+      setToggleError(msg);
+      setTimeout(() => setToggleError(''), 5000);
+    } finally {
+      setToggleLoading(false);
     }
   };
 
@@ -76,8 +92,10 @@ const CaptainProfile = () => {
       navigate('/captain/personal-details');
     } else if (id === 'wallet') {
       navigate('/captain/wallet');
+    /* Temporarily commented out:
     } else if (id === 'ratings') {
       setShowBreakdownModal(true);
+    */
     } else if (id === 'service-areas') {
       navigate('/captain/service-areas');
     } else if (id === 'privacy') {
@@ -110,6 +128,7 @@ const CaptainProfile = () => {
       badge: profile?.membershipStatus === 'active' ? 'Active' : 'Plans',
       badgeColor: profile?.membershipStatus === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-sky-50 text-sky-700 border-sky-200',
     },
+    /* Temporarily commented out: Captain Rating & Reviews
     {
       id: 'ratings',
       label: 'Captain Rating & Reviews',
@@ -120,6 +139,7 @@ const CaptainProfile = () => {
       badge: profile?.ratingCount > 0 ? `⭐ ${profile.ratingAverage.toFixed(1)}` : 'New',
       badgeColor: 'bg-amber-50 text-amber-800 border-amber-200',
     },
+    */
     {
       id: 'wallet',
       label: 'Wallet & Payouts',
@@ -178,6 +198,7 @@ const CaptainProfile = () => {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Partner Account</span>
+                {/* Temporarily commented out: Captain rating badge
                 {profile?.ratingCount > 0 && (
                   <span
                     onClick={(e) => {
@@ -189,22 +210,46 @@ const CaptainProfile = () => {
                     <span>⭐</span> {profile.ratingAverage.toFixed(1)} ({profile.ratingCount})
                   </span>
                 )}
+                */}
               </div>
               <span className="text-sm font-black text-slate-900 block truncate leading-tight mt-0.5">{captainName}</span>
               <span className="text-[11px] text-slate-500 font-medium block">{captainPhone}</span>
             </div>
           </div>
 
-          <button
-            onClick={handleOnlineToggle}
-            className={`w-12 h-6.5 rounded-full p-0.5 transition-all duration-300 flex items-center cursor-pointer border-none outline-none shrink-0 ${
-              isOnline ? 'bg-[#10b981] justify-end' : 'bg-slate-300 justify-start'
-            }`}
-            title={isOnline ? 'Status: Online' : 'Status: Offline'}
-          >
-            <div className="w-5.5 h-5.5 rounded-full bg-white shadow-md transition-all"></div>
-          </button>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={handleOnlineToggle}
+              disabled={toggleLoading}
+              className={`rounded-full p-0.5 transition-all duration-300 flex items-center cursor-pointer border-none outline-none ${
+                isOnline ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
+              } ${toggleLoading ? 'opacity-60 cursor-wait' : ''}`}
+              style={{ width: '48px', height: '26px' }}
+              title={isOnline ? 'Status: Online (Tap to go Offline)' : 'Status: Offline (Tap to go Online)'}
+            >
+              <div 
+                className="rounded-full bg-white shadow-md transition-all flex items-center justify-center"
+                style={{ width: '22px', height: '22px' }}
+              >
+                {toggleLoading && (
+                  <span className="w-2.5 h-2.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
+                )}
+              </div>
+            </button>
+            <span className={`text-[10px] font-black tracking-wider uppercase ${isOnline ? 'text-emerald-600' : 'text-slate-400'}`}>
+              {toggleLoading ? 'Updating…' : (isOnline ? 'Online' : 'Offline')}
+            </span>
+          </div>
         </div>
+
+        {/* Toggle Error Alert */}
+        {toggleError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-2xl flex items-center gap-2 animate-in fade-in">
+            <span className="text-sm shrink-0">⚠️</span>
+            <p className="flex-1">{toggleError}</p>
+          </div>
+        )}
 
         {/* Verification Status Card */}
         {!loading && profile?.status === 'approved' && (

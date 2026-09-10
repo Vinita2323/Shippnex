@@ -171,14 +171,22 @@ const CaptainDashboard = () => {
 
   // ── Online Toggle ──────────────────────────────────────────────
   const handleOnlineToggle = async (e) => {
-    const newStatus = e.target.checked;
+    e?.preventDefault?.();
+    const newStatus = typeof e?.target?.checked === 'boolean' ? e.target.checked : !isOnline;
     setIsOnline(newStatus);
     localStorage.setItem('shippnex_captain_online', String(newStatus));
     try {
-      await captainService.updateOnlineStatus(newStatus);
+      const res = await captainService.updateOnlineStatus(newStatus);
+      if (res && res.isOnline !== undefined) {
+        setIsOnline(Boolean(res.isOnline));
+        localStorage.setItem('shippnex_captain_online', String(res.isOnline));
+      }
       fetchDashboard(true);
     } catch (err) {
       console.error('Status update error:', err);
+      setIsOnline(!newStatus);
+      localStorage.setItem('shippnex_captain_online', String(!newStatus));
+      alert(err?.response?.data?.message || err?.message || 'Failed to update online status');
     }
   };
 
