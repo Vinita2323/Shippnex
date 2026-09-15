@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Store, MapPin, FileText, CheckCircle, Check, Loader2, Search, Navigation, AlertCircle, Crown, Zap, Star, CreditCard, Banknote, Wallet, Building2, Smartphone, UploadCloud, Image, X, FileCheck, Layers, Eye, EyeOff, Lock, ShieldCheck, RotateCcw } from 'lucide-react';
-import { authService, membershipService, categoryService } from '../../../../services/authService';
+import { Store, MapPin, FileText, CheckCircle, Check, Loader2, Search, Navigation, AlertCircle, Crown, Zap, Star, CreditCard, Banknote, Wallet, Building2, Smartphone, UploadCloud, Image, X, FileCheck, Layers, Eye, EyeOff, Lock, ShieldCheck, RotateCcw, DollarSign, Sparkles } from 'lucide-react';
+import { authService, membershipService, categoryService, sellerRegistrationFeeService } from '../../../../services/authService';
 import { MapService } from '../../../../services/MapService';
 import LocationSearchModal from '../../../../components/LocationSearchModal';
+import { loadRazorpaySdk } from '../../../../utils/razorpay';
 
 const FALLBACK_CATEGORIES = [
   'Grocery Essentials',
@@ -32,9 +33,20 @@ const SellerRegister = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [plans, setPlans] = useState([]);
-  const [loadingPlans, setLoadingPlans] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('netbanking');
+
+  // Dynamic Seller Registration Fee States
+  const [feeConfig, setFeeConfig] = useState({
+    amount: 150,
+    currency: 'INR',
+    isActive: true,
+    description: '',
+    loading: true,
+  });
+  const [pendingSellerId, setPendingSellerId] = useState(null);
+  const [paymentSuccessMsg, setPaymentSuccessMsg] = useState('');
+  const [paymentFailed, setPaymentFailed] = useState(false);
+  const [paymentErrorMessage, setPaymentErrorMessage] = useState('');
+  const [isRetryingPayment, setIsRetryingPayment] = useState(false);
 
   const [availableCategories, setAvailableCategories] = useState(FALLBACK_CATEGORIES);
   const [selectedCategories, setSelectedCategories] = useState([]);
@@ -48,6 +60,32 @@ const SellerRegister = () => {
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isResendingOtp, setIsResendingOtp] = useState(false);
   const [resendSuccessMsg, setResendSuccessMsg] = useState('');
+
+  // Fetch Dynamic Registration Fee Config on Mount
+  const fetchFeeConfig = async () => {
+    try {
+      setFeeConfig(prev => ({ ...prev, loading: true }));
+      const res = await sellerRegistrationFeeService.getPublicFeeConfig();
+      if (res && res.success) {
+        setFeeConfig({
+          amount: res.amount !== undefined ? res.amount : 150,
+          currency: res.currency || 'INR',
+          isActive: Boolean(res.isActive),
+          description: res.description || '',
+          loading: false,
+        });
+      } else {
+        setFeeConfig(prev => ({ ...prev, loading: false }));
+      }
+    } catch (err) {
+      console.warn('Could not fetch registration fee config, using defaults:', err);
+      setFeeConfig(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  useEffect(() => {
+    fetchFeeConfig();
+  }, []);
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -65,27 +103,6 @@ const SellerRegister = () => {
     };
     loadCategories();
   }, []);
-
-  const fetchPlans = async () => {
-    setLoadingPlans(true);
-    try {
-      const res = await membershipService.getSellerPlans();
-      if (res.success) setPlans(res.plans || []);
-    } catch (err) {
-      console.error('Failed to load plans', err);
-    } finally {
-      setLoadingPlans(false);
-    }
-  };
-
-  useEffect(() => {
-    if (step === 4 && plans.length === 0) {
-      fetchPlans();
-    }
-  }, [step]);
-
-  const PLAN_ICONS = { monthly: Zap, halfYearly: Star, yearly: Crown };
-  const durationLabel = (t) => ({ monthly: '1 Month', halfYearly: '6 Months', yearly: '12 Months' }[t] || t);
 
   const [formData, setFormData] = useState({
     businessName: '',
@@ -263,6 +280,100 @@ const SellerRegister = () => {
     }
   };
 
+  const handleLaunchRazorpayCheckout = async (orderData) => {
+    const isLoaded = await loadRazorpaySdk();
+    if (!isLoaded || !window.Razorpay) {
+      setPaymentFailed(true);
+      setPaymentErrorMessage('Razorpay SDK failed to load. Please check your internet connection.');
+      return;
+    }
+
+    const options = {
+      key: orderData.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TRZdg2aAOYv4KK',
+      amount: Math.round(orderData.amount * 100),
+      currency: orderData.currency || 'INR',
+      name: 'ShippNex Marketplace',
+      description: `One-Time Seller Registration Fee (₹${orderData.amount})`,
+      order_id: orderData.orderId,
+      handler: async function (response) {
+        try {
+          setIsSubmitting(true);
+          setPaymentErrorMessage('');
+          const verifyPayload = {
+            sellerId: orderData.sellerId,
+            razorpayPaymentId: response.razorpay_payment_id,
+            razorpayOrderId: response.razorpay_order_id,
+            razorpaySignature: response.razorpay_signature,
+          };
+          const verifyRes = await sellerRegistrationFeeService.verifyPayment(verifyPayload);
+          if (verifyRes && verifyRes.success) {
+            setPaymentSuccessMsg('Registration payment successful.');
+            setPaymentFailed(false);
+            setStep(5); // Advance to OTP verification
+          } else {
+            setPaymentFailed(true);
+            setPaymentErrorMessage(verifyRes?.message || 'Payment verification failed. Please retry.');
+          }
+        } catch (err) {
+          setPaymentFailed(true);
+          setPaymentErrorMessage(err.response?.data?.message || err.message || 'Payment verification error.');
+        } finally {
+          setIsSubmitting(false);
+        }
+      },
+      modal: {
+        ondismiss: function () {
+          setIsSubmitting(false);
+          setPaymentFailed(true);
+          setPaymentErrorMessage('Payment cancelled or closed. Your registration has not been completed. Please retry.');
+        },
+      },
+      prefill: {
+        name: formData.ownerName || formData.businessName,
+        email: formData.email,
+        contact: formData.phone,
+        method: 'netbanking',
+      },
+      theme: {
+        color: '#ff5500',
+      },
+    };
+
+    const rzp = new window.Razorpay(options);
+    rzp.on('payment.failed', function (response) {
+      setIsSubmitting(false);
+      setPaymentFailed(true);
+      setPaymentErrorMessage(response.error?.description || 'Payment failed. Your registration has not been completed. Please retry.');
+    });
+    rzp.open();
+  };
+
+  const handleRetryPayment = async () => {
+    setIsRetryingPayment(true);
+    setPaymentErrorMessage('');
+    try {
+      const res = await sellerRegistrationFeeService.retryOrder({
+        sellerId: pendingSellerId,
+        phone: formData.phone,
+      });
+      if (res && res.alreadyPaid) {
+        setPaymentSuccessMsg('Registration payment already verified.');
+        setPaymentFailed(false);
+        setStep(5);
+        return;
+      }
+      if (res && res.success && res.orderId) {
+        handleLaunchRazorpayCheckout(res);
+      } else {
+        setPaymentErrorMessage(res?.message || 'Unable to retry payment. Please re-submit.');
+      }
+    } catch (err) {
+      setPaymentErrorMessage(err.response?.data?.message || err.message || 'Error initializing retry payment.');
+    } finally {
+      setIsRetryingPayment(false);
+    }
+  };
+
   const nextStep = async (e) => {
     e.preventDefault();
     setErrorMessage('');
@@ -285,8 +396,12 @@ const SellerRegister = () => {
     if (step < 4) {
       setStep(step + 1);
     } else {
+      // Step 4: Seller Registration Fee Payment
       setIsSubmitting(true);
       setErrorMessage('');
+      setPaymentErrorMessage('');
+      setPaymentSuccessMsg('');
+      setPaymentFailed(false);
 
       const basePayload = {
         businessName: formData.businessName,
@@ -309,82 +424,37 @@ const SellerRegister = () => {
         fssaiLicense: formData.fssaiLicense,
         gstPhoto: formData.gstPhoto,
         bankPassbookPhoto: formData.bankPassbookPhoto,
-        planId: formData.planId,
       };
 
       try {
-        if (formData.planId) {
-          const selectedPlan = plans.find(p => p._id === formData.planId);
-          if (selectedPlan && selectedPlan.price > 0) {
-            // Razorpay online payment
-            const orderRes = await membershipService.createRazorpayOrder(selectedPlan._id, 'seller');
-            if (!orderRes.success || !orderRes.order) throw new Error(orderRes.message || 'Could not create payment order');
-            
-            const options = {
-              key: orderRes.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TRZdg2aAOYv4KK',
-              amount: orderRes.order.amount,
-              currency: orderRes.order.currency || 'INR',
-              name: 'ShippNex',
-              description: `${selectedPlan.name} Membership Payment`,
-              order_id: orderRes.order.id,
-              handler: async function (response) {
-                try {
-                  setIsSubmitting(true);
-                  const finalPayload = {
-                    ...basePayload,
-                    razorpayPaymentId: response.razorpay_payment_id,
-                    razorpayOrderId: response.razorpay_order_id,
-                    razorpaySignature: response.razorpay_signature,
-                    paymentMethod: 'razorpay'
-                  };
-                  const res = await authService.registerSeller(finalPayload);
-                  if (res && res.success) {
-                    setStep(5); // Move to OTP Verification
-                  } else {
-                    setErrorMessage(res.message || 'Registration failed');
-                  }
-                } catch (err) {
-                  setErrorMessage(err.response?.data?.message || err.message || 'Server error occurred');
-                } finally {
-                  setIsSubmitting(false);
-                }
-              },
-              modal: {
-                ondismiss: function () {
-                  setIsSubmitting(false);
-                }
-              },
-              prefill: {
-                name: formData.ownerName || formData.businessName,
-                email: formData.email,
-                contact: formData.phone,
-                method: 'netbanking'
-              },
-              theme: {
-                color: '#ff5500'
-              }
-            };
-            
-            const rzp = new window.Razorpay(options);
-            rzp.on('payment.failed', function (response) {
-              setErrorMessage(response.error.description || 'Payment Failed');
-              setIsSubmitting(false);
-            });
-            rzp.open();
-            return;
-          }
+        const res = await sellerRegistrationFeeService.initiateOrder(basePayload);
+
+        if (res && res.sellerId) {
+          setPendingSellerId(res.sellerId);
         }
-        
-        // Submit directly to register and receive OTP
-        const res = await authService.registerSeller(basePayload);
-        if (res && res.success) {
+
+        if (res && res.alreadyPaid) {
+          setPaymentSuccessMsg('Registration fee has already been paid for this account.');
           setStep(5); // Move to OTP verification
-        } else {
-          setErrorMessage(res.message || 'Registration failed');
+          return;
         }
+
+        if (res && !res.registrationFeeRequired) {
+          // Fee waived by admin
+          setPaymentSuccessMsg('Registration fee is currently waived.');
+          setStep(5); // Move to OTP verification
+          return;
+        }
+
+        if (res && res.registrationFeeRequired && res.orderId) {
+          handleLaunchRazorpayCheckout(res);
+          return;
+        }
+
+        setErrorMessage(res?.message || 'Failed to initiate registration fee order.');
       } catch (err) {
-        console.error('Registration submit error:', err);
-        setErrorMessage(err.response?.data?.message || err.message || 'Server error occurred');
+        console.error('Registration order initiation error:', err);
+        setErrorMessage(err.response?.data?.message || err.message || 'Server error occurred during payment initiation.');
       } finally {
         setIsSubmitting(false);
       }
@@ -460,7 +530,7 @@ const SellerRegister = () => {
                 </div>
                 <div className={`flex flex-col items-center gap-1.5`}>
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${step >= 4 ? 'bg-[#ff5500] text-white ring-4 ring-orange-50' : 'bg-slate-100 text-slate-400'}`}>4</div>
-                  <span className={`text-[11px] font-semibold ${step >= 4 ? 'text-[#ff5500]' : 'text-slate-500'}`}>Plan</span>
+                  <span className={`text-[11px] font-semibold ${step >= 4 ? 'text-[#ff5500]' : 'text-slate-500'}`}>Fee & Pay</span>
                 </div>
                 <div className={`flex flex-col items-center gap-1.5`}>
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${step >= 5 ? 'bg-[#ff5500] text-white ring-4 ring-orange-50' : 'bg-slate-100 text-slate-400'}`}>5</div>
@@ -801,59 +871,138 @@ const SellerRegister = () => {
               </div>
             )}
 
-            {/* STEP 4: MEMBERSHIP */}
+            {/* STEP 4: SELLER REGISTRATION FEE */}
             {step === 4 && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+              <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-orange-50 text-[#ff5500] rounded-lg"><Crown size={20} /></div>
-                    <h3 className="text-lg font-bold text-slate-800 m-0">Select Membership Plan</h3>
+                    <div className="p-2.5 bg-orange-50 text-[#ff5500] rounded-xl border border-orange-100">
+                      <CreditCard size={22} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800 m-0">One-Time Registration Fee</h3>
+                      <p className="text-xs text-slate-500 font-medium">Complete one-time onboarding payment to activate your seller account</p>
+                    </div>
                   </div>
                   <button 
                     type="button" 
-                    onClick={fetchPlans}
-                    className="text-xs font-bold text-[#ff5500] hover:text-[#e64d00] flex items-center gap-1 cursor-pointer bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-lg transition-colors"
+                    onClick={fetchFeeConfig}
+                    className="text-xs font-bold text-[#ff5500] hover:text-[#e64d00] flex items-center gap-1 cursor-pointer bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-lg transition-colors border-none"
                   >
                     Refresh
                   </button>
                 </div>
 
-                {loadingPlans ? (
-                  <div className="py-8 flex flex-col items-center justify-center">
+                {feeConfig.loading ? (
+                  <div className="py-10 flex flex-col items-center justify-center">
                     <Loader2 size={32} className="animate-spin text-[#ff5500] mb-2" />
-                    <p className="text-sm text-slate-500 font-medium">Loading membership plans...</p>
-                  </div>
-                ) : plans.length === 0 ? (
-                  <div className="p-4 bg-slate-50 text-slate-500 text-sm text-center rounded-xl border border-slate-200">
-                    No membership plans available right now. You can skip this step and proceed with registration.
+                    <p className="text-sm text-slate-500 font-medium">Fetching current registration fee configuration...</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-                    {plans.map(plan => {
-                      const Icon = PLAN_ICONS[plan.durationType] || Crown;
-                      const isSelected = formData.planId === plan._id;
-                      return (
-                        <div
-                          key={plan._id}
-                          onClick={() => setFormData(prev => ({ ...prev, planId: plan._id }))}
-                          className={`relative p-4 rounded-2xl border-2 transition-all cursor-pointer ${isSelected ? 'border-[#ff5500] bg-orange-50/50 shadow-md scale-[1.02]' : 'border-slate-100 bg-white hover:border-orange-200 hover:shadow-sm'}`}
-                        >
-                          {isSelected && (
-                            <div className="absolute top-3 right-3 text-[#ff5500]">
-                              <CheckCircle size={20} className="fill-[#ff5500] text-white" />
+                  <div className="space-y-4">
+                    {/* Dynamic Fee Card */}
+                    <div className="relative overflow-hidden rounded-2xl border-2 border-orange-200 bg-gradient-to-br from-white via-orange-50/20 to-orange-100/30 p-6 shadow-sm">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-bold tracking-wide uppercase mb-2">
+                            <Sparkles size={13} />
+                            One-Time Onboarding Fee
+                          </div>
+                          <h4 className="text-xl font-bold text-slate-900">Seller Registration Fee</h4>
+                          <p className="text-xs text-slate-600 mt-1 max-w-sm">
+                            {feeConfig.description || 'Mandatory one-time fee for business onboarding, KYC document verification, and platform access.'}
+                          </p>
+                        </div>
+
+                        <div className="text-right bg-white/90 backdrop-blur-xs p-4 rounded-xl border border-orange-100 shadow-xs">
+                          <span className="text-xs text-slate-400 font-bold uppercase block tracking-wider">Payable Now</span>
+                          {feeConfig.isActive ? (
+                            <div className="flex items-baseline justify-end gap-1">
+                              <span className="text-3xl font-black text-slate-900">
+                                ₹{feeConfig.amount}
+                              </span>
+                              <span className="text-xs font-bold text-slate-500">one-time</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 text-emerald-600 font-bold">
+                              <span className="text-2xl font-black">₹0</span>
+                              <span className="text-xs bg-emerald-100 px-2 py-0.5 rounded-full font-bold">Waived</span>
                             </div>
                           )}
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${isSelected ? 'bg-[#ff5500] text-white' : 'bg-orange-50 text-[#ff5500]'}`}>
-                            <Icon size={20} />
-                          </div>
-                          <h3 className="text-sm font-bold text-slate-800 mb-1">{plan.name}</h3>
-                          <div className="flex items-baseline gap-1 mb-2">
-                            <span className="text-lg font-black text-slate-900">₹{plan.price}</span>
-                            <span className="text-xs font-semibold text-slate-500">/{durationLabel(plan.durationType)}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 pt-4 border-t border-orange-100/80 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-600">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle size={15} className="text-emerald-500 shrink-0" />
+                          <span>Identity & KYC Verification</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle size={15} className="text-emerald-500 shrink-0" />
+                          <span>Lifetime Store Onboarding</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle size={15} className="text-emerald-500 shrink-0" />
+                          <span>Zero Renewal or Hidden Costs</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Informational Notice */}
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-start gap-2.5">
+                      <ShieldCheck size={18} className="text-orange-500 shrink-0 mt-0.5" />
+                      <p className="m-0 leading-relaxed font-normal">
+                        This registration fee is completely separate from any future store services or optional subscription plans. Once payment is verified, your account moves to the final OTP verification step.
+                      </p>
+                    </div>
+
+                    {/* Payment Success Alert */}
+                    {paymentSuccessMsg && (
+                      <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center gap-3 animate-in fade-in">
+                        <CheckCircle size={20} className="text-emerald-600 shrink-0" />
+                        <div>
+                          <p className="font-bold text-emerald-900 m-0">Registration Payment Successful!</p>
+                          <p className="font-normal text-emerald-700 m-0 mt-0.5">{paymentSuccessMsg}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Payment Failed / Retry Alert */}
+                    {paymentFailed && (
+                      <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs space-y-3 animate-in fade-in">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle size={20} className="text-rose-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-rose-900 m-0 text-sm">
+                              Payment failed. Your registration has not been completed. Please retry.
+                            </p>
+                            {paymentErrorMessage && (
+                              <p className="text-rose-700 font-medium m-0 mt-1">{paymentErrorMessage}</p>
+                            )}
                           </div>
                         </div>
-                      );
-                    })}
+                        <div className="flex items-center gap-3 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleRetryPayment}
+                            disabled={isRetryingPayment}
+                            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {isRetryingPayment ? (
+                              <>
+                                <Loader2 size={14} className="animate-spin" />
+                                Preparing Retry...
+                              </>
+                            ) : (
+                              <>
+                                <RotateCcw size={14} />
+                                Retry Payment Now (₹{feeConfig.amount})
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -938,11 +1087,13 @@ const SellerRegister = () => {
                 className="flex-1 py-2.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-[#ff5500] hover:bg-[#e64d00] transition-colors cursor-pointer disabled:opacity-70 flex justify-center items-center gap-2"
               >
                 {isSubmitting ? (
-                  <><Loader2 size={16} className="animate-spin" /> Submitting...</>
+                  <><Loader2 size={16} className="animate-spin" /> Processing...</>
                 ) : isVerifyingOtp ? (
                   <><Loader2 size={16} className="animate-spin" /> Verifying OTP...</>
                 ) : (
-                  step === 4 ? 'Submit Application' : (step === 5 ? 'Verify OTP & Complete' : 'Continue')
+                  step === 4 ? (
+                    feeConfig.isActive ? `Pay Registration Fee (₹${feeConfig.amount}) & Continue` : 'Continue (Fee Waived)'
+                  ) : (step === 5 ? 'Verify OTP & Complete' : 'Continue')
                 )}
               </button>
             </div>

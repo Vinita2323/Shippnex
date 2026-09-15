@@ -43,8 +43,8 @@ router.put('/admin/captain/plans/:id/toggle', protect('admin'), adminToggleCapta
 router.delete('/admin/captain/plans/:id', protect('admin'), adminDeleteCaptainPlan);
 router.get('/admin/seller/subscriptions', protect('admin'), adminGetSellerSubscriptions);
 router.get('/admin/captain/subscriptions', protect('admin'), adminGetCaptainSubscriptions);
-router.put('/admin/seller/subscriptions/:id/confirm-payment', protect('admin'), adminConfirmSellerPayment);
-router.put('/admin/captain/subscriptions/:id/confirm-payment', protect('admin'), adminConfirmCaptainPayment);
+router.put('/admin/seller/subscriptions/:id/confirm-payment', protect('super_admin'), adminConfirmSellerPayment);
+router.put('/admin/captain/subscriptions/:id/confirm-payment', protect('super_admin'), adminConfirmCaptainPayment);
 router.get('/admin/seller/stats', protect('admin'), adminGetSellerMembershipStats);
 router.get('/admin/captain/stats', protect('admin'), adminGetCaptainMembershipStats);
 router.post('/admin/check-expiry', protect('admin'), adminCheckExpiry);

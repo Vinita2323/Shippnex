@@ -7,7 +7,7 @@ const adminSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      default: 'Super Admin',
+      default: 'Administrator',
     },
     email: {
       type: String,
@@ -22,6 +22,7 @@ const adminSchema = new mongoose.Schema(
     },
     role: {
       type: String,
+      enum: ['admin', 'super_admin'],
       default: 'admin',
     },
   },

@@ -228,9 +228,9 @@ const LocationSelectionPage = () => {
   };
 
   return (
-    <div className="h-[100dvh] bg-[#f8fafc] font-sans max-w-[480px] mx-auto relative flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="bg-white px-4 py-4 flex items-center shadow-xs z-10 shrink-0 border-b border-slate-100">
+    <div className="h-[100dvh] md:h-auto md:min-h-screen bg-[#f8fafc] font-sans max-w-[480px] md:max-w-3xl mx-auto relative flex flex-col md:py-8 md:px-6 overflow-hidden md:overflow-visible">
+      {/* Mobile Header */}
+      <div className="flex md:hidden bg-white px-4 py-4 items-center shadow-xs z-10 shrink-0 border-b border-slate-100">
         <button onClick={() => navigate(-1)} className="mr-3 p-1 rounded-full hover:bg-slate-100 transition-colors border-none cursor-pointer">
           <ArrowLeft size={22} className="text-slate-800" />
         </button>
@@ -240,7 +240,25 @@ const LocationSelectionPage = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 [&::-webkit-scrollbar]:hidden pb-10">
+      {/* Desktop Header */}
+      <div className="hidden md:flex items-center justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
+            <button onClick={() => navigate(-1)} className="hover:text-orange-600 font-medium cursor-pointer border-none bg-transparent flex items-center gap-1">
+              <ArrowLeft size={16} /> Back
+            </button>
+            <span>/</span>
+            <span className="text-slate-800 font-bold">Location</span>
+          </div>
+          <h1 className="text-2xl font-black text-slate-900 m-0">Select Delivery Location</h1>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-xs">
+          <MapPin size={16} className="text-[#ea580c]" />
+          Powered by Google Maps
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 md:p-0 space-y-4 [&::-webkit-scrollbar]:hidden pb-10 md:pb-12 md:overflow-visible">
         {/* GPS Location Button */}
         <button 
           onClick={handleUseCurrentLocation}

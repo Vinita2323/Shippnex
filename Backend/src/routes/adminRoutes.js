@@ -1,4 +1,5 @@
 import express from 'express';
+import { protect } from '../middleware/authMiddleware.js';
 import { 
   getDashboardStats,
   getAllUsers,
@@ -24,7 +25,8 @@ router.get('/users', getAllUsers);
 // Seller Management
 router.get('/sellers', getAllSellers);
 router.put('/sellers/:id/status', toggleSellerStatus);
-router.put('/sellers/:id/commission', updateSellerCommission);
+// Commission updates are strictly revoked from Admin and restricted to Super Admin
+router.put('/sellers/:id/commission', protect('super_admin'), updateSellerCommission);
 
 // Captain Management
 router.get('/captains', getAllCaptains);

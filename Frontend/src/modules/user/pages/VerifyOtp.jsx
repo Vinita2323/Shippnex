@@ -104,14 +104,14 @@ const VerifyOtp = () => {
   };
 
   return (
-    <div className="h-[100dvh] bg-[#fdf2ec] bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-[#ffedd5] via-[#ffedd5] to-[#f97316]/20 font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col p-4 overflow-hidden">
+    <div className="h-[100dvh] md:h-auto md:min-h-screen bg-[#fdf2ec] bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-[#ffedd5] via-[#ffedd5] to-[#f97316]/20 font-sans text-slate-800 relative w-full flex flex-col md:items-center md:justify-center p-4 md:py-12 md:px-4 overflow-hidden">
       
       {/* Background Blurs */}
-      <div className="absolute -left-[100px] top-[20%] w-[300px] h-[300px] bg-[#f97316] rounded-full mix-blend-multiply filter blur-[60px] opacity-[0.15]"></div>
-      <div className="absolute -right-[100px] bottom-[10%] w-[300px] h-[300px] bg-[#ea580c] rounded-full mix-blend-multiply filter blur-[60px] opacity-[0.15]"></div>
+      <div className="absolute -left-[100px] top-[20%] w-[300px] md:w-[500px] h-[300px] md:h-[500px] bg-[#f97316] rounded-full mix-blend-multiply filter blur-[60px] md:blur-[100px] opacity-[0.15]"></div>
+      <div className="absolute -right-[100px] bottom-[10%] w-[300px] md:w-[500px] h-[300px] md:h-[500px] bg-[#ea580c] rounded-full mix-blend-multiply filter blur-[60px] md:blur-[100px] opacity-[0.15]"></div>
 
       {/* Main Card */}
-      <div className="flex-1 bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] border border-slate-100 relative z-10 p-5 flex flex-col justify-between overflow-y-auto [&::-webkit-scrollbar]:hidden">
+      <div className="w-full max-w-[480px] md:max-w-md mx-auto flex-1 md:flex-initial bg-white rounded-2xl md:rounded-3xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] md:shadow-[0_20px_60px_rgba(0,0,0,0.1)] border border-slate-100 relative z-10 p-5 md:p-8 flex flex-col justify-between overflow-y-auto md:overflow-visible [&::-webkit-scrollbar]:hidden">
         
         <div>
           {/* Header Navigation */}

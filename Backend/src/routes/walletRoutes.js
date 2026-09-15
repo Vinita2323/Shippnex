@@ -14,9 +14,9 @@ const router = express.Router();
 router.get('/seller', protect('seller'), getSellerWallet);
 router.post('/seller/withdraw', protect('seller'), requestWithdrawal);
 
-// Admin Settlement & Withdrawal Management Routes
-router.get('/admin/settlements', protect('admin'), getAdminSettlements);
-router.get('/admin/withdrawals', protect('admin'), getAdminWithdrawals);
-router.put('/admin/withdrawals/:id/status', protect('admin'), updateWithdrawalStatus);
+// Super Admin Settlement & Withdrawal Management Routes (Restricted from normal Admin)
+router.get('/admin/settlements', protect('super_admin'), getAdminSettlements);
+router.get('/admin/withdrawals', protect('super_admin'), getAdminWithdrawals);
+router.put('/admin/withdrawals/:id/status', protect('super_admin'), updateWithdrawalStatus);
 
 export default router;

@@ -3,6 +3,7 @@ import Seller from '../models/Seller.model.js';
 import SellerNotification from '../models/SellerNotification.model.js';
 import WalletTransaction from '../models/WalletTransaction.model.js';
 import WithdrawalRequest from '../models/WithdrawalRequest.model.js';
+import PayoutRequest from '../models/PayoutRequest.model.js';
 
 // @desc    Get Seller Wallet Data (Metrics, Transactions, Withdrawals)
 // @route   GET /api/wallet/seller
@@ -130,6 +131,23 @@ export const requestWithdrawal = async (req, res, next) => {
       },
       status: 'PENDING',
     });
+
+    // Create unified PayoutRequest for Super Admin Financial System
+    await PayoutRequest.create({
+      payoutId: withdrawalId,
+      recipientType: 'SELLER',
+      recipientId: String(seller._id),
+      recipientName: seller.businessName || seller.ownerName || 'Seller Store',
+      recipientPhone: seller.phone || '',
+      requestedAmount: withdrawAmt,
+      bankDetails: {
+        bankName,
+        accountNumber,
+        ifscCode,
+        accountHolderName: accountHolderName || seller.ownerName || seller.businessName,
+      },
+      status: 'PENDING',
+    }).catch(err => console.warn('[PayoutRequest] Error syncing seller withdrawal:', err.message));
 
     // Create Wallet Transaction Record
     const txnId = `TXN-WTH-${Date.now().toString().slice(-6)}`;

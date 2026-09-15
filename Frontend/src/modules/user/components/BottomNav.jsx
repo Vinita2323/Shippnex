@@ -10,7 +10,7 @@ const BottomNav = () => {
   const { cartCount } = useCart();
 
   return (
-    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white flex justify-around items-center py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] rounded-t-[20px] z-[100]">
+    <nav className="md:hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white flex justify-around items-center py-3 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.06)] rounded-t-[20px] z-[100]">
       <div 
         className={`flex flex-col items-center gap-1 cursor-pointer relative transition-colors duration-200 ${currentPath === '/' ? 'text-[#ff5500]' : 'text-slate-400'}`}
         onClick={() => navigate('/')}

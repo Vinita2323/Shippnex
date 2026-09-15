@@ -359,9 +359,9 @@ const Checkout = () => {
   const finalGrandTotal = safeTotal + deliveryCharge;
 
   return (
-    <div className="h-[100dvh] bg-slate-50 font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="flex justify-between items-center py-3 px-5 bg-gradient-to-r from-[#ea580c] to-[#f97316] rounded-b-[20px] shadow-sm z-10 relative mb-2">
+    <div className="w-full max-w-[480px] md:max-w-7xl mx-auto h-[100dvh] md:h-auto md:min-h-screen bg-slate-50 font-sans text-slate-800 relative shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col overflow-hidden md:overflow-visible md:px-6 md:py-8">
+      {/* Mobile Header */}
+      <header className="md:hidden flex justify-between items-center py-3 px-5 bg-gradient-to-r from-[#ea580c] to-[#f97316] rounded-b-[20px] shadow-sm z-10 relative mb-2">
         <button className="bg-transparent border-none cursor-pointer p-0 flex items-center" onClick={() => navigate(-1)}>
           <ArrowLeft size={22} color="white" />
         </button>
@@ -369,8 +369,25 @@ const Checkout = () => {
         <div className="w-[22px]"></div>
       </header>
 
+      {/* Desktop Header */}
+      <div className="hidden md:flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 m-0">Secure Checkout</h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">Review your delivery address, slot and payment options</p>
+        </div>
+        <button
+          onClick={() => navigate('/cart')}
+          className="text-xs font-bold text-[#ff5500] hover:underline bg-transparent border-none cursor-pointer flex items-center gap-1"
+        >
+          ← Return to Cart
+        </button>
+      </div>
+
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-4 [&::-webkit-scrollbar]:hidden">
+      <div className="flex-1 overflow-y-auto md:overflow-visible px-5 md:px-0 py-3 md:py-0 flex flex-col md:grid md:grid-cols-12 md:gap-8 md:items-start gap-4 [&::-webkit-scrollbar]:hidden">
+        
+        {/* Left Column (Address, Slot, Payment) on Desktop */}
+        <div className="w-full md:col-span-7 lg:col-span-8 flex flex-col gap-4">
         
         {(!userName || userName === 'Customer' || userName === 'User') && (
           <div className="bg-orange-50 border border-orange-200 text-[#ea580c] px-4 py-3 rounded-xl text-[12px] font-bold flex items-center justify-between shadow-xs">
@@ -484,10 +501,13 @@ const Checkout = () => {
             })}
           </div>
         </div>
+        </div> {/* End Left Column */}
 
+        {/* Right Column (Order Summary & Desktop Checkout Button) on Desktop */}
+        <div className="w-full md:col-span-5 lg:col-span-4 md:sticky md:top-24 flex flex-col gap-4">
         {/* 5. Order Summary Card */}
-        <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-          <h3 className="text-[14px] font-bold text-slate-800 m-0 mb-3">Order Summary</h3>
+        <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs">
+          <h3 className="text-sm font-black text-slate-900 m-0 mb-3 pb-2 border-b border-slate-100">Order Summary</h3>
 
           {/* Cart Items List */}
           <div className="flex flex-col gap-2 mb-3 pb-3 border-b border-slate-100 max-h-[160px] overflow-y-auto [&::-webkit-scrollbar]:hidden">
@@ -523,18 +543,44 @@ const Checkout = () => {
               </div>
             )}
             <div className="flex justify-between items-center mt-2 pt-3 border-t border-dashed border-slate-300">
-              <span className="text-[14px] font-extrabold text-slate-900">Grand Total</span>
-              <span className="text-[16px] font-extrabold text-slate-900">₹{finalGrandTotal.toFixed(2)}</span>
+              <span className="text-sm font-black text-slate-900">Grand Total</span>
+              <span className="text-lg font-black text-slate-900">₹{finalGrandTotal.toFixed(2)}</span>
             </div>
           </div>
-        </div>
 
-        {/* Extra bottom padding to ensure Order Summary is fully visible above sticky footer */}
-        <div className="h-[140px] shrink-0"></div>
+          {/* Desktop Place Order Button */}
+          <div className="hidden md:block pt-3">
+            <button
+              disabled={placingOrder}
+              className="w-full bg-[#ff5500] hover:bg-[#e04b00] disabled:opacity-60 text-white border-none rounded-xl py-3.5 px-6 text-sm font-black cursor-pointer shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+              onClick={handlePlaceOrder}
+            >
+              {placingOrder ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" /> Placing Order...
+                </>
+              ) : (
+                <>
+                  <span>Place Order • ₹{finalGrandTotal.toFixed(2)}</span>
+                  <ChevronRight size={18} />
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-center gap-4 text-[11px] text-slate-400 font-medium">
+            <span>🔒 Safe & Secure Checkout</span>
+            <span>⚡ 10-Min Fast Delivery</span>
+          </div>
+        </div>
+        </div> {/* End Right Column */}
+
+        {/* Extra bottom padding to ensure Order Summary is fully visible above sticky footer (Mobile only) */}
+        <div className="h-[140px] shrink-0 md:hidden"></div>
       </div>
 
-      {/* Sticky Place Order Footer */}
-      <div className="absolute bottom-0 left-0 w-full py-4 px-5 pb-6 bg-white border-t border-slate-200/80 z-[80] flex items-center justify-between">
+      {/* Sticky Place Order Footer (Mobile Only) */}
+      <div className="md:hidden absolute bottom-0 left-0 w-full py-4 px-5 pb-6 bg-white border-t border-slate-200/80 z-[80] flex items-center justify-between">
         <div>
           <span className="text-[11px] font-medium text-slate-500 block">Total Payable</span>
           <span className="text-[18px] font-extrabold text-slate-900">₹{finalGrandTotal.toFixed(2)}</span>
@@ -560,7 +606,7 @@ const Checkout = () => {
       {/* Complete Profile Modal */}
       {isProfileModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[150] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full max-w-[480px] rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl animate-fade-in-up flex flex-col">
+          <div className="bg-white w-full max-w-[480px] sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 shadow-2xl animate-fade-in-up flex flex-col">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-3">
               <h3 className="text-[16px] font-extrabold text-slate-900 m-0">Complete Your Profile</h3>
               {userName && userName !== 'Customer' && userName !== 'User' && (
@@ -626,7 +672,7 @@ const Checkout = () => {
       {/* Address Selection Modal */}
       {isAddressModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full max-w-[480px] rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl animate-fade-in-up flex flex-col max-h-[80vh]">
+          <div className="bg-white w-full max-w-[480px] sm:max-w-xl rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 shadow-2xl animate-fade-in-up flex flex-col max-h-[80vh]">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-3">
               <h3 className="text-[16px] font-extrabold text-slate-900 m-0">Select Delivery Address</h3>
               <button
@@ -700,8 +746,8 @@ const Checkout = () => {
 
       {/* New Address Modal */}
       {isNewAddressModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[110] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full max-w-[480px] rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl animate-fade-in-up flex flex-col max-h-[85vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[150] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full max-w-[480px] sm:max-w-xl rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 shadow-2xl animate-fade-in-up flex flex-col max-h-[85vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-3">
               <h3 className="text-[16px] font-extrabold text-slate-900 m-0">Add New Delivery Address</h3>
               <button

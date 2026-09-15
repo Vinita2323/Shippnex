@@ -407,7 +407,16 @@ export const loginSeller = async (req, res, next) => {
       });
     }
 
-    // 1. Check Pending OTP Status
+    // 1. Check Pending Registration Fee & OTP Status
+    if (seller.registrationFeeStatus === 'pending' || seller.registrationFeeStatus === 'failed') {
+      return res.status(403).json({
+        success: false,
+        accountStatus: 'pending_payment',
+        registrationFeeStatus: seller.registrationFeeStatus,
+        message: 'Seller registration fee payment is pending. Please complete your registration fee payment to proceed.',
+      });
+    }
+
     if (seller.accountStatus === 'pending_otp' && !seller.isVerified) {
       return res.status(403).json({
         success: false,

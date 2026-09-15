@@ -118,16 +118,16 @@ const Orders = () => {
   });
 
   return (
-    <div className="h-[100dvh] bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
+    <div className="w-full h-[100dvh] md:h-auto md:min-h-screen bg-[#f8fafc] font-sans text-slate-800 relative shadow-none flex flex-col overflow-hidden md:overflow-visible px-0 md:px-5 md:py-6">
       
-      {/* Peach Header */}
-      <header className="flex flex-col gap-0 py-4 px-5 bg-[#ffece1] z-10 pb-0">
+      {/* Mobile Peach Header */}
+      <header className="md:hidden flex flex-col gap-0 py-4 px-5 bg-[#ffece1] z-10 pb-0">
         <div className="flex items-center gap-4 mb-4">
           <ArrowLeft size={24} className="text-[#1e1b4b] cursor-pointer" onClick={() => navigate(-1)} />
           <h2 className="text-[20px] font-medium m-0 text-[#1e1b4b]">My Bookings & Orders</h2>
         </div>
         
-        {/* Tabs */}
+        {/* Mobile Tabs */}
         <div className="flex w-full gap-4">
           <div 
             className={`pb-3 text-[14px] font-bold cursor-pointer relative ${activeTab === 'shopping' ? 'text-[#ff5500]' : 'text-slate-500'}`}
@@ -145,6 +145,40 @@ const Orders = () => {
           </div>
         </div>
       </header>
+
+      {/* Desktop Header Banner */}
+      <div className="hidden md:flex flex-col bg-white border border-slate-100 rounded-2xl p-6 shadow-xs mb-6">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 m-0">My Bookings & Orders</h1>
+            <p className="text-sm text-slate-500 mt-1 mb-0">Track active deliveries, scheduled vehicle logistics and review order status</p>
+          </div>
+          <button 
+            onClick={() => navigate('/order-history')}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-[#ff5500] font-bold text-sm rounded-xl border border-orange-200 cursor-pointer transition-colors"
+          >
+            <Package size={16} /> Complete Order History →
+          </button>
+        </div>
+
+        {/* Desktop Tabs */}
+        <div className="flex items-center gap-4 border-b border-slate-100">
+          <button 
+            onClick={() => setActiveTab('shopping')}
+            className={`pb-3 text-sm font-bold border-none bg-transparent cursor-pointer relative transition-colors ${activeTab === 'shopping' ? 'text-[#ff5500]' : 'text-slate-500 hover:text-slate-800'}`}
+          >
+            Shopping Orders ({allOrders.length})
+            {activeTab === 'shopping' && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#ff5500] rounded-t-md"></div>}
+          </button>
+          <button 
+            onClick={() => setActiveTab('transport')}
+            className={`pb-3 text-sm font-bold border-none bg-transparent cursor-pointer relative transition-colors ${activeTab === 'transport' ? 'text-[#ff5500]' : 'text-slate-500 hover:text-slate-800'}`}
+          >
+            Vehicle Logistics ({transportBookings.length})
+            {activeTab === 'transport' && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#ff5500] rounded-t-md"></div>}
+          </button>
+        </div>
+      </div>
 
       {/* Quick Link to Order History */}
       <div className="bg-[#fff4ed] border-b border-orange-200/70 px-5 py-2.5 flex items-center justify-between text-xs shrink-0">
@@ -213,7 +247,7 @@ const Orders = () => {
       </div>
 
       {/* Order List */}
-      <div className="flex-1 overflow-y-auto px-5 pb-[100px] pt-2 [&::-webkit-scrollbar]:hidden flex flex-col gap-3.5">
+      <div className="flex-1 overflow-y-auto px-5 md:px-0 pb-[100px] md:pb-12 pt-2 md:pt-0 [&::-webkit-scrollbar]:hidden md:overflow-visible">
         
         {activeTab === 'shopping' ? (
           loading ? (
@@ -222,51 +256,53 @@ const Orders = () => {
               <span className="text-sm font-bold text-slate-700">Loading your orders...</span>
             </div>
           ) : filteredOrders.length > 0 ? (
-          filteredOrders.map((order, index) => {
-            const firstItemImg = order.items?.[0]?.image || order.items?.[0]?.product?.mainImage || order.items?.[0]?.product?.image;
-            return (
-            <div key={index} className="bg-white rounded-[16px] p-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col gap-3">
-              
-              {/* Top Row: Icon, ID/Date, Status */}
-              <div className="flex items-start justify-between">
-                <div className="flex gap-3 items-center">
-                  <div className="w-[44px] h-[44px] rounded-[12px] bg-[#f0f3f6] flex items-center justify-center shrink-0 overflow-hidden">
-                    {firstItemImg ? (
-                      <img src={firstItemImg} alt="Order Item" className="w-full h-full object-cover" />
-                    ) : (
-                      <Box size={20} className="text-slate-400" />
-                    )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredOrders.map((order, index) => {
+              const firstItemImg = order.items?.[0]?.image || order.items?.[0]?.product?.mainImage || order.items?.[0]?.product?.image;
+              return (
+              <div key={index} className="bg-white rounded-[16px] md:rounded-2xl p-4 md:p-5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between gap-3 hover:shadow-md transition-shadow">
+                
+                {/* Top Row: Icon, ID/Date, Status */}
+                <div className="flex items-start justify-between">
+                  <div className="flex gap-3 items-center">
+                    <div className="w-[44px] h-[44px] md:w-12 md:h-12 rounded-[12px] bg-[#f0f3f6] flex items-center justify-center shrink-0 overflow-hidden">
+                      {firstItemImg ? (
+                        <img src={firstItemImg} alt="Order Item" className="w-full h-full object-cover" />
+                      ) : (
+                        <Box size={22} className="text-slate-400" />
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[14px] md:text-base font-extrabold text-slate-900 tracking-tight">{order.id}</span>
+                      <span className="text-[12px] font-medium text-slate-500">{order.date}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[14px] font-extrabold text-slate-900 tracking-tight">{order.id}</span>
-                    <span className="text-[12px] font-medium text-slate-500">{order.date}</span>
+                  <span className={`text-[12px] md:text-xs font-bold px-2.5 py-1 rounded-full bg-slate-50 border border-slate-100 ${getStatusColor(order.status)}`}>
+                    {order.status}
+                  </span>
+                </div>
+
+                {/* Divider */}
+                <div className="w-full h-px bg-slate-100 my-0.5"></div>
+
+                {/* Bottom Row: Items, Price, Link */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] md:text-sm font-bold text-slate-500">{order.itemCount} Items</span>
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span className="text-[15px] md:text-lg font-extrabold text-slate-900">₹{order.total}.00</span>
+                    <button 
+                      onClick={() => navigate('/track-order', { state: { order: order.rawOrder || order } })}
+                      className="bg-transparent border-none text-[#ff5500] hover:text-[#d97706] text-[12px] md:text-xs font-extrabold cursor-pointer p-0 transition-colors"
+                    >
+                      View Details →
+                    </button>
                   </div>
                 </div>
-                <span className={`text-[12px] font-bold ${getStatusColor(order.status)}`}>
-                  {order.status}
-                </span>
+
               </div>
-
-              {/* Divider */}
-              <div className="w-full h-px bg-slate-100 my-0.5"></div>
-
-              {/* Bottom Row: Items, Price, Link */}
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] font-bold text-slate-500">{order.itemCount} Items</span>
-                <div className="flex flex-col items-end gap-0.5">
-                  <span className="text-[15px] font-extrabold text-slate-900">₹{order.total}.00</span>
-                  <button 
-                    onClick={() => navigate('/track-order', { state: { order: order.rawOrder || order } })}
-                    className="bg-transparent border-none text-[#ff5500] hover:text-[#d97706] text-[12px] font-extrabold cursor-pointer p-0 transition-colors"
-                  >
-                    View Details →
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          );
-        })
+            );
+          })}
+          </div>
         ) : (
           <div className="bg-white rounded-[20px] flex flex-col items-center justify-center py-16 shadow-[0_4px_24px_rgba(0,0,0,0.03)] border border-slate-100 mt-2">
             <Package size={48} className="text-slate-300 mb-4" strokeWidth={1.5} />
@@ -286,83 +322,85 @@ const Orders = () => {
               <span className="text-[14px]">Loading transport bookings...</span>
             </div>
           ) : filteredTransport.length > 0 ? (
-            filteredTransport.map((booking, index) => {
-              const bId = booking.bookingId || booking._id;
-              const bDate = booking.createdAt
-                ? new Date(booking.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-                : '—';
-              const bPickup = booking.pickupLocation?.address || '—';
-              const bDrop = booking.dropLocation?.address || '—';
-              const bVehicle = booking.vehicleSnapshot?.name || '—';
-              const bFare = booking.fareBreakdown?.totalFare ?? 0;
-              const bStatus = booking.status || 'SEARCHING_CAPTAIN';
-              const statusLabel = {
-                SEARCHING_CAPTAIN: 'Searching', CAPTAIN_ASSIGNED: 'Assigned',
-                RIDE_STARTED: 'In Progress', RIDE_COMPLETED: 'Delivered', CANCELLED: 'Cancelled'
-              }[bStatus] || bStatus;
-              const statusColor = bStatus === 'CANCELLED' ? 'text-red-500' : bStatus === 'RIDE_COMPLETED' ? 'text-green-600' : bStatus === 'SEARCHING_CAPTAIN' ? 'text-orange-500' : 'text-blue-600';
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredTransport.map((booking, index) => {
+                const bId = booking.bookingId || booking._id;
+                const bDate = booking.createdAt
+                  ? new Date(booking.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                  : '—';
+                const bPickup = booking.pickupLocation?.address || '—';
+                const bDrop = booking.dropLocation?.address || '—';
+                const bVehicle = booking.vehicleSnapshot?.name || '—';
+                const bFare = booking.fareBreakdown?.totalFare ?? 0;
+                const bStatus = booking.status || 'SEARCHING_CAPTAIN';
+                const statusLabel = {
+                  SEARCHING_CAPTAIN: 'Searching', CAPTAIN_ASSIGNED: 'Assigned',
+                  RIDE_STARTED: 'In Progress', RIDE_COMPLETED: 'Delivered', CANCELLED: 'Cancelled'
+                }[bStatus] || bStatus;
+                const statusColor = bStatus === 'CANCELLED' ? 'text-red-500' : bStatus === 'RIDE_COMPLETED' ? 'text-green-600' : bStatus === 'SEARCHING_CAPTAIN' ? 'text-orange-500' : 'text-blue-600';
 
-              return (
-                <div key={index} className="bg-white rounded-[16px] p-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col gap-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex gap-3 items-center">
-                      <div className="w-[44px] h-[44px] rounded-[12px] bg-green-50 flex items-center justify-center shrink-0 border border-green-100 text-green-700">
-                        <Truck size={24} strokeWidth={1.5} />
+                return (
+                  <div key={index} className="bg-white rounded-[16px] md:rounded-2xl p-4 md:p-5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between gap-3 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between">
+                      <div className="flex gap-3 items-center">
+                        <div className="w-[44px] h-[44px] md:w-12 md:h-12 rounded-[12px] bg-green-50 flex items-center justify-center shrink-0 border border-green-100 text-green-700">
+                          <Truck size={24} strokeWidth={1.5} />
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[14px] md:text-base font-extrabold text-slate-900 tracking-tight">{bId}</span>
+                          <span className="text-[12px] font-medium text-slate-500">{bDate}</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[14px] font-extrabold text-slate-900 tracking-tight">{bId}</span>
-                        <span className="text-[12px] font-medium text-slate-500">{bDate}</span>
+                      <span className={`text-[12px] font-bold px-2.5 py-1 rounded-full bg-slate-50 border border-slate-100 ${statusColor}`}>{statusLabel}</span>
+                    </div>
+
+                    <div className="w-full h-px bg-slate-100 my-0.5"></div>
+
+                    <div className="flex flex-col gap-1.5 px-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-[#047857]"></div>
+                        <span className="text-[12px] font-medium text-slate-700 truncate">{bPickup}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-sm bg-[#ff5500]"></div>
+                        <span className="text-[12px] font-medium text-slate-700 truncate">{bDrop}</span>
                       </div>
                     </div>
-                    <span className={`text-[12px] font-bold ${statusColor}`}>{statusLabel}</span>
-                  </div>
 
-                  <div className="w-full h-px bg-slate-100 my-0.5"></div>
+                    <div className="w-full h-px bg-slate-100 my-0.5"></div>
 
-                  <div className="flex flex-col gap-1.5 px-1">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-[#047857]"></div>
-                      <span className="text-[12px] font-medium text-slate-700 truncate">{bPickup}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-sm bg-[#ff5500]"></div>
-                      <span className="text-[12px] font-medium text-slate-700 truncate">{bDrop}</span>
-                    </div>
-                  </div>
-
-                  <div className="w-full h-px bg-slate-100 my-0.5"></div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-[13px] font-bold text-slate-500">{bVehicle}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-extrabold text-slate-900">₹{bFare}</span>
-                      {bStatus === 'RIDE_COMPLETED' && (
-                        booking.hasUserRated ? (
-                          <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200/80 px-2.5 py-1 rounded-lg text-[11px] font-extrabold">
-                            <Star size={11} className="fill-amber-400 text-amber-400" />
-                            <span>{booking.userRating}/5</span>
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => setRatingRide(booking)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white border-none rounded-lg px-2.5 py-1 text-[11px] font-extrabold cursor-pointer transition-colors shadow-2xs flex items-center gap-1"
-                          >
-                            <Star size={11} className="fill-white" />
-                            <span>Rate</span>
-                          </button>
-                        )
-                      )}
-                      <button
-                        onClick={() => navigate('/transport/booking-details', { state: { bookingId: bId } })}
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 border-none rounded-lg px-2.5 py-1.5 text-[11px] font-bold cursor-pointer transition-colors"
-                      >
-                        Details
-                      </button>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13px] md:text-sm font-bold text-slate-500">{bVehicle}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] md:text-base font-extrabold text-slate-900">₹{bFare}</span>
+                        {bStatus === 'RIDE_COMPLETED' && (
+                          booking.hasUserRated ? (
+                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200/80 px-2.5 py-1 rounded-lg text-[11px] font-extrabold">
+                              <Star size={11} className="fill-amber-400 text-amber-400" />
+                              <span>{booking.userRating}/5</span>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => setRatingRide(booking)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white border-none rounded-lg px-2.5 py-1 text-[11px] font-extrabold cursor-pointer transition-colors shadow-2xs flex items-center gap-1"
+                            >
+                              <Star size={11} className="fill-white" />
+                              <span>Rate</span>
+                            </button>
+                          )
+                        )}
+                        <button
+                          onClick={() => navigate('/transport/booking-details', { state: { bookingId: bId } })}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 border-none rounded-lg px-2.5 py-1.5 text-[11px] font-bold cursor-pointer transition-colors"
+                        >
+                          Details
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })}
+            </div>
           ) : (
             <div className="bg-white rounded-[20px] flex flex-col items-center justify-center py-16 shadow-[0_4px_24px_rgba(0,0,0,0.03)] border border-slate-100 mt-2">
               <Truck size={48} className="text-slate-300 mb-4" strokeWidth={1.5} />

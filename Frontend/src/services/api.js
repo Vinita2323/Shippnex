@@ -42,7 +42,9 @@ API.interceptors.request.use(
     const requestUrl = config.url || '';
 
     // Route-specific or endpoint-specific token resolution
-    if (requestUrl.includes('/admin')) {
+    if (requestUrl.includes('/super-admin') || currentPath.startsWith('/super-admin')) {
+      token = localStorage.getItem('shippnex_super_admin_token');
+    } else if (requestUrl.includes('/admin')) {
       token = localStorage.getItem('shippnex_admin_token');
     } else if (requestUrl.includes('/captain')) {
       token = localStorage.getItem('shippnex_captain_token');
@@ -63,6 +65,7 @@ API.interceptors.request.use(
       token = localStorage.getItem('shippnex_captain_token');
     } else {
       token =
+        localStorage.getItem('shippnex_super_admin_token') ||
         localStorage.getItem('shippnex_user_token') ||
         localStorage.getItem('shippnex_seller_token') ||
         localStorage.getItem('shippnex_captain_token') ||
@@ -84,7 +87,14 @@ API.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       const currentPath = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
 
-      if (currentPath.startsWith('/seller')) {
+      if (currentPath.startsWith('/super-admin')) {
+        if (!currentPath.startsWith('/super-admin/login')) {
+          localStorage.removeItem('shippnex_super_admin_token');
+          localStorage.removeItem('shippnex_super_admin_data');
+          sessionStorage.setItem('shippnex_super_admin_auth_expired_redirect', currentPath);
+          window.location.href = '/super-admin/login';
+        }
+      } else if (currentPath.startsWith('/seller')) {
         // Only redirect if on a protected seller page
         if (!currentPath.startsWith('/seller/login') && !currentPath.startsWith('/seller/register') && !currentPath.startsWith('/seller/under-review') && !currentPath.startsWith('/seller/terms') && !currentPath.startsWith('/seller/privacy')) {
           localStorage.removeItem('shippnex_seller_token');

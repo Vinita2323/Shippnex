@@ -9,16 +9,24 @@ const Wishlist = () => {
   const { wishlistItems, removeFromWishlist } = useWishlist();
 
   return (
-    <div className="h-[100dvh] bg-slate-50 font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="flex items-center gap-3 py-4 px-5 bg-gradient-to-r from-[#ea580c] to-[#f97316] rounded-b-[20px] shadow-sm z-10 relative mb-2">
+    <div className="w-full max-w-[480px] md:max-w-7xl mx-auto h-[100dvh] md:h-auto md:min-h-screen bg-slate-50 font-sans text-slate-800 relative shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col overflow-hidden md:overflow-visible md:px-6 md:py-8">
+      {/* Mobile Header */}
+      <header className="md:hidden flex items-center gap-3 py-4 px-5 bg-gradient-to-r from-[#ea580c] to-[#f97316] rounded-b-[20px] shadow-sm z-10 relative mb-2">
         <ArrowLeft size={22} color="white" className="cursor-pointer" onClick={() => navigate(-1)} />
         <h2 className="text-[20px] font-semibold m-0 text-white">My Wishlist</h2>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 [&::-webkit-scrollbar]:hidden">
+      {/* Desktop Header */}
+      <div className="hidden md:flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 m-0">My Wishlist</h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">{wishlistItems.length} saved items in your wishlist</p>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto md:overflow-visible px-4 md:px-0 py-4 md:py-0 [&::-webkit-scrollbar]:hidden">
         {wishlistItems.length === 0 ? (
-          <div className="bg-white border border-slate-100 rounded-xl p-8 flex flex-col items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.02)] h-[60vh]">
+          <div className="bg-white border border-slate-100 rounded-2xl p-8 flex flex-col items-center justify-center shadow-xs h-[60vh] max-w-md mx-auto my-6">
             <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-3">
               <Heart size={28} className="text-red-300" fill="currentColor" />
             </div>
@@ -26,13 +34,13 @@ const Wishlist = () => {
             <p className="text-[13px] text-slate-400 m-0 text-center">Save items you love here and buy them later.</p>
             <button 
               onClick={() => navigate('/')}
-              className="mt-5 bg-[#ff5500] text-white border-none rounded-lg px-6 py-2.5 text-[13px] font-bold cursor-pointer transition-transform duration-200 active:scale-[0.98]"
+              className="mt-5 bg-[#ff5500] hover:bg-[#e04a00] text-white border-none rounded-xl px-6 py-2.5 text-[13px] font-bold cursor-pointer transition-transform duration-200 active:scale-[0.98]"
             >
               Start Shopping
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 pb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-5 pb-6">
             {wishlistItems.map((item) => {
               const itemImg = item.image || item.mainImage || grainsImg;
               const itemPrice = item.price || item.salePrice || 0;

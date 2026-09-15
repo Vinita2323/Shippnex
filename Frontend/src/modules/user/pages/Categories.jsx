@@ -139,9 +139,9 @@ const Categories = () => {
   };
 
   return (
-    <div className="h-[100dvh] bg-[#fdfaf6] font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="p-4 bg-white shadow-2xs border-b border-slate-100/80 shrink-0">
+    <div className="w-full h-[100dvh] md:h-auto md:min-h-screen bg-[#fdfaf6] font-sans text-slate-800 relative shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col overflow-hidden md:overflow-visible px-0 md:px-5 md:py-6">
+      {/* Mobile Search Header */}
+      <div className="md:hidden p-4 bg-white shadow-2xs border-b border-slate-100/80 shrink-0">
         <div className="flex justify-between items-center mb-3">
           <h2 className="text-[20px] font-extrabold text-[#1a1b41] m-0">All Categories</h2>
         </div>
@@ -155,9 +155,12 @@ const Categories = () => {
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden md:overflow-visible md:gap-8">
         {/* Left Sidebar */}
-        <div className="w-[82px] bg-white border-r border-slate-100 overflow-y-auto shrink-0 [&::-webkit-scrollbar]:hidden">
+        <div className="w-[82px] md:w-64 bg-white border-r md:border md:rounded-2xl border-slate-100 overflow-y-auto shrink-0 [&::-webkit-scrollbar]:hidden md:p-3 md:shadow-xs">
+          <div className="hidden md:block pb-2 mb-2 border-b border-slate-100 px-1">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider">All Categories</h3>
+          </div>
           {sidebarCategories.map((cat, idx) => {
             const isActive = activeCategory === cat.name;
             const fallbackImg = getCategoryFallbackImage(cat.name);
@@ -169,14 +172,14 @@ const Categories = () => {
                   setActiveCategory(cat.name);
                   setActiveSubCategory(null);
                 }}
-                className={`py-3 px-1 flex flex-col items-center justify-center cursor-pointer relative transition-all border-b border-slate-50 ${
-                  isActive ? 'bg-[#fff5ee]' : 'hover:bg-slate-50/50'
+                className={`py-3 px-1 md:px-3 md:py-2.5 flex flex-col md:flex-row items-center md:gap-3 justify-center md:justify-start cursor-pointer relative transition-all border-b border-slate-50 md:border-b-0 md:rounded-xl md:mb-1 ${
+                  isActive ? 'bg-[#fff5ee] text-[#ff5500]' : 'hover:bg-slate-50/70 text-slate-700'
                 }`}
               >
                 {isActive && (
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff5500] rounded-r-full"></div>
                 )}
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-1.5 mb-1 transition-transform ${
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-1.5 mb-1 md:mb-0 shrink-0 transition-transform ${
                   isActive ? 'scale-105' : 'opacity-80'
                 }`}>
                   <img 
@@ -189,19 +192,19 @@ const Categories = () => {
                     }}
                   />
                 </div>
-                <span className={`text-[9.5px] text-center font-bold leading-tight ${
-                  isActive ? 'text-[#ff5500]' : 'text-slate-600'
+                <span className={`text-[9.5px] md:text-xs text-center md:text-left font-bold leading-tight truncate ${
+                  isActive ? 'text-[#ff5500]' : 'text-slate-700'
                 }`}>
                   {cat.name}
                 </span>
               </div>
             );
           })}
-          <div className="h-[100px]"></div>
+          <div className="h-[100px] md:hidden"></div>
         </div>
 
         {/* Right Content Area */}
-        <div className="flex-1 p-3 overflow-y-auto [&::-webkit-scrollbar]:hidden bg-[#fdfaf6]">
+        <div className="flex-1 p-3 md:p-0 overflow-y-auto md:overflow-visible [&::-webkit-scrollbar]:hidden bg-[#fdfaf6]">
           {/* Top Info */}
           <div className="flex justify-between items-start mb-5">
             <div>
@@ -275,7 +278,7 @@ const Categories = () => {
           })()}
 
           {/* Product Grid */}
-          <div className="grid grid-cols-2 gap-3 pb-24">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5 pb-24 md:pb-12">
             {products.map((item) => {
               const itemDiscount = item.mrp && item.salePrice ? Math.round(((item.mrp - item.salePrice) / item.mrp) * 100) : 0;
               const qty = getItemQuantity(item._id || item.id);

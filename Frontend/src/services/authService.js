@@ -1068,6 +1068,45 @@ export const profileEditRequestService = {
   },
 };
 
+export const sellerRegistrationFeeService = {
+  // Public & Seller Methods
+  getPublicFeeConfig: async () => {
+    const response = await API.get('/seller-registration-fee/config');
+    return response.data;
+  },
+  initiateOrder: async (payload) => {
+    const response = await API.post('/seller-registration-fee/initiate-order', payload);
+    return response.data;
+  },
+  verifyPayment: async (payload) => {
+    const response = await API.post('/seller-registration-fee/verify-payment', payload);
+    return response.data;
+  },
+  retryOrder: async (payload) => {
+    const response = await API.post('/seller-registration-fee/retry-order', payload);
+    return response.data;
+  },
+
+  // Admin Management Methods
+  adminGetConfig: async () => {
+    const response = await API.get('/seller-registration-fee/admin');
+    return response.data;
+  },
+  adminUpdateConfig: async (payload) => {
+    const response = await API.put('/seller-registration-fee/admin', payload);
+    return response.data;
+  },
+  adminGetPayments: async (params = {}) => {
+    const response = await API.get('/seller-registration-fee/admin/payments', { params });
+    return response.data;
+  },
+  adminGetPaymentById: async (id) => {
+    const response = await API.get(`/seller-registration-fee/admin/payments/${id}`);
+    return response.data;
+  },
+};
+
+
 
 
 

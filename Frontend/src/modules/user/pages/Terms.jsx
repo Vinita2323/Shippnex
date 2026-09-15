@@ -36,10 +36,10 @@ const Terms = () => {
   const themeColor = isPrivacyPage ? '#ea580c' : '#15803d';
 
   return (
-    <div className="h-[100dvh] bg-[#f8fafc] font-sans text-slate-800 relative max-w-[440px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
+    <div className="h-[100dvh] md:h-auto md:min-h-screen bg-[#f8fafc] font-sans text-slate-800 relative max-w-[440px] md:max-w-4xl mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col md:py-8 md:px-6 overflow-hidden md:overflow-visible">
       
-      {/* Sleek Compact Header */}
-      <header className="flex justify-between items-center py-3 px-4 bg-white shadow-xs z-10 sticky top-0 border-b border-slate-100">
+      {/* Sleek Compact Mobile Header */}
+      <header className="flex md:hidden justify-between items-center py-3 px-4 bg-white shadow-xs z-10 sticky top-0 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
           <button 
             className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 border-none cursor-pointer p-0 flex items-center justify-center transition-colors text-slate-800" 
@@ -58,17 +58,36 @@ const Terms = () => {
           </div>
         </div>
 
-        <button
-          onClick={loadPolicy}
+        <button 
+          onClick={loadPolicy} 
+          disabled={loading}
+          className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200/80 flex items-center justify-center cursor-pointer transition-colors text-slate-600 disabled:opacity-50"
           title="Refresh"
-          className="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 border-none cursor-pointer p-0 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
         >
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={13} className={loading ? 'animate-spin text-orange-600' : ''} />
         </button>
       </header>
 
+      {/* Desktop Breadcrumbs & Header */}
+      <div className="hidden md:flex items-center justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
+            <button onClick={() => navigate(-1)} className="hover:text-orange-600 font-medium cursor-pointer border-none bg-transparent flex items-center gap-1">
+              <ArrowLeft size={16} /> Back
+            </button>
+            <span>/</span>
+            <span className="text-slate-800 font-bold">Legal</span>
+          </div>
+          <h1 className="text-2xl font-black text-slate-900 m-0">{pageTitle}</h1>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-xs">
+          <ShieldCheck size={16} className="text-emerald-600" />
+          Official ShippNex Policy
+        </div>
+      </div>
+
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto px-3.5 py-3 [&::-webkit-scrollbar]:hidden flex flex-col gap-2.5 pb-8">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 py-4 md:py-8 pb-16 md:pb-12 [&::-webkit-scrollbar]:hidden md:bg-white md:rounded-3xl md:border md:border-slate-100 md:shadow-sm md:overflow-visible flex flex-col gap-3">
         
         {/* Compact Meta Strip */}
         <div className={`px-3 py-2 rounded-xl flex items-center justify-between gap-2 text-[11px] ${

@@ -154,10 +154,12 @@ const ProductDetails = () => {
   const savingsAmount = hasDiscount ? (originalPrice - currentPrice) : 0;
 
   return (
-    <div className="min-h-[100dvh] bg-white font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_25px_rgba(0,0,0,0.05)] flex flex-col pb-24">
+    <div className="min-h-[100dvh] md:min-h-screen bg-white font-sans text-slate-800 relative w-full max-w-[480px] md:max-w-7xl mx-auto shadow-[0_0_25px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col pb-24 md:pb-12 md:px-6 md:pt-4">
       
-      {/* Full-Cover Hero Product Image Canvas */}
-      <div className="w-full relative overflow-hidden bg-slate-100 border-b border-slate-100">
+      {/* Desktop 2-Column Split Container */}
+      <div className="md:grid md:grid-cols-12 md:gap-10 md:items-start">
+        {/* Full-Cover Hero Product Image Canvas (Left Column) */}
+        <div className="w-full relative overflow-hidden bg-slate-100 border-b md:border border-slate-100 md:col-span-6 lg:col-span-5 md:rounded-3xl md:sticky md:top-24">
         
         {/* Floating Top Header Controls */}
         <div className="absolute top-4 left-0 right-0 z-30 px-4 flex items-center justify-between pointer-events-none">
@@ -192,7 +194,7 @@ const ProductDetails = () => {
         </div>
 
         {/* Full Edge-to-Edge Image Container */}
-        <div className="w-full h-[320px] sm:h-[360px] relative overflow-hidden bg-slate-100">
+        <div className="w-full h-[320px] sm:h-[360px] md:h-[420px] lg:h-[480px] relative overflow-hidden bg-slate-100">
           <img 
             src={getImageUrl(activeImage || product.image || product.mainImage)} 
             alt={product.name} 
@@ -228,8 +230,8 @@ const ProductDetails = () => {
         </div>
       </div>
 
-      {/* 3. Product Info Content */}
-      <div className="px-4 py-4 flex flex-col gap-3">
+      {/* 3. Product Info Content (Right Column) */}
+      <div className="px-4 py-4 md:px-0 md:py-0 flex flex-col gap-3 md:gap-4 md:col-span-6 lg:col-span-7">
 
         {/* Title & Rating Header */}
         <div className="flex items-start justify-between gap-3">
@@ -277,6 +279,69 @@ const ProductDetails = () => {
             </span>
           )}
           <span className="text-[10px] text-slate-400">Inclusive of all taxes</span>
+        </div>
+
+        {/* Desktop Inlined Action Box */}
+        <div className="hidden md:flex flex-col gap-3.5 p-4 bg-slate-50 border border-slate-200/80 rounded-2xl my-2">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center bg-white rounded-xl border border-slate-200 p-1">
+              <button 
+                onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+                className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium flex items-center justify-center cursor-pointer border-none active:scale-95 transition-transform"
+              >
+                <Minus size={15} />
+              </button>
+              <span className="w-10 text-center text-sm font-bold text-slate-900">{quantity}</span>
+              <button 
+                onClick={() => setQuantity(prev => prev + 1)}
+                className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium flex items-center justify-center cursor-pointer border-none active:scale-95 transition-transform"
+              >
+                <Plus size={15} />
+              </button>
+            </div>
+
+            <div className="flex-1 flex items-center gap-3">
+              {product && !isInCart(product.id || product._id) ? (
+                <button 
+                  onClick={handleAddToCart}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-3 text-sm font-extrabold cursor-pointer border-none flex items-center justify-center gap-2 active:scale-98 transition-transform shadow-md"
+                >
+                  <Plus size={18} strokeWidth={3} /> ADD TO CART
+                </button>
+              ) : (
+                <button 
+                  onClick={async () => {
+                    if (product) {
+                      await removeFromCart(product.id || product._id);
+                      setToastMessage('Item removed from cart');
+                      setTimeout(() => setToastMessage(''), 2000);
+                    }
+                  }}
+                  className="flex-1 bg-rose-600 hover:bg-rose-700 text-white rounded-xl py-3 text-sm font-extrabold cursor-pointer border-none flex items-center justify-center gap-2 active:scale-98 transition-transform shadow-md"
+                >
+                  <Trash2 size={16} /> REMOVE FROM CART
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  if (product && !isInCart(product.id || product._id)) {
+                    addToCart(product, quantity);
+                  }
+                  navigate('/checkout');
+                }}
+                className="flex-1 bg-[#ff5500] hover:bg-[#e04a00] text-white rounded-xl py-3 text-sm font-extrabold cursor-pointer border-none flex items-center justify-center gap-2 active:scale-98 transition-transform shadow-md"
+              >
+                BUY NOW
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 text-xs font-semibold text-slate-500 pt-1">
+            <span className="flex items-center gap-1"><Check size={14} className="text-emerald-600" /> Free Returns</span>
+            <span className="flex items-center gap-1"><Check size={14} className="text-emerald-600" /> 10-Min Fast Delivery</span>
+            <span className="flex items-center gap-1"><Check size={14} className="text-emerald-600" /> 100% Genuine</span>
+          </div>
         </div>
 
         {/* Seamless Divider */}
@@ -510,14 +575,14 @@ const ProductDetails = () => {
             </button>
           </div>
 
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 hide-scrollbar">
+          <div className="flex gap-3 overflow-x-auto md:grid md:grid-cols-4 lg:grid-cols-5 md:gap-4 pb-2 -mx-4 px-4 md:mx-0 md:px-0 hide-scrollbar">
             {similarProducts.map((item) => {
               const qty = getItemQuantity(item.id || item._id);
               return (
                 <div 
                   key={item.id}
                   onClick={() => navigate(`/product/${item.id}`)}
-                  className="min-w-[135px] w-[135px] bg-white rounded-xl border border-slate-100 p-2.5 flex flex-col justify-between cursor-pointer shrink-0"
+                  className="min-w-[135px] w-[135px] md:min-w-0 md:w-full bg-white rounded-xl border border-slate-100 p-2.5 flex flex-col justify-between cursor-pointer shrink-0 md:shrink hover:shadow-md transition-shadow"
                 >
                   <div className="bg-slate-50 rounded-lg h-[90px] w-full flex items-center justify-center p-2 mb-2">
                     <img src={item.image} alt={item.name} className="max-h-full max-w-full object-contain mix-blend-multiply" />
@@ -579,9 +644,10 @@ const ProductDetails = () => {
         </div>
 
       </div>
+      </div>
 
-      {/* 4. Sticky Bottom Action Bar */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white border-t border-slate-200/80 px-4 py-3 flex items-center justify-between gap-3 z-50">
+      {/* 4. Sticky Bottom Action Bar (Mobile Only) */}
+      <div className="md:hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white border-t border-slate-200/80 px-4 py-3 flex items-center justify-between gap-3 z-50">
         
         {/* Quantity Stepper */}
         <div className="flex items-center bg-slate-100 rounded-lg border border-slate-200/80 p-0.5">

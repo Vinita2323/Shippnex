@@ -9,6 +9,8 @@ import CaptainNotification from '../models/CaptainNotification.model.js';
 import SellerNotification from '../models/SellerNotification.model.js';
 import TransportBooking from '../models/TransportBooking.model.js';
 import Rating from '../models/Rating.model.js';
+import PayoutRequest from '../models/PayoutRequest.model.js';
+import PlatformLedger from '../models/PlatformLedger.model.js';
 import { getVehicleMatchPattern } from './transportBookingController.js';
 
 // In-memory fast cache for Captain Dashboard stats
@@ -688,6 +690,27 @@ export const updateDeliveryStatus = async (req, res, next) => {
             status: 'COMPLETED',
           });
 
+          // Record CAPTAIN_EARNING in Central Platform Ledger
+          await PlatformLedger.create({
+            transactionId: `TXN-LED-CAP-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`,
+            category: 'CAPTAIN_EARNING',
+            type: 'CREDIT',
+            amount: earnings,
+            source: 'PLATFORM_TREASURY',
+            destination: 'CAPTAIN',
+            entityType: 'CAPTAIN',
+            entityId: String(captain._id),
+            entityName: captain.name || 'Captain',
+            referenceModel: 'Order',
+            referenceId: order.orderId,
+            referenceObjId: order._id,
+            status: 'SUCCESS',
+            balanceBefore: balBefore,
+            balanceAfter: captain.walletBalance,
+            description: `Delivery fee credited for Order #${order.orderId}`,
+            metadata: { orderId: order.orderId, earnings },
+          }).catch(err => console.warn('[PlatformLedger] Captain delivery earning log failed:', err.message));
+
           await CaptainNotification.create({
             captainId,
             type: 'PAYMENT',
@@ -906,26 +929,46 @@ export const requestWithdrawal = async (req, res, next) => {
     }
 
     const balBefore = captain.walletBalance;
-    captain.walletBalance -= withdrawAmount;
+    captain.walletBalance = Number((balBefore - withdrawAmount).toFixed(2));
     await captain.save();
+
+    const payoutId = `PAY-CAP-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
+
+    const payout = await PayoutRequest.create({
+      payoutId,
+      recipientType: 'CAPTAIN',
+      recipientId: String(captain._id),
+      recipientName: captain.name || 'Captain Partner',
+      recipientPhone: captain.phone || '',
+      requestedAmount: withdrawAmount,
+      bankDetails: {
+        bankName: captain.bankDetails?.bankName || '',
+        accountNumber: captain.bankDetails?.accountNumber || '',
+        ifscCode: captain.bankDetails?.ifscCode || '',
+        accountHolderName: captain.bankDetails?.accountHolderName || captain.name || '',
+        upiId: captain.bankDetails?.upiId || '',
+      },
+      status: 'PENDING',
+    });
 
     const txn = await CaptainTransaction.create({
       transactionId: generateTxnId(),
       captainId,
+      orderId: payoutId,
       type: 'WITHDRAWAL',
       amount: withdrawAmount,
       balanceBefore: balBefore,
       balanceAfter: captain.walletBalance,
-      description: `Withdrawal to ${captain.bankDetails?.bankName || 'Bank'} ****${(captain.bankDetails?.accountNumber || '').slice(-4)}`,
-      status: 'COMPLETED',
+      description: `Payout Request #${payoutId} submitted for Super Admin approval (${captain.bankDetails?.bankName || 'Bank'} ****${(captain.bankDetails?.accountNumber || '').slice(-4)})`,
+      status: 'PENDING',
       bankDetails: captain.bankDetails,
     });
 
     await CaptainNotification.create({
       captainId,
       type: 'PAYMENT',
-      title: 'Withdrawal Processed',
-      message: `₹${withdrawAmount.toFixed(2)} has been transferred to your ${captain.bankDetails?.bankName || 'bank'} account.`,
+      title: 'Payout Request Submitted',
+      message: `Payout request for ₹${withdrawAmount.toFixed(2)} (#${payoutId}) submitted for review by Super Admin.`,
       amount: withdrawAmount,
       icon: 'account_balance',
     });
@@ -934,8 +977,9 @@ export const requestWithdrawal = async (req, res, next) => {
 
     res.json({
       success: true,
-      message: 'Withdrawal processed successfully',
+      message: `Payout request for ₹${withdrawAmount.toFixed(2)} submitted successfully for Super Admin approval`,
       newBalance: captain.walletBalance,
+      payout,
       transaction: txn,
     });
   } catch (error) {

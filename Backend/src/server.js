@@ -11,6 +11,8 @@ import sellerAuthRoutes from './routes/sellerAuthRoutes.js';
 import captainAuthRoutes from './routes/captainAuthRoutes.js';
 import captainRoutes from './routes/captainRoutes.js';
 import adminAuthRoutes from './routes/adminAuthRoutes.js';
+import superAdminAuthRoutes from './routes/superAdminAuthRoutes.js';
+import superAdminRoutes from './routes/superAdminRoutes.js';
 import bannerRoutes from './routes/bannerRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import categoryRoutes from './routes/categoryRoutes.js';
@@ -32,6 +34,7 @@ import ratingRoutes from './routes/ratingRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import faqRoutes from './routes/faqRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
+import sellerRegistrationFeeRoutes from './routes/sellerRegistrationFeeRoutes.js';
 import compression from 'compression';
 import performanceLogger from './middleware/performanceMiddleware.js';
 
@@ -81,6 +84,8 @@ const registerRoutes = (prefix = '') => {
   app.use(`${prefix}/auth/captain`, captainAuthRoutes);
   app.use(`${prefix}/captain`, captainRoutes);
   app.use(`${prefix}/auth/admin`, adminAuthRoutes);
+  app.use(`${prefix}/auth/super-admin`, superAdminAuthRoutes);
+  app.use(`${prefix}/super-admin`, superAdminRoutes);
   app.use(`${prefix}/banners`, bannerRoutes);
   app.use(`${prefix}/upload`, uploadRoutes);
   app.use(`${prefix}/categories`, categoryRoutes);
@@ -104,6 +109,7 @@ const registerRoutes = (prefix = '') => {
   app.use(`${prefix}/faqs`, faqRoutes);
   app.use(`${prefix}/support-settings`, supportRoutes);
   app.use(`${prefix}/support`, supportRoutes);
+  app.use(`${prefix}/seller-registration-fee`, sellerRegistrationFeeRoutes);
 };
 
 app.use('', healthRoutes);
@@ -122,8 +128,7 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-// Start server immediately so cloud host (Render) health-checks pass instantly
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'production'} mode on port ${PORT}`);
 });
 

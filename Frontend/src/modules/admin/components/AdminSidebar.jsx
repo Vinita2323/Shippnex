@@ -133,8 +133,7 @@ export const AdminSidebar = () => {
           icon: Truck,
           badge: '15',
           submenu: [
-            { id: 'captains', label: 'Manage Captain' },
-            { id: 'fund_transfer', label: 'Fund Transfer' }
+            { id: 'captains', label: 'Manage Captain' }
           ]
         },
       ]
@@ -148,15 +147,6 @@ export const AdminSidebar = () => {
         { id: 'sellers', label: 'Sellers', icon: Store },
         { id: 'staff', label: 'Staff Roles', icon: ShieldAlert },
         { id: 'location', label: 'Live Location Map', icon: MapPin }
-      ]
-    },
-    {
-      title: 'FINANCE SECTION',
-      items: [
-        { id: 'wallet', label: 'Wallet', icon: Wallet },
-        { id: 'withdrawals', label: 'Withdrawals', icon: TrendingUp },
-        { id: 'seller_transaction', label: 'Seller Transaction', icon: Users },
-        { id: 'cash_collection', label: 'Cash Collection', icon: Banknote },
       ]
     },
     {

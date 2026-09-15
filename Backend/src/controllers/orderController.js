@@ -8,6 +8,7 @@ import SellerNotification from '../models/SellerNotification.model.js';
 import WalletTransaction from '../models/WalletTransaction.model.js';
 import Captain from '../models/Captain.model.js';
 import CaptainNotification from '../models/CaptainNotification.model.js';
+import PlatformLedger from '../models/PlatformLedger.model.js';
 import { 
   sendNotificationToUser, 
   sendNotificationToSeller, 
@@ -982,6 +983,48 @@ export const processSellerSettlement = async (notificationId) => {
       settlementStatus: 'SETTLED',
       description: `Wallet credit for Delivered Order #${notification.orderId} (Net ₹${netAmount} after ${commRate}% commission ₹${commAmount})`,
     });
+
+    // Central Platform Ledger: Record Seller Net Earning
+    await PlatformLedger.create({
+      transactionId: `TXN-LED-SEL-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`,
+      category: 'SELLER_EARNING',
+      type: 'CREDIT',
+      amount: netAmount,
+      source: 'PLATFORM_TREASURY',
+      destination: 'SELLER',
+      entityType: 'SELLER',
+      entityId: String(seller._id),
+      entityName: seller.businessName || seller.ownerName || 'Seller',
+      referenceModel: 'Order',
+      referenceId: notification.orderId,
+      referenceObjId: notification.order,
+      status: 'SUCCESS',
+      balanceBefore,
+      balanceAfter,
+      description: `Seller net earning credited for Order #${notification.orderId}`,
+      metadata: { grossAmount, commRate, commAmount, netAmount },
+    }).catch(err => console.warn('[PlatformLedger] Seller earning log failed:', err.message));
+
+    // Central Platform Ledger: Record Platform Commission
+    if (commAmount > 0) {
+      await PlatformLedger.create({
+        transactionId: `TXN-LED-COMM-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`,
+        category: 'PLATFORM_COMMISSION',
+        type: 'CREDIT',
+        amount: commAmount,
+        source: 'SELLER_ORDER',
+        destination: 'PLATFORM_TREASURY',
+        entityType: 'SELLER',
+        entityId: String(seller._id),
+        entityName: seller.businessName || seller.ownerName || 'Seller',
+        referenceModel: 'Order',
+        referenceId: notification.orderId,
+        referenceObjId: notification.order,
+        status: 'SUCCESS',
+        description: `Platform commission (${commRate}%) earned on Order #${notification.orderId}`,
+        metadata: { grossAmount, commRate, commAmount },
+      }).catch(err => console.warn('[PlatformLedger] Commission log failed:', err.message));
+    }
 
     console.log(`[Settlement SUCCESS] Credited ₹${netAmount} (Gross: ₹${grossAmount}, Comm ${commRate}%: ₹${commAmount}) to Seller "${seller.businessName}" (Balance: ₹${balanceBefore} -> ₹${balanceAfter})`);
     return notification;

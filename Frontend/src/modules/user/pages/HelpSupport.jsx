@@ -32,9 +32,9 @@ const HelpSupport = () => {
   }, []);
 
   return (
-    <div className="h-[100dvh] bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="flex justify-between items-center py-4 px-4 bg-white border-b border-slate-100 z-10 sticky top-0 shrink-0">
+    <div className="h-[100dvh] md:h-auto md:min-h-screen bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] md:max-w-4xl mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col md:py-8 md:px-6 overflow-hidden md:overflow-visible">
+      {/* Mobile Header */}
+      <header className="flex md:hidden justify-between items-center py-4 px-4 bg-white border-b border-slate-100 z-10 sticky top-0 shrink-0">
         <button 
           className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 border-none cursor-pointer flex items-center justify-center text-slate-700 transition-colors p-0" 
           onClick={() => navigate(-1)}
@@ -46,21 +46,39 @@ const HelpSupport = () => {
         <div className="w-8"></div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-5 pb-20 [&::-webkit-scrollbar]:hidden flex flex-col items-center">
+      {/* Desktop Breadcrumbs & Header */}
+      <div className="hidden md:flex items-center justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
+            <button onClick={() => navigate('/profile')} className="hover:text-orange-600 font-medium cursor-pointer border-none bg-transparent flex items-center gap-1">
+              <ArrowLeft size={16} /> Profile
+            </button>
+            <span>/</span>
+            <span className="text-slate-800 font-bold">Support</span>
+          </div>
+          <h1 className="text-2xl font-black text-slate-900 m-0">Help & Customer Support</h1>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100">
+          <Headphones size={16} />
+          24/7 Available
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 md:px-0 py-5 md:py-0 pb-20 md:pb-12 [&::-webkit-scrollbar]:hidden flex flex-col items-center md:overflow-visible">
         
         {/* Banner */}
-        <div className="w-full flex flex-col items-center justify-center py-5 mb-2 text-center">
+        <div className="w-full flex flex-col items-center justify-center py-5 md:py-8 mb-2 md:mb-6 text-center md:bg-white md:rounded-3xl md:border md:border-slate-100 md:shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
           <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center mb-3 shadow-[0_4px_16px_rgba(234,88,12,0.12)]">
             <Headphones size={28} className="text-[#ea580c]" />
           </div>
-          <h2 className="text-[18px] font-extrabold text-slate-900 mb-1">{settings.bannerTitle || "We're here to help"}</h2>
-          <p className="text-[12px] font-medium text-slate-500 max-w-xs m-0">
+          <h2 className="text-[18px] md:text-2xl font-extrabold text-slate-900 mb-1">{settings.bannerTitle || "We're here to help"}</h2>
+          <p className="text-[12px] md:text-sm font-medium text-slate-500 max-w-sm m-0">
             {settings.bannerSubtitle || 'Have an issue with your order or want to share feedback? Connect with us directly.'}
           </p>
         </div>
 
         {/* Action Cards */}
-        <div className="w-full flex flex-col gap-2.5">
+        <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
           
           {/* Call Support */}
           <a 

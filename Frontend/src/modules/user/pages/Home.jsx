@@ -273,9 +273,9 @@ const Home = () => {
   };
 
   return (
-    <div className="h-[100dvh] bg-white font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] overflow-y-auto overflow-x-hidden hide-scrollbar [&::-webkit-scrollbar]:hidden">
-      {/* Top Header Section with Dark Orange Background */}
-      <div className="bg-gradient-to-r from-[#ea580c] to-[#f97316] rounded-b-[20px] pb-3 mb-4 shadow-sm relative z-10 pt-1">
+    <div className="w-full h-[100dvh] md:h-auto md:min-h-screen bg-white font-sans text-slate-800 relative shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none overflow-y-auto md:overflow-visible overflow-x-hidden hide-scrollbar [&::-webkit-scrollbar]:hidden px-0 md:px-0 md:py-6">
+      {/* Top Header Section with Dark Orange Background (Mobile Only) */}
+      <div className="md:hidden bg-gradient-to-r from-[#ea580c] to-[#f97316] rounded-b-[20px] pb-3 mb-4 shadow-sm relative z-10 pt-1">
         {/* Header Section */}
         <header className="flex justify-between items-center px-4 pt-1.5 pb-2.5">
           <div className="flex items-center flex-1">
@@ -355,12 +355,12 @@ const Home = () => {
         </div>
       </div>
 
-      <div className="px-5">
+      <div className="px-3.5 md:px-5">
         {searchQuery ? (
           <div className="pb-4">
-            <h3 className="text-[16px] font-bold mb-4 text-[#ff5500]">Search Results for "{searchQuery}"</h3>
+            <h3 className="text-[16px] md:text-xl font-bold mb-4 text-[#ff5500]">Search Results for "{searchQuery}"</h3>
             {searchResults.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-5">
                 {searchResults.map(product => (
                   <div key={product.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
                     <img onClick={() => navigate(`/product/${product.id}`)} src={product.image} alt={product.name} loading="lazy" decoding="async" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
@@ -405,9 +405,9 @@ const Home = () => {
           <>
         {/* Dynamic Promo Banner */}
         {banners.length > 0 ? (
-          <div className="mb-5">
+          <div className="mb-5 md:mb-8">
             <div
-              className="rounded-2xl relative overflow-hidden shadow-md cursor-pointer w-full h-[140px] bg-slate-100"
+              className="rounded-2xl md:rounded-3xl relative overflow-hidden shadow-md cursor-pointer w-full h-[140px] md:h-[300px] lg:h-[360px] bg-slate-100"
               style={{ transition: 'opacity 0.3s ease, transform 0.3s ease', opacity: bannerVisible ? 1 : 0, transform: bannerVisible ? 'translateY(0)' : 'translateY(6px)' }}
               onClick={() => navigate(banners[currentBannerIndex]?.redirectUrl || '/categories')}
             >
@@ -437,7 +437,7 @@ const Home = () => {
           </div>
         ) : (
           <div 
-            className="rounded-2xl relative overflow-hidden mb-5 shadow-md cursor-pointer w-full h-[140px] bg-slate-100"
+            className="rounded-2xl md:rounded-3xl relative overflow-hidden mb-5 md:mb-8 shadow-md cursor-pointer w-full h-[140px] md:h-[300px] lg:h-[360px] bg-slate-100"
             onClick={() => navigate('/categories')}
           >
             <img 
@@ -454,10 +454,10 @@ const Home = () => {
 
         {/* Dynamic Categories Grid */}
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-[16px] font-bold m-0 text-[#ff5500]">Categories</h3>
-          <button onClick={() => navigate('/categories')} className="bg-transparent border-none text-blue-600 text-[12px] font-semibold cursor-pointer">See All</button>
+          <h3 className="text-[16px] md:text-xl font-bold m-0 text-[#ff5500]">Categories</h3>
+          <button onClick={() => navigate('/categories')} className="bg-transparent border-none text-blue-600 text-[12px] md:text-sm font-semibold cursor-pointer hover:underline">See All</button>
         </div>
-        <div className="grid grid-cols-4 gap-y-4 gap-x-3 mb-8">
+        <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-y-4 gap-x-3 md:gap-6 mb-8 md:mb-10">
           {categories.length > 0 ? (
             categories.slice(0, 8).map((cat) => {
               const fallbackImg = getCategoryFallbackImage(cat.name);
@@ -512,19 +512,19 @@ const Home = () => {
         {/* Flash Deals */}
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2">
-            <h3 className="text-[16px] font-bold m-0 text-[#ff5500]">Flash Deals</h3>
+            <h3 className="text-[16px] md:text-xl font-bold m-0 text-[#ff5500]">Flash Deals</h3>
             <div className="flex items-center gap-1 font-bold text-blue-900">
               <span className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-[12px]">02</span>:
               <span className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-[12px]">45</span>:
               <span className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-[12px]">30</span>
             </div>
           </div>
-          <button onClick={() => navigate('/flash-sale')} className="bg-transparent border-none text-blue-600 text-[12px] font-semibold cursor-pointer">See All</button>
+          <button onClick={() => navigate('/flash-sale')} className="bg-transparent border-none text-blue-600 text-[12px] md:text-sm font-semibold cursor-pointer hover:underline">See All</button>
         </div>
 
-        <div className="flex overflow-x-auto gap-4 pb-4 -mr-5 pr-5 [&::-webkit-scrollbar]:hidden">
+        <div className="flex overflow-x-auto md:grid md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5 pb-4 hide-scrollbar [&::-webkit-scrollbar]:hidden mb-4">
           {flashDeals.map((prod) => (
-            <div key={prod.id} className="min-w-[155px] max-w-[155px] bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+            <div key={prod.id} className="min-w-[155px] max-w-[155px] md:min-w-0 md:max-w-none bg-white border border-slate-100 rounded-xl md:rounded-2xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow flex flex-col justify-between">
               <div className="h-[125px] w-full overflow-hidden bg-slate-50 relative cursor-pointer" onClick={() => navigate(`/product/${prod.id}`)}>
                 <img 
                   src={getImageUrl(prod.image, grainsImg)} 
@@ -582,22 +582,22 @@ const Home = () => {
         </div>
 
         {/* Best Sellers (List of All Sellers / Top Stores) */}
-        <div className="flex justify-between items-center mb-3 mt-5">
+        <div className="flex justify-between items-center mb-3 mt-6">
           <div className="flex items-center gap-2">
-            <h3 className="text-[16px] font-bold m-0 text-[#ff5500]">Best Sellers</h3>
-            <span className="bg-amber-100 text-amber-900 text-[10.5px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+            <h3 className="text-[16px] md:text-xl font-bold m-0 text-[#ff5500]">Best Sellers</h3>
+            <span className="bg-amber-100 text-amber-900 text-[10.5px] md:text-xs font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
               <Sparkles size={11} className="text-amber-600 fill-amber-500" /> Top Stores
             </span>
           </div>
-          <button onClick={() => navigate('/sellers')} className="bg-transparent border-none text-blue-600 text-[12px] font-semibold cursor-pointer hover:underline">See All</button>
+          <button onClick={() => navigate('/sellers')} className="bg-transparent border-none text-blue-600 text-[12px] md:text-sm font-semibold cursor-pointer hover:underline">See All</button>
         </div>
 
-        <div className="flex overflow-x-auto gap-3.5 pb-4 -mr-5 pr-5 hide-scrollbar [&::-webkit-scrollbar]:hidden">
+        <div className="flex overflow-x-auto md:grid md:grid-cols-3 lg:grid-cols-4 gap-3.5 md:gap-5 pb-4 hide-scrollbar [&::-webkit-scrollbar]:hidden mb-4">
           {sellers.map((seller) => (
             <div 
               key={seller._id || seller.businessName}
               onClick={() => navigate(`/store/${encodeURIComponent(seller._id || seller.businessName)}`)}
-              className="min-w-[190px] max-w-[190px] bg-white border border-slate-100/90 rounded-2xl overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col justify-between cursor-pointer group hover:shadow-md transition-all shrink-0 hover:-translate-y-0.5"
+              className="min-w-[190px] max-w-[190px] md:min-w-0 md:max-w-none bg-white border border-slate-100/90 rounded-2xl overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col justify-between cursor-pointer group hover:shadow-md transition-all shrink-0 md:shrink hover:-translate-y-0.5"
             >
               {/* Store Mini Banner & Logo */}
               <div className="h-20 w-full bg-slate-100 relative overflow-hidden">
@@ -652,14 +652,14 @@ const Home = () => {
         </div>
         
         {/* Best Selling Products */}
-        <div className="flex justify-between items-center mb-4 mt-6">
+        <div className="flex justify-between items-center mb-4 mt-8">
           <div className="flex items-center gap-2">
-            <h3 className="text-[16px] font-bold m-0 text-[#ff5500]">Best Selling Products</h3>
+            <h3 className="text-[16px] md:text-xl font-bold m-0 text-[#ff5500]">Best Selling Products</h3>
           </div>
-          <button onClick={() => navigate('/bestseller')} className="bg-transparent border-none text-blue-600 text-[12px] font-semibold cursor-pointer">See All</button>
+          <button onClick={() => navigate('/bestseller')} className="bg-transparent border-none text-blue-600 text-[12px] md:text-sm font-semibold cursor-pointer hover:underline">See All</button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 pb-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-5 pb-4">
           {bestsellerProducts.map((prod) => (
             <div key={prod.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between">
               <div className="h-[125px] w-full overflow-hidden bg-slate-50 relative cursor-pointer" onClick={() => navigate(`/product/${prod.id}`)}>
@@ -718,7 +718,7 @@ const Home = () => {
           ))}
         </div>
         
-        <div className="h-[80px]"></div> {/* Spacing for bottom nav */}
+        <div className="h-[80px] md:hidden"></div> {/* Spacing for bottom nav (Mobile only) */}
           </>
         )}
         

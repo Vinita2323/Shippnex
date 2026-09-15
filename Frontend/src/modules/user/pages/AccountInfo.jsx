@@ -105,9 +105,9 @@ const AccountInfo = () => {
   };
 
   return (
-    <div className="h-[100dvh] bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="flex justify-between items-center py-5 px-5 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)] z-10 sticky top-0">
+    <div className="w-full max-w-[480px] md:max-w-3xl mx-auto h-[100dvh] md:h-auto md:min-h-screen bg-[#f8fafc] font-sans text-slate-800 relative shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col overflow-hidden md:overflow-visible md:px-6 md:py-8">
+      {/* Mobile Header */}
+      <header className="md:hidden flex justify-between items-center py-5 px-5 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.02)] z-10 sticky top-0">
         <button className="bg-transparent border-none cursor-pointer p-0 flex items-center" onClick={() => navigate(-1)}>
           <ArrowLeft size={22} className="text-slate-900" />
         </button>
@@ -115,7 +115,25 @@ const AccountInfo = () => {
         <div className="w-6"></div> {/* Spacer for centering */}
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-6 [&::-webkit-scrollbar]:hidden flex flex-col gap-4">
+      {/* Desktop Header */}
+      <div className="hidden md:flex items-center justify-between mb-6 bg-white p-6 rounded-2xl border border-slate-100 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
+            <button onClick={() => navigate('/profile')} className="hover:text-orange-600 font-medium cursor-pointer border-none bg-transparent flex items-center gap-1">
+              <ArrowLeft size={16} /> Profile
+            </button>
+            <span>/</span>
+            <span className="text-slate-800 font-bold">Account Information</span>
+          </div>
+          <h1 className="text-2xl font-black text-slate-900 m-0">Personal Profile & Details</h1>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg">
+          <ShieldCheck size={16} className="text-emerald-600" />
+          Verified Account
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-5 md:px-0 py-6 md:py-0 [&::-webkit-scrollbar]:hidden flex flex-col gap-4 md:overflow-visible">
         
         {notice && (
           <div className="bg-orange-50 border border-orange-200 text-[#ea580c] px-4 py-3 rounded-2xl text-[13px] font-semibold flex items-center gap-2.5 shadow-sm">
@@ -149,78 +167,80 @@ const AccountInfo = () => {
           </div>
         )}
 
-        <div className="bg-white rounded-[24px] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100 flex flex-col gap-5">
+        <div className="bg-white rounded-[24px] p-6 md:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100 flex flex-col gap-5">
           
-          {/* Full Name */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider pl-1">Full Name *</label>
-            <div className="relative">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                <User size={18} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Full Name */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider pl-1">Full Name *</label>
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                  <User size={18} />
+                </div>
+                <input 
+                  type="text" 
+                  name="fullName"
+                  placeholder="Enter your full name"
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  disabled={!isEditing}
+                  className="w-full bg-[#f8fafc] border border-slate-200 rounded-[16px] py-3.5 pl-12 pr-4 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors disabled:opacity-70 disabled:bg-slate-50"
+                />
               </div>
-              <input 
-                type="text" 
-                name="fullName"
-                placeholder="Enter your full name"
-                value={formData.fullName}
-                onChange={handleChange}
-                disabled={!isEditing}
-                className="w-full bg-[#f8fafc] border border-slate-200 rounded-[16px] py-3.5 pl-12 pr-4 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors disabled:opacity-70 disabled:bg-slate-50"
-              />
             </div>
-          </div>
 
-          {/* Email */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider pl-1">Email Address</label>
-            <div className="relative">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                <Mail size={18} />
+            {/* Email */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider pl-1">Email Address</label>
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                  <Mail size={18} />
+                </div>
+                <input 
+                  type="email" 
+                  name="email"
+                  placeholder="name@example.com"
+                  value={formData.email}
+                  onChange={handleChange}
+                  disabled={!isEditing}
+                  className="w-full bg-[#f8fafc] border border-slate-200 rounded-[16px] py-3.5 pl-12 pr-4 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors disabled:opacity-70 disabled:bg-slate-50"
+                />
               </div>
-              <input 
-                type="email" 
-                name="email"
-                placeholder="Enter your email address"
-                value={formData.email}
-                onChange={handleChange}
-                disabled={!isEditing}
-                className="w-full bg-[#f8fafc] border border-slate-200 rounded-[16px] py-3.5 pl-12 pr-4 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors disabled:opacity-70 disabled:bg-slate-50"
-              />
             </div>
-          </div>
 
-          {/* Phone */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider pl-1">Phone Number</label>
-            <div className="relative">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                <Phone size={18} />
+            {/* Phone Number */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider pl-1">Phone Number *</label>
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                  <Phone size={18} />
+                </div>
+                <input 
+                  type="tel" 
+                  name="phone"
+                  placeholder="Enter your mobile number"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  disabled={!isEditing}
+                  className="w-full bg-[#f8fafc] border border-slate-200 rounded-[16px] py-3.5 pl-12 pr-4 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors disabled:opacity-70 disabled:bg-slate-50"
+                />
               </div>
-              <input 
-                type="tel" 
-                name="phone"
-                placeholder="Enter your mobile number"
-                value={formData.phone}
-                onChange={handleChange}
-                disabled={!isEditing}
-                className="w-full bg-[#f8fafc] border border-slate-200 rounded-[16px] py-3.5 pl-12 pr-4 text-[14px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors disabled:opacity-70 disabled:bg-slate-50"
-              />
             </div>
-          </div>
 
-          {/* DOB */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider pl-1">Date of Birth</label>
-            <div className="relative z-10">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10 pointer-events-none">
-                <Calendar size={18} />
+            {/* DOB */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider pl-1">Date of Birth</label>
+              <div className="relative z-10">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10 pointer-events-none">
+                  <Calendar size={18} />
+                </div>
+                <CustomDatePicker 
+                  value={formData.dob}
+                  onChange={handleChange}
+                  disabled={!isEditing}
+                  placeholder="Select Date of Birth"
+                />
               </div>
-              <CustomDatePicker
-                value={formData.dob}
-                onChange={handleChange}
-                disabled={!isEditing}
-                placeholder="Select Date of Birth"
-              />
             </div>
           </div>
 
@@ -229,7 +249,7 @@ const AccountInfo = () => {
       </div>
 
       {/* Bottom Action */}
-      <div className="p-5 bg-white border-t border-slate-100 shadow-[0_-4px_24px_rgba(0,0,0,0.02)]">
+      <div className="p-5 md:p-0 md:mt-6 bg-white md:bg-transparent border-t md:border-none border-slate-100 shadow-[0_-4px_24px_rgba(0,0,0,0.02)] md:shadow-none">
         {isEditing ? (
           <button 
             disabled={saving}

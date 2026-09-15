@@ -239,10 +239,10 @@ const OrderHistory = () => {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
+    <div className="min-h-[100dvh] md:min-h-screen bg-[#f8fafc] font-sans text-slate-800 relative w-full shadow-none flex flex-col overflow-hidden md:overflow-visible px-0 md:px-5 md:py-6">
       
-      {/* Compact Top Header */}
-      <header className="bg-gradient-to-r from-[#ea580c] via-[#f97316] to-[#ea580c] text-white px-3 pt-2.5 pb-2 shadow-sm z-20 shrink-0">
+      {/* Mobile Top Header */}
+      <header className="md:hidden bg-gradient-to-r from-[#ea580c] via-[#f97316] to-[#ea580c] text-white px-3 pt-2.5 pb-2 shadow-sm z-20 shrink-0">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <button 
@@ -275,8 +275,8 @@ const OrderHistory = () => {
         <div className="relative w-full">
           <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-orange-200" />
           <input 
-            type="text"
-            placeholder="Search by order ID, item name, or date..."
+            type="text" 
+            placeholder="Search by order ID, item name, or date..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-white/15 border border-white/25 rounded-lg pl-7 pr-6 py-1 text-[11px] text-white placeholder:text-orange-200/90 outline-none focus:bg-white/25 focus:border-white transition-all h-7"
@@ -292,8 +292,115 @@ const OrderHistory = () => {
         </div>
       </header>
 
-      {/* Slim Active Orders Banner */}
-      <div className="bg-[#fff7ed] border-b border-orange-200/60 px-3 py-1 flex items-center justify-between text-[10.5px] text-slate-700 shrink-0">
+      {/* Desktop Header & Search Filter Banner */}
+      <div className="hidden md:flex flex-col bg-white border border-slate-100 rounded-2xl p-6 shadow-xs mb-6">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => navigate('/profile')}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border-none cursor-pointer flex items-center justify-center transition-colors"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-black text-slate-900 m-0">Complete Order History</h1>
+                <span className="bg-orange-100 text-orange-700 font-bold px-2.5 py-0.5 rounded-full text-xs">
+                  {orders.length} total
+                </span>
+              </div>
+              <p className="text-sm text-slate-500 mt-1 mb-0">Browse past purchases, download invoices, rate products or reorder items in 1-click</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => fetchOrderHistory(true)} 
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer transition-colors"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin text-orange-500' : ''} />
+              Refresh
+            </button>
+            <button 
+              onClick={() => navigate('/orders')}
+              className="flex items-center gap-1.5 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-[#ea580c] text-xs font-bold rounded-xl border border-orange-200 cursor-pointer transition-colors"
+            >
+              Live Tracking →
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop Search & Filters */}
+        <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-100">
+          {/* Filter Pills */}
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                statusFilter === 'ALL'
+                  ? 'bg-[#ea580c] text-white border-[#ea580c] shadow-2xs'
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              All ({counts.total})
+            </button>
+            <button 
+              onClick={() => setStatusFilter('COMPLETED')}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                statusFilter === 'COMPLETED'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <CheckCircle2 size={13} /> Delivered ({counts.completed})
+            </button>
+            <button 
+              onClick={() => setStatusFilter('ACTIVE')}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                statusFilter === 'ACTIVE'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <Clock size={13} /> Active ({counts.active})
+            </button>
+            <button 
+              onClick={() => setStatusFilter('CANCELLED')}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                statusFilter === 'CANCELLED'
+                  ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <XCircle size={13} /> Cancelled ({counts.cancelled})
+            </button>
+          </div>
+
+          {/* Search Box on Desktop */}
+          <div className="w-80 relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search order ID, item name..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 rounded-xl pl-9 pr-8 py-2 text-xs text-slate-800 placeholder:text-slate-400 outline-none transition-colors"
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer p-0 text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Slim Active Orders Banner (Mobile only) */}
+      <div className="md:hidden bg-[#fff7ed] border-b border-orange-200/60 px-3 py-1 flex items-center justify-between text-[10.5px] text-slate-700 shrink-0">
         <span className="font-medium text-slate-600">Track ongoing live deliveries?</span>
         <button 
           onClick={() => navigate('/orders')}
@@ -303,8 +410,8 @@ const OrderHistory = () => {
         </button>
       </div>
 
-      {/* Compact Filter Tabs */}
-      <div className="px-2.5 py-1.5 bg-white border-b border-slate-100 flex items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden shrink-0 z-10">
+      {/* Compact Filter Tabs (Mobile only) */}
+      <div className="md:hidden px-2.5 py-1.5 bg-white border-b border-slate-100 flex items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden shrink-0 z-10">
         <button 
           onClick={() => setStatusFilter('ALL')}
           className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all whitespace-nowrap cursor-pointer ${
@@ -352,21 +459,22 @@ const OrderHistory = () => {
 
       {/* Toast Feedback */}
       {reorderSuccess && (
-        <div className="mx-2.5 mt-1.5 p-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-[10.5px] font-bold flex items-center justify-between shrink-0 animate-fadeIn">
+        <div className="mx-2.5 md:mx-0 mt-1.5 p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs font-bold flex items-center justify-between shrink-0 animate-fadeIn mb-3">
           <span>✓ {reorderSuccess}</span>
-          <button onClick={() => navigate('/cart')} className="underline bg-transparent border-none cursor-pointer text-emerald-900 font-extrabold text-[10.5px]">View Cart</button>
+          <button onClick={() => navigate('/cart')} className="underline bg-transparent border-none cursor-pointer text-emerald-900 font-extrabold text-xs">View Cart</button>
         </div>
       )}
 
-      {/* Main Order History Compact List */}
-      <div className="flex-1 overflow-y-auto p-2.5 space-y-2 [&::-webkit-scrollbar]:hidden">
+      {/* Main Order History List */}
+      <div className="flex-1 overflow-y-auto p-2.5 md:p-0 [&::-webkit-scrollbar]:hidden md:overflow-visible">
         {loading ? (
           <div className="py-16 flex flex-col items-center justify-center gap-2 text-slate-400">
             <Loader2 size={24} className="animate-spin text-[#ea580c]" />
             <span className="text-[11px] font-bold text-slate-600">Loading orders...</span>
           </div>
         ) : filteredOrders.length > 0 ? (
-          filteredOrders.map((order) => {
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {filteredOrders.map((order) => {
             const statusInfo = getStatusBadge(order.status);
             const totalItems = order.items?.length || 0;
             const isExpanded = !!expandedOrderIds[order.id];
@@ -516,7 +624,8 @@ const OrderHistory = () => {
 
               </div>
             );
-          })
+          })}
+          </div>
         ) : (
           <div className="py-12 px-4 flex flex-col items-center justify-center text-center bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
             <div className="w-10 h-10 rounded-full bg-orange-50 text-[#ea580c] flex items-center justify-center">

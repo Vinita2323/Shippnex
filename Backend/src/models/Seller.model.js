@@ -85,6 +85,23 @@ const sellerSchema = new mongoose.Schema(
       enum: ['active', 'expired', 'pending_payment', 'none'],
       default: 'none',
     },
+    registrationFeeStatus: {
+      type: String,
+      enum: ['pending', 'paid', 'not_required', 'failed'],
+      default: 'pending',
+      index: true,
+    },
+    registrationFeePaymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SellerRegistrationPayment',
+    },
+    registrationFeeAmount: {
+      type: Number,
+      default: 0,
+    },
+    registrationFeePaidAt: {
+      type: Date,
+    },
     warehouseLocation: {
       location: {
         type: { type: String, enum: ['Point'], default: 'Point' },
@@ -115,6 +132,7 @@ const sellerSchema = new mongoose.Schema(
 sellerSchema.index({ 'warehouseLocation.location': '2dsphere' }, { sparse: true });
 sellerSchema.index({ accountStatus: 1, createdAt: -1 });
 sellerSchema.index({ status: 1, createdAt: -1 });
+sellerSchema.index({ registrationFeeStatus: 1, createdAt: -1 });
 sellerSchema.index({ businessName: 1 });
 sellerSchema.index({ createdAt: -1 });
 

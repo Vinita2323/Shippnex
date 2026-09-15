@@ -39,10 +39,10 @@ const Faqs = () => {
   );
 
   return (
-    <div className="h-[100dvh] bg-white font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
+    <div className="h-[100dvh] md:h-auto md:min-h-screen bg-white md:bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] md:max-w-4xl mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col md:py-8 md:px-6 overflow-hidden md:overflow-visible">
       
-      {/* Clean Top Header */}
-      <header className="flex items-center justify-between px-4 py-3.5 border-b border-slate-100 bg-white z-10 sticky top-0 shrink-0">
+      {/* Clean Mobile Top Header */}
+      <header className="flex md:hidden items-center justify-between px-4 py-3.5 border-b border-slate-100 bg-white z-10 sticky top-0 shrink-0">
         <button 
           onClick={() => navigate(-1)}
           className="w-8 h-8 rounded-full hover:bg-slate-100 border-none bg-transparent cursor-pointer flex items-center justify-center text-slate-800 transition-colors p-0"
@@ -54,8 +54,26 @@ const Faqs = () => {
         <div className="w-8"></div>
       </header>
 
-      {/* Simple, Clean Questions List */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 pb-16 [&::-webkit-scrollbar]:hidden divide-y divide-slate-100">
+      {/* Desktop Breadcrumbs & Header */}
+      <div className="hidden md:flex items-center justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
+            <button onClick={() => navigate('/profile')} className="hover:text-orange-600 font-medium cursor-pointer border-none bg-transparent flex items-center gap-1">
+              <ArrowLeft size={16} /> Profile
+            </button>
+            <span>/</span>
+            <span className="text-slate-800 font-bold">Help</span>
+          </div>
+          <h1 className="text-2xl font-black text-slate-900 m-0">Frequently Asked Questions</h1>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100">
+          <HelpCircle size={16} />
+          Customer Knowledge Base
+        </div>
+      </div>
+
+      {/* Questions List */}
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-3 md:py-6 pb-16 md:pb-12 [&::-webkit-scrollbar]:hidden divide-y divide-slate-100 md:bg-white md:rounded-3xl md:border md:border-slate-100 md:shadow-[0_4px_24px_rgba(0,0,0,0.02)] md:overflow-visible">
         {loading && customerFaqs.length === 0 ? (
           <div className="py-20 flex flex-col items-center justify-center gap-2 text-slate-400">
             <Loader2 size={24} className="animate-spin text-[#ea580c]" />

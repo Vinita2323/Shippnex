@@ -193,7 +193,7 @@ export const getAllSellers = async (req, res, next) => {
     }
 
     const sellers = await Seller.find({})
-      .select('_id businessName ownerName phone email walletBalance pendingBalance totalEarnings commissionPercentage status accountStatus membershipStatus categories warehouseLocation isVerified role createdAt updatedAt')
+      .select('_id businessName ownerName phone email walletBalance pendingBalance totalEarnings commissionPercentage status accountStatus membershipStatus registrationFeeStatus registrationFeeAmount registrationFeePaidAt categories warehouseLocation isVerified role createdAt updatedAt')
       .sort({ _id: -1 })
       .lean()
       .exec();
@@ -229,6 +229,12 @@ export const toggleSellerStatus = async (req, res, next) => {
     }
 
     if (rawStatus === 'approved') {
+      if (seller.registrationFeeStatus === 'pending') {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot approve seller: One-time registration fee payment is pending.',
+        });
+      }
       seller.accountStatus = 'approved';
       seller.status = 'approved';
       seller.isVerified = true;

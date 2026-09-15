@@ -15,11 +15,6 @@ import {
   SkuAuditManagement,
   OrderManagement, 
   DeliveryManagement, 
-  PaymentManagement, 
-  AdminWalletFinance,
-  AdminWithdrawals,
-  AdminSellerTransactions,
-  AdminCashCollection,
   CouponManagement, 
   ReportManagement, 
   FaqManagement, 
@@ -50,11 +45,31 @@ import { AdminLocationDashboard } from '../pages/AdminLocationDashboard';
 import { PolicyManagement } from '../pages/PolicyManagement';
 import { ProfileEditRequests } from '../pages/ProfileEditRequests';
 
+const FinancialAuthorityTransferred = () => (
+  <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm max-w-2xl mx-auto mt-12">
+    <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center text-2xl font-bold mb-4">
+      🔒
+    </div>
+    <h3 className="text-xl font-bold text-slate-800 mb-2">Financial Authority Restricted</h3>
+    <p className="text-sm text-slate-600 max-w-md mb-6 leading-relaxed">
+      In accordance with platform governance, all financial operations including wallets, settlements, payouts, transactions, and commission management have been moved exclusively to the <strong className="text-slate-900">Super Admin Panel</strong>.
+    </p>
+    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
+      Operational administrators are restricted to catalog, inventory, order fulfillment, customers, and fleet operations.
+    </div>
+  </div>
+);
+
 export const AdminLayout = () => {
   const { activeTab, setActiveTab } = useAdmin();
 
   const renderActiveTabContent = () => {
     switch (activeTab) {
+      case 'seller-registration-fee':
+      case 'seller_registration_fee':
+      case 'registration_fee':
+      case 'seller-fee':
+        return <FinancialAuthorityTransferred />;
       case 'location':
         return <AdminLocationDashboard />;
       case 'dashboard':
@@ -107,15 +122,11 @@ export const AdminLayout = () => {
       case 'deliveries':
         return <DeliveryManagement />;
       case 'fund_transfer':
-        return <PaymentManagement />;
       case 'wallet':
-        return <AdminWalletFinance />;
       case 'withdrawals':
-        return <AdminWithdrawals />;
       case 'seller_transaction':
-        return <AdminSellerTransactions />;
       case 'cash_collection':
-        return <AdminCashCollection />;
+        return <FinancialAuthorityTransferred />;
       case 'coupons':
         return <CouponManagement />;
       case 'promo_dashboard':

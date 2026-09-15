@@ -153,8 +153,8 @@ const CaptainWallet = () => {
                     disabled={(walletData?.balance || 0) <= 0}
                     className="w-full bg-[#97fc43] hover:bg-[#86e835] text-[#002625] font-black py-2.5 rounded-xl text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span className="material-symbols-outlined text-base">bolt</span>
-                    Instant Cashout
+                    <span className="material-symbols-outlined text-base">payments</span>
+                    Request Payout
                   </button>
                 </div>
               </div>
@@ -265,11 +265,11 @@ const CaptainWallet = () => {
         <div className="fixed inset-0 z-50 bg-primary/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="glass-panel p-6 rounded-3xl max-w-md w-full border-white shadow-2xl space-y-4">
             <div className="w-12 h-12 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center mx-auto">
-              <span className="material-symbols-outlined text-2xl">bolt</span>
+              <span className="material-symbols-outlined text-2xl">account_balance</span>
             </div>
             <div className="text-center space-y-1">
-              <h3 className="font-bold text-xl text-primary">Instant Cashout</h3>
-              <p className="text-xs text-on-surface-variant">Transfer to {walletData.bankDetails?.bankName || 'your bank'}</p>
+              <h3 className="font-bold text-xl text-primary">Request Payout</h3>
+              <p className="text-xs text-on-surface-variant">Transfer to {walletData.bankDetails?.bankName || 'your bank'} (via Super Admin Approval)</p>
             </div>
 
             <div className="space-y-2">
@@ -287,13 +287,16 @@ const CaptainWallet = () => {
 
             <div className="bg-surface-container p-3.5 rounded-xl space-y-2 text-xs border border-outline-variant/30">
               <div className="flex justify-between">
-                <span className="text-on-surface-variant">Transfer Amount</span>
+                <span className="text-on-surface-variant">Requested Amount</span>
                 <span className="font-bold text-primary">₹{parseFloat(cashoutAmount || 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between border-t border-outline-variant/20 pt-2 font-bold text-sm">
                 <span>Net Transfer</span>
                 <span className="text-secondary">₹{parseFloat(cashoutAmount || 0).toFixed(2)}</span>
               </div>
+              <p className="text-[10px] text-on-surface-variant/80 italic pt-1">
+                Payout requests are reviewed and disbursed securely by platform Super Admin.
+              </p>
             </div>
 
             <div className="flex gap-3 pt-2">
@@ -306,10 +309,10 @@ const CaptainWallet = () => {
                 className="flex-1 py-3 rounded-xl bg-secondary hover:bg-secondary/90 text-white text-xs font-bold shadow-lg cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
               >
                 {cashoutStatus === 'transferring' ? (
-                  <><span className="material-symbols-outlined animate-spin text-sm">sync</span> Transferring...</>
+                  <><span className="material-symbols-outlined animate-spin text-sm">sync</span> Submitting...</>
                 ) : cashoutStatus === 'done' ? (
-                  <>Transferred! <span className="material-symbols-outlined text-sm">check</span></>
-                ) : 'Confirm Transfer'}
+                  <>Submitted for Review! <span className="material-symbols-outlined text-sm">check</span></>
+                ) : 'Submit Payout Request'}
               </button>
             </div>
           </div>

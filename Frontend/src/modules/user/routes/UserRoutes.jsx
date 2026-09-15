@@ -4,6 +4,7 @@ import ProtectedRoute from '../../../components/ProtectedRoute';
 import PageSkeleton from '../../../components/PageSkeleton';
 import Home from '../pages/Home';
 import BottomNav from '../components/BottomNav';
+import UserDesktopHeader from '../components/UserDesktopHeader';
 
 const Categories = lazy(() => import('../pages/Categories'));
 const Cart = lazy(() => import('../pages/Cart'));
@@ -63,6 +64,7 @@ const UserRoutes = () => {
 
   return (
     <>
+      {!isLogin && !isVerifyOtp && <UserDesktopHeader />}
       <Suspense fallback={<PageSkeleton />}>
         <Routes>
           {/* Public Browsing Routes (Accessible to Guests) */}

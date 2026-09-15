@@ -8,6 +8,7 @@ const UserRoutes = lazy(() => import('./modules/user/routes/UserRoutes'));
 const DeliveryRoutes = lazy(() => import('./modules/delivery/routes/DeliveryRoutes'));
 const SellerRoutes = lazy(() => import('./modules/seller/routes/SellerRoutes'));
 const AdminRoutes = lazy(() => import('./modules/admin/routes/AdminRoutes'));
+const SuperAdminRoutes = lazy(() => import('./modules/super-admin/routes/SuperAdminRoutes'));
 
 import { CartProvider } from './modules/user/context/CartContext';
 import { WishlistProvider } from './modules/user/context/WishlistContext';
@@ -22,6 +23,7 @@ function App() {
   const isCaptainRoute = location.pathname.startsWith('/captain');
   const isSellerRoute = location.pathname.startsWith('/seller');
   const isAdminRoute = location.pathname.startsWith('/admin');
+  const isSuperAdminRoute = location.pathname.startsWith('/super-admin');
 
   // Initialize Firebase Push Notifications on App mount (SOP Standard)
   React.useEffect(() => {
@@ -39,7 +41,7 @@ function App() {
   // Bypass splash screen if accessing any specific sub-route or if splash has already been dismissed
   const isSpecificRoute = location.pathname !== '/' && location.pathname !== '';
   const hasSeenSplash = typeof window !== 'undefined' && sessionStorage.getItem('shippnex_splash_seen') === 'true';
-  const bypassSplash = isCaptainRoute || isSellerRoute || isAdminRoute || isSpecificRoute || hasSeenSplash;
+  const bypassSplash = isCaptainRoute || isSellerRoute || isAdminRoute || isSuperAdminRoute || isSpecificRoute || hasSeenSplash;
 
   const [showSplash, setShowSplash] = useState(!bypassSplash);
 
@@ -67,6 +69,7 @@ function App() {
                       <Route path="/captain/*" element={<DeliveryRoutes />} />
                       <Route path="/seller/*" element={<SellerRoutes />} />
                       <Route path="/admin/*" element={<AdminRoutes />} />
+                      <Route path="/super-admin/*" element={<SuperAdminRoutes />} />
                       <Route path="/*" element={<UserRoutes />} />
                     </Routes>
                   </Suspense>

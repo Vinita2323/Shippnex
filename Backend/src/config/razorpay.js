@@ -9,7 +9,18 @@ const __dirname = path.dirname(__filename);
 // Ensure it loads the .env file from the Backend root directory (2 levels up)
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-export const razorpayInstance = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'secret_placeholder',
+export const getRazorpayInstance = () => {
+  return new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+};
+
+export const razorpayInstance = new Proxy({}, {
+  get(target, prop) {
+    const rzp = getRazorpayInstance();
+    const val = rzp[prop];
+    return typeof val === 'function' ? val.bind(rzp) : val;
+  }
 });
+

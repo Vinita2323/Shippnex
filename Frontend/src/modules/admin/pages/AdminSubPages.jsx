@@ -393,20 +393,10 @@ export const SellerManagement = () => {
   // Save Edit Modal
   const handleSaveEdit = async (e) => {
     e.preventDefault();
-    const commNumber = parseFloat(editFormData.commission);
-    if (!isNaN(commNumber) && editingSellerModal) {
-      try {
-        await adminService.updateSellerCommission(editingSellerModal.id, commNumber);
-      } catch (err) {
-        console.warn('Could not update commission on server:', err.message);
-      }
-    }
     setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? {
       ...s,
       name: editFormData.name,
-      storeName: editFormData.storeName,
-      commission: isNaN(commNumber) ? editFormData.commission : `${commNumber}%`,
-      balance: editFormData.balance
+      storeName: editFormData.storeName
     } : s));
     setEditingSellerModal(null);
   };
@@ -532,6 +522,7 @@ export const SellerManagement = () => {
                   <th onClick={() => handleSort('commission')} className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/70">Commission ⇅</th>
                   <th className="py-3.5 px-4">Categories</th>
                   <th onClick={() => handleSort('status')} className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/70">Status ⇅</th>
+                  <th className="py-3.5 px-4 text-center">Reg Fee</th>
                   <th className="py-3.5 px-4 text-center">Need Approval?</th>
                   <th className="py-3.5 px-4 text-center">Action</th>
                 </tr>
@@ -539,7 +530,7 @@ export const SellerManagement = () => {
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {loading ? (
                   <tr>
-                    <td colSpan="11" className="py-16 text-center">
+                    <td colSpan="12" className="py-16 text-center">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="w-9 h-9 border-3 border-orange-500/20 border-t-[#ff5500] rounded-full animate-spin"></div>
                         <div>
@@ -595,6 +586,19 @@ export const SellerManagement = () => {
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          seller.registrationFeeStatus === 'paid' 
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                            : seller.registrationFeeStatus === 'not_required'
+                            ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                            : seller.registrationFeeStatus === 'failed'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          {seller.registrationFeeStatus === 'paid' ? 'Paid' : (seller.registrationFeeStatus === 'not_required' ? 'Waived' : (seller.registrationFeeStatus === 'failed' ? 'Failed' : 'Pending'))}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
                         <span className={`text-xs font-bold ${seller.needApproval === 'Yes' ? 'text-rose-500' : 'text-slate-400'}`}>
                           {seller.needApproval}
                         </span>
@@ -618,8 +622,12 @@ export const SellerManagement = () => {
                                   const data = await adminService.toggleSellerStatus(seller.id, 'approved');
                                   if (data && data.success) {
                                     setSellers(prev => prev.map(s => s.id === seller.id ? { ...s, status: 'Approved', needApproval: 'No' } : s));
+                                  } else {
+                                    alert(data?.message || 'Failed to approve seller');
                                   }
-                                } catch (err) { console.error(err); }
+                                } catch (err) {
+                                  alert(err.response?.data?.message || 'Error approving seller: registration fee may be unpaid.');
+                                }
                               }}
                               className="p-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg border border-emerald-200 cursor-pointer transition-colors text-[10px] font-bold px-1.5"
                               title="Approve Seller"
@@ -922,31 +930,16 @@ export const SellerManagement = () => {
 
                   <div>
                     <label className="text-slate-500 font-medium block mb-1">Commission (%)</label>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                       <input 
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={editFormData.commission}
-                        onChange={(e) => setEditFormData({ ...editFormData, commission: e.target.value })}
-                        className="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
-                        placeholder="e.g. 10"
+                        type="text"
+                        readOnly
+                        value={editFormData.commission ? `${editFormData.commission}%` : 'Standard (10%)'}
+                        className="flex-1 bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-600 outline-none cursor-not-allowed font-medium"
                       />
-                      <button 
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const res = await walletService.updateSellerCommission(editingSellerModal._id, editFormData.commission);
-                            alert(res.message || `Commission set to ${editFormData.commission}%`);
-                            fetchSellers();
-                          } catch (err) {
-                            alert(err.response?.data?.message || err.message || 'Failed to update commission');
-                          }
-                        }}
-                        className="px-4 py-2.5 bg-[#ff7526] hover:bg-[#e65507] text-white font-extrabold rounded-xl border-none cursor-pointer shadow-sm transition-all"
-                      >
-                        Set Rate
-                      </button>
+                      <span className="text-[10px] text-amber-700 bg-amber-50 px-2.5 py-2 rounded-xl font-bold border border-amber-200 whitespace-nowrap">
+                        Super Admin Managed
+                      </span>
                     </div>
                   </div>
                 </div>

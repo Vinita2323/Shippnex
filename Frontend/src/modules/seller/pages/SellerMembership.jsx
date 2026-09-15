@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   CheckCircle, Clock, XCircle, AlertTriangle, Star, Zap, Shield, CreditCard, 
-  RefreshCw, ChevronRight, Crown, Calendar, Receipt, Sparkles, Lock, ArrowRight, Wallet
+  RefreshCw, ChevronRight, Crown, Calendar, Receipt, Sparkles, Lock, ArrowRight, Wallet,
+  Building2
 } from 'lucide-react';
 import { membershipService } from '../../../services/authService';
+import { loadRazorpaySdk } from '../../../utils/razorpay';
 
 const STATUS_CONFIG = {
   active: { label: 'Active Plan', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: CheckCircle },
@@ -21,21 +23,6 @@ const daysLeft = (exp) => {
   if (!exp) return null;
   const diff = new Date(exp) - new Date();
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-};
-
-// Helper to ensure Razorpay SDK is loaded
-const loadRazorpayScript = () => {
-  return new Promise((resolve) => {
-    if (window.Razorpay) {
-      resolve(true);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
 };
 
 const SellerMembership = () => {
@@ -93,7 +80,7 @@ const SellerMembership = () => {
     setSuccessMsg('');
 
     try {
-      const isLoaded = await loadRazorpayScript();
+      const isLoaded = await loadRazorpaySdk();
       if (!isLoaded || !window.Razorpay) {
         throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
       }

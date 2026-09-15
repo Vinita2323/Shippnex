@@ -36,19 +36,31 @@ const Payment = () => {
   };
 
   return (
-    <div className="h-[100dvh] bg-slate-50 font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="flex justify-between items-center py-4 px-5 bg-white">
+    <div className="h-[100dvh] md:h-auto md:min-h-screen bg-slate-50 font-sans text-slate-800 relative max-w-[480px] md:max-w-3xl mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col md:py-8 md:px-6 overflow-hidden md:overflow-visible">
+      {/* Mobile Header */}
+      <header className="flex md:hidden justify-between items-center py-4 px-5 bg-white">
         <button className="bg-transparent border-none cursor-pointer p-0 flex items-center" onClick={() => navigate(-1)}>
           <ArrowLeft size={20} color="#1e293b" />
         </button>
         <h2 className="text-[16px] font-bold m-0 text-slate-900 text-center">Payment</h2>
-        <div className="w-5"></div> {/* Spacer for centering */}
+        <div className="w-5"></div>
       </header>
 
-      {/* Progress Stepper (Optional for consistency, but screenshot doesn't show it. Based on Checkout having it, we could add it, but let's stick to the screenshot strictly which only shows Header and Content) */}
+      {/* Desktop Header */}
+      <div className="hidden md:flex items-center justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
+            <button onClick={() => navigate(-1)} className="hover:text-orange-600 font-medium cursor-pointer border-none bg-transparent flex items-center gap-1">
+              <ArrowLeft size={16} /> Back
+            </button>
+            <span>/</span>
+            <span className="text-slate-800 font-bold">Payment</span>
+          </div>
+          <h1 className="text-2xl font-black text-slate-900 m-0">Payment Options</h1>
+        </div>
+      </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-6 [&::-webkit-scrollbar]:hidden">
+      <div className="flex-1 overflow-y-auto px-5 md:px-0 py-4 md:py-0 flex flex-col gap-6 [&::-webkit-scrollbar]:hidden md:overflow-visible">
         
         {/* UPI Section */}
         <div>

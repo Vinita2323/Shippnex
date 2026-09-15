@@ -176,9 +176,9 @@ const TransportBookingDetails = () => {
     !booking.dropOtpVerified;
 
   return (
-    <div className="h-[100dvh] bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="flex items-center justify-between py-4 px-4 bg-white z-10 sticky top-0 border-b border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+    <div className="h-[100dvh] md:h-auto md:min-h-screen bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] md:max-w-6xl mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col md:py-8 md:px-6 overflow-hidden md:overflow-visible">
+      {/* Mobile Header */}
+      <header className="flex md:hidden items-center justify-between py-4 px-4 bg-white z-10 sticky top-0 border-b border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
         <div className="flex items-center gap-3">
           <button className="bg-transparent border-none cursor-pointer p-0 flex items-center" onClick={() => navigate(-1)}>
             <ChevronLeft size={24} className="text-slate-700" />
@@ -193,10 +193,31 @@ const TransportBookingDetails = () => {
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-5 pb-[40px] [&::-webkit-scrollbar]:hidden flex flex-col gap-4">
+      {/* Desktop Header */}
+      <div className="hidden md:flex items-center justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
+            <button onClick={() => navigate('/orders', { state: { tab: 'transport' } })} className="hover:text-emerald-700 font-medium cursor-pointer border-none bg-transparent flex items-center gap-1">
+              <ChevronLeft size={16} /> Transport Orders
+            </button>
+            <span>/</span>
+            <span className="text-slate-800 font-bold">{bId}</span>
+          </div>
+          <h1 className="text-2xl font-black text-slate-900 m-0">Transport Live Tracking</h1>
+        </div>
+        <button
+          onClick={() => { setRefreshing(true); fetchBooking(false); }}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
+        >
+          <RefreshCw size={14} className={refreshing ? 'animate-spin text-[#047857]' : ''} />
+          <span>Refresh Status</span>
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-5 md:px-0 py-5 md:py-0 pb-[40px] md:pb-12 [&::-webkit-scrollbar]:hidden flex flex-col md:grid md:grid-cols-12 md:gap-6 md:items-start md:overflow-visible [grid-auto-flow:dense]">
         {/* ── STAGE 1: PICKUP OTP CARD (HIGHLIGHTED) ── */}
         {showPickupOtp && (
-          <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl p-4 shadow-md border border-emerald-500 flex items-center justify-between animate-fade-in-up">
+          <div className="md:col-span-7 md:col-start-1 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl p-4 md:p-6 shadow-md border border-emerald-500 flex items-center justify-between animate-fade-in-up">
             <div className="flex flex-col gap-0.5">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-200 flex items-center gap-1.5">
                 <KeyRound size={14} /> Pickup Verification OTP
@@ -216,7 +237,7 @@ const TransportBookingDetails = () => {
 
         {/* ── STAGE 2: DROP OTP CARD (HIGHLIGHTED) ── */}
         {showDropOtp && (
-          <div className="bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-2xl p-4 shadow-md border border-amber-500 flex items-center justify-between animate-fade-in-up">
+          <div className="md:col-span-7 md:col-start-1 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-2xl p-4 md:p-6 shadow-md border border-amber-500 flex items-center justify-between animate-fade-in-up">
             <div className="flex flex-col gap-0.5">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-200 flex items-center gap-1.5">
                 <ShieldCheck size={14} /> Drop Delivery OTP
@@ -235,7 +256,7 @@ const TransportBookingDetails = () => {
         )}
 
         {/* Top Summary Card */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col gap-3">
+        <div className="md:col-span-7 md:col-start-1 bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-sm border border-slate-100 flex flex-col gap-3">
           <div className="flex justify-between items-start">
             <div className="flex flex-col gap-0.5">
               <span className="text-[14px] font-extrabold text-slate-900 m-0">{bId}</span>
@@ -289,7 +310,7 @@ const TransportBookingDetails = () => {
 
         {/* Assigned Captain Card (if assigned) */}
         {captain && (
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
+          <div className="md:col-span-5 md:col-start-8 bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-sm border border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 bg-emerald-50 rounded-full flex items-center justify-center text-[#047857] font-bold text-base border border-emerald-100">
                 {captain.name ? captain.name.charAt(0).toUpperCase() : 'C'}
@@ -312,8 +333,8 @@ const TransportBookingDetails = () => {
         )}
 
         {/* Booking Status Timeline */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-          <h3 className="text-[14px] font-bold text-slate-800 mb-5">Ride Timeline</h3>
+        <div className="md:col-span-7 md:col-start-1 bg-white rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-sm border border-slate-100">
+          <h3 className="text-[14px] md:text-base font-bold text-slate-800 mb-5">Ride Timeline</h3>
           <div className="relative pl-3">
             <div className="absolute left-[23px] top-2 bottom-6 w-0.5 bg-slate-100"></div>
             {TIMELINE_STEPS.map((step, idx) => {
@@ -337,7 +358,7 @@ const TransportBookingDetails = () => {
                     )}
                   </div>
                   <div className="flex flex-col flex-1 pb-1">
-                    <span className={`text-[13px] font-bold ${done ? 'text-slate-800' : 'text-slate-400'}`}>
+                    <span className={`text-[13px] md:text-[14px] font-bold ${done ? 'text-slate-800' : 'text-slate-400'}`}>
                       {step.label}
                     </span>
                     {timeStr && <span className="text-[11px] text-slate-500 mt-0.5">{timeStr}</span>}
@@ -349,7 +370,7 @@ const TransportBookingDetails = () => {
         </div>
 
         {/* Locations Card */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex gap-4">
+        <div className="md:col-span-5 md:col-start-8 bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-sm border border-slate-100 flex gap-4">
           <div className="flex flex-col items-center mt-1.5 mb-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-[#047857]"></div>
             <div className="w-0.5 flex-1 bg-slate-200 my-1"></div>
@@ -358,18 +379,18 @@ const TransportBookingDetails = () => {
           <div className="flex-1 flex flex-col justify-between gap-4 py-0.5">
             <div className="flex flex-col">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pickup Address</span>
-              <span className="text-[13px] font-medium text-slate-800 leading-snug">{bPickup}</span>
+              <span className="text-[13px] md:text-[14px] font-medium text-slate-800 leading-snug">{bPickup}</span>
             </div>
             <div className="flex flex-col">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Drop Address</span>
-              <span className="text-[13px] font-medium text-slate-800 leading-snug">{bDrop}</span>
+              <span className="text-[13px] md:text-[14px] font-medium text-slate-800 leading-snug">{bDrop}</span>
             </div>
           </div>
         </div>
 
         {/* ── STAGE 3: POST-RIDE RATING CARD ── */}
         {bStatus === 'RIDE_COMPLETED' && (
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-100 flex flex-col gap-3">
+          <div className="md:col-span-7 md:col-start-1 bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-sm border border-emerald-100 flex flex-col gap-3">
             {booking.hasUserRated ? (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -377,15 +398,15 @@ const TransportBookingDetails = () => {
                     <Star size={20} className="fill-amber-400 text-amber-400" />
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-slate-800 block">
+                    <span className="text-xs md:text-sm font-bold text-slate-800 block">
                       You rated {captain?.name || 'Captain'} {booking.userRating}/5 ⭐
                     </span>
                     {booking.userReview ? (
-                      <span className="text-[11px] text-slate-500 italic block mt-0.5 line-clamp-1">
+                      <span className="text-[11px] md:text-xs text-slate-500 italic block mt-0.5 line-clamp-1">
                         "{booking.userReview}"
                       </span>
                     ) : (
-                      <span className="text-[10px] text-emerald-600 font-medium block">
+                      <span className="text-[10px] md:text-xs text-emerald-600 font-medium block">
                         Rating submitted successfully
                       </span>
                     )}
@@ -406,8 +427,8 @@ const TransportBookingDetails = () => {
                     <Star size={20} className="fill-amber-400 text-amber-400" />
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-slate-900 block">Rate Your Captain</span>
-                    <span className="text-[11px] text-slate-500 font-medium">How was your trip experience?</span>
+                    <span className="text-xs md:text-sm font-bold text-slate-900 block">Rate Your Captain</span>
+                    <span className="text-[11px] md:text-xs text-slate-500 font-medium">How was your trip experience?</span>
                   </div>
                 </div>
 
@@ -424,8 +445,8 @@ const TransportBookingDetails = () => {
         )}
 
         {/* Goods Information Card */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
-          <h3 className="text-[14px] font-bold text-slate-800 mb-3 flex items-center gap-2">
+        <div className="md:col-span-5 md:col-start-8 bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-sm border border-slate-100">
+          <h3 className="text-[14px] md:text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
             <Package size={16} className="text-[#047857]" /> Goods Information
           </h3>
           <div className="grid grid-cols-2 gap-y-3 gap-x-4">
