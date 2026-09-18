@@ -86,9 +86,12 @@ const CaptainProfile = () => {
   };
 
   const handleItemClick = (id) => {
+    /* Temporarily commented out: Captain Membership
     if (id === 'membership') {
       navigate('/captain/membership');
-    } else if (id === 'personal-info') {
+    } else
+    */
+    if (id === 'personal-info') {
       navigate('/captain/personal-details');
     } else if (id === 'wallet') {
       navigate('/captain/wallet');
@@ -118,6 +121,7 @@ const CaptainProfile = () => {
       badge: 'Verified',
       badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     },
+    /* Temporarily commented out: Captain Membership
     {
       id: 'membership',
       label: 'Captain Membership',
@@ -128,6 +132,7 @@ const CaptainProfile = () => {
       badge: profile?.membershipStatus === 'active' ? 'Active' : 'Plans',
       badgeColor: profile?.membershipStatus === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-sky-50 text-sky-700 border-sky-200',
     },
+    */
     /* Temporarily commented out: Captain Rating & Reviews
     {
       id: 'ratings',

@@ -708,6 +708,7 @@ const CaptainDashboard = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Temporarily commented out: Captain Membership Plans
                   <button
                     onClick={() => navigate('/captain/membership')}
                     className="px-3 py-1.5 rounded-full bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-sky-100"
@@ -715,6 +716,7 @@ const CaptainDashboard = () => {
                     <span className="material-symbols-outlined text-sm">workspace_premium</span>
                     <span>Plans</span>
                   </button>
+                  */}
                   <button
                     onClick={() => navigate('/captain/wallet')}
                     className="px-3.5 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100/80 text-[#15803d] text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"

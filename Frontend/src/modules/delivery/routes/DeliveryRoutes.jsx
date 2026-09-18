@@ -17,7 +17,8 @@ const FinalVerification = lazy(() => import('../pages/FinalVerification'));
 const NewJobRequest = lazy(() => import('../pages/NewJobRequest'));
 const CaptainNotifications = lazy(() => import('../pages/CaptainNotifications'));
 const CaptainServiceAreas = lazy(() => import('../pages/CaptainServiceAreas'));
-const CaptainMembership = lazy(() => import('../pages/CaptainMembership'));
+// Temporarily commented out: Captain Membership
+// const CaptainMembership = lazy(() => import('../pages/CaptainMembership'));
 const CaptainPolicyPage = lazy(() => import('../pages/CaptainPolicyPage'));
 const CaptainSupport = lazy(() => import('../pages/CaptainSupport'));
 const CaptainDeleteAccount = lazy(() => import('../pages/CaptainDeleteAccount'));
@@ -50,7 +51,8 @@ const DeliveryRoutes = () => {
             <Route path="/personal-details" element={<CaptainPersonalDetails />} />
             <Route path="/notifications" element={<CaptainNotifications />} />
             <Route path="/service-areas" element={<CaptainServiceAreas />} />
-            <Route path="/membership" element={<CaptainMembership />} />
+            {/* Temporarily commented out: Captain Membership (/captain/membership) */}
+            {/* <Route path="/membership" element={<CaptainMembership />} /> */}
             <Route path="/help" element={<CaptainSupport />} />
             <Route path="/privacy" element={<CaptainPolicyPage />} />
             <Route path="/delete-account" element={<CaptainDeleteAccount />} />
