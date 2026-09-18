@@ -17,8 +17,8 @@ const LocationSearchModal = ({
   isOpen,
   onClose,
   onSelect,
-  title = 'Select Location',
-  placeholder = 'Search street, building, area, landmark...',
+  title = 'Select Location / स्थान चुनें',
+  placeholder = 'Search street, building, area, landmark... / सड़क, भवन, क्षेत्र, लैंडमार्क खोजें...',
   initialLocation = null,
   accentColor = '#047857',
 }) => {
@@ -87,7 +87,7 @@ const LocationSearchModal = ({
       setQuery(fullDetails.formattedAddress);
     } catch (err) {
       console.error('Failed to resolve place details:', err);
-      setErrorMsg('Could not fetch complete details for this place. Please try another.');
+      setErrorMsg('Could not fetch complete details for this place. Please try another. / इस स्थान का पूरा विवरण प्राप्त नहीं हो सका। कृपया दूसरा स्थान चुनें।');
     } finally {
       setResolvingDetails(false);
     }
@@ -105,7 +105,7 @@ const LocationSearchModal = ({
       setPredictions([]);
     } catch (err) {
       console.error('GPS detect error:', err);
-      setErrorMsg(err.message || 'Unable to detect GPS location. Please enter location manually.');
+      setErrorMsg(err.message || 'Unable to detect GPS location. Please enter location manually. / जीपीएस स्थान का पता लगाने में असमर्थ। कृपया मैन्युअल रूप से स्थान दर्ज करें।');
     } finally {
       setDetectingGps(false);
     }
@@ -143,7 +143,7 @@ const LocationSearchModal = ({
             </div>
             <div>
               <h2 className="text-[16px] font-extrabold text-slate-900 m-0 leading-tight">{title}</h2>
-              <span className="text-[11px] font-semibold text-slate-400">Powered by Google Maps</span>
+              <span className="text-[11px] font-semibold text-slate-400">Powered by Google Maps / गूगल मैप्स द्वारा संचालित</span>
             </div>
           </div>
           <button 
@@ -190,8 +190,8 @@ const LocationSearchModal = ({
                 {detectingGps ? <Loader2 size={15} className="animate-spin text-emerald-700" /> : <Navigation size={15} className="text-emerald-700" />}
               </div>
               <div>
-                <span className="text-[12.5px] font-bold text-slate-800 block">Use current GPS location</span>
-                <span className="text-[10.5px] text-slate-500 font-medium">Detect exact coordinates automatically</span>
+                <span className="text-[12.5px] font-bold text-slate-800 block">Use current GPS location / वर्तमान जीपीएस स्थान का उपयोग करें</span>
+                <span className="text-[10.5px] text-slate-500 font-medium">Detect exact coordinates automatically / सटीक निर्देशांक स्वचालित रूप से खोजें</span>
               </div>
             </div>
             <ChevronRight size={16} className="text-slate-400" />
@@ -213,7 +213,7 @@ const LocationSearchModal = ({
             <div className="flex flex-col items-center justify-center py-8 gap-2 text-slate-400">
               <Loader2 size={24} className="animate-spin" style={{ color: accentColor }} />
               <span className="text-[12px] font-medium">
-                {resolvingDetails ? 'Fetching complete address details...' : 'Searching places in India...'}
+                {resolvingDetails ? 'Fetching complete address details... / पूरे पते का विवरण प्राप्त किया जा रहा है...' : 'Searching places in India... / भारत में स्थान खोजे जा रहे हैं...'}
               </span>
             </div>
           )}
@@ -245,7 +245,7 @@ const LocationSearchModal = ({
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
                   <Check size={14} className="text-emerald-700" strokeWidth={3} />
-                  Selected Location Verified
+                  Selected Location Verified / चयनित स्थान सत्यापित
                 </span>
                 {selectedLocation.latitude && selectedLocation.longitude && (
                   <span className="text-[10px] font-mono bg-white text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-200 font-bold">
@@ -263,22 +263,22 @@ const LocationSearchModal = ({
                 <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-slate-100">
                   {selectedLocation.area && (
                     <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                      Locality: {selectedLocation.area}
+                      Locality / इलाका: {selectedLocation.area}
                     </span>
                   )}
                   {selectedLocation.city && (
                     <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                      City: {selectedLocation.city}
+                      City / शहर: {selectedLocation.city}
                     </span>
                   )}
                   {selectedLocation.state && (
                     <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                      State: {selectedLocation.state}
+                      State / राज्य: {selectedLocation.state}
                     </span>
                   )}
                   {selectedLocation.postalCode && (
                     <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
-                      PIN: {selectedLocation.postalCode}
+                      PIN / पिन: {selectedLocation.postalCode}
                     </span>
                   )}
                 </div>
@@ -290,8 +290,8 @@ const LocationSearchModal = ({
           {!searching && !resolvingDetails && predictions.length === 0 && !selectedLocation && (
             <div className="py-6 text-center text-slate-400 space-y-1">
               <MapPin size={32} className="mx-auto text-slate-300 mb-2" />
-              <p className="text-[13px] font-bold text-slate-600 m-0">Search any location in India</p>
-              <p className="text-[11px] text-slate-400 m-0">Type building, street, area or tap GPS button above</p>
+              <p className="text-[13px] font-bold text-slate-600 m-0">Search any location in India / भारत में कोई भी स्थान खोजें</p>
+              <p className="text-[11px] text-slate-400 m-0">Type building, street, area or tap GPS button above / भवन, सड़क, क्षेत्र लिखें या ऊपर जीपीएस बटन दबाएं</p>
             </div>
           )}
         </div>
@@ -306,7 +306,7 @@ const LocationSearchModal = ({
             style={{ backgroundColor: accentColor }}
           >
             <Check size={18} />
-            Confirm This Location
+            Confirm This Location / इस स्थान की पुष्टि करें
           </button>
         </div>
       </div>
