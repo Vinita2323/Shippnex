@@ -1,4 +1,5 @@
 import Category from '../models/Category.model.js';
+import Product from '../models/Product.model.js';
 
 // Initial default categories seed
 const initialCategories = [
@@ -35,6 +36,50 @@ export const getCategories = async (req, res, next) => {
     // Seed default categories if database is empty
     if (categories.length === 0) {
       categories = await Category.insertMany(initialCategories);
+    } else {
+      // Ensure missing initial core categories are present
+      const existingLower = new Set(categories.map(c => (c.name || '').toLowerCase().trim()));
+      const missingInitial = initialCategories.filter(ic => !existingLower.has(ic.name.toLowerCase().trim()));
+      if (missingInitial.length > 0) {
+        try {
+          await Category.insertMany(missingInitial, { ordered: false });
+          categories = await Category.find()
+            .select('name slug icon image parent status priority')
+            .sort({ priority: 1 })
+            .lean();
+        } catch (e) {
+          // Ignore duplicate errors
+        }
+      }
+    }
+
+    // Ensure categories associated with existing products also appear
+    try {
+      const existingLower = new Set(categories.map(c => (c.name || '').toLowerCase().trim()));
+      const productCategories = await Product.distinct('category');
+      const missingFromProducts = [];
+      for (const pCat of productCategories) {
+        if (pCat && pCat.trim() && !existingLower.has(pCat.toLowerCase().trim())) {
+          missingFromProducts.push({
+            name: pCat.trim(),
+            icon: 'Package',
+            image: '/uploads/categories/Grocery-removebg-preview.png',
+            status: 'Active',
+            priority: 20,
+            parent: null,
+          });
+          existingLower.add(pCat.toLowerCase().trim());
+        }
+      }
+      if (missingFromProducts.length > 0) {
+        await Category.insertMany(missingFromProducts, { ordered: false });
+        categories = await Category.find()
+          .select('name slug icon image parent status priority')
+          .sort({ priority: 1 })
+          .lean();
+      }
+    } catch (e) {
+      // Ignore
     }
 
     const payload = {

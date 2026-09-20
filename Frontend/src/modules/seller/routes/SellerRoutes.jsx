@@ -49,6 +49,8 @@ const SellerRoutes = () => {
             {/* Product Group */}
             <Route path="product/add" element={<AddProduct />} />
             <Route path="products/add" element={<AddProduct />} />
+            <Route path="product/edit/:id" element={<AddProduct />} />
+            <Route path="products/edit/:id" element={<AddProduct />} />
             <Route path="taxes" element={<Navigate to="/seller/dashboard" replace />} />
             <Route path="products" element={<Products />} />
             <Route path="product/list" element={<Products />} />

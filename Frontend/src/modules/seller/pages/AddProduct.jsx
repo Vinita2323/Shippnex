@@ -2,11 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, Upload, Tag, DollarSign, Boxes, CheckCircle, Package, Plus, ArrowLeft, ShieldCheck, RotateCcw, AlertCircle
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { categoryService, productService, authService } from '../../../services/authService';
 
 const AddProduct = () => {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const editId = id || searchParams.get('id') || searchParams.get('edit');
+  const isEditMode = Boolean(editId);
+  const [loadingProduct, setLoadingProduct] = useState(isEditMode);
 
   // Get Logged-in Seller Info
   const [sellerInfo, setSellerInfo] = useState(() => {
@@ -59,6 +64,70 @@ const AddProduct = () => {
 
   const [formData, setFormData] = useState(initialData);
 
+  // Fetch product to edit if in Edit Mode
+  useEffect(() => {
+    if (!editId) return;
+
+    let isMounted = true;
+    const fetchProductToEdit = async () => {
+      setLoadingProduct(true);
+      try {
+        let prod = null;
+        try {
+          const res = await productService.getProductById(editId);
+          if (res?.product) prod = res.product;
+          else if (res?.data) prod = res.data;
+        } catch (e) {
+          console.warn('Backend getProductById error, fallback to local:', e.message);
+        }
+
+        if (!prod) {
+          const localProds = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+          prod = localProds.find(p => (p._id && p._id === editId) || p.id === editId || p.sku === editId);
+        }
+
+        if (prod && isMounted) {
+          setFormData({
+            name: prod.name || '',
+            category: prod.category || 'Groceries & Grains',
+            subCategory: prod.subCategory || '',
+            brand: prod.brand || '',
+            unitValue: String(prod.unitValue || (prod.unit ? prod.unit.split(' ')[0] : '1')),
+            unitType: String(prod.unitType || (prod.unit ? prod.unit.split(' ')[1] : 'kg')),
+            description: prod.description || '',
+            mrp: prod.mrp !== undefined ? String(prod.mrp) : '',
+            salePrice: prod.salePrice !== undefined ? String(prod.salePrice) : (prod.price !== undefined ? String(prod.price) : ''),
+            taxRate: prod.taxRate || '5%',
+            hsnCode: prod.hsnCode || '0713',
+            stock: prod.stock !== undefined ? String(prod.stock) : '',
+            minStockLimit: prod.minStockLimit !== undefined ? String(prod.minStockLimit) : '10',
+            sku: prod.sku || prod.id || '',
+            seller: prod.seller || defaultSellerName,
+            status: prod.status || 'Published',
+            isFeatured: Boolean(prod.isFeatured),
+            isReturnable: prod.isReturnable !== undefined ? Boolean(prod.isReturnable) : true,
+            returnWindow: String(prod.returnWindow || '7'),
+            returnPolicy: prod.returnPolicy || '7 Days Returnable / Replacement',
+            mainImage: prod.mainImage || prod.image || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
+            mainImageFile: null,
+            galleryImages: Array.isArray(prod.galleryImages) ? prod.galleryImages : []
+          });
+
+          if (Array.isArray(prod.homeSections) && prod.homeSections.length > 0) {
+            setSelectedHomeSections(prod.homeSections);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load product for editing:', err);
+      } finally {
+        if (isMounted) setLoadingProduct(false);
+      }
+    };
+
+    fetchProductToEdit();
+    return () => { isMounted = false; };
+  }, [editId]);
+
   // Dynamic Categories State
   const [dynamicCategoryMap, setDynamicCategoryMap] = useState({});
   const [registeredCategories, setRegisteredCategories] = useState([]);
@@ -95,11 +164,16 @@ const AddProduct = () => {
           if (keys.length > 0) {
             const firstCat = keys[0];
             const firstSub = map[firstCat].length > 0 ? map[firstCat][0] : 'None';
-            setFormData(prev => ({
-              ...prev,
-              category: prev.category && map[prev.category] ? prev.category : firstCat,
-              subCategory: prev.category && map[prev.category] ? (map[prev.category].length > 0 ? map[prev.category][0] : 'None') : firstSub
-            }));
+            setFormData(prev => {
+              if (isEditMode && prev.name) {
+                return prev;
+              }
+              return {
+                ...prev,
+                category: prev.category && map[prev.category] ? prev.category : firstCat,
+                subCategory: prev.category && map[prev.category] ? (map[prev.category].length > 0 ? map[prev.category][0] : 'None') : firstSub
+              };
+            });
           }
         }
       } catch (err) {
@@ -107,7 +181,7 @@ const AddProduct = () => {
       }
     };
     fetchRegisteredCategories();
-  }, []);
+  }, [isEditMode]);
 
   const handleCategorySelectChange = (newCategory) => {
     const availableSubs = dynamicCategoryMap[newCategory] || [];
@@ -232,34 +306,65 @@ const AddProduct = () => {
         stock: Number(formData.stock || 0)
       };
 
-      const res = await productService.createProduct(payload);
-      console.log('Product saved to DB:', res);
+      if (isEditMode) {
+        const res = await productService.updateProduct(editId, payload);
+        console.log('Product updated in DB:', res);
 
-      const createdProd = res?.product || res;
-      const generatedSku = createdProd?.sku || formData.sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
-      const newProductObj = {
-        _id: createdProd?._id,
-        id: createdProd?._id || generatedSku,
-        name: formData.name || 'New Product',
-        seller: formData.seller || defaultSellerName,
-        category: formData.category,
-        subCategory: formData.subCategory,
-        image: createdProd?.mainImage || formData.mainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
-        galleryImages: formData.galleryImages || [],
-        variation: `${formData.unitValue || 1} ${formData.unitType || 'kg'}`,
-        stock: Number(formData.stock || 0),
-        status: statusToSave,
-        mrp: Number(formData.mrp || 0),
-        salePrice: Number(formData.salePrice || 0),
-        homeSections: selectedHomeSections
-      };
+        const updatedProd = res?.product || payload;
+        const targetObj = {
+          ...updatedProd,
+          _id: editId,
+          id: editId,
+          name: formData.name,
+          category: formData.category,
+          subCategory: formData.subCategory,
+          image: cleanMainImage,
+          stock: Number(formData.stock || 0),
+          status: statusToSave,
+          mrp: Number(formData.mrp || 0),
+          salePrice: Number(formData.salePrice || 0),
+        };
 
-      const existingLocal = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
-      const updatedLocal = [newProductObj, ...existingLocal.filter(p => p.id !== newProductObj.id)];
-      localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
+        const existingLocal = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+        const updatedLocal = existingLocal.map(p => 
+          ((p._id && p._id === editId) || p.id === editId || p.sku === formData.sku) ? { ...p, ...targetObj } : p
+        );
+        localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
 
-      setCreatedSuccessModal(newProductObj);
-      showToast(`Product "${formData.name}" added and saved to DB!`);
+        showToast(`Product "${formData.name}" updated successfully!`);
+        setTimeout(() => {
+          navigate('/seller/products');
+        }, 1200);
+      } else {
+        const res = await productService.createProduct(payload);
+        console.log('Product saved to DB:', res);
+
+        const createdProd = res?.product || res;
+        const generatedSku = createdProd?.sku || formData.sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+        const newProductObj = {
+          _id: createdProd?._id,
+          id: createdProd?._id || generatedSku,
+          name: formData.name || 'New Product',
+          seller: formData.seller || defaultSellerName,
+          category: formData.category,
+          subCategory: formData.subCategory,
+          image: createdProd?.mainImage || formData.mainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
+          galleryImages: formData.galleryImages || [],
+          variation: `${formData.unitValue || 1} ${formData.unitType || 'kg'}`,
+          stock: Number(formData.stock || 0),
+          status: statusToSave,
+          mrp: Number(formData.mrp || 0),
+          salePrice: Number(formData.salePrice || 0),
+          homeSections: selectedHomeSections
+        };
+
+        const existingLocal = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+        const updatedLocal = [newProductObj, ...existingLocal.filter(p => p.id !== newProductObj.id)];
+        localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
+
+        setCreatedSuccessModal(newProductObj);
+        showToast(`Product "${formData.name}" added and saved to DB!`);
+      }
     } catch (err) {
       console.error('Error saving product to backend DB:', err);
       showToast(`Error: ${err.response?.data?.message || err.message}`);
@@ -333,8 +438,21 @@ const AddProduct = () => {
       {/* Page Header Bar */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Add New Product</h2>
-          <p className="text-xs text-slate-500">Create and list new items with pricing, stock limits, media, and homepage section mapping</p>
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-xl font-bold text-slate-900">
+              {isEditMode ? 'Edit Product' : 'Add New Product'}
+            </h2>
+            {isEditMode && (
+              <span className="px-2.5 py-0.5 text-xs font-mono font-bold bg-[#ff5500]/10 text-[#ff5500] rounded-full border border-[#ff5500]/20">
+                {formData.sku || editId}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {isEditMode 
+              ? 'Modify and update product details, pricing, inventory stock, media, and homepage placement' 
+              : 'Create and list new items with pricing, stock limits, media, and homepage section mapping'}
+          </p>
         </div>
         <button
           type="button"
@@ -344,6 +462,13 @@ const AddProduct = () => {
           <ArrowLeft size={16} /> Back to Product List
         </button>
       </div>
+
+      {loadingProduct && (
+        <div className="bg-white p-12 rounded-2xl border border-slate-200 shadow-sm text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#ff5500] border-t-transparent mb-3"></div>
+          <p className="text-sm font-semibold text-slate-700">Loading product details for editing...</p>
+        </div>
+      )}
 
       <form onSubmit={(e) => handleFormSubmit(e, 'Published')} className="max-w-4xl mx-auto space-y-6">
         {/* Card 1: Basic Information */}
@@ -858,13 +983,22 @@ const AddProduct = () => {
         </div>
 
         {/* Submit Button */}
-        <div className="pt-4 flex justify-end">
+        <div className="pt-4 flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/seller/products')}
+            className="px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl border border-slate-200 cursor-pointer transition-all"
+          >
+            Cancel
+          </button>
           <button 
             type="submit" 
-            disabled={isSubmitting}
-            className="w-full sm:w-auto px-8 py-3.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-base font-semibold rounded-xl border-none cursor-pointer shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+            disabled={isSubmitting || loadingProduct}
+            className="w-full sm:w-auto px-8 py-3.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-base font-semibold rounded-xl border-none cursor-pointer shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            {isSubmitting ? 'Saving Product...' : 'Add Product'}
+            {isSubmitting 
+              ? (isEditMode ? 'Updating Product...' : 'Saving Product...') 
+              : (isEditMode ? 'Update Product' : 'Add Product')}
           </button>
         </div>
 

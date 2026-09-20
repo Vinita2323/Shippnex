@@ -407,25 +407,7 @@ export const loginSeller = async (req, res, next) => {
       });
     }
 
-    // 1. Check Pending Registration Fee & OTP Status
-    if (seller.registrationFeeStatus === 'pending' || seller.registrationFeeStatus === 'failed') {
-      return res.status(403).json({
-        success: false,
-        accountStatus: 'pending_payment',
-        registrationFeeStatus: seller.registrationFeeStatus,
-        message: 'Seller registration fee payment is pending. Please complete your registration fee payment to proceed.',
-      });
-    }
-
-    if (seller.accountStatus === 'pending_otp' && !seller.isVerified) {
-      return res.status(403).json({
-        success: false,
-        accountStatus: 'pending_otp',
-        message: 'Please complete your mobile number OTP verification before logging in.',
-      });
-    }
-
-    // 2. Check Under Review Status
+    // 1. Check Suspended / Rejected Status
     const isApproved = seller.accountStatus === 'approved' || (seller.status === 'approved' && !seller.accountStatus);
     const isRejected = seller.accountStatus === 'rejected' || seller.status === 'rejected';
     const isSuspended = seller.accountStatus === 'suspended' || seller.status === 'suspended';
@@ -446,6 +428,38 @@ export const loginSeller = async (req, res, next) => {
       });
     }
 
+    // 2. Check Registration Fee Status (Existing registered & approved sellers are exempt)
+    const feeConfigCutoff = new Date('2026-09-12T12:46:51.865Z');
+    const isPreFeeSeller = seller.createdAt && new Date(seller.createdAt) < feeConfigCutoff;
+
+    if (isApproved || isPreFeeSeller) {
+      // Existing sellers who registered previously or are approved do not need to pay registration fee
+      if (seller.registrationFeeStatus === 'pending') {
+        seller.registrationFeeStatus = 'not_required';
+        await Seller.updateOne({ _id: seller._id }, { $set: { registrationFeeStatus: 'not_required' } });
+      }
+    } else {
+      // Only new unapproved applicants registered after fee system was introduced must pay
+      if (seller.registrationFeeStatus === 'pending' || seller.registrationFeeStatus === 'failed') {
+        return res.status(403).json({
+          success: false,
+          accountStatus: 'pending_payment',
+          registrationFeeStatus: seller.registrationFeeStatus,
+          message: 'Seller registration fee payment is pending. Please complete your registration fee payment to proceed.',
+        });
+      }
+    }
+
+    // 3. Check OTP Verification
+    if (seller.accountStatus === 'pending_otp' && !seller.isVerified) {
+      return res.status(403).json({
+        success: false,
+        accountStatus: 'pending_otp',
+        message: 'Please complete your mobile number OTP verification before logging in.',
+      });
+    }
+
+    // 4. Check Under Review Status
     if (!isApproved) {
       return res.status(403).json({
         success: false,
@@ -454,7 +468,7 @@ export const loginSeller = async (req, res, next) => {
       });
     }
 
-    // 3. Verify Password
+    // 5. Verify Password
     if (!seller.password) {
       return res.status(200).json({
         success: false,

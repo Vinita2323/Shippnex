@@ -230,10 +230,7 @@ export const toggleSellerStatus = async (req, res, next) => {
 
     if (rawStatus === 'approved') {
       if (seller.registrationFeeStatus === 'pending') {
-        return res.status(400).json({
-          success: false,
-          message: 'Cannot approve seller: One-time registration fee payment is pending.',
-        });
+        seller.registrationFeeStatus = 'not_required';
       }
       seller.accountStatus = 'approved';
       seller.status = 'approved';

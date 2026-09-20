@@ -121,8 +121,17 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
         });
       }
 
-      if (existingSeller.registrationFeeStatus === 'paid') {
-        // Already paid registration fee! Skip payment and proceed directly to OTP
+      const feeConfigCutoff = new Date('2026-09-12T12:46:51.865Z');
+      const isLegacySeller = existingSeller.createdAt && new Date(existingSeller.createdAt) < feeConfigCutoff;
+      const isFeeExempt = existingSeller.registrationFeeStatus === 'paid' || 
+                          existingSeller.registrationFeeStatus === 'not_required' || 
+                          isLegacySeller;
+
+      if (isFeeExempt) {
+        if (existingSeller.registrationFeeStatus !== 'paid') {
+          existingSeller.registrationFeeStatus = 'not_required';
+        }
+        // Already paid or fee waived/legacy! Skip payment and proceed directly to OTP
         const { otp, otpExpiry } = generateOtp();
         existingSeller.otp = otp;
         existingSeller.otpExpiry = otpExpiry;
@@ -139,7 +148,7 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
           success: true,
           registrationFeeRequired: false,
           alreadyPaid: true,
-          message: 'Registration fee has already been paid for this account. Proceeding to verification.',
+          message: 'Registration fee is not required or already paid for this account. Proceeding to verification.',
           phone: cleanPhone,
           otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
           seller: {
@@ -447,11 +456,20 @@ export const retryRegistrationFeeOrder = async (req, res, next) => {
       });
     }
 
-    if (seller.registrationFeeStatus === 'paid') {
+    const feeConfigCutoff = new Date('2026-09-12T12:46:51.865Z');
+    const isLegacySeller = seller.createdAt && new Date(seller.createdAt) < feeConfigCutoff;
+    const isFeeExempt = seller.registrationFeeStatus === 'paid' || 
+                        seller.registrationFeeStatus === 'not_required' || 
+                        seller.accountStatus === 'approved' || 
+                        seller.status === 'approved' || 
+                        isLegacySeller;
+
+    if (isFeeExempt) {
       return res.status(200).json({
         success: true,
         alreadyPaid: true,
-        message: 'Registration fee is already paid for this account.',
+        registrationFeeRequired: false,
+        message: 'Registration fee is not required or already paid for this account.',
         phone: seller.phone,
       });
     }

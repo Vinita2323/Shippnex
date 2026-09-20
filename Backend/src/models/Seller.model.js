@@ -88,7 +88,7 @@ const sellerSchema = new mongoose.Schema(
     registrationFeeStatus: {
       type: String,
       enum: ['pending', 'paid', 'not_required', 'failed'],
-      default: 'pending',
+      default: 'not_required',
       index: true,
     },
     registrationFeePaymentId: {

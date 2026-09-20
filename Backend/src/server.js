@@ -77,6 +77,15 @@ app.use('/uploads', express.static(uploadsDir, {
   immutable: true 
 }));
 
+// Fallback for missing uploads images (prevents 404 image errors)
+app.use('/uploads', (req, res, next) => {
+  const fallbackFile = path.join(uploadsDir, 'categories', 'Grocery-removebg-preview.png');
+  if (fs.existsSync(fallbackFile)) {
+    return res.sendFile(fallbackFile);
+  }
+  next();
+});
+
 // Core API Routes (Mounted under both /api and root for backwards compatibility)
 const registerRoutes = (prefix = '') => {
   app.use(`${prefix}/auth/user`, userAuthRoutes);

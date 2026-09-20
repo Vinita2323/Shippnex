@@ -146,12 +146,16 @@ export const getProducts = async (req, res) => {
       query.seller = seller;
     }
 
-    if (category) {
-      query.category = category;
+    if (category && category.trim() && category.trim().toLowerCase() !== 'all') {
+      const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const normalizedCat = escapeRegex(category.trim()).replace(/\s+/g, '\\s+');
+      query.category = { $regex: new RegExp(`^${normalizedCat}$`, 'i') };
     }
 
-    if (subCategory) {
-      query.subCategory = subCategory;
+    if (subCategory && subCategory.trim() && subCategory.trim().toLowerCase() !== 'all' && subCategory.trim().toLowerCase() !== 'none') {
+      const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const normalizedSub = escapeRegex(subCategory.trim()).replace(/\s+/g, '\\s+');
+      query.subCategory = { $regex: new RegExp(`^${normalizedSub}$`, 'i') };
     }
 
     if (section) {
