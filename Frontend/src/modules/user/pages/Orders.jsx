@@ -7,19 +7,34 @@ import { transportService } from '../../../services/transportService';
 import RatingModal from '../../../components/RatingModal';
 
 const formatRawOrdersData = (rawList = []) => {
-  return rawList.map(o => ({
-    id: o.orderId || o._id,
-    _id: o._id,
-    date: o.createdAt 
-      ? new Date(o.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-      : 'Recent',
-    status: o.orderStatus || o.status || 'Placed',
-    rejectionReason: o.rejectionReason || '',
-    items: o.items || [],
-    total: o.grandTotal || o.total || 0,
-    itemCount: (o.items || []).reduce((acc, i) => acc + (i.quantity || 1), 0),
-    rawOrder: o,
-  }));
+  return rawList.map(o => {
+    let displayStatus = (o.orderStatus || o.status || 'Placed').trim();
+    if (o.orderStatus === 'Refund Completed' || o.refundStatus === 'Completed' || o.returnStatus === 'Refunded') {
+      displayStatus = 'Refund Completed';
+    } else if (o.orderStatus === 'Returned' || o.returnStatus === 'Completed') {
+      displayStatus = 'Returned';
+    } else if (o.orderStatus === 'Return Approved' || o.returnStatus === 'Approved') {
+      displayStatus = 'Return Approved';
+    } else if (o.orderStatus === 'Return Requested' || o.returnStatus === 'Pending' || o.returnStatus === 'Requested') {
+      displayStatus = 'Return Requested';
+    } else if (o.orderStatus === 'Return Rejected' || o.returnStatus === 'Rejected') {
+      displayStatus = 'Return Rejected';
+    }
+
+    return {
+      id: o.orderId || o._id,
+      _id: o._id,
+      date: o.createdAt 
+        ? new Date(o.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+        : 'Recent',
+      status: displayStatus,
+      rejectionReason: o.rejectionReason || '',
+      items: o.items || [],
+      total: o.grandTotal || o.total || 0,
+      itemCount: (o.items || []).reduce((acc, i) => acc + (i.quantity || 1), 0),
+      rawOrder: o,
+    };
+  });
 };
 
 const Orders = () => {
@@ -55,14 +70,14 @@ const Orders = () => {
   const [transportLoading, setTransportLoading] = useState(false);
   const [ratingRide, setRatingRide] = useState(null);
 
-  const filterOptions = ['All', 'Placed', 'Processing', 'Out for Delivery', 'Delivered', 'Cancelled'];
+  const filterOptions = ['All', 'Placed', 'Processing', 'Out for Delivery', 'Delivered', 'Refund Completed', 'Cancelled'];
 
   const { orders: contextOrders } = useOrder();
 
   useEffect(() => {
     const fetchOrders = async () => {
       try {
-        const res = await orderService.getOrders();
+        const res = await orderService.getOrders(true);
         if (res && res.success && res.orders) {
           setServerOrders(formatRawOrdersData(res.orders));
         }
@@ -96,14 +111,25 @@ const Orders = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Placed': return 'text-orange-500';
-      case 'Accepted': return 'text-emerald-600 font-extrabold';
-      case 'Rejected': return 'text-red-600 font-extrabold';
-      case 'Processing': return 'text-[#ff5500]';
-      case 'Out for Delivery': return 'text-blue-600';
-      case 'Delivered': return 'text-green-500';
-      case 'Cancelled': return 'text-red-500';
-      default: return 'text-slate-500';
+      case 'Placed': return 'text-orange-600 font-bold bg-orange-50 border-orange-200';
+      case 'Accepted': return 'text-emerald-600 font-extrabold bg-emerald-50 border-emerald-200';
+      case 'Rejected': return 'text-red-600 font-extrabold bg-red-50 border-red-200';
+      case 'Processing': return 'text-[#ff5500] font-bold bg-orange-50 border-orange-200';
+      case 'Out for Delivery': return 'text-blue-600 font-bold bg-blue-50 border-blue-200';
+      case 'Delivered': return 'text-emerald-600 font-extrabold bg-emerald-50 border-emerald-200';
+      case 'Cancelled': return 'text-red-500 font-bold bg-red-50 border-red-200';
+      case 'Refund Completed':
+      case 'Refunded':
+        return 'text-emerald-700 font-black bg-emerald-50 border-emerald-300';
+      case 'Return Requested':
+        return 'text-amber-700 font-bold bg-amber-50 border-amber-200';
+      case 'Return Approved':
+        return 'text-teal-700 font-bold bg-teal-50 border-teal-200';
+      case 'Return Rejected':
+        return 'text-rose-700 font-bold bg-rose-50 border-rose-200';
+      case 'Returned':
+        return 'text-purple-700 font-bold bg-purple-50 border-purple-200';
+      default: return 'text-slate-600 font-medium bg-slate-50 border-slate-200';
     }
   };
 
@@ -277,7 +303,7 @@ const Orders = () => {
                       <span className="text-[12px] font-medium text-slate-500">{order.date}</span>
                     </div>
                   </div>
-                  <span className={`text-[12px] md:text-xs font-bold px-2.5 py-1 rounded-full bg-slate-50 border border-slate-100 ${getStatusColor(order.status)}`}>
+                  <span className={`text-[12px] md:text-xs font-bold px-2.5 py-1 rounded-full border ${getStatusColor(order.status)}`}>
                     {order.status}
                   </span>
                 </div>

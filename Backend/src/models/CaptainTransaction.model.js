@@ -31,6 +31,22 @@ const captainTransactionSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    grossAmount: {
+      type: Number,
+      default: 0,
+    },
+    commissionRate: {
+      type: Number,
+      default: 0,
+    },
+    commissionAmount: {
+      type: Number,
+      default: 0,
+    },
+    netAmount: {
+      type: Number,
+      default: 0,
+    },
     balanceBefore: {
       type: Number,
       default: 0,

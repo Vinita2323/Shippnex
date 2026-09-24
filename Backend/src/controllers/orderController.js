@@ -9,11 +9,28 @@ import WalletTransaction from '../models/WalletTransaction.model.js';
 import Captain from '../models/Captain.model.js';
 import CaptainNotification from '../models/CaptainNotification.model.js';
 import PlatformLedger from '../models/PlatformLedger.model.js';
+import CommissionSettings from '../models/CommissionSettings.model.js';
+import RefundRequest from '../models/RefundRequest.model.js';
 import { 
   sendNotificationToUser, 
   sendNotificationToSeller, 
   sendNotificationToCaptain 
 } from '../utils/pushNotificationHelper.js';
+
+// Helper: Clean base64 image strings to prevent database and payload bloat
+const cleanImage = (img) => {
+  if (typeof img === 'string' && img.startsWith('data:image/') && img.length > 500) {
+    return 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
+  }
+  return img || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
+};
+
+// High-speed In-memory Cache for Seller Notifications
+const sellerNotifCache = new Map();
+const sellerDocCache = new Map();
+export const invalidateSellerNotifCache = () => {
+  sellerNotifCache.clear();
+};
 
 // Helper: Generate delivery OTP
 const genDeliveryOtp = () => Math.floor(1000 + Math.random() * 9000).toString();
@@ -97,7 +114,20 @@ export const autoAssignCaptainToOrder = async (notification) => {
         } catch (e) {}
       }
 
-      const captainEarnings = Math.max(15, Math.round((notification.totalAmount || parentOrder.grandTotal || 0) * 0.08 * 100) / 100);
+      // Fetch dynamic active captain commission rate
+      let captainCommRate = parentOrder.captainCommissionRate;
+      if (captainCommRate === undefined || captainCommRate === null) {
+        try {
+          const commSettings = await CommissionSettings.getOrCreateActiveSettings();
+          captainCommRate = commSettings?.captainCommission || 5;
+        } catch (e) {
+          captainCommRate = 5;
+        }
+      }
+
+      const captainEarnings = parentOrder.captainEarnings > 0 
+        ? parentOrder.captainEarnings 
+        : Math.max(15, Math.round(((notification.totalAmount || parentOrder.grandTotal || 0) * (captainCommRate / 100)) * 100) / 100);
 
       const eligibleCaptains = await findAllEligibleCaptains(deliveryCity, deliveryState, deliveryPincode, sellerCity, sellerPincode);
 
@@ -109,7 +139,10 @@ export const autoAssignCaptainToOrder = async (notification) => {
           captainId: nearestCaptain._id,
           captainStatus: 'Assigned',
           deliveryOtp: otp,
+          captainCommissionRate: captainCommRate,
+          captainCommissionAmount: Math.round(((notification.totalAmount || parentOrder.grandTotal || 0) * (captainCommRate / 100)) * 100) / 100,
           captainEarnings,
+          captainEarning: captainEarnings,
           captainAssignedAt: new Date(),
         });
 
@@ -273,7 +306,7 @@ export const placeOrder = async (req, res, next) => {
         price: unitPrice,
         originalPrice: originalUnitPrice,
         quantity: qty,
-        image: product.mainImage || product.image || item.image || '',
+        image: cleanImage(product.mainImage || product.image || item.image),
         seller: product.seller || item.seller || 'ShippNex Official Store',
       });
     }
@@ -287,7 +320,26 @@ export const placeOrder = async (req, res, next) => {
     // Generate Order ID
     const orderId = `ORD-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    // Create order document in MongoDB
+    // Fetch dynamic commission settings
+    let globalSellerCommRate = 10;
+    let globalCaptainCommRate = 5;
+    try {
+      const commSettings = await CommissionSettings.getOrCreateActiveSettings();
+      if (commSettings) {
+        globalSellerCommRate = Number(commSettings.sellerCommission !== undefined ? commSettings.sellerCommission : 10);
+        globalCaptainCommRate = Number(commSettings.captainCommission !== undefined ? commSettings.captainCommission : 5);
+      }
+    } catch (e) {
+      console.warn('[OrderController] Error reading CommissionSettings, using fallback rates:', e.message);
+    }
+
+    const sellerCommissionAmount = Number(((itemsTotal * globalSellerCommRate) / 100).toFixed(2));
+    const sellerEarning = Number((itemsTotal - sellerCommissionAmount).toFixed(2));
+
+    const captainCommissionAmount = Number(((grandTotal * globalCaptainCommRate) / 100).toFixed(2));
+    const captainEarnings = Math.max(15, Math.round(captainCommissionAmount * 100) / 100);
+
+    // Create order document in MongoDB with frozen rate snapshots
     const order = await Order.create({
       orderId,
       user: userId,
@@ -304,9 +356,16 @@ export const placeOrder = async (req, res, next) => {
       discount,
       gst,
       grandTotal,
+      sellerCommissionRate: globalSellerCommRate,
+      sellerCommissionAmount,
+      sellerEarning,
+      captainCommissionRate: globalCaptainCommRate,
+      captainCommissionAmount,
+      captainEarnings,
+      captainEarning: captainEarnings,
     });
 
-    console.log(`[OrderController] Successfully created Order in MongoDB: OrderID=${order.orderId}, UserID=${userId}, GrandTotal=₹${grandTotal}`);
+    console.log(`[OrderController] Successfully created Order in MongoDB: OrderID=${order.orderId}, UserID=${userId}, GrandTotal=₹${grandTotal}, SellerComm=${globalSellerCommRate}%, CaptainComm=${globalCaptainCommRate}%`);
 
     // Parallel stock reduction for all ordered items
     const stockUpdates = orderItems.map((orderItem) =>
@@ -347,7 +406,7 @@ export const placeOrder = async (req, res, next) => {
 
       const assignedSellerId = sellerDoc ? String(sellerDoc._id) : sellerName;
       const actualSellerName = sellerDoc ? (sellerDoc.businessName || sellerDoc.ownerName || sellerName) : sellerName;
-      const commRate = Number(sellerDoc?.commissionPercentage !== undefined ? sellerDoc.commissionPercentage : 10);
+      const commRate = Number(sellerDoc?.commissionPercentage !== undefined ? sellerDoc.commissionPercentage : globalSellerCommRate);
       const commAmount = Number(((groupSubtotal * commRate) / 100).toFixed(2));
       const netAmount = Number((groupSubtotal - commAmount).toFixed(2));
 
@@ -356,7 +415,7 @@ export const placeOrder = async (req, res, next) => {
         sellerName: actualSellerName,
         order: order._id,
         orderId: order.orderId,
-        items: groupItems,
+        items: groupItems.map(it => ({ ...it, image: cleanImage(it.image) })),
         customerDetails: {
           name: shippingAddress.fullName || userDoc?.name || 'Customer',
           phone: shippingAddress.phone || userDoc?.phone || '',
@@ -373,6 +432,8 @@ export const placeOrder = async (req, res, next) => {
         settlementStatus: 'PENDING',
         status: 'NEW',
       });
+
+      invalidateSellerNotifCache();
 
       // Asynchronous non-blocking push notification to seller
       setImmediate(() => {
@@ -558,7 +619,7 @@ export const getUserOrders = async (req, res, next) => {
     }
 
     const orders = await Order.find({ user: userId })
-      .select('orderId items shippingAddress deliverySlot paymentMethod paymentStatus orderStatus sellerStatus rejectionReason itemsTotal shippingFee discount gst grandTotal createdAt updatedAt')
+      .select('orderId items shippingAddress deliverySlot paymentMethod paymentStatus orderStatus returnStatus returnReason returnedAt refundStatus refundedAt sellerStatus rejectionReason itemsTotal shippingFee discount gst grandTotal createdAt updatedAt')
       .sort({ createdAt: -1 })
       .lean()
       .exec();
@@ -587,7 +648,7 @@ export const getOrderById = async (req, res, next) => {
         { orderId: id },
       ],
     })
-      .populate('captainId', 'name phone vehicleType')
+      .populate('captainId', 'name phone vehicleType liveLocation')
       .populate('items.product', 'name mainImage price salePrice');
 
     if (!order) {
@@ -620,10 +681,28 @@ export const getOrderById = async (req, res, next) => {
 export const getSellerNotifications = async (req, res, next) => {
   try {
     const sellerId = req.user?.id;
-    let sellerDoc = null;
+    if (!sellerId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
 
-    if (sellerId && mongoose.Types.ObjectId.isValid(sellerId)) {
-      sellerDoc = await Seller.findById(sellerId).lean();
+    const limit = req.query.limit !== undefined 
+      ? (Number(req.query.limit) === 0 ? 0 : Math.min(50, Math.max(1, Number(req.query.limit)))) 
+      : 20;
+    const page = Math.max(1, Number(req.query.page) || 1);
+
+    const now = Date.now();
+    const cacheKey = `${sellerId}_p${page}_l${limit}`;
+    const cached = sellerNotifCache.get(cacheKey);
+    if (cached && (now - cached.timestamp < 3500)) {
+      return res.status(200).json(cached.data);
+    }
+
+    let sellerDoc = sellerDocCache.get(sellerId)?.doc;
+    if (!sellerDoc && mongoose.Types.ObjectId.isValid(sellerId)) {
+      sellerDoc = await Seller.findById(sellerId).select('businessName ownerName phone').lean();
+      if (sellerDoc) {
+        sellerDocCache.set(sellerId, { doc: sellerDoc, timestamp: now });
+      }
     }
 
     const possibleSellerKeys = [
@@ -641,25 +720,42 @@ export const getSellerNotifications = async (req, res, next) => {
       ],
     };
 
-    const limit = req.query.limit ? Number(req.query.limit) : 0;
-    const page = req.query.page ? Number(req.query.page) : 1;
+    let dbQuery = SellerNotification.find(query)
+      .select('sellerId sellerName order orderId items.name items.price items.originalPrice items.quantity items.image items.product customerDetails deliveryAddress deliverySlot paymentMethod paymentStatus totalAmount status rejectionReason commissionRate commissionAmount netSellerAmount settlementStatus proofOfDeliveryUrl captainId captainName captainPhone viewedAt acceptedAt rejectedAt settledAt createdAt updatedAt')
+      .sort({ createdAt: -1 })
+      .lean();
 
-    let dbQuery = SellerNotification.find(query).sort({ createdAt: -1 }).lean();
     if (limit > 0) {
       dbQuery = dbQuery.skip((page - 1) * limit).limit(limit);
     }
 
-    const [notifications, newNotificationsCount] = await Promise.all([
+    const [rawNotifications, newNotificationsCount] = await Promise.all([
       dbQuery,
       SellerNotification.countDocuments({ ...query, status: 'NEW' }),
     ]);
 
-    res.status(200).json({
+    const notifications = rawNotifications.map(n => {
+      if (Array.isArray(n.items)) {
+        n.items = n.items.map(it => {
+          if (typeof it.image === 'string' && it.image.startsWith('data:image/') && it.image.length > 500) {
+            it.image = 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
+          }
+          return it;
+        });
+      }
+      return n;
+    });
+
+    const responsePayload = {
       success: true,
       count: notifications.length,
       newCount: newNotificationsCount,
       notifications,
-    });
+    };
+
+    sellerNotifCache.set(cacheKey, { data: responsePayload, timestamp: now });
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -684,6 +780,7 @@ export const markNotificationViewed = async (req, res, next) => {
       notification.status = 'VIEWED';
       notification.viewedAt = new Date();
       await notification.save();
+      invalidateSellerNotifCache();
     }
 
     res.status(200).json({
@@ -723,6 +820,7 @@ export const acceptSellerOrder = async (req, res, next) => {
       notification.acceptedAt = now;
     }
     await notification.save();
+    invalidateSellerNotifCache();
 
     // Update parent order
     if (notification.order) {
@@ -785,6 +883,7 @@ export const rejectSellerOrder = async (req, res, next) => {
     notification.rejectionReason = finalReason;
     notification.rejectedAt = now;
     await notification.save();
+    invalidateSellerNotifCache();
 
     // Restore stock for items in this notification
     if (Array.isArray(notification.items)) {
@@ -874,6 +973,7 @@ export const updateSellerOrderStatus = async (req, res, next) => {
 
     notification.status = mappedNotificationStatus;
     await notification.save();
+    invalidateSellerNotifCache();
 
     if (notification.order) {
       await Order.findByIdAndUpdate(notification.order, {
@@ -1031,6 +1131,176 @@ export const processSellerSettlement = async (notificationId) => {
   } catch (err) {
     console.error(`[Settlement ERROR] Failed processing settlement for notification ${notificationId}:`, err);
     return null;
+  }
+};
+
+// @desc   Request Return on Delivered Order
+// @route  POST /api/orders/:id/return
+// @access Private/User
+export const requestOrderReturn = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reason, remarks } = req.body;
+
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid reason for the return request.' });
+    }
+
+    const isMongoId = mongoose.Types.ObjectId.isValid(id);
+    const order = await Order.findOne(
+      isMongoId 
+        ? { $or: [{ _id: id }, { orderId: id }], user: req.user.id }
+        : { orderId: id, user: req.user.id }
+    );
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found or unauthorized.' });
+    }
+
+    const currentStatus = order.orderStatus || order.status || '';
+    const isDelivered = ['Delivered', 'DELIVERED', 'Completed'].includes(currentStatus) || order.captainStatus === 'Delivered';
+    if (!isDelivered) {
+      return res.status(400).json({
+        success: false,
+        message: `Only delivered orders are eligible for return. Current status is "${currentStatus}".`,
+      });
+    }
+
+    if (order.returnStatus && ['Pending', 'Approved', 'Completed'].includes(order.returnStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `A return request has already been submitted for this order (Status: ${order.returnStatus}).`,
+      });
+    }
+
+    const formattedReason = String(reason).trim();
+    const cleanRemarks = remarks ? String(remarks).trim() : '';
+    const fullReasonText = cleanRemarks ? `${formattedReason} - ${cleanRemarks}` : formattedReason;
+
+    order.orderStatus = 'Return Requested';
+    order.returnStatus = 'Pending';
+    order.returnReason = fullReasonText;
+    order.returnedAt = new Date();
+    await order.save();
+
+    invalidateUserOrdersCache(req.user.id);
+
+    // Create RefundRequest record for Admin Financials / SuperAdmin Refund Management
+    const refundId = `REFUND-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
+    const refundReq = await RefundRequest.create({
+      refundId,
+      orderId: order.orderId,
+      order: order._id,
+      userId: req.user.id,
+      userName: order.shippingAddress?.fullName || req.user.name || 'Customer',
+      userPhone: order.shippingAddress?.phone || req.user.phone || '',
+      amount: order.grandTotal || 0,
+      reason: fullReasonText,
+      status: 'REQUESTED',
+      paymentMethod: order.paymentMethod || 'COD',
+      remarks: cleanRemarks,
+    }).catch(err => console.warn('[RefundRequest] Creation error:', err.message));
+
+    // Update Seller Notifications so seller dashboard shows return request
+    await SellerNotification.updateMany(
+      { order: order._id },
+      {
+        $set: {
+          status: 'RETURNED',
+          rejectionReason: `Customer Return Requested: ${fullReasonText}`,
+        }
+      }
+    ).catch(() => {});
+
+    res.status(200).json({
+      success: true,
+      message: 'Return request submitted successfully. Our team will review and process your return shortly.',
+      order,
+      refundRequest: refundReq || null,
+    });
+  } catch (error) {
+    console.error('[OrderController] Error requesting order return:', error);
+    next(error);
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Razorpay Payment Integration
+// ──────────────────────────────────────────────────────────────────────────────
+
+import Razorpay from 'razorpay';
+import crypto from 'crypto';
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_TRZdg2aAOYv4KK',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'Zu7lopLZWWZtA4T0R5Z2ORhU',
+});
+
+export const createRazorpayOrder = async (req, res, next) => {
+  try {
+    const { amount, orderId } = req.body;
+
+    if (!amount || !orderId) {
+      return res.status(400).json({ success: false, message: 'Amount and orderId are required' });
+    }
+
+    const options = {
+      amount: Math.round(amount),
+      currency: 'INR',
+      receipt: `order_${orderId}_${Date.now()}`,
+      payment_capture: 1,
+    };
+
+    const razorpayOrder = await razorpay.orders.create(options);
+
+    res.status(200).json({
+      success: true,
+      orderId: razorpayOrder.id,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
+    });
+  } catch (error) {
+    console.error('[Razorpay Create Order Error]', error);
+    res.status(500).json({ success: false, message: 'Failed to create payment order' });
+  }
+};
+
+export const verifyRazorpayPayment = async (req, res, next) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderId } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Payment details are missing' });
+    }
+
+    // Verify signature
+    const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'Zu7lopLZWWZtA4T0R5Z2ORhU');
+    hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+    const generated_signature = hmac.digest('hex');
+
+    if (generated_signature !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Payment verification failed' });
+    }
+
+    // Update order payment status
+    const order = await Order.findOne({
+      $or: [{ _id: orderId }, { orderId: orderId }]
+    });
+
+    if (order) {
+      order.paymentStatus = 'Paid';
+      order.paymentMethod = 'ONLINE';
+      await order.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Payment verified successfully',
+      orderId: order?._id,
+    });
+  } catch (error) {
+    console.error('[Razorpay Verify Payment Error]', error);
+    res.status(500).json({ success: false, message: 'Payment verification failed' });
   }
 };
 

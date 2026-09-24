@@ -139,7 +139,10 @@ const Products = () => {
       unitType: ap.unitType || (ap.unit ? ap.unit.split(' ')[1] : 'kg'),
       unit: ap.unit || '1 kg',
       minStockLimit: ap.minStockLimit !== undefined ? ap.minStockLimit : 10,
-      returnPolicy: ap.returnPolicy || '7 Days Returnable / Replacement'
+      returnPolicy: ap.returnPolicy || '7 Days Returnable / Replacement',
+      hasVariants: Boolean(ap.hasVariants || (Array.isArray(ap.variants) && ap.variants.length > 0)),
+      variantOptions: ap.variantOptions || [],
+      variants: ap.variants || []
     }));
 
     // Populate category dropdown from loaded products
@@ -644,6 +647,23 @@ const Products = () => {
             {/* Modal Scrollable Form Body */}
             <form onSubmit={handleSaveEditProduct} className="flex-1 overflow-y-auto p-6 space-y-4">
               
+              {editingProduct?.hasVariants && (
+                <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span>This product has <strong>{editingProduct.variants?.length || 0} variant combinations</strong> (sizes, colors, etc.).</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = editingProduct._id || editingProduct.id;
+                      setEditingProduct(null);
+                      navigate(`/seller/product/edit/${id}`);
+                    }}
+                    className="font-bold text-[#ff7526] hover:underline bg-transparent border-none cursor-pointer p-0 shrink-0 text-left sm:text-right"
+                  >
+                    Open Full Variant Editor &rarr;
+                  </button>
+                </div>
+              )}
+
               {/* Product Name */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">

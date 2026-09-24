@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 
-export const protect = (requiredRole) => {
+export const protect = (...requiredRoles) => {
   return async (req, res, next) => {
     let token;
 
@@ -15,17 +15,18 @@ export const protect = (requiredRole) => {
           process.env.JWT_SECRET || 'shippnex_secret'
         );
 
-        if (requiredRole) {
-          const isAllowed = Array.isArray(requiredRole)
-            ? requiredRole.includes(decoded.role)
-            : decoded.role === requiredRole;
+        if (requiredRoles && requiredRoles.length > 0) {
+          const roles = requiredRoles.flat().filter(Boolean);
+          if (roles.length > 0) {
+            const isAllowed = roles.includes(decoded.role);
 
-          if (!isAllowed) {
-            const roleStr = Array.isArray(requiredRole) ? requiredRole.join(' or ') : requiredRole;
-            return res.status(403).json({
-              success: false,
-              message: `Forbidden: Access restricted to ${roleStr}`,
-            });
+            if (!isAllowed) {
+              const roleStr = roles.join(' or ');
+              return res.status(403).json({
+                success: false,
+                message: `Forbidden: Access restricted to ${roleStr}`,
+              });
+            }
           }
         }
 

@@ -10,38 +10,55 @@ export const useTransport = () => {
   return context;
 };
 
+const DRAFT_STORAGE_KEY = 'shippnex_transport_draft';
+
+const defaultDraft = {
+  pickup: null,
+  stops: [],
+  drop: null,
+  goods: {
+    category: '',
+    customCategory: '',
+    weight: '',
+    packages: '',
+    instructions: '',
+  },
+  vehicle: null,
+  fareEstimate: null,
+};
+
 export const TransportProvider = ({ children }) => {
-  // Active booking draft (cleared after checkout)
-  const [activeBooking, setActiveBooking] = useState({
-    pickup: null, // string address (or object for Phase 2)
-    stops: [], // array of string addresses for intermediate stops
-    drop: null, // string address (or object)
-    goods: {
-      category: '',
-      weight: '',
-      packages: '',
-      instructions: ''
-    },
-    vehicle: null, // vehicle ID or object
-    fareEstimate: null, // To store the returned fare breakdown
+  // Active booking draft initialized from sessionStorage
+  const [activeBooking, setActiveBooking] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+      if (saved) {
+        return { ...defaultDraft, ...JSON.parse(saved) };
+      }
+    } catch (e) {
+      console.warn('Could not parse transport draft from storage:', e);
+    }
+    return defaultDraft;
   });
 
   const updateActiveBooking = (key, value) => {
-    setActiveBooking(prev => ({
-      ...prev,
-      [key]: value
-    }));
+    setActiveBooking((prev) => {
+      const updated = {
+        ...prev,
+        [key]: value,
+      };
+      try {
+        sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
   const clearActiveBooking = () => {
-    setActiveBooking({
-      pickup: null,
-      stops: [],
-      drop: null,
-      goods: { category: '', weight: '', packages: '', instructions: '' },
-      vehicle: null,
-      fareEstimate: null,
-    });
+    try {
+      sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch (e) {}
+    setActiveBooking(defaultDraft);
   };
 
   const value = {

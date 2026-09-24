@@ -42,6 +42,7 @@ const ProductDetails = () => {
   const [error, setError] = useState(null);
   const [reviewsData, setReviewsData] = useState(null);
   const [loadingReviews, setLoadingReviews] = useState(true);
+  const [selectedAttributes, setSelectedAttributes] = useState({});
 
   React.useEffect(() => {
     const fetchProductDetails = async () => {
@@ -50,6 +51,19 @@ const ProductDetails = () => {
         const res = await productService.getProductById(id);
         if (res && res.success && res.product) {
           setProduct(res.product);
+
+          // Initialize default selected attributes if product has variants
+          if (res.product.hasVariants && Array.isArray(res.product.variantOptions)) {
+            const initialAttrs = {};
+            res.product.variantOptions.forEach(opt => {
+              if (opt.name && opt.values && opt.values.length > 0) {
+                initialAttrs[opt.name.trim()] = opt.values[0];
+              }
+            });
+            setSelectedAttributes(initialAttrs);
+          }
+          // Fetch reviews using resolved product _id
+          fetchReviews(res.product._id || id);
         } else {
           setError('Product not found');
         }
@@ -61,11 +75,11 @@ const ProductDetails = () => {
       }
     };
     
-    const fetchReviews = async () => {
-      if (!id) return;
+    const fetchReviews = async (targetId = id) => {
+      if (!targetId) return;
       try {
         setLoadingReviews(true);
-        const res = await productReviewService.getProductReviews(id);
+        const res = await productReviewService.getProductReviews(targetId);
         if (res && res.success) {
           setReviewsData(res);
         }
@@ -77,8 +91,42 @@ const ProductDetails = () => {
     };
 
     fetchProductDetails();
-    fetchReviews();
   }, [id]);
+
+  // Find currently matched variant from selected attributes
+  const matchedVariant = React.useMemo(() => {
+    if (!product || !product.hasVariants || !Array.isArray(product.variants) || product.variants.length === 0) {
+      return null;
+    }
+
+    const found = product.variants.find(v => {
+      if (!v.attributes) return false;
+      return Object.entries(selectedAttributes).every(([attrName, attrVal]) => {
+        return v.attributes[attrName] === attrVal;
+      });
+    });
+
+    return found || product.variants.find(v => v.active !== false) || product.variants[0];
+  }, [product, selectedAttributes]);
+
+  // Sync active image with product mainImage and non-dummy variant images
+  React.useEffect(() => {
+    const isDummyImage = (url) => !url || url.includes('photo-1586201375761-83865001e31c');
+    const primaryImg = product?.mainImage || product?.image || (Array.isArray(product?.galleryImages) && product.galleryImages[0]);
+
+    if (matchedVariant && matchedVariant.image && !isDummyImage(matchedVariant.image)) {
+      setActiveImage(matchedVariant.image);
+    } else if (primaryImg) {
+      setActiveImage(primaryImg);
+    }
+  }, [matchedVariant, product]);
+
+  const handleSelectAttribute = (attrName, val) => {
+    setSelectedAttributes(prev => ({
+      ...prev,
+      [attrName.trim()]: val
+    }));
+  };
 
   const similarProducts = [
     { id: 2, name: 'Refined Sunflower Oil', brand: 'ShippNex Select', price: 699, originalPrice: 1118, discount: 38, image: oilGheeImg, rating: 4.6 },
@@ -105,9 +153,33 @@ const ProductDetails = () => {
     }
   };
 
+  const getProductToAdd = () => {
+    if (!product) return null;
+    if (matchedVariant) {
+      return {
+        ...product,
+        id: product._id || product.id,
+        productId: product._id || product.id,
+        salePrice: matchedVariant.price,
+        price: matchedVariant.price,
+        mrp: matchedVariant.originalPrice || matchedVariant.price,
+        originalPrice: matchedVariant.originalPrice || matchedVariant.price,
+        stock: matchedVariant.stock,
+        variation: matchedVariant.title,
+        variantTitle: matchedVariant.title,
+        variantSku: matchedVariant.sku,
+        sku: matchedVariant.sku || product.sku,
+        image: matchedVariant.image || product.mainImage || product.image,
+        selectedVariant: matchedVariant
+      };
+    }
+    return product;
+  };
+
   const handleAddToCart = async () => {
-    if (!product) return;
-    const res = await addToCart(product, quantity, { navigate, returnUrl: window.location.pathname });
+    const itemToAdd = getProductToAdd();
+    if (!itemToAdd) return;
+    const res = await addToCart(itemToAdd, quantity, { navigate, returnUrl: window.location.pathname });
     if (res && res.success) {
       setToastMessage(`${quantity} item${quantity > 1 ? 's' : ''} added to cart! 🛒`);
       setTimeout(() => setToastMessage(''), 2500);
@@ -115,8 +187,9 @@ const ProductDetails = () => {
   };
 
   const handleBuyNow = async () => {
-    if (!product) return;
-    const res = await addToCart(product, quantity, { isBuyNow: true, navigate, returnUrl: window.location.pathname });
+    const itemToAdd = getProductToAdd();
+    if (!itemToAdd) return;
+    const res = await addToCart(itemToAdd, quantity, { isBuyNow: true, navigate, returnUrl: window.location.pathname });
     if (res && res.success) {
       navigate('/checkout');
     }
@@ -147,11 +220,14 @@ const ProductDetails = () => {
     );
   }
 
-  const currentPrice = product.salePrice || product.price || 0;
-  const originalPrice = product.mrp || product.originalPrice || 0;
+  const currentPrice = matchedVariant ? Number(matchedVariant.price || 0) : Number(product.salePrice || product.price || 0);
+  const originalPrice = matchedVariant ? Number(matchedVariant.originalPrice || matchedVariant.price || 0) : Number(product.mrp || product.originalPrice || 0);
   const hasDiscount = originalPrice > currentPrice;
   const discountCalc = hasDiscount ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0;
   const savingsAmount = hasDiscount ? (originalPrice - currentPrice) : 0;
+  const isOutOfStock = matchedVariant 
+    ? (matchedVariant.stock <= 0 || matchedVariant.active === false) 
+    : (product.stock !== undefined && product.stock <= 0);
 
   return (
     <div className="min-h-[100dvh] md:min-h-screen bg-white font-sans text-slate-800 relative w-full max-w-[480px] md:max-w-7xl mx-auto shadow-[0_0_25px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col pb-24 md:pb-12 md:px-6 md:pt-4 overflow-x-hidden">
@@ -196,12 +272,12 @@ const ProductDetails = () => {
         {/* Full Edge-to-Edge Image Container */}
         <div className="w-full h-[320px] sm:h-[360px] md:h-[420px] lg:h-[480px] relative overflow-hidden bg-slate-100">
           <img 
-            src={getImageUrl(activeImage || product.image || product.mainImage)} 
+            src={getImageUrl(activeImage || product.mainImage || product.image || (Array.isArray(product.galleryImages) && product.galleryImages[0]))} 
             alt={product.name} 
             className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" 
             onError={(e) => {
               e.target.onerror = null;
-              e.target.src = grainsImg;
+              e.target.src = product.mainImage || grainsImg;
             }}
           />
         </div>
@@ -209,10 +285,10 @@ const ProductDetails = () => {
         {/* Thumbnail Selector Row */}
         <div className="flex justify-center items-center gap-2 py-2.5 px-4 bg-white border-t border-slate-100">
           {[
-            product.image || product.mainImage, 
+            product.mainImage || product.image, 
             ...(product.galleryImages || [])
-          ].filter(Boolean).slice(0, 4).map((imgUrl, idx) => {
-            const isSelected = (activeImage || product.image || product.mainImage) === imgUrl;
+          ].filter(Boolean).filter((img, i, arr) => arr.indexOf(img) === i).slice(0, 5).map((imgUrl, idx) => {
+            const isSelected = (activeImage || product.mainImage || product.image) === imgUrl;
             return (
               <button 
                 key={idx}
@@ -281,6 +357,69 @@ const ProductDetails = () => {
           <span className="text-[10px] text-slate-400">Inclusive of all taxes</span>
         </div>
 
+        {/* Dynamic Product Variant Attribute Selectors */}
+        {product.hasVariants && Array.isArray(product.variantOptions) && product.variantOptions.length > 0 && (
+          <div className="flex flex-col gap-3 p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200/80 my-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#ff5500]"></span>
+                Available Options:
+              </span>
+              {matchedVariant && (
+                <span className="text-[11px] font-mono font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  {matchedVariant.title}
+                </span>
+              )}
+            </div>
+
+            {product.variantOptions.map((opt, oIdx) => (
+              <div key={oIdx} className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700">{opt.name}:</span>
+                  <span className="font-bold text-[#ff5500] font-mono text-[11px]">
+                    {selectedAttributes[opt.name.trim()] || opt.values?.[0] || ''}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {opt.values && opt.values.map((val, vIdx) => {
+                    const isSelected = (selectedAttributes[opt.name.trim()] || opt.values[0]) === val;
+                    return (
+                      <button
+                        key={vIdx}
+                        type="button"
+                        onClick={() => handleSelectAttribute(opt.name, val)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer active:scale-95 ${
+                          isSelected
+                            ? 'bg-[#ff5500] text-white border-[#ff5500] shadow-xs scale-102 ring-2 ring-[#ff5500]/20'
+                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100/70'
+                        }`}
+                      >
+                        {val}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {/* Stock Availability indicator for selected variant */}
+            <div className="pt-1.5 border-t border-slate-200/60 flex items-center justify-between text-xs">
+              <span className="text-slate-500 font-medium">Availability:</span>
+              {isOutOfStock ? (
+                <span className="font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                  Out of Stock
+                </span>
+              ) : (
+                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                  In Stock {matchedVariant?.stock !== undefined ? `(${matchedVariant.stock} left)` : ''}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Desktop Inlined Action Box */}
         <div className="hidden md:flex flex-col gap-3.5 p-4 bg-slate-50 border border-slate-200/80 rounded-2xl my-2">
           <div className="flex items-center gap-4">
@@ -301,41 +440,47 @@ const ProductDetails = () => {
             </div>
 
             <div className="flex-1 flex items-center gap-3">
-              {product && !isInCart(product.id || product._id) ? (
+              {isOutOfStock ? (
                 <button 
-                  onClick={handleAddToCart}
-                  className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold cursor-pointer border-none flex items-center justify-center gap-2 whitespace-nowrap active:scale-98 transition-all shadow-md"
+                  disabled
+                  className="flex-1 h-12 bg-slate-200 text-slate-400 rounded-xl text-sm font-bold cursor-not-allowed border-none flex items-center justify-center gap-2"
                 >
-                  <ShoppingCart size={18} className="shrink-0" />
-                  <span>Add to Cart</span>
+                  <span>Out of Stock</span>
                 </button>
               ) : (
-                <button 
-                  onClick={async () => {
-                    if (product) {
-                      await removeFromCart(product.id || product._id);
-                      setToastMessage('Item removed from cart');
-                      setTimeout(() => setToastMessage(''), 2000);
-                    }
-                  }}
-                  className="flex-1 h-12 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold cursor-pointer border-none flex items-center justify-center gap-2 whitespace-nowrap active:scale-98 transition-all shadow-md"
-                >
-                  <Trash2 size={16} className="shrink-0" />
-                  <span>Remove from Cart</span>
-                </button>
-              )}
+                <>
+                  {product && !isInCart(product.id || product._id) ? (
+                    <button 
+                      onClick={handleAddToCart}
+                      className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold cursor-pointer border-none flex items-center justify-center gap-2 whitespace-nowrap active:scale-98 transition-all shadow-md"
+                    >
+                      <ShoppingCart size={18} className="shrink-0" />
+                      <span>Add to Cart</span>
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={async () => {
+                        if (product) {
+                          await removeFromCart(product.id || product._id);
+                          setToastMessage('Item removed from cart');
+                          setTimeout(() => setToastMessage(''), 2000);
+                        }
+                      }}
+                      className="flex-1 h-12 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold cursor-pointer border-none flex items-center justify-center gap-2 whitespace-nowrap active:scale-98 transition-all shadow-md"
+                    >
+                      <Trash2 size={16} className="shrink-0" />
+                      <span>Remove from Cart</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => {
-                  if (product && !isInCart(product.id || product._id)) {
-                    addToCart(product, quantity);
-                  }
-                  navigate('/checkout');
-                }}
-                className="flex-1 h-12 bg-[#ff5500] hover:bg-[#e04a00] text-white rounded-xl text-sm font-bold cursor-pointer border-none flex items-center justify-center gap-2 whitespace-nowrap active:scale-98 transition-all shadow-md"
-              >
-                <span>Buy Now</span>
-              </button>
+                  <button
+                    onClick={handleBuyNow}
+                    className="flex-1 h-12 bg-[#ff5500] hover:bg-[#e04a00] text-white rounded-xl text-sm font-bold cursor-pointer border-none flex items-center justify-center gap-2 whitespace-nowrap active:scale-98 transition-all shadow-md"
+                  >
+                    <span>Buy Now</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -670,36 +815,47 @@ const ProductDetails = () => {
 
         {/* Action Buttons */}
         <div className="flex-1 flex items-center gap-2 min-w-0">
-          {product && !isInCart(product.id || product._id) ? (
+          {isOutOfStock ? (
             <button 
-              onClick={handleAddToCart}
-              className="flex-1 h-11 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-[13px] font-bold cursor-pointer border-none flex items-center justify-center gap-1.5 whitespace-nowrap px-2.5 active:scale-98 transition-all shadow-xs"
+              disabled
+              className="flex-1 h-11 bg-slate-200 text-slate-400 rounded-xl text-xs sm:text-[13px] font-bold cursor-not-allowed border-none flex items-center justify-center gap-1.5"
             >
-              <ShoppingCart size={16} className="shrink-0" />
-              <span>Add to Cart</span>
+              <span>Out of Stock</span>
             </button>
           ) : (
-            <button 
-              onClick={async () => {
-                if (product) {
-                  await removeFromCart(product.id || product._id);
-                  setToastMessage('Item removed from cart');
-                  setTimeout(() => setToastMessage(''), 2000);
-                }
-              }}
-              className="flex-1 h-11 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs sm:text-[13px] font-bold cursor-pointer border-none flex items-center justify-center gap-1.5 whitespace-nowrap px-2 active:scale-98 transition-all shadow-xs"
-            >
-              <Trash2 size={15} className="shrink-0" />
-              <span>Remove</span>
-            </button>
-          )}
+            <>
+              {product && !isInCart(product.id || product._id) ? (
+                <button 
+                  onClick={handleAddToCart}
+                  className="flex-1 h-11 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-[13px] font-bold cursor-pointer border-none flex items-center justify-center gap-1.5 whitespace-nowrap px-2.5 active:scale-98 transition-all shadow-xs"
+                >
+                  <ShoppingCart size={16} className="shrink-0" />
+                  <span>Add to Cart</span>
+                </button>
+              ) : (
+                <button 
+                  onClick={async () => {
+                    if (product) {
+                      await removeFromCart(product.id || product._id);
+                      setToastMessage('Item removed from cart');
+                      setTimeout(() => setToastMessage(''), 2000);
+                    }
+                  }}
+                  className="flex-1 h-11 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs sm:text-[13px] font-bold cursor-pointer border-none flex items-center justify-center gap-1.5 whitespace-nowrap px-2 active:scale-98 transition-all shadow-xs"
+                >
+                  <Trash2 size={15} className="shrink-0" />
+                  <span>Remove</span>
+                </button>
+              )}
 
-          <button 
-            onClick={handleBuyNow}
-            className="flex-1 h-11 bg-[#ff5500] hover:bg-[#e04a00] text-white rounded-xl text-xs sm:text-[13px] font-bold cursor-pointer border-none flex items-center justify-center gap-1.5 whitespace-nowrap px-2.5 active:scale-98 transition-all shadow-xs"
-          >
-            <span>Buy Now</span>
-          </button>
+              <button 
+                onClick={handleBuyNow}
+                className="flex-1 h-11 bg-[#ff5500] hover:bg-[#e04a00] text-white rounded-xl text-xs sm:text-[13px] font-bold cursor-pointer border-none flex items-center justify-center gap-1.5 whitespace-nowrap px-2.5 active:scale-98 transition-all shadow-xs"
+              >
+                <span>Buy Now</span>
+              </button>
+            </>
+          )}
         </div>
 
       </div>

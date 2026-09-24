@@ -1,10 +1,13 @@
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 import TransportBooking from '../models/TransportBooking.model.js';
 import VehicleType from '../models/VehicleType.model.js';
 import Captain from '../models/Captain.model.js';
 import Rating from '../models/Rating.model.js';
 import CaptainNotification from '../models/CaptainNotification.model.js';
 import CaptainTransaction from '../models/CaptainTransaction.model.js';
+import CommissionSettings from '../models/CommissionSettings.model.js';
+import { razorpayInstance } from '../config/razorpay.js';
 import { haversineDistance, estimateDuration } from '../utils/haversine.js';
 import { calculateFare } from '../utils/fareCalculator.js';
 import { generateBookingId } from '../utils/generateBookingId.js';
@@ -23,11 +26,17 @@ const ACTIVE_STATUSES = [
   'CAPTAIN_REACHED_DROP',
 ];
 
+// Statuses of active rides in progress with an assigned driver
+const IN_PROGRESS_STATUSES = [
+  'CAPTAIN_ASSIGNED',
+  'CAPTAIN_ARRIVING',
+  'CAPTAIN_REACHED_PICKUP',
+  'RIDE_STARTED',
+  'CAPTAIN_REACHED_DROP',
+];
+
 // Statuses that are terminal (cannot be cancelled or modified by user)
 const TERMINAL_STATUSES = ['RIDE_COMPLETED', 'CANCELLED'];
-
-// Captain earnings percentage of the total fare
-const CAPTAIN_EARNINGS_RATE = 0.8; // 80% of total fare goes to captain
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -150,9 +159,10 @@ const dispatchTransportRequests = async (booking) => {
       return;
     }
 
-    const captainEarnings = Math.round(
-      booking.fareBreakdown.totalFare * CAPTAIN_EARNINGS_RATE * 100
-    ) / 100;
+    const captainCommRate = booking.captainCommissionRate !== undefined ? booking.captainCommissionRate : 5;
+    const captainEarnings = booking.captainEarnings > 0
+      ? booking.captainEarnings
+      : Math.round((booking.fareBreakdown.totalFare * ((100 - captainCommRate) / 100)) * 100) / 100;
 
     const now = new Date();
     const requests = eligibleCaptains.map((captain) => ({
@@ -203,20 +213,23 @@ export const getFareEstimate = async (req, res, next) => {
   try {
     const { pickupLocation, dropLocation, vehicleTypeId } = req.body;
 
-    // ── Validation ────────────────────────────────────────────────────
-    if (!pickupLocation || !pickupLocation.address) {
-      return res.status(400).json({ success: false, message: 'Pickup location address is required' });
-    }
-    if (!dropLocation || !dropLocation.address) {
-      return res.status(400).json({ success: false, message: 'Drop location address is required' });
-    }
-    if (pickupLocation.address.trim() === dropLocation.address.trim()) {
-      return res.status(400).json({ success: false, message: 'Pickup and drop locations cannot be the same' });
-    }
+    const pickupAddr = (
+      (typeof pickupLocation === 'string' ? pickupLocation : pickupLocation?.address || pickupLocation?.formattedAddress || pickupLocation?.name || '')
+    ).trim();
+
+    const dropAddr = (
+      (typeof dropLocation === 'string' ? dropLocation : dropLocation?.address || dropLocation?.formattedAddress || dropLocation?.name || '')
+    ).trim();
+
+    const pickupLat = pickupLocation?.lat ?? pickupLocation?.latitude ?? null;
+    const pickupLng = pickupLocation?.lng ?? pickupLocation?.longitude ?? null;
+    const dropLat = dropLocation?.lat ?? dropLocation?.latitude ?? null;
+    const dropLng = dropLocation?.lng ?? dropLocation?.longitude ?? null;
+
     if (!vehicleTypeId || !mongoose.Types.ObjectId.isValid(vehicleTypeId)) {
       return res.status(400).json({ success: false, message: 'A valid vehicle type ID is required' });
     }
-    if (!isValidCoord(pickupLocation.lat, pickupLocation.lng) || !isValidCoord(dropLocation.lat, dropLocation.lng)) {
+    if (!isValidCoord(pickupLat, pickupLng) || !isValidCoord(dropLat, dropLng)) {
       return res.status(400).json({ success: false, message: 'Invalid coordinate values. Latitude must be -90 to 90, longitude -180 to 180' });
     }
 
@@ -230,15 +243,15 @@ export const getFareEstimate = async (req, res, next) => {
     let distanceKm = null;
     let estimatedDurationMin = null;
 
-    const hasPickupCoords = pickupLocation.lat != null && pickupLocation.lng != null;
-    const hasDropCoords = dropLocation.lat != null && dropLocation.lng != null;
+    const hasPickupCoords = pickupLat != null && pickupLng != null;
+    const hasDropCoords = dropLat != null && dropLng != null;
 
     if (hasPickupCoords && hasDropCoords) {
       distanceKm = haversineDistance(
-        parseFloat(pickupLocation.lat),
-        parseFloat(pickupLocation.lng),
-        parseFloat(dropLocation.lat),
-        parseFloat(dropLocation.lng)
+        parseFloat(pickupLat),
+        parseFloat(pickupLng),
+        parseFloat(dropLat),
+        parseFloat(dropLng)
       );
       estimatedDurationMin = estimateDuration(distanceKm);
     } else {
@@ -267,6 +280,387 @@ export const getFareEstimate = async (req, res, next) => {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
+// POST /api/transport/bookings/create-payment-order
+// Auth: user required
+// Create a Razorpay order for online transport booking payment
+// ──────────────────────────────────────────────────────────────────────────────
+export const createTransportPaymentOrder = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const {
+      pickupLocation,
+      dropLocation,
+      vehicleTypeId,
+      goods,
+    } = req.body;
+
+    const pickupAddr = (
+      typeof pickupLocation === 'string'
+        ? pickupLocation
+        : pickupLocation?.address || pickupLocation?.formattedAddress || pickupLocation?.name || ''
+    ).trim();
+
+    const dropAddr = (
+      typeof dropLocation === 'string'
+        ? dropLocation
+        : dropLocation?.address || dropLocation?.formattedAddress || dropLocation?.name || ''
+    ).trim();
+
+    const pickupLat = pickupLocation?.lat ?? pickupLocation?.latitude ?? null;
+    const pickupLng = pickupLocation?.lng ?? pickupLocation?.longitude ?? null;
+    const dropLat = dropLocation?.lat ?? dropLocation?.latitude ?? null;
+    const dropLng = dropLocation?.lng ?? dropLocation?.longitude ?? null;
+
+    if (!pickupAddr) {
+      return res.status(400).json({ success: false, message: 'Pickup location address is required' });
+    }
+    if (!dropAddr) {
+      return res.status(400).json({ success: false, message: 'Drop location address is required' });
+    }
+    if (pickupAddr.toLowerCase() === dropAddr.toLowerCase()) {
+      return res.status(400).json({ success: false, message: 'Pickup and drop locations cannot be the same' });
+    }
+    if (!vehicleTypeId || !mongoose.Types.ObjectId.isValid(vehicleTypeId)) {
+      return res.status(400).json({ success: false, message: 'A valid vehicle type ID is required' });
+    }
+    if (!goods || !goods.category || !goods.weightKg || !goods.packages) {
+      return res.status(400).json({ success: false, message: 'Goods details are required' });
+    }
+
+    // ── Prevent duplicate in-progress rides with assigned drivers ─────
+    const existingInProgress = await TransportBooking.findOne({
+      user: userId,
+      status: { $in: IN_PROGRESS_STATUSES },
+    });
+    if (existingInProgress) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have an active ride in progress. Please wait for completion before placing a new booking.',
+        activeBookingId: existingInProgress.bookingId,
+      });
+    }
+
+    // Auto-cancel previous unassigned searches so user is never blocked
+    await TransportBooking.updateMany(
+      { user: userId, status: 'SEARCHING_CAPTAIN' },
+      {
+        $set: {
+          status: 'CANCELLED',
+          cancelledBy: 'user',
+          cancellationReason: 'Superseded by new booking',
+          cancelledAt: new Date(),
+        },
+      }
+    );
+
+    // ── Fetch & validate vehicle ──────────────────────────────────────
+    const vehicle = await VehicleType.findOne({ _id: vehicleTypeId, isActive: true });
+    if (!vehicle) {
+      return res.status(404).json({ success: false, message: 'Selected vehicle type is not available' });
+    }
+
+    // ── Recalculate distance & fare server-side ───────────────────────
+    const hasPickupCoords = pickupLat != null && pickupLng != null;
+    const hasDropCoords = dropLat != null && dropLng != null;
+
+    let distanceKm = 5.0;
+    let estimatedDurationMin = estimateDuration(5.0);
+
+    if (hasPickupCoords && hasDropCoords) {
+      distanceKm = haversineDistance(
+        parseFloat(pickupLat),
+        parseFloat(pickupLng),
+        parseFloat(dropLat),
+        parseFloat(dropLng)
+      );
+      estimatedDurationMin = estimateDuration(distanceKm);
+    }
+
+    const fareBreakdown = calculateFare(vehicle, distanceKm);
+    const amountInPaise = Math.round(fareBreakdown.totalFare * 100);
+
+    if (amountInPaise <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid booking fare calculation' });
+    }
+
+    // ── Create Razorpay Order ─────────────────────────────────────────
+    const orderOptions = {
+      amount: amountInPaise,
+      currency: 'INR',
+      receipt: `trb_${Date.now().toString().slice(-8)}`,
+      notes: {
+        userId: userId.toString(),
+        vehicleTypeId: vehicleTypeId.toString(),
+        category: goods.category,
+      },
+    };
+
+    const razorpayOrder = await razorpayInstance.orders.create(orderOptions);
+
+    res.status(200).json({
+      success: true,
+      orderId: razorpayOrder.id,
+      amount: fareBreakdown.totalFare,
+      amountPaise: amountInPaise,
+      currency: 'INR',
+      keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_TRZdg2aAOYv4KK',
+      distanceKm,
+      estimatedDurationMin,
+      fareBreakdown,
+    });
+  } catch (error) {
+    console.error('[TransportRazorpayOrder ERROR]', error);
+    next(error);
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// POST /api/transport/bookings/verify-payment
+// Auth: user required
+// Verify Razorpay payment and confirm transport booking
+// ──────────────────────────────────────────────────────────────────────────────
+export const verifyTransportPayment = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const {
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
+      pickupLocation,
+      dropLocation,
+      stops = [],
+      goods,
+      vehicleTypeId,
+      paymentMethod = 'UPI',
+    } = req.body;
+
+    // ── Validate payment tokens ───────────────────────────────────────
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment verification tokens (razorpayOrderId, razorpayPaymentId, razorpaySignature) are required',
+      });
+    }
+
+    // ── Cryptographic Signature Verification ──────────────────────────
+    const generatedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+      .digest('hex');
+
+    if (generatedSignature !== razorpaySignature) {
+      console.error('[TransportRazorpayVerify] Signature mismatch for order:', razorpayOrderId);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment signature. Verification failed.',
+      });
+    }
+
+    // ── Idempotency Check: if booking was already created for this order ─
+    const existingOrderBooking = await TransportBooking.findOne({ razorpayOrderId });
+    if (existingOrderBooking) {
+      return res.status(200).json({
+        success: true,
+        message: 'Payment already verified and booking confirmed',
+        booking: existingOrderBooking,
+      });
+    }
+
+    // ── Prevent duplicate in-progress rides with assigned drivers ─────
+    const existingInProgress = await TransportBooking.findOne({
+      user: userId,
+      status: { $in: IN_PROGRESS_STATUSES },
+    });
+    if (existingInProgress) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have an active ride in progress. Please wait for completion before placing a new booking.',
+        activeBookingId: existingInProgress.bookingId,
+      });
+    }
+
+    // Auto-cancel previous unassigned searches
+    await TransportBooking.updateMany(
+      { user: userId, status: 'SEARCHING_CAPTAIN' },
+      {
+        $set: {
+          status: 'CANCELLED',
+          cancelledBy: 'user',
+          cancellationReason: 'Superseded by new booking',
+          cancelledAt: new Date(),
+        },
+      }
+    );
+
+    // ── Fetch & validate vehicle ──────────────────────────────────────
+    const vehicle = await VehicleType.findOne({ _id: vehicleTypeId, isActive: true });
+    if (!vehicle) {
+      return res.status(404).json({ success: false, message: 'Selected vehicle type is not available' });
+    }
+
+    const pickupAddr = (
+      typeof pickupLocation === 'string'
+        ? pickupLocation
+        : pickupLocation?.address || pickupLocation?.formattedAddress || pickupLocation?.name || ''
+    ).trim();
+
+    const dropAddr = (
+      typeof dropLocation === 'string'
+        ? dropLocation
+        : dropLocation?.address || dropLocation?.formattedAddress || dropLocation?.name || ''
+    ).trim();
+
+    const pickupLat = pickupLocation?.lat ?? pickupLocation?.latitude ?? null;
+    const pickupLng = pickupLocation?.lng ?? pickupLocation?.longitude ?? null;
+    const dropLat = dropLocation?.lat ?? dropLocation?.latitude ?? null;
+    const dropLng = dropLocation?.lng ?? dropLocation?.longitude ?? null;
+
+    // ── Recalculate distance & fare ───────────────────────────────────
+    const hasPickupCoords = pickupLat != null && pickupLng != null;
+    const hasDropCoords = dropLat != null && dropLng != null;
+
+    let distanceKm = 5.0;
+    let estimatedDurationMin = estimateDuration(5.0);
+
+    if (hasPickupCoords && hasDropCoords) {
+      distanceKm = haversineDistance(
+        parseFloat(pickupLat),
+        parseFloat(pickupLng),
+        parseFloat(dropLat),
+        parseFloat(dropLng)
+      );
+      estimatedDurationMin = estimateDuration(distanceKm);
+    }
+
+    const fareBreakdown = calculateFare(vehicle, distanceKm);
+
+    const vehicleSnapshot = {
+      name: vehicle.name,
+      slug: vehicle.slug,
+      capacityKg: vehicle.capacityKg,
+      baseFare: vehicle.baseFare,
+      perKmFare: vehicle.perKmFare,
+      minimumFare: vehicle.minimumFare,
+      platformFee: vehicle.platformFee,
+    };
+
+    const sanitizedStops = (stops || [])
+      .filter((s) => s && (s.address || s.formattedAddress || typeof s === 'string'))
+      .map((s) => ({
+        address: (typeof s === 'string' ? s : s.address || s.formattedAddress || '').trim(),
+        city: s.city || '',
+        lat: s.lat != null ? parseFloat(s.lat) : (s.latitude != null ? parseFloat(s.latitude) : null),
+        lng: s.lng != null ? parseFloat(s.lng) : (s.longitude != null ? parseFloat(s.longitude) : null),
+      }));
+
+    const bookingId = generateBookingId();
+    const now = new Date();
+
+    // Fetch dynamic active captain commission rate
+    let captainCommRate = 5;
+    try {
+      const commSettings = await CommissionSettings.getOrCreateActiveSettings();
+      if (commSettings) {
+        captainCommRate = Number(commSettings.captainCommission !== undefined ? commSettings.captainCommission : 5);
+      }
+    } catch (e) {}
+
+    const captainCommAmount = Math.round(((fareBreakdown.totalFare * captainCommRate) / 100) * 100) / 100;
+    const captainEarnings = Math.max(0, Math.round((fareBreakdown.totalFare - captainCommAmount) * 100) / 100);
+
+    const booking = await TransportBooking.create({
+      bookingId,
+      user: userId,
+      pickupLocation: {
+        address: pickupAddr,
+        landmark: pickupLocation.landmark || '',
+        city: pickupLocation.city || '',
+        state: pickupLocation.state || '',
+        pincode: pickupLocation.pincode || '',
+        lat: hasPickupCoords ? parseFloat(pickupLat) : null,
+        lng: hasPickupCoords ? parseFloat(pickupLng) : null,
+      },
+      dropLocation: {
+        address: dropAddr,
+        landmark: dropLocation.landmark || '',
+        city: dropLocation.city || '',
+        state: dropLocation.state || '',
+        pincode: dropLocation.pincode || '',
+        lat: hasDropCoords ? parseFloat(dropLat) : null,
+        lng: hasDropCoords ? parseFloat(dropLng) : null,
+      },
+      stops: sanitizedStops,
+      distanceKm,
+      estimatedDurationMin,
+      goods: {
+        category: (goods.category === 'Other' && goods.customCategory ? goods.customCategory : goods.category).trim(),
+        customCategory: goods.customCategory?.trim() || '',
+        weightKg: parseFloat(goods.weightKg),
+        packages: parseInt(goods.packages),
+        instructions: goods.instructions || '',
+      },
+      vehicleTypeId: vehicle._id,
+      vehicleSnapshot,
+      fareBreakdown,
+      paymentMethod: paymentMethod || 'UPI',
+      paymentStatus: 'Paid',
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
+      paidAt: now,
+      captainCommissionRate: captainCommRate,
+      captainCommissionAmount: captainCommAmount,
+      captainEarnings,
+      captainEarning: captainEarnings,
+      status: 'SEARCHING_CAPTAIN',
+      statusHistory: [
+        {
+          status: 'SEARCHING_CAPTAIN',
+          changedBy: 'system',
+          changedById: null,
+          reason: `Booking created via Razorpay payment (${razorpayPaymentId})`,
+          timestamp: now,
+        },
+      ],
+    });
+
+    console.log(`[TransportRazorpayVerify] Success: ${bookingId} verified & created for user ${userId}. Fare: ₹${fareBreakdown.totalFare}, CaptainComm: ${captainCommRate}%`);
+
+    // ── Dispatch requests to eligible captains ────────────────────────
+    dispatchTransportRequests(booking).catch((err) =>
+      console.error(`[TransportDispatch ASYNC ERROR] ${booking.bookingId}:`, err.message)
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Payment verified and booking created successfully. Searching for nearby captains...',
+      booking: {
+        _id: booking._id,
+        bookingId: booking.bookingId,
+        status: 'SEARCHING_CAPTAIN',
+        distanceKm: booking.distanceKm,
+        estimatedDurationMin: booking.estimatedDurationMin,
+        fareBreakdown: booking.fareBreakdown,
+        paymentMethod: booking.paymentMethod,
+        paymentStatus: booking.paymentStatus,
+        razorpayPaymentId: booking.razorpayPaymentId,
+        pickupLocation: booking.pickupLocation,
+        dropLocation: booking.dropLocation,
+        stops: booking.stops,
+        goods: booking.goods,
+        vehicleSnapshot: booking.vehicleSnapshot,
+        captainId: null,
+        captainAssignedAt: null,
+        createdAt: booking.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error('[TransportRazorpayVerify ERROR]', error);
+    next(error);
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
 // POST /api/transport/bookings
 // Auth: user required
 // Create a new transport booking — fare is always recalculated server-side
@@ -283,14 +677,31 @@ export const createBooking = async (req, res, next) => {
       paymentMethod = 'CASH',
     } = req.body;
 
+    const pickupAddr = (
+      typeof pickupLocation === 'string'
+        ? pickupLocation
+        : pickupLocation?.address || pickupLocation?.formattedAddress || pickupLocation?.name || ''
+    ).trim();
+
+    const dropAddr = (
+      typeof dropLocation === 'string'
+        ? dropLocation
+        : dropLocation?.address || dropLocation?.formattedAddress || dropLocation?.name || ''
+    ).trim();
+
+    const pickupLat = pickupLocation?.lat ?? pickupLocation?.latitude ?? null;
+    const pickupLng = pickupLocation?.lng ?? pickupLocation?.longitude ?? null;
+    const dropLat = dropLocation?.lat ?? dropLocation?.latitude ?? null;
+    const dropLng = dropLocation?.lng ?? dropLocation?.longitude ?? null;
+
     // ── Validation ────────────────────────────────────────────────────
-    if (!pickupLocation || !pickupLocation.address?.trim()) {
+    if (!pickupAddr) {
       return res.status(400).json({ success: false, message: 'Pickup location address is required' });
     }
-    if (!dropLocation || !dropLocation.address?.trim()) {
+    if (!dropAddr) {
       return res.status(400).json({ success: false, message: 'Drop location address is required' });
     }
-    if (pickupLocation.address.trim() === dropLocation.address.trim()) {
+    if (pickupAddr.toLowerCase() === dropAddr.toLowerCase()) {
       return res.status(400).json({ success: false, message: 'Pickup and drop locations cannot be the same' });
     }
     if (!vehicleTypeId || !mongoose.Types.ObjectId.isValid(vehicleTypeId)) {
@@ -302,8 +713,8 @@ export const createBooking = async (req, res, next) => {
     if (!goods || !goods.category || !goods.weightKg || !goods.packages) {
       return res.status(400).json({ success: false, message: 'Goods details (category, weight, packages) are required' });
     }
-    if (!['Furniture', 'Electronics', 'Groceries', 'Textiles', 'Hardware', 'Other'].includes(goods.category)) {
-      return res.status(400).json({ success: false, message: 'Invalid goods category' });
+    if (typeof goods.category !== 'string' || !goods.category.trim()) {
+      return res.status(400).json({ success: false, message: 'Valid goods category is required' });
     }
     if (parseFloat(goods.weightKg) <= 0) {
       return res.status(400).json({ success: false, message: 'Goods weight must be greater than 0' });
@@ -311,25 +722,38 @@ export const createBooking = async (req, res, next) => {
     if (parseInt(goods.packages) < 1) {
       return res.status(400).json({ success: false, message: 'Number of packages must be at least 1' });
     }
-    if (!isValidCoord(pickupLocation.lat, pickupLocation.lng) || !isValidCoord(dropLocation.lat, dropLocation.lng)) {
+    if (!isValidCoord(pickupLat, pickupLng) || !isValidCoord(dropLat, dropLng)) {
       return res.status(400).json({ success: false, message: 'Invalid coordinate values provided' });
     }
     if (stops.length > 3) {
       return res.status(400).json({ success: false, message: 'Maximum 3 intermediate stops are allowed' });
     }
 
-    // ── Prevent duplicate active bookings ─────────────────────────────
-    const existingActive = await TransportBooking.findOne({
+    // ── Prevent duplicate in-progress rides with assigned drivers ─────
+    const existingInProgress = await TransportBooking.findOne({
       user: userId,
-      status: { $in: ACTIVE_STATUSES },
+      status: { $in: IN_PROGRESS_STATUSES },
     });
-    if (existingActive) {
+    if (existingInProgress) {
       return res.status(400).json({
         success: false,
-        message: 'You already have an active transport booking. Please complete or cancel it before creating a new one.',
-        activeBookingId: existingActive.bookingId,
+        message: 'You have an active ride in progress. Please wait for completion before placing a new booking.',
+        activeBookingId: existingInProgress.bookingId,
       });
     }
+
+    // Auto-cancel previous unassigned searches
+    await TransportBooking.updateMany(
+      { user: userId, status: 'SEARCHING_CAPTAIN' },
+      {
+        $set: {
+          status: 'CANCELLED',
+          cancelledBy: 'user',
+          cancellationReason: 'Superseded by new booking',
+          cancelledAt: new Date(),
+        },
+      }
+    );
 
     // ── Fetch & validate vehicle ──────────────────────────────────────
     const vehicle = await VehicleType.findOne({ _id: vehicleTypeId, isActive: true });
@@ -382,6 +806,18 @@ export const createBooking = async (req, res, next) => {
     const bookingId = generateBookingId();
     const now = new Date();
 
+    // Fetch dynamic active captain commission rate
+    let captainCommRate = 5;
+    try {
+      const commSettings = await CommissionSettings.getOrCreateActiveSettings();
+      if (commSettings) {
+        captainCommRate = Number(commSettings.captainCommission !== undefined ? commSettings.captainCommission : 5);
+      }
+    } catch (e) {}
+
+    const captainCommAmount = Math.round(((fareBreakdown.totalFare * captainCommRate) / 100) * 100) / 100;
+    const captainEarnings = Math.max(0, Math.round((fareBreakdown.totalFare - captainCommAmount) * 100) / 100);
+
     const booking = await TransportBooking.create({
       bookingId,
       user: userId,
@@ -407,7 +843,8 @@ export const createBooking = async (req, res, next) => {
       distanceKm,
       estimatedDurationMin,
       goods: {
-        category: goods.category,
+        category: (goods.category === 'Other' && goods.customCategory ? goods.customCategory : goods.category).trim(),
+        customCategory: goods.customCategory?.trim() || '',
         weightKg: parseFloat(goods.weightKg),
         packages: parseInt(goods.packages),
         instructions: goods.instructions || '',
@@ -417,6 +854,10 @@ export const createBooking = async (req, res, next) => {
       fareBreakdown,
       paymentMethod,
       paymentStatus: 'Pending',
+      captainCommissionRate: captainCommRate,
+      captainCommissionAmount: captainCommAmount,
+      captainEarnings,
+      captainEarning: captainEarnings,
       status: 'SEARCHING_CAPTAIN',
       statusHistory: [
         {
@@ -429,7 +870,7 @@ export const createBooking = async (req, res, next) => {
       ],
     });
 
-    console.log(`[TransportBooking] Created: ${bookingId} for user ${userId}. Fare: ₹${fareBreakdown.totalFare}, Distance: ${distanceKm} km`);
+    console.log(`[TransportBooking] Created: ${bookingId} for user ${userId}. Fare: ₹${fareBreakdown.totalFare}, CaptainComm: ${captainCommRate}%`);
 
     // ── Dispatch requests to eligible captains asynchronously ──────────
     // Does NOT assign any captain; keeps status at SEARCHING_CAPTAIN.
@@ -695,6 +1136,294 @@ export const cancelBooking = async (req, res, next) => {
       },
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Admin: Get Platform-Wide Transport Bookings with Filters, Search & Metrics
+// GET /api/transport/bookings/admin/all
+// ──────────────────────────────────────────────────────────────────────────────
+export const getAdminTransportBookings = async (req, res, next) => {
+  try {
+    const {
+      status,
+      search,
+      vehicleType,
+      startDate,
+      endDate,
+      captainId,
+      userId,
+      page = 1,
+      limit = 50,
+    } = req.query;
+
+    const query = {};
+
+    // Status Filter
+    if (status && status !== 'ALL' && status !== 'all') {
+      if (status === 'IN_PROGRESS' || status === 'ACTIVE') {
+        query.status = { $in: IN_PROGRESS_STATUSES };
+      } else {
+        query.status = status;
+      }
+    }
+
+    // Vehicle Type Filter
+    if (vehicleType && vehicleType !== 'ALL' && vehicleType !== 'all') {
+      query['vehicleSnapshot.slug'] = vehicleType;
+    }
+
+    // Captain Filter
+    if (captainId && mongoose.Types.ObjectId.isValid(captainId)) {
+      query.captainId = captainId;
+    }
+
+    // User Filter
+    if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+      query.user = userId;
+    }
+
+    // Date Range Filter
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
+    }
+
+    // Text Search
+    if (search && String(search).trim()) {
+      const q = String(search).trim();
+      const qRegex = new RegExp(q, 'i');
+      query.$or = [
+        { bookingId: qRegex },
+        { 'pickupLocation.address': qRegex },
+        { 'pickupLocation.city': qRegex },
+        { 'dropLocation.address': qRegex },
+        { 'dropLocation.city': qRegex },
+        { 'goods.category': qRegex },
+        { 'vehicleSnapshot.name': qRegex },
+      ];
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [rawBookings, allSummaries] = await Promise.all([
+      TransportBooking.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      TransportBooking.find({}).select('status fareBreakdown.totalFare captainEarnings').lean(),
+    ]);
+
+    const total = allSummaries.length;
+
+    // Fast batch population for users & captains in parallel
+    const userIds = [...new Set(rawBookings.map((b) => b.user?.toString()).filter(Boolean))];
+    const captainIds = [...new Set(rawBookings.map((b) => b.captainId?.toString()).filter(Boolean))];
+
+    const [usersList, captainsList] = await Promise.all([
+      userIds.length > 0 ? User.find({ _id: { $in: userIds } }).select('name phone email').lean() : [],
+      captainIds.length > 0
+        ? Captain.find({ _id: { $in: captainIds } })
+            .select('name phone vehicleType vehicleNumber isOnline ratingAverage ratingCount')
+            .lean()
+        : [],
+    ]);
+
+    const userMap = new Map((usersList || []).map((u) => [u._id.toString(), u]));
+    const captainMap = new Map((captainsList || []).map((c) => [c._id.toString(), c]));
+
+    const bookings = rawBookings.map((b) => ({
+      ...b,
+      user: b.user ? userMap.get(b.user.toString()) || { _id: b.user, name: 'Customer' } : null,
+      captainId: b.captainId ? captainMap.get(b.captainId.toString()) || null : null,
+    }));
+
+    const stats = {
+      totalBookings: total,
+      searchingCount: allSummaries.filter((b) => b.status === 'SEARCHING_CAPTAIN').length,
+      inProgressCount: allSummaries.filter((b) => IN_PROGRESS_STATUSES.includes(b.status)).length,
+      completedCount: allSummaries.filter((b) => b.status === 'RIDE_COMPLETED').length,
+      cancelledCount: allSummaries.filter((b) => b.status === 'CANCELLED').length,
+      totalRevenue: allSummaries
+        .filter((b) => b.status === 'RIDE_COMPLETED')
+        .reduce((acc, b) => acc + (b.fareBreakdown?.totalFare || 0), 0),
+      totalCaptainEarnings: allSummaries
+        .filter((b) => b.status === 'RIDE_COMPLETED')
+        .reduce((acc, b) => acc + (b.captainEarnings || 0), 0),
+    };
+
+    return res.status(200).json({
+      success: true,
+      bookings,
+      stats,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / parseInt(limit)) || 1,
+      },
+    });
+  } catch (error) {
+    console.error('[getAdminTransportBookings ERROR]', error);
+    return res.status(200).json({
+      success: true,
+      bookings: [],
+      stats: {
+        totalBookings: 0,
+        searchingCount: 0,
+        inProgressCount: 0,
+        completedCount: 0,
+        cancelledCount: 0,
+        totalRevenue: 0,
+        totalCaptainEarnings: 0,
+      },
+      pagination: { total: 0, page: 1, limit: 50, pages: 1 },
+      notice: 'Fallback mode active',
+    });
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Admin: Manual Captain Assignment / Reassignment
+// PUT /api/transport/bookings/admin/:bookingId/assign-captain
+// ──────────────────────────────────────────────────────────────────────────────
+export const adminAssignCaptainToTransportBooking = async (req, res, next) => {
+  try {
+    const { bookingId } = req.params;
+    const { captainId, captainEarnings } = req.body;
+
+    if (!captainId || !mongoose.Types.ObjectId.isValid(captainId)) {
+      return res.status(400).json({ success: false, message: 'Valid Captain ID is required.' });
+    }
+
+    const captain = await Captain.findById(captainId);
+    if (!captain) {
+      return res.status(404).json({ success: false, message: 'Captain not found.' });
+    }
+
+    const isMongoId = mongoose.Types.ObjectId.isValid(bookingId);
+    const booking = await TransportBooking.findOne(
+      isMongoId ? { $or: [{ _id: bookingId }, { bookingId }] } : { bookingId }
+    );
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Transport booking not found.' });
+    }
+
+    if (booking.status === 'RIDE_COMPLETED' || booking.status === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot assign captain to booking in ${booking.status} state.`,
+      });
+    }
+
+    const pickupOtp = generateRideOtp();
+    const dropOtp = generateRideOtp();
+    const earnings = Number(captainEarnings || booking.captainEarnings || (booking.fareBreakdown.totalFare * 0.85).toFixed(2));
+    const now = new Date();
+
+    booking.captainId = captain._id;
+    booking.status = 'CAPTAIN_ASSIGNED';
+    booking.captainAssignedAt = now;
+    booking.pickupOtp = pickupOtp;
+    booking.dropOtp = dropOtp;
+    booking.captainEarnings = earnings;
+    booking.captainEarning = earnings;
+
+    booking.statusHistory.push({
+      status: 'CAPTAIN_ASSIGNED',
+      changedBy: 'system',
+      changedById: req.user.id || req.user._id,
+      reason: `Assigned manually by Admin to Captain "${captain.name}" (${captain.phone})`,
+      timestamp: now,
+    });
+
+    await booking.save();
+
+    // Push Notification to Captain
+    await CaptainNotification.create({
+      captainId: captain._id,
+      type: 'NEW_JOB_ASSIGNED',
+      title: '🚚 New Vehicle Transport Assigned by Admin!',
+      message: `Admin assigned you Transport Job #${booking.bookingId} (${booking.vehicleSnapshot.name}). Payout: ₹${earnings}`,
+      orderId: booking.bookingId,
+      icon: 'local_shipping',
+    }).catch(() => {});
+
+    res.status(200).json({
+      success: true,
+      message: `Captain "${captain.name}" assigned successfully to Transport Booking #${booking.bookingId}!`,
+      booking,
+    });
+  } catch (error) {
+    console.error('[adminAssignCaptainToTransportBooking ERROR]', error);
+    next(error);
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Admin: Cancel Transport Booking
+// PUT /api/transport/bookings/admin/:bookingId/cancel
+// ──────────────────────────────────────────────────────────────────────────────
+export const adminCancelTransportBooking = async (req, res, next) => {
+  try {
+    const { bookingId } = req.params;
+    const { reason = 'Cancelled by Administrator' } = req.body;
+
+    const isMongoId = mongoose.Types.ObjectId.isValid(bookingId);
+    const booking = await TransportBooking.findOne(
+      isMongoId ? { $or: [{ _id: bookingId }, { bookingId }] } : { bookingId }
+    );
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found.' });
+    }
+
+    if (booking.status === 'RIDE_COMPLETED') {
+      return res.status(400).json({ success: false, message: 'Cannot cancel an already completed ride.' });
+    }
+
+    const now = new Date();
+    booking.status = 'CANCELLED';
+    booking.cancelledBy = 'system';
+    booking.cancellationReason = reason.trim();
+    booking.cancelledAt = now;
+
+    booking.statusHistory.push({
+      status: 'CANCELLED',
+      changedBy: 'system',
+      changedById: req.user.id || req.user._id,
+      reason: reason.trim(),
+      timestamp: now,
+    });
+
+    await booking.save();
+
+    if (booking.captainId) {
+      await CaptainNotification.create({
+        captainId: booking.captainId,
+        type: 'JOB_CANCELLED',
+        title: 'Transport Job Cancelled by Admin',
+        message: `Booking #${booking.bookingId} has been cancelled by Admin. Reason: ${reason}`,
+        orderId: booking.bookingId,
+        icon: 'cancel',
+      }).catch(() => {});
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Transport Booking #${booking.bookingId} has been cancelled.`,
+      booking,
+    });
+  } catch (error) {
+    console.error('[adminCancelTransportBooking ERROR]', error);
     next(error);
   }
 };

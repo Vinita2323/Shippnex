@@ -133,7 +133,12 @@ export const submitReview = async (req, res, next) => {
     }
 
     // 4. Verify Product exists in database
-    const product = await Product.findById(productId);
+    let product = null;
+    if (mongoose.Types.ObjectId.isValid(productId)) {
+      product = await Product.findById(productId);
+    } else {
+      product = await Product.findOne({ sku: productId });
+    }
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -204,11 +209,29 @@ export const getProductReviews = async (req, res, next) => {
     const limit = Math.max(1, Math.min(50, parseInt(req.query.limit) || 10));
     const skip = (page - 1) * limit;
 
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-      return res.status(400).json({ success: false, message: 'Invalid product ID' });
+    let prodObjectId = null;
+    if (productId && mongoose.Types.ObjectId.isValid(productId)) {
+      prodObjectId = new mongoose.Types.ObjectId(productId);
+    } else if (productId) {
+      const prod = await Product.findOne({ sku: productId }).select('_id').lean();
+      if (prod) {
+        prodObjectId = prod._id;
+      }
     }
 
-    const prodObjectId = new mongoose.Types.ObjectId(productId);
+    if (!prodObjectId) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        total: 0,
+        page,
+        limit,
+        averageRating: 0,
+        totalRatings: 0,
+        breakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+        reviews: [],
+      });
+    }
 
     // Aggregate rating breakdown (1 to 5 star counts)
     const breakdownAgg = await ProductReview.aggregate([

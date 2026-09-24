@@ -49,7 +49,7 @@ export const SuperAdminCaptainSettlements = () => {
   const totalCashCollected = captains.reduce((acc, c) => acc + (c.cashCollected || 0), 0);
 
   return (
-    <div className="min-h-screen bg-[#020909] text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans">
       <SuperAdminHeader
         title="Captain Settlements & Fleet Balances"
         subtitle="Delivery partner earnings, unwithdrawn wallet balances, and COD cash collected governance"
@@ -60,42 +60,42 @@ export const SuperAdminCaptainSettlements = () => {
       <div className="p-6 space-y-5 flex-1 max-w-7xl mx-auto w-full">
         {/* Quick Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-[#051716] border border-emerald-950 p-4 rounded-2xl space-y-1">
-            <span className="text-slate-400 text-xs font-bold uppercase">Total Captain Liability</span>
-            <p className="text-2xl font-black text-amber-400 m-0">₹{Number(totalCaptainLiability).toFixed(2)}</p>
-            <p className="text-[11px] text-slate-400 font-mono m-0">Available in captain wallets</p>
+          <div className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs space-y-1">
+            <span className="text-slate-500 text-xs font-extrabold uppercase">Total Captain Liability</span>
+            <p className="text-2xl font-black text-amber-700 m-0">₹{Number(totalCaptainLiability).toFixed(2)}</p>
+            <p className="text-[11px] text-slate-500 font-medium m-0">Available in captain wallets</p>
           </div>
-          <div className="bg-[#051716] border border-emerald-950 p-4 rounded-2xl space-y-1">
-            <span className="text-slate-400 text-xs font-bold uppercase">COD Cash Collected</span>
-            <p className="text-2xl font-black text-emerald-400 m-0">₹{Number(totalCashCollected).toFixed(2)}</p>
-            <p className="text-[11px] text-slate-400 font-mono m-0">Cash in hand by captains</p>
+          <div className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs space-y-1">
+            <span className="text-slate-500 text-xs font-extrabold uppercase">COD Cash Collected</span>
+            <p className="text-2xl font-black text-emerald-700 m-0">₹{Number(totalCashCollected).toFixed(2)}</p>
+            <p className="text-[11px] text-slate-500 font-medium m-0">Cash in hand by captains</p>
           </div>
-          <div className="bg-[#051716] border border-emerald-950 p-4 rounded-2xl space-y-1">
-            <span className="text-slate-400 text-xs font-bold uppercase">Active Delivery Fleet</span>
-            <p className="text-2xl font-black text-white m-0">{total}</p>
-            <p className="text-[11px] text-emerald-400 font-mono m-0">Registered captains</p>
+          <div className="bg-white border border-slate-200/80 p-4.5 rounded-2xl shadow-xs space-y-1">
+            <span className="text-slate-500 text-xs font-extrabold uppercase">Active Delivery Fleet</span>
+            <p className="text-2xl font-black text-slate-900 m-0">{total}</p>
+            <p className="text-[11px] text-emerald-700 font-semibold m-0">Registered captains</p>
           </div>
         </div>
 
         {/* Search Bar */}
-        <div className="bg-[#051716] border border-emerald-950 p-3.5 rounded-2xl">
+        <div className="bg-white border border-slate-200/80 p-3.5 rounded-2xl shadow-xs">
           <div className="relative max-w-md">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search Captain Name, Phone, Vehicle..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#020b0b] border border-emerald-950 rounded-xl pl-10 pr-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-[#ff5500]"
             />
           </div>
         </div>
 
         {/* Captains Table */}
-        <div className="bg-[#051716] border border-emerald-950/90 rounded-3xl shadow-xl overflow-hidden">
+        <div className="bg-white border border-slate-200/80 rounded-3xl shadow-xs overflow-hidden">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-[#03100f] border-b border-emerald-950 text-slate-400 uppercase tracking-wider font-mono text-[11px]">
+              <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 uppercase tracking-wider font-extrabold text-[11px]">
                 <th className="py-3.5 px-4 font-bold">Captain Partner</th>
                 <th className="py-3.5 px-4 font-bold">Mobile Phone</th>
                 <th className="py-3.5 px-4 font-bold">Vehicle Type</th>
@@ -105,38 +105,38 @@ export const SuperAdminCaptainSettlements = () => {
                 <th className="py-3.5 px-4 font-bold">Joined Date</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-emerald-950/60">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">Loading captain balances...</td>
+                  <td colSpan={7} className="py-12 text-center text-slate-400 font-medium">Loading captain balances...</td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-500">No captain records found.</td>
+                  <td colSpan={7} className="py-12 text-center text-slate-400 font-medium">No captain records found.</td>
                 </tr>
               ) : (
                 filtered.map((c) => (
-                  <tr key={c._id} className="hover:bg-emerald-950/20 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-white flex items-center gap-2">
-                      <span className="p-1 rounded-md bg-indigo-500/10 text-indigo-400">
+                  <tr key={c._id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
+                      <span className="p-1 rounded-md bg-indigo-50 text-indigo-700">
                         <Truck size={14} />
                       </span>
                       <span>{c.name || 'Captain Partner'}</span>
                     </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-300">{c.phone}</td>
-                    <td className="py-3.5 px-4 text-slate-300">{c.vehicleType || 'Two Wheeler'}</td>
-                    <td className="py-3.5 px-4 font-black text-amber-400 font-mono text-sm">
+                    <td className="py-3.5 px-4 font-mono text-slate-600 font-semibold">{c.phone}</td>
+                    <td className="py-3.5 px-4 text-slate-600">{c.vehicleType || 'Two Wheeler'}</td>
+                    <td className="py-3.5 px-4 font-black text-amber-700 font-mono text-sm">
                       ₹{Number(c.walletBalance || 0).toFixed(2)}
                     </td>
-                    <td className="py-3.5 px-4 font-mono font-bold text-white">
+                    <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
                       ₹{Number(c.cashCollected || 0).toFixed(2)}
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="px-2.5 py-0.5 rounded-full font-bold text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                      <span className="px-2.5 py-0.5 rounded-full font-bold text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200">
                         {c.status || 'Active'}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 text-slate-400 font-mono text-[11px]">
+                    <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
                       {new Date(c.createdAt).toLocaleDateString('en-IN')}
                     </td>
                   </tr>

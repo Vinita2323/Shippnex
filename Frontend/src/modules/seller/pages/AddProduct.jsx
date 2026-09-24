@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  FileText, Upload, Tag, DollarSign, Boxes, CheckCircle, Package, Plus, ArrowLeft, ShieldCheck, RotateCcw, AlertCircle
+  FileText, Upload, Tag, DollarSign, Boxes, CheckCircle, Package, Plus, ArrowLeft, ShieldCheck, RotateCcw, AlertCircle, Sparkles
 } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { categoryService, productService, authService } from '../../../services/authService';
+import ProductVariantBuilder from '../components/ProductVariantBuilder';
 
 const AddProduct = () => {
   const navigate = useNavigate();
@@ -58,7 +59,10 @@ const AddProduct = () => {
     returnPolicy: '7 Days Returnable / Replacement',
     mainImage: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
     mainImageFile: null,
-    galleryImages: []
+    galleryImages: [],
+    hasVariants: false,
+    variantOptions: [],
+    variants: []
   };
 
 
@@ -110,7 +114,10 @@ const AddProduct = () => {
             returnPolicy: prod.returnPolicy || '7 Days Returnable / Replacement',
             mainImage: prod.mainImage || prod.image || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
             mainImageFile: null,
-            galleryImages: Array.isArray(prod.galleryImages) ? prod.galleryImages : []
+            galleryImages: Array.isArray(prod.galleryImages) ? prod.galleryImages : [],
+            hasVariants: Boolean(prod.hasVariants || (Array.isArray(prod.variants) && prod.variants.length > 0)),
+            variantOptions: Array.isArray(prod.variantOptions) ? prod.variantOptions : [],
+            variants: Array.isArray(prod.variants) ? prod.variants : []
           });
 
           if (Array.isArray(prod.homeSections) && prod.homeSections.length > 0) {
@@ -288,11 +295,65 @@ const AddProduct = () => {
 
   const handleFormSubmit = async (e, statusToSave = 'Published') => {
     e.preventDefault();
+
+    // Validation for multi-variant products
+    if (formData.hasVariants) {
+      const validOptions = (formData.variantOptions || []).filter(
+        opt => opt.name && opt.name.trim() && Array.isArray(opt.values) && opt.values.length > 0
+      );
+      if (validOptions.length === 0) {
+        showToast('Please add at least one variant option with values (e.g. Size: 4, 5, 6, 7).');
+        return;
+      }
+    }
+
+    if (formData.salePrice === '' || isNaN(formData.salePrice) || Number(formData.salePrice) < 0) {
+      showToast('Please provide a valid Selling Price (₹).');
+      return;
+    }
+    if (formData.mrp === '' || isNaN(formData.mrp) || Number(formData.mrp) < 0) {
+      showToast('Please provide a valid MRP Price (₹).');
+      return;
+    }
+    if (formData.stock === '' || isNaN(formData.stock) || Number(formData.stock) < 0) {
+      showToast('Please provide a valid Initial Stock Quantity.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const cleanMainImage = (typeof formData.mainImage === 'string' && formData.mainImage.length > 1500000)
         ? 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80'
         : formData.mainImage;
+
+      const finalSalePrice = Number(formData.salePrice || 0);
+      const finalMrp = Number(formData.mrp || formData.salePrice || 0);
+      const finalStock = Number(formData.stock || 0);
+      const finalSku = formData.sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      // Filter out empty options with 0 values
+      const cleanVariantOptions = formData.hasVariants && Array.isArray(formData.variantOptions)
+        ? formData.variantOptions.filter(o => o.name && o.name.trim() && Array.isArray(o.values) && o.values.length > 0)
+        : [];
+
+      // Sync variants with standard product price and stock (avoid heavy duplicated base64 images)
+      const syncedVariants = (formData.hasVariants && Array.isArray(formData.variants))
+        ? formData.variants.map(v => ({
+            ...v,
+            price: finalSalePrice,
+            originalPrice: finalMrp,
+            stock: finalStock,
+            image: v.image || ''
+          }))
+        : [];
+
+      const firstActiveVariant = (formData.hasVariants && Array.isArray(syncedVariants) && syncedVariants.length > 0)
+        ? (syncedVariants.find(v => v.active !== false) || syncedVariants[0])
+        : null;
+
+      const finalVariation = formData.hasVariants && firstActiveVariant 
+        ? firstActiveVariant.title 
+        : `${formData.unitValue || 1} ${formData.unitType || 'kg'}`;
 
       const payload = {
         ...formData,
@@ -301,9 +362,13 @@ const AddProduct = () => {
         sellerId: sellerInfo?._id || sellerInfo?.id,
         homeSections: selectedHomeSections,
         status: statusToSave,
-        mrp: Number(formData.mrp || 0),
-        salePrice: Number(formData.salePrice || 0),
-        stock: Number(formData.stock || 0)
+        sku: finalSku,
+        mrp: finalMrp,
+        salePrice: finalSalePrice,
+        stock: finalStock,
+        hasVariants: Boolean(formData.hasVariants && cleanVariantOptions.length > 0),
+        variantOptions: cleanVariantOptions,
+        variants: syncedVariants
       };
 
       if (isEditMode) {
@@ -319,10 +384,13 @@ const AddProduct = () => {
           category: formData.category,
           subCategory: formData.subCategory,
           image: cleanMainImage,
-          stock: Number(formData.stock || 0),
+          stock: finalStock,
           status: statusToSave,
-          mrp: Number(formData.mrp || 0),
-          salePrice: Number(formData.salePrice || 0),
+          mrp: finalMrp,
+          salePrice: finalSalePrice,
+          hasVariants: Boolean(formData.hasVariants && cleanVariantOptions.length > 0),
+          variantOptions: cleanVariantOptions,
+          variants: syncedVariants
         };
 
         const existingLocal = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
@@ -340,7 +408,7 @@ const AddProduct = () => {
         console.log('Product saved to DB:', res);
 
         const createdProd = res?.product || res;
-        const generatedSku = createdProd?.sku || formData.sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+        const generatedSku = createdProd?.sku || finalSku;
         const newProductObj = {
           _id: createdProd?._id,
           id: createdProd?._id || generatedSku,
@@ -349,13 +417,16 @@ const AddProduct = () => {
           category: formData.category,
           subCategory: formData.subCategory,
           image: createdProd?.mainImage || formData.mainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
-          galleryImages: formData.galleryImages || [],
-          variation: `${formData.unitValue || 1} ${formData.unitType || 'kg'}`,
-          stock: Number(formData.stock || 0),
+          galleryImages: createdProd?.galleryImages || formData.galleryImages || [],
+          variation: finalVariation,
+          stock: finalStock,
           status: statusToSave,
-          mrp: Number(formData.mrp || 0),
-          salePrice: Number(formData.salePrice || 0),
-          homeSections: selectedHomeSections
+          mrp: finalMrp,
+          salePrice: finalSalePrice,
+          homeSections: selectedHomeSections,
+          hasVariants: Boolean(formData.hasVariants && cleanVariantOptions.length > 0),
+          variantOptions: cleanVariantOptions,
+          variants: syncedVariants
         };
 
         const existingLocal = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
@@ -489,7 +560,7 @@ const AddProduct = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Registered Category *</label>
               <select 
@@ -535,41 +606,6 @@ const AddProduct = () => {
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Unit / Weight Variant *</label>
-              <div className="flex items-center gap-2">
-                <input 
-                  type="text" 
-                  required
-                  placeholder="Quantity (e.g. 1, 500, 250)"
-                  value={formData.unitValue}
-                  onChange={(e) => handleInputChange('unitValue', e.target.value)}
-                  className="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
-                />
-                <select 
-                  value={formData.unitType}
-                  onChange={(e) => handleInputChange('unitType', e.target.value)}
-                  className="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:border-[#ff5500]"
-                >
-                  <option value="kg">kg (Kilograms)</option>
-                  <option value="g">g (Grams)</option>
-                  <option value="L">L (Liters)</option>
-                  <option value="ml">ml (Milliliters)</option>
-                  <option value="Pcs">Pcs (Pieces)</option>
-                  <option value="Pack">Pack</option>
-                  <option value="Dozen">Dozen (12 Pcs)</option>
-                  <option value="Bunch">Bunch</option>
-                  <option value="Box">Box</option>
-                  <option value="Bottle">Bottle</option>
-                  <option value="Sachet">Sachet</option>
-                  <option value="Combo">Combo Pack</option>
-                </select>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">Preview Variant: <span className="font-semibold text-[#ff5500]">{formData.unitValue || '1'} {formData.unitType || 'kg'}</span></p>
-            </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Seller Store Name</label>
@@ -593,6 +629,26 @@ const AddProduct = () => {
             />
           </div>
         </div>
+
+        {/* Card 2: Dynamic Product Variants System */}
+        <ProductVariantBuilder 
+          category={formData.category}
+          basePrice={formData.salePrice}
+          baseMrp={formData.mrp}
+          baseStock={formData.stock}
+          baseSku={formData.sku}
+          productName={formData.name}
+          unitValue={formData.unitValue}
+          unitType={formData.unitType}
+          onUnitChange={(field, val) => handleInputChange(field, val)}
+          hasVariants={formData.hasVariants}
+          onHasVariantsChange={(val) => handleInputChange('hasVariants', val)}
+          variantOptions={formData.variantOptions}
+          onVariantOptionsChange={(opts) => handleInputChange('variantOptions', opts)}
+          variants={formData.variants}
+          onVariantsChange={(vars) => handleInputChange('variants', vars)}
+          availableImages={[formData.mainImage, ...(formData.galleryImages || [])].filter(Boolean)}
+        />
 
         {/* Card 2: Primary Image Upload */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
@@ -766,13 +822,17 @@ const AddProduct = () => {
 
         {/* Card 4: Pricing & Tax */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
-            <DollarSign size={18} className="text-[#ff5500]" /> Pricing, Discounts & Taxation
-          </h3>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <DollarSign size={18} className="text-[#ff5500]" /> Pricing, Discounts & Taxation
+            </h3>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">MRP Price (₹) *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                MRP Price (₹) *
+              </label>
               <input 
                 type="number" 
                 required
@@ -784,7 +844,9 @@ const AddProduct = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Selling Price (₹) *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Selling Price (₹) *
+              </label>
               <input 
                 type="number" 
                 required
@@ -824,13 +886,17 @@ const AddProduct = () => {
 
         {/* Card 5: Inventory & SKU */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
-            <Boxes size={18} className="text-[#ff5500]" /> Inventory & Stock Control
-          </h3>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <Boxes size={18} className="text-[#ff5500]" /> Inventory & Stock Control
+            </h3>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Initial Stock Quantity *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Initial Stock Quantity *
+              </label>
               <input 
                 type="number" 
                 required

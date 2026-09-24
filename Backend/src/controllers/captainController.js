@@ -677,6 +677,10 @@ export const updateDeliveryStatus = async (req, res, next) => {
           captain.walletBalance = balBefore + earnings;
           await captain.save();
 
+          const grossAmount = Number(order.grandTotal || order.itemsTotal || earnings);
+          const commRate = Number(order.captainCommissionRate !== undefined ? order.captainCommissionRate : 5);
+          const commAmt = Number(order.captainCommissionAmount !== undefined ? order.captainCommissionAmount : ((grossAmount * commRate) / 100).toFixed(2));
+
           await CaptainTransaction.create({
             transactionId: generateTxnId(),
             captainId,
@@ -684,6 +688,10 @@ export const updateDeliveryStatus = async (req, res, next) => {
             orderId: order.orderId,
             type: 'CREDIT',
             amount: earnings,
+            grossAmount,
+            commissionRate: commRate,
+            commissionAmount: commAmt,
+            netAmount: earnings,
             balanceBefore: balBefore,
             balanceAfter: captain.walletBalance,
             description: `Delivery completed for Order #${order.orderId}`,
@@ -870,12 +878,28 @@ export const getWallet = async (req, res, next) => {
     const nextPayoutDate = new Date();
     nextPayoutDate.setDate(nextPayoutDate.getDate() + ((2 - nextPayoutDate.getDay() + 7) % 7 || 7));
 
+    // All-time credit transactions for total aggregates
+    const allCreditTransactions = await CaptainTransaction.find({
+      captainId,
+      type: 'CREDIT',
+    });
+
+    const totalDeliveries = allCreditTransactions.length;
+    const totalEarnings = allCreditTransactions.reduce((sum, t) => sum + (t.grossAmount || t.amount), 0);
+    const totalCommissionDeducted = allCreditTransactions.reduce((sum, t) => sum + (t.commissionAmount || 0), 0);
+    const netEarnings = allCreditTransactions.reduce((sum, t) => sum + t.amount, 0);
+
     res.json({
       success: true,
       wallet: {
-        balance: captain.walletBalance,
-        fromDeliveries,
-        fromTransport,
+        balance: Number(captain.walletBalance || 0),
+        availableBalance: Number(captain.walletBalance || 0),
+        totalDeliveries,
+        totalEarnings: Number(totalEarnings.toFixed(2)),
+        totalCommissionDeducted: Number(totalCommissionDeducted.toFixed(2)),
+        netEarnings: Number(netEarnings.toFixed(2)),
+        fromDeliveries: Number(fromDeliveries.toFixed(2)),
+        fromTransport: Number(fromTransport.toFixed(2)),
         bankDetails: captain.bankDetails,
         nextPayoutDate: nextPayoutDate.toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric' }),
       },

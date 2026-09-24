@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Lock, Mail, ArrowRight } from 'lucide-react';
 import { authService } from '../../../services/authService';
+import { useAuth } from '../../../context/AuthContext';
 
 export const AdminLogin = () => {
   const navigate = useNavigate();
+  const { syncAuthFromStorage } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,6 +18,7 @@ export const AdminLogin = () => {
     setLoading(true);
     try {
       await authService.adminLogin(email, password);
+      syncAuthFromStorage();
       setLoading(false);
       navigate('/admin');
     } catch (err) {

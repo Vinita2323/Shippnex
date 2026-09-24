@@ -366,7 +366,11 @@ export const updateTransportStatus = async (req, res, next) => {
       if (proofUrl) updates.proofOfDeliveryUrl = proofUrl;
 
       // Credit wallet
-      const earnings = booking.captainEarnings || Math.round((booking.fareBreakdown?.totalFare || 0) * 0.8) || 0;
+      const totalFare = Number(booking.fareBreakdown?.totalFare || 0);
+      const captainCommRate = Number(booking.captainCommissionRate !== undefined ? booking.captainCommissionRate : 5);
+      const captainCommAmount = Number(booking.captainCommissionAmount !== undefined ? booking.captainCommissionAmount : ((totalFare * captainCommRate) / 100).toFixed(2));
+      const earnings = booking.captainEarnings || Math.round((totalFare - captainCommAmount) * 100) / 100 || 0;
+
       const captain = await Captain.findById(captainId);
       if (captain && earnings > 0 && booking.status !== 'RIDE_COMPLETED') {
         const balBefore = captain.walletBalance || 0;
@@ -379,6 +383,10 @@ export const updateTransportStatus = async (req, res, next) => {
           orderId: booking.bookingId,
           type: 'CREDIT',
           amount: earnings,
+          grossAmount: totalFare,
+          commissionRate: captainCommRate,
+          commissionAmount: captainCommAmount,
+          netAmount: earnings,
           balanceBefore: balBefore,
           balanceAfter: captain.walletBalance,
           description: `Transport ride completed: ${booking.bookingId}`,

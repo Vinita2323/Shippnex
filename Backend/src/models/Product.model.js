@@ -87,6 +87,31 @@ const productSchema = new mongoose.Schema(
       type: [String],
       default: []
     },
+    hasVariants: {
+      type: Boolean,
+      default: false
+    },
+    variantOptions: [
+      {
+        name: { type: String, trim: true },
+        values: [{ type: String, trim: true }]
+      }
+    ],
+    variants: [
+      {
+        attributes: {
+          type: mongoose.Schema.Types.Mixed,
+          default: {}
+        },
+        title: { type: String, default: '' },
+        sku: { type: String, default: '' },
+        price: { type: Number, min: 0, default: 0 },
+        originalPrice: { type: Number, min: 0, default: 0 },
+        stock: { type: Number, min: 0, default: 0 },
+        image: { type: String, default: '' },
+        active: { type: Boolean, default: true }
+      }
+    ],
     status: {
       type: String,
       enum: ['Published', 'Draft', 'Pending Audit'],

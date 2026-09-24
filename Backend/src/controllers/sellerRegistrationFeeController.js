@@ -5,6 +5,7 @@ import Seller from '../models/Seller.model.js';
 import { razorpayInstance } from '../config/razorpay.js';
 import { uploadToCloudinary } from '../config/cloudinary.js';
 import { sendOtpSMS } from '../services/smsIndiaHubService.js';
+import { applyReferralCodeAtRegistration } from './referralController.js';
 
 // Helper: Normalize 10-digit phone
 const normalizePhone = (phone) => {
@@ -80,6 +81,7 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
       gstPhoto,
       bankPassbookPhoto,
       categories,
+      referralCode,
     } = req.body;
 
     if (!phone || !businessName) {
@@ -236,6 +238,22 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
       seller = await existingSeller.save();
     } else {
       seller = await Seller.create(sellerData);
+    }
+
+    // Process referral code if provided
+    if (referralCode) {
+      try {
+        await applyReferralCodeAtRegistration({
+          referralCode,
+          referrerRole: 'seller',
+          referredId: seller._id,
+          referredRole: 'seller',
+          referredPhone: cleanPhone,
+          referredName: businessName || ownerName || 'Seller',
+        });
+      } catch (refErr) {
+        console.warn('[SellerRegFee] Referral registration error:', refErr.message);
+      }
     }
 
     // CASE 1: Registration Fee is DISABLED or ₹0 by Admin

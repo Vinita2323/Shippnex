@@ -454,6 +454,14 @@ export const getCachedUserOrders = () => {
 };
 
 export const orderService = {
+  createRazorpayOrder: async (amount, orderId) => {
+    const response = await API.post('/orders/razorpay/create-order', { amount, orderId });
+    return response.data;
+  },
+  verifyRazorpayPayment: async (payload) => {
+    const response = await API.post('/orders/razorpay/verify-payment', payload);
+    return response.data;
+  },
   placeOrder: async (orderData) => {
     clearUserOrdersCache();
     const response = await API.post('/orders', orderData);
@@ -477,8 +485,10 @@ export const orderService = {
     const response = await API.get(`/orders/${id}`);
     return response.data;
   },
-  getSellerNotifications: async () => {
-    const response = await API.get('/orders/seller/notifications');
+  getSellerNotifications: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const url = `/orders/seller/notifications${query ? `?${query}` : ''}`;
+    const response = await API.get(url);
     return response.data;
   },
   markNotificationViewed: async (id) => {
@@ -497,7 +507,95 @@ export const orderService = {
     const response = await API.put(`/orders/seller/notifications/${id}/status`, { status, ...payload });
     return response.data;
   },
+  requestReturn: async (orderId, payload) => {
+    clearUserOrdersCache();
+    const response = await API.post(`/orders/${orderId}/return`, payload);
+    return response.data;
+  },
 };
+
+export const returnService = {
+  // Customer
+  requestItemReturn: async (payload) => {
+    clearUserOrdersCache();
+    const response = await API.post('/returns', payload);
+    return response.data;
+  },
+  getMyReturns: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const response = await API.get(`/returns/my-returns${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  getReturnById: async (id) => {
+    const response = await API.get(`/returns/${id}`);
+    return response.data;
+  },
+  cancelReturn: async (id) => {
+    const response = await API.put(`/returns/${id}/cancel`);
+    return response.data;
+  },
+
+  // Seller
+  getSellerReturns: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const response = await API.get(`/returns/seller/returns${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  sellerApproveReturn: async (id, action = 'APPROVE', rejectionReason = '') => {
+    const response = await API.put(`/returns/${id}/seller-approve`, { action, rejectionReason });
+    return response.data;
+  },
+  sellerReceiveReturn: async (id, payload = {}) => {
+    const response = await API.put(`/returns/${id}/seller-receive`, payload);
+    return response.data;
+  },
+  sellerVerifyReturn: async (id, payload) => {
+    const response = await API.put(`/returns/${id}/seller-verify`, payload);
+    return response.data;
+  },
+
+  // Captain
+  getCaptainReturnJobs: async (filter = 'available') => {
+    const response = await API.get(`/returns/captain/jobs?filter=${filter}`);
+    return response.data;
+  },
+  captainAcceptReturnJob: async (id) => {
+    const response = await API.put(`/returns/captain/${id}/accept`);
+    return response.data;
+  },
+  captainUpdateReturnStatus: async (id, status, notes = '') => {
+    const response = await API.put(`/returns/captain/${id}/status`, { status, notes });
+    return response.data;
+  },
+  captainVerifyReturnOtp: async (id, otp, notes = '', proofUrl = '', checklist = null) => {
+    const response = await API.post(`/returns/captain/${id}/verify-otp`, { otp, notes, proofUrl, checklist });
+    return response.data;
+  },
+  captainFailInspection: async (id, failureReason = '', notes = '') => {
+    const response = await API.put(`/returns/captain/${id}/fail-inspection`, { failureReason, notes });
+    return response.data;
+  },
+
+  // Admin
+  getAdminReturns: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const response = await API.get(`/returns/admin/all${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  adminApproveReturn: async (id, action = 'APPROVE', rejectionReason = '') => {
+    const response = await API.put(`/returns/admin/${id}/approve`, { action, rejectionReason });
+    return response.data;
+  },
+  adminAssignCaptain: async (id, captainId) => {
+    const response = await API.put(`/returns/admin/${id}/assign-captain`, { captainId });
+    return response.data;
+  },
+  adminVerifyReturn: async (id, payload) => {
+    const response = await API.put(`/returns/admin/${id}/verify`, payload);
+    return response.data;
+  },
+};
+
 
 export const walletService = {
   getSellerWallet: async () => {
@@ -1010,7 +1108,7 @@ export const adminService = {
     if (!forceRefresh && adminClientCache.sellers.data && (now - adminClientCache.sellers.timestamp < 30000)) {
       return adminClientCache.sellers.data;
     }
-    const response = await API.get('/admin/sellers');
+    const response = await API.get(`/admin/sellers${forceRefresh ? '?fresh=true' : ''}`);
     if (response.data && response.data.success) {
       adminClientCache.sellers = { data: response.data, timestamp: now };
     }
@@ -1026,17 +1124,42 @@ export const adminService = {
     const response = await API.put(`/admin/sellers/${id}/commission`, { commissionPercentage });
     return response.data;
   },
+  updateSellerDetails: async (id, details) => {
+    clearAdminClientCache('sellers');
+    const response = await API.put(`/admin/sellers/${id}/details`, details);
+    return response.data;
+  },
   getCaptains: async (forceRefresh = false) => {
     return captainService.getAllCaptains(forceRefresh);
   },
   toggleCaptainStatus: async (id, status) => {
     return captainService.toggleCaptainStatus(id, status);
   },
+  updateCaptainDetails: async (id, details) => {
+    const response = await API.put(`/admin/captains/${id}/details`, details);
+    return response.data;
+  },
   deleteCaptain: async (id) => {
     return captainService.deleteCaptain(id);
   },
   assignCaptainToOrder: async (orderId, captainId, captainEarnings = 0) => {
     const response = await API.put(`/admin/orders/${orderId}/assign-captain`, { captainId, captainEarnings });
+    return response.data;
+  },
+  getAvailableCaptains: async () => {
+    const response = await API.get('/admin/captains/available');
+    return response.data;
+  },
+  updateOrderStatus: async (orderId, payload) => {
+    const response = await API.put(`/admin/orders/${orderId}/status`, payload);
+    return response.data;
+  },
+  getUserOrders: async (userId) => {
+    const response = await API.get(`/admin/users/${userId}/orders`);
+    return response.data;
+  },
+  updateReturnStatus: async (orderId, payload) => {
+    const response = await API.put(`/admin/orders/${orderId}/return-status`, payload);
     return response.data;
   },
 };
@@ -1105,6 +1228,114 @@ export const sellerRegistrationFeeService = {
     return response.data;
   },
 };
+
+export const captainRegistrationFeeService = {
+  // Public & Captain Methods
+  getPublicFeeConfig: async () => {
+    const response = await API.get('/captain-registration-fee/config');
+    return response.data;
+  },
+  initiateOrder: async (payload) => {
+    const response = await API.post('/captain-registration-fee/initiate-order', payload);
+    return response.data;
+  },
+  verifyPayment: async (payload) => {
+    const response = await API.post('/captain-registration-fee/verify-payment', payload);
+    return response.data;
+  },
+  retryOrder: async (payload) => {
+    const response = await API.post('/captain-registration-fee/retry-order', payload);
+    return response.data;
+  },
+
+  // Admin Management Methods
+  adminGetConfig: async () => {
+    const response = await API.get('/captain-registration-fee/admin');
+    return response.data;
+  },
+  adminUpdateConfig: async (payload) => {
+    const response = await API.put('/captain-registration-fee/admin', payload);
+    return response.data;
+  },
+  adminGetPayments: async (params = {}) => {
+    const response = await API.get('/captain-registration-fee/admin/payments', { params });
+    return response.data;
+  },
+  adminGetPaymentById: async (id) => {
+    const response = await API.get(`/captain-registration-fee/admin/payments/${id}`);
+    return response.data;
+  },
+};
+
+export { default as commissionService } from './commissionService';
+
+// Referral & Earn Service
+export const referralService = {
+  // Seller
+  getSellerCode: async () => {
+    const res = await API.get('/referral/seller/code');
+    return res.data;
+  },
+  getSellerReferrals: async (params = {}) => {
+    const res = await API.get('/referral/seller/my', { params });
+    return res.data;
+  },
+
+  // Captain
+  getCaptainCode: async () => {
+    const res = await API.get('/referral/captain/code');
+    return res.data;
+  },
+  getCaptainReferrals: async (params = {}) => {
+    const res = await API.get('/referral/captain/my', { params });
+    return res.data;
+  },
+
+  // Admin
+  getSettings: async () => {
+    const res = await API.get('/referral/admin/settings');
+    return res.data;
+  },
+  updateSettings: async (data) => {
+    const res = await API.put('/referral/admin/settings', data);
+    return res.data;
+  },
+  getStats: async () => {
+    const res = await API.get('/referral/admin/stats');
+    return res.data;
+  },
+  getAllReferrals: async (params = {}) => {
+    const res = await API.get('/referral/admin/all', { params });
+    return res.data;
+  },
+  updateReferralStatus: async (id, action, reason = '') => {
+    const res = await API.put(`/referral/admin/${id}/approve`, { action, reason });
+    return res.data;
+  },
+  creditReward: async (id) => {
+    const res = await API.post(`/referral/admin/${id}/credit`);
+    return res.data;
+  },
+};
+
+export const adminTransportService = {
+  getAllBookings: async (params = {}) => {
+    const res = await API.get('/transport/bookings/admin/all', { params });
+    return res.data;
+  },
+  assignCaptain: async (bookingId, captainId, captainEarnings = 0) => {
+    const res = await API.put(`/transport/bookings/admin/${bookingId}/assign-captain`, { captainId, captainEarnings });
+    return res.data;
+  },
+  cancelBooking: async (bookingId, reason = '') => {
+    const res = await API.put(`/transport/bookings/admin/${bookingId}/cancel`, { reason });
+    return res.data;
+  },
+};
+
+
+
+
 
 
 

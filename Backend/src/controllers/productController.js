@@ -5,12 +5,22 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// High-speed In-memory Cache for Products listing
+const productsCache = new Map();
+export const invalidateProductsCache = () => {
+  productsCache.clear();
+};
+
 const processImage = async (imgStr, folder = 'products') => {
   if (!imgStr) return 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
   
   if (typeof imgStr === 'string' && imgStr.startsWith('data:image/')) {
     try {
-      const res = await uploadToCloudinary(imgStr, folder);
+      const uploadPromise = uploadToCloudinary(imgStr, folder);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Cloudinary upload timed out (5s limit)')), 5000)
+      );
+      const res = await Promise.race([uploadPromise, timeoutPromise]);
       if (res && res.secure_url) return res.secure_url;
     } catch (err) {
       console.warn('Cloudinary upload bypassed/failed:', err.message);
@@ -21,6 +31,19 @@ const processImage = async (imgStr, folder = 'products') => {
     }
   }
   return imgStr;
+};
+
+const processImageWithCache = async (imgStr, folder = 'products', cache = new Map()) => {
+  if (!imgStr) return 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
+  if (typeof imgStr === 'string' && (imgStr.startsWith('http://') || imgStr.startsWith('https://'))) {
+    return imgStr;
+  }
+  if (cache.has(imgStr)) {
+    return cache.get(imgStr);
+  }
+  const result = await processImage(imgStr, folder);
+  cache.set(imgStr, result);
+  return result;
 };
 
 // @desc    Create a new product
@@ -52,7 +75,10 @@ export const createProduct = async (req, res) => {
       isFeatured,
       isReturnable,
       returnWindow,
-      returnPolicy
+      returnPolicy,
+      hasVariants,
+      variantOptions,
+      variants
     } = req.body;
 
     if (!name || typeof name !== 'string' || !name.trim()) {
@@ -62,19 +88,53 @@ export const createProduct = async (req, res) => {
       });
     }
 
-    const parsedMrp = Number(mrp || salePrice || 0);
-    const parsedSalePrice = Number(salePrice || mrp || 0);
-    const parsedStock = Number(stock || 0);
+    const imageCache = new Map();
 
-    const formattedUnit = `${unitValue || '1'} ${unitType || 'kg'}`;
+    // Process mainImage & galleryImages through Cloudinary in PARALLEL
+    const [processedMainImage, processedGalleryImages] = await Promise.all([
+      processImageWithCache(mainImage, 'products/main', imageCache),
+      Array.isArray(galleryImages) && galleryImages.length > 0
+        ? Promise.all(galleryImages.map(img => processImageWithCache(img, 'products/gallery', imageCache)))
+        : Promise.resolve([])
+    ]);
 
-    // Process mainImage & galleryImages through Cloudinary if configured
-    const processedMainImage = await processImage(mainImage, 'products/main');
-    let processedGalleryImages = [];
-    if (Array.isArray(galleryImages)) {
-      processedGalleryImages = await Promise.all(galleryImages.map(img => processImage(img, 'products/gallery')));
+    // Process variant images if provided, re-using processedMainImage when possible
+    let processedVariants = [];
+    if (Array.isArray(variants) && variants.length > 0) {
+      processedVariants = await Promise.all(
+        variants.map(async (v) => {
+          let vImage = v.image || '';
+          if (vImage && typeof vImage === 'string' && vImage.startsWith('data:image/')) {
+            vImage = await processImageWithCache(vImage, 'products/variants', imageCache);
+          } else if (!vImage || vImage === mainImage) {
+            vImage = processedMainImage;
+          }
+          return {
+            ...v,
+            image: vImage,
+            price: Number(v.price || 0),
+            originalPrice: Number(v.originalPrice || v.price || 0),
+            stock: Number(v.stock || 0),
+            active: v.active !== undefined ? Boolean(v.active) : true
+          };
+        })
+      );
     }
 
+    // Clean out any option that has 0 values (e.g. user added option name but no tags)
+    const cleanVariantOptions = Array.isArray(variantOptions)
+      ? variantOptions.filter(o => o.name && o.name.trim() && Array.isArray(o.values) && o.values.length > 0)
+      : [];
+
+    const isMultiVariant = Boolean((hasVariants && cleanVariantOptions.length > 0) || (processedVariants && processedVariants.length > 0));
+    const firstActiveVariant = processedVariants.find(v => v.active !== false) || processedVariants[0];
+
+    const parsedMrp = Number(mrp || (firstActiveVariant ? firstActiveVariant.originalPrice : (salePrice || 0)));
+    const parsedSalePrice = Number(salePrice || (firstActiveVariant ? firstActiveVariant.price : (mrp || 0)));
+    const totalVariantStock = processedVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+    const parsedStock = Number(stock !== undefined && stock !== '' ? stock : (isMultiVariant ? totalVariantStock : 0));
+
+    const formattedUnit = `${unitValue || '1'} ${unitType || 'kg'}`;
     const finalIsReturnable = isReturnable !== undefined ? Boolean(isReturnable) : true;
     const finalReturnWindow = returnWindow ? Number(returnWindow) : 7;
     const finalReturnPolicy = returnPolicy || (finalIsReturnable ? `${finalReturnWindow} Days Returnable` : 'Non-Returnable');
@@ -96,17 +156,22 @@ export const createProduct = async (req, res) => {
       hsnCode: hsnCode || '',
       stock: parsedStock,
       minStockLimit: minStockLimit ? Number(minStockLimit) : 10,
-      sku: sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
-      mainImage: processedMainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
+      sku: sku || (firstActiveVariant?.sku) || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
+      mainImage: processedMainImage || (firstActiveVariant?.image) || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
       homeSections: Array.isArray(homeSections) && homeSections.length > 0 ? homeSections : ['flash_sale', 'bestseller'],
       galleryImages: processedGalleryImages,
       status: status || 'Published',
       isFeatured: Boolean(isFeatured),
       isReturnable: finalIsReturnable,
       returnWindow: finalReturnWindow,
-      returnPolicy: finalReturnPolicy
+      returnPolicy: finalReturnPolicy,
+      hasVariants: isMultiVariant,
+      variantOptions: cleanVariantOptions,
+      variants: processedVariants
     });
 
+
+    invalidateProductsCache();
 
     console.log(`[PRODUCT CREATED IN DB] ID: ${product._id}, Name: ${product.name}, Seller: ${product.seller}, SellerID: ${product.sellerId}`);
 
@@ -129,6 +194,13 @@ export const createProduct = async (req, res) => {
 // @access  Public
 export const getProducts = async (req, res) => {
   try {
+    const now = Date.now();
+    const cacheKey = req.originalUrl || JSON.stringify(req.query);
+    const cached = productsCache.get(cacheKey);
+    if (cached && (now - cached.timestamp < 15000)) {
+      return res.status(200).json(cached.data);
+    }
+
     const { category, subCategory, section, search, sellerId, seller } = req.query;
     let query = {};
 
@@ -172,7 +244,7 @@ export const getProducts = async (req, res) => {
       : 50;
 
     let dbQuery = Product.find(query)
-      .select('name category subCategory brand unitValue unitType unit seller sellerId mrp salePrice stock mainImage homeSections status isFeatured isReturnable sku createdAt')
+      .select('name category subCategory brand unitValue unitType unit seller sellerId mrp salePrice stock mainImage homeSections status isFeatured isReturnable sku createdAt hasVariants variantOptions variants')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -185,14 +257,18 @@ export const getProducts = async (req, res) => {
       Product.countDocuments(query),
     ]);
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       count: products.length,
       total,
       page,
       limit: limit || total,
       products
-    });
+    };
+
+    productsCache.set(cacheKey, { data: responsePayload, timestamp: now });
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -265,11 +341,43 @@ export const updateProduct = async (req, res) => {
       updateData.galleryImages = await Promise.all(updateData.galleryImages.map(img => processImage(img, 'products/gallery')));
     }
 
+    if (Array.isArray(updateData.variants)) {
+      updateData.variants = await Promise.all(
+        updateData.variants.map(async (v) => {
+          let vImage = v.image || '';
+          if (vImage && typeof vImage === 'string' && vImage.startsWith('data:image/')) {
+            vImage = await processImage(vImage, 'products/variants');
+          }
+          return {
+            ...v,
+            image: vImage,
+            price: Number(v.price || 0),
+            originalPrice: Number(v.originalPrice || v.price || 0),
+            stock: Number(v.stock || 0),
+            active: v.active !== undefined ? Boolean(v.active) : true
+          };
+        })
+      );
+
+      if (updateData.hasVariants && updateData.variants.length > 0) {
+        const firstActiveVariant = updateData.variants.find(v => v.active !== false) || updateData.variants[0];
+        if (firstActiveVariant) {
+          if (!updateData.salePrice) updateData.salePrice = firstActiveVariant.price;
+          if (!updateData.mrp) updateData.mrp = firstActiveVariant.originalPrice;
+        }
+        if (updateData.stock === undefined || updateData.stock === null) {
+          updateData.stock = updateData.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+        }
+      }
+    }
+
     const updatedProduct = await Product.findByIdAndUpdate(
       product._id,
       { $set: updateData },
       { returnDocument: 'after', runValidators: true }
     );
+
+    invalidateProductsCache();
 
     res.status(200).json({
       success: true,
@@ -299,6 +407,7 @@ export const deleteProduct = async (req, res) => {
     }
 
     await product.deleteOne();
+    invalidateProductsCache();
 
     res.status(200).json({
       success: true,

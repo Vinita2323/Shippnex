@@ -26,7 +26,7 @@ const walletTransactionSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['CREDIT', 'DEBIT_REVERSAL', 'WITHDRAWAL'],
+      enum: ['CREDIT', 'DEBIT', 'DEBIT_REVERSAL', 'WITHDRAWAL', 'REFUND_REVERSAL'],
       required: true,
     },
     grossAmount: {

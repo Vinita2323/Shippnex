@@ -13,7 +13,19 @@ import { getImageUrl, grainsImg } from '../../../utils/imageUtils';
 
 const formatRawOrdersList = (rawList = []) => {
   return rawList.map(o => {
-    const rawStatus = (o.orderStatus || o.status || 'Placed').trim();
+    let rawStatus = (o.orderStatus || o.status || 'Placed').trim();
+    if (o.orderStatus === 'Refund Completed' || o.refundStatus === 'Completed' || o.returnStatus === 'Refunded') {
+      rawStatus = 'Refund Completed';
+    } else if (o.orderStatus === 'Returned' || o.returnStatus === 'Completed') {
+      rawStatus = 'Returned';
+    } else if (o.orderStatus === 'Return Approved' || o.returnStatus === 'Approved') {
+      rawStatus = 'Return Approved';
+    } else if (o.orderStatus === 'Return Requested' || o.returnStatus === 'Pending' || o.returnStatus === 'Requested') {
+      rawStatus = 'Return Requested';
+    } else if (o.orderStatus === 'Return Rejected' || o.returnStatus === 'Rejected') {
+      rawStatus = 'Return Rejected';
+    }
+
     return {
       id: o.orderId || o._id,
       _id: o._id,
@@ -113,7 +125,7 @@ const OrderHistory = () => {
   };
 
   useEffect(() => {
-    fetchOrderHistory();
+    fetchOrderHistory(true);
     fetchUserReviews();
   }, []);
 
@@ -171,18 +183,18 @@ const OrderHistory = () => {
   // Filter Counts
   const counts = useMemo(() => {
     const total = orders.length;
-    const completed = orders.filter(o => ['Delivered', 'Completed'].includes(o.status)).length;
-    const active = orders.filter(o => ['Placed', 'Accepted', 'Processing', 'Out for Delivery'].includes(o.status)).length;
-    const cancelled = orders.filter(o => ['Cancelled', 'Rejected'].includes(o.status)).length;
+    const completed = orders.filter(o => ['Delivered', 'Completed', 'Refund Completed', 'Refunded', 'Returned'].includes(o.status)).length;
+    const active = orders.filter(o => ['Placed', 'Accepted', 'Processing', 'Out for Delivery', 'Return Requested', 'Return Approved'].includes(o.status)).length;
+    const cancelled = orders.filter(o => ['Cancelled', 'Rejected', 'Return Rejected'].includes(o.status)).length;
     return { total, completed, active, cancelled };
   }, [orders]);
 
   // Filtered orders based on status & search
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
-      if (statusFilter === 'COMPLETED' && !['Delivered', 'Completed'].includes(o.status)) return false;
-      if (statusFilter === 'ACTIVE' && !['Placed', 'Accepted', 'Processing', 'Out for Delivery'].includes(o.status)) return false;
-      if (statusFilter === 'CANCELLED' && !['Cancelled', 'Rejected'].includes(o.status)) return false;
+      if (statusFilter === 'COMPLETED' && !['Delivered', 'Completed', 'Refund Completed', 'Refunded', 'Returned'].includes(o.status)) return false;
+      if (statusFilter === 'ACTIVE' && !['Placed', 'Accepted', 'Processing', 'Out for Delivery', 'Return Requested', 'Return Approved'].includes(o.status)) return false;
+      if (statusFilter === 'CANCELLED' && !['Cancelled', 'Rejected', 'Return Rejected'].includes(o.status)) return false;
 
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase().trim();
@@ -201,12 +213,43 @@ const OrderHistory = () => {
 
   const getStatusBadge = (status) => {
     switch (status) {
+      case 'Refund Completed':
+      case 'Refunded':
+        return {
+          bg: 'bg-emerald-50 border-emerald-300 text-emerald-800 font-black',
+          icon: <CheckCircle2 size={10} className="text-emerald-600" />,
+          label: 'Refund Completed',
+        };
       case 'Delivered':
       case 'Completed':
         return {
           bg: 'bg-emerald-50 border-emerald-200 text-emerald-700',
           icon: <CheckCircle2 size={10} className="text-emerald-600" />,
           label: 'Delivered',
+        };
+      case 'Return Requested':
+        return {
+          bg: 'bg-amber-50 border-amber-200 text-amber-700',
+          icon: <RotateCcw size={10} className="text-amber-600" />,
+          label: 'Return Requested',
+        };
+      case 'Return Approved':
+        return {
+          bg: 'bg-teal-50 border-teal-200 text-teal-700',
+          icon: <CheckCircle2 size={10} className="text-teal-600" />,
+          label: 'Return Approved',
+        };
+      case 'Return Rejected':
+        return {
+          bg: 'bg-rose-50 border-rose-200 text-rose-700',
+          icon: <XCircle size={10} className="text-rose-600" />,
+          label: 'Return Rejected',
+        };
+      case 'Returned':
+        return {
+          bg: 'bg-purple-50 border-purple-200 text-purple-700',
+          icon: <RotateCcw size={10} className="text-purple-600" />,
+          label: 'Returned',
         };
       case 'Placed':
       case 'Accepted':

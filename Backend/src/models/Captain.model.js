@@ -92,6 +92,23 @@ const captainSchema = new mongoose.Schema(
       enum: ['active', 'expired', 'pending_payment', 'none'],
       default: 'none',
     },
+    registrationFeeStatus: {
+      type: String,
+      enum: ['pending', 'paid', 'not_required', 'failed'],
+      default: 'not_required',
+      index: true,
+    },
+    registrationFeePaymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'CaptainRegistrationPayment',
+    },
+    registrationFeeAmount: {
+      type: Number,
+      default: 0,
+    },
+    registrationFeePaidAt: {
+      type: Date,
+    },
 
     walletBalance: {
       type: Number,
@@ -151,10 +168,22 @@ const captainSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    // Referral System
+    referralCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+    },
+    referredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Captain',
+      default: null,
+    },
   },
   {
     timestamps: true,
     collection: 'captains',
+    autoIndex: false,
   }
 );
 
@@ -163,6 +192,7 @@ captainSchema.index({ status: 1, isOnline: 1 });
 captainSchema.index({ vehicleType: 1, status: 1, isOnline: 1 });
 captainSchema.index({ accountStatus: 1, createdAt: -1 });
 captainSchema.index({ createdAt: -1 });
+captainSchema.index({ referralCode: 1 }, { unique: true, sparse: true });
 
 // Hash password before saving
 captainSchema.pre('save', async function () {

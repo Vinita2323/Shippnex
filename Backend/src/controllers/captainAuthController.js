@@ -3,6 +3,28 @@ import { generateOtp } from '../utils/generateOtp.js';
 import { generateToken } from '../utils/generateToken.js';
 import CaptainMembership from '../models/CaptainMembership.model.js';
 import { sendOtpSMS, normalizePhoneNumber } from '../services/smsIndiaHubService.js';
+import { uploadToCloudinary } from '../config/cloudinary.js';
+import { applyReferralCodeAtRegistration } from './referralController.js';
+
+const processDocImage = async (imgStr, docName = 'doc') => {
+  if (!imgStr) return '';
+  if (typeof imgStr === 'string' && (imgStr.startsWith('http://') || imgStr.startsWith('https://'))) {
+    return imgStr;
+  }
+  if (typeof imgStr === 'string' && imgStr.startsWith('data:image/')) {
+    try {
+      const uploadPromise = uploadToCloudinary(imgStr, `captains/${docName}`);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Cloudinary upload timeout')), 5000)
+      );
+      const res = await Promise.race([uploadPromise, timeoutPromise]);
+      if (res && res.secure_url) return res.secure_url;
+    } catch (err) {
+      console.warn(`[CaptainAuth] Cloudinary upload for ${docName} bypassed/fallback:`, err.message);
+    }
+  }
+  return imgStr;
+};
 
 // Register Captain (Mandates Password & Dispatches Verification OTP)
 export const registerCaptain = async (req, res, next) => {
@@ -45,6 +67,7 @@ export const registerCaptain = async (req, res, next) => {
       branchName,
       upiId,
       panCardNumber,
+      referralCode,
     } = req.body;
 
     const rawPhone = mobileNumber || req.body.phone;
@@ -86,48 +109,60 @@ export const registerCaptain = async (req, res, next) => {
 
     const { otp, otpExpiry } = generateOtp();
 
-    const captainData = {
-      name: fullName,
-      phone,
-      password, // Pre-save hook will hash this
-      email,
-      alternateMobile,
-      dob,
-      age,
-      fatherName,
-      currentAddress,
-      permanentAddress,
-      city,
-      state,
-      pinCode,
-      emergencyContact,
-      aadhaarNumber,
-      panCardNumber: panCardNumber ? panCardNumber.toUpperCase() : '',
-      vehicleType: vehicleType || 'Motorcycle',
-      drivingLicenseNumber,
-      rcNumber,
-      vehicleInsuranceNumber,
-      insuranceValidTill,
-      pucNumber,
-      pucValidTill,
-      permitNumber,
-      permitValidTill,
-      fitnessCertNumber,
-      fitnessValidTill,
-      roadTaxNumber,
-      roadTaxValidTill,
-      gpsEnabled: gpsEnabled !== undefined ? gpsEnabled : true,
-      gpsDeviceId,
-      documents: req.body.documents || {},
-      bankDetails: {
-        bankName,
-        accountHolderName,
-        accountNumber,
-        ifscCode,
-        branchName,
-        upiId,
+      const rawDocs = req.body.documents || {};
+      const processedDocs = {};
+      await Promise.all(
+        Object.entries(rawDocs).map(async ([key, val]) => {
+          if (val) {
+            processedDocs[key] = await processDocImage(val, key);
+          } else {
+            processedDocs[key] = '';
+          }
+        })
+      );
+
+      const captainData = {
+        name: fullName,
+        phone,
+        password, // Pre-save hook will hash this
+        email,
+        alternateMobile,
+        dob,
+        age,
+        fatherName,
+        currentAddress,
+        permanentAddress,
+        city,
+        state,
+        pinCode,
+        emergencyContact,
+        aadhaarNumber,
         panCardNumber: panCardNumber ? panCardNumber.toUpperCase() : '',
-      },
+        vehicleType: vehicleType || 'Motorcycle',
+        drivingLicenseNumber,
+        rcNumber,
+        vehicleInsuranceNumber,
+        insuranceValidTill,
+        pucNumber,
+        pucValidTill,
+        permitNumber,
+        permitValidTill,
+        fitnessCertNumber,
+        fitnessValidTill,
+        roadTaxNumber,
+        roadTaxValidTill,
+        gpsEnabled: gpsEnabled !== undefined ? gpsEnabled : true,
+        gpsDeviceId,
+        documents: processedDocs,
+        bankDetails: {
+          bankName,
+          accountHolderName,
+          accountNumber,
+          ifscCode,
+          branchName,
+          upiId,
+          panCardNumber: panCardNumber ? panCardNumber.toUpperCase() : '',
+        },
       otp,
       otpExpiry,
       isVerified: false,
@@ -140,6 +175,22 @@ export const registerCaptain = async (req, res, next) => {
       await captain.save();
     } else {
       captain = await Captain.create(captainData);
+    }
+
+    // Process referral code if provided
+    if (referralCode) {
+      try {
+        await applyReferralCodeAtRegistration({
+          referralCode,
+          referrerRole: 'captain',
+          referredId: captain._id,
+          referredRole: 'captain',
+          referredPhone: phone,
+          referredName: fullName || 'Captain',
+        });
+      } catch (refErr) {
+        console.warn('Referral registration error for captain:', refErr.message);
+      }
     }
 
     console.log(`[CAPTAIN REGISTER] Registered Captain "${fullName}" (${phone}) - Status: PENDING OTP Verification`);

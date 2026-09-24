@@ -48,7 +48,7 @@ const orderSchema = new mongoose.Schema(
     deliveryInstructions: { type: String, default: '' },
     paymentMethod: {
       type: String,
-      enum: ['COD', 'UPI', 'CARD', 'NETBANKING', 'WALLET'],
+      enum: ['COD', 'UPI', 'CARD', 'NETBANKING', 'WALLET', 'ONLINE'],
       default: 'COD',
     },
     paymentStatus: {
@@ -58,12 +58,40 @@ const orderSchema = new mongoose.Schema(
     },
     orderStatus: {
       type: String,
-      enum: ['Placed', 'Accepted', 'Rejected', 'Processing', 'Reached Store / Pickup', 'Out for Delivery', 'Delivered', 'Cancelled'],
+      enum: [
+        'Placed',
+        'Accepted',
+        'Rejected',
+        'Processing',
+        'Reached Store / Pickup',
+        'Out for Delivery',
+        'Delivered',
+        'Cancelled',
+        'Returned',
+        'Return Requested',
+        'Return Approved',
+        'Return Rejected',
+        'Refund Completed',
+        'Refunded',
+      ],
       default: 'Placed',
     },
+    returnReason: { type: String, default: '' },
+    returnStatus: {
+      type: String,
+      enum: [null, 'Pending', 'Approved', 'Rejected', 'Completed', 'Refunded'],
+      default: null,
+    },
+    returnedAt: { type: Date },
+    refundStatus: {
+      type: String,
+      enum: [null, 'Pending', 'Initiated', 'Completed', 'Failed', 'Refunded'],
+      default: null,
+    },
+    refundedAt: { type: Date },
     sellerStatus: {
       type: String,
-      enum: ['Pending', 'Accepted', 'Rejected'],
+      enum: ['Pending', 'Accepted', 'Rejected', 'Delivered', 'DELIVERED', 'Processing', 'Cancelled'],
       default: 'Pending',
     },
     rejectionReason: { type: String, default: '' },
@@ -74,6 +102,14 @@ const orderSchema = new mongoose.Schema(
     discount: { type: Number, required: true, default: 0 },
     gst: { type: Number, required: true, default: 0 },
     grandTotal: { type: Number, required: true },
+
+    // Dynamic Commission & Earning Snapshot Fields
+    sellerCommissionRate: { type: Number, default: 10 },
+    sellerCommissionAmount: { type: Number, default: 0 },
+    sellerEarning: { type: Number, default: 0 },
+    captainCommissionRate: { type: Number, default: 5 },
+    captainCommissionAmount: { type: Number, default: 0 },
+    captainEarning: { type: Number, default: 0 },
 
     // Captain Delivery Fields
     captainId: {

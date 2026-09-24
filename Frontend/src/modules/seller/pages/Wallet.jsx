@@ -205,23 +205,31 @@ const Wallet = () => {
       </div>
 
       {/* Secondary Financial Metrics Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1 shadow-2xs">
-          <span className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider">Total Earnings</span>
+          <span className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider">Total Orders</span>
+          <p className="text-xl font-black text-slate-900 m-0">{transactions.filter(t => t.type === 'CREDIT').length}</p>
+          <span className="text-[10px] text-slate-400">Completed order deliveries</span>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1 shadow-2xs">
+          <span className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider">Total Sales</span>
+          <p className="text-xl font-black text-slate-900 m-0">
+            ₹{Number((walletData.totalEarnings || 0) + (walletData.totalCommissionDeducted || 0)).toFixed(2)}
+          </p>
+          <span className="text-[10px] text-slate-400">Gross customer sales</span>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1 shadow-2xs">
+          <span className="text-[11px] font-extrabold uppercase text-[#ff7526] tracking-wider">Commission</span>
+          <p className="text-xl font-black text-[#ff7526] m-0">₹{Number(walletData.totalCommissionDeducted || 0).toFixed(2)}</p>
+          <span className="text-[10px] text-slate-400">Platform commission</span>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1 shadow-2xs">
+          <span className="text-[11px] font-extrabold uppercase text-emerald-600 tracking-wider">Net Earnings</span>
           <p className="text-xl font-black text-emerald-600 m-0">₹{Number(walletData.totalEarnings || 0).toFixed(2)}</p>
-          <span className="text-[10px] text-slate-400">Net credited sales revenue</span>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1 shadow-2xs">
-          <span className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider">Total Commission Deducted</span>
-          <p className="text-xl font-black text-slate-900 m-0">₹{Number(walletData.totalCommissionDeducted || 0).toFixed(2)}</p>
-          <span className="text-[10px] text-slate-400">Admin platform commission</span>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1 shadow-2xs">
-          <span className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider">Total Payout Withdrawn</span>
-          <p className="text-xl font-black text-blue-600 m-0">₹{Number(walletData.totalWithdrawn || 0).toFixed(2)}</p>
-          <span className="text-[10px] text-slate-400">Settled bank payouts</span>
+          <span className="text-[10px] text-slate-400">Net credited revenue</span>
         </div>
       </div>
 
@@ -340,24 +348,26 @@ const Wallet = () => {
               {transactions.filter(t => t.type === 'CREDIT').map((c) => (
                 <div 
                   key={c._id} 
-                  className="bg-slate-50/80 hover:bg-slate-50 border border-slate-200/80 p-4 rounded-2xl flex items-center justify-between gap-4 transition-colors"
+                  className="bg-slate-50/80 hover:bg-slate-50 border border-slate-200/80 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors"
                 >
-                  <div className="space-y-0.5">
+                  <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-slate-900 text-sm m-0">Order Settlement #{c.orderId}</h4>
+                      <h4 className="font-bold text-slate-900 text-sm m-0">Order #{c.orderId}</h4>
                       <span className="text-xs font-extrabold text-[#ff7526] bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200">
                         Commission: {c.commissionRate}%
                       </span>
                     </div>
-                    <p className="text-xs text-slate-600 font-normal m-0">
-                      Gross Order Amount: <strong className="font-semibold text-slate-900">₹{Number(c.grossAmount).toFixed(2)}</strong>
-                    </p>
-                    <p className="text-[11px] text-slate-400 m-0">{new Date(c.createdAt).toLocaleDateString()}</p>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                      <span>Order Amount: <strong className="font-bold text-slate-900">₹{Number(c.grossAmount || c.netAmount).toFixed(2)}</strong></span>
+                      <span>Commission Rate: <strong className="font-bold text-[#ff7526]">{c.commissionRate}%</strong></span>
+                      <span>Commission Amount: <strong className="font-bold text-rose-600">-₹{Number(c.commissionAmount || 0).toFixed(2)}</strong></span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 m-0">{new Date(c.createdAt).toLocaleString('en-IN')}</p>
                   </div>
 
-                  <div className="text-right space-y-0.5 shrink-0">
-                    <span className="font-extrabold text-red-600 text-sm block">-₹{Number(c.commissionAmount).toFixed(2)}</span>
-                    <span className="text-xs font-bold text-emerald-600 block">Net Credited: ₹{Number(c.netAmount).toFixed(2)}</span>
+                  <div className="sm:text-right bg-white sm:bg-transparent p-3 sm:p-0 rounded-xl border sm:border-0 border-slate-200 shrink-0">
+                    <span className="text-[10px] font-extrabold uppercase text-slate-400 block tracking-wider">Your Net Earning</span>
+                    <span className="text-base font-black text-emerald-600 block">₹{Number(c.netAmount).toFixed(2)}</span>
                   </div>
                 </div>
               ))}

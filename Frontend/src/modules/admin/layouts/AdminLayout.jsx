@@ -44,6 +44,12 @@ import {
 import { AdminLocationDashboard } from '../pages/AdminLocationDashboard';
 import { PolicyManagement } from '../pages/PolicyManagement';
 import { ProfileEditRequests } from '../pages/ProfileEditRequests';
+import { CaptainRegistrationFeeAdmin } from '../pages/CaptainRegistrationFeeAdmin';
+import { SellerRegistrationFeeAdmin } from '../pages/SellerRegistrationFeeAdmin';
+import { CommissionManagement } from '../pages/CommissionManagement';
+import { ReferralManagement, ReferralDashboard, ReferralSettings, ReferralList } from '../pages/ReferralManagement';
+import { ReturnManagement } from '../pages/ReturnManagement';
+import { TransportManagement } from '../pages/TransportManagement';
 
 const FinancialAuthorityTransferred = () => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm max-w-2xl mx-auto mt-12">
@@ -52,10 +58,10 @@ const FinancialAuthorityTransferred = () => (
     </div>
     <h3 className="text-xl font-bold text-slate-800 mb-2">Financial Authority Restricted</h3>
     <p className="text-sm text-slate-600 max-w-md mb-6 leading-relaxed">
-      In accordance with platform governance, all financial operations including wallets, settlements, payouts, transactions, and commission management have been moved exclusively to the <strong className="text-slate-900">Super Admin Panel</strong>.
+      In accordance with platform governance, all financial operations including wallets, settlements, payouts, and ledger adjustments have been moved to the Super Admin Panel.
     </p>
     <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
-      Operational administrators are restricted to catalog, inventory, order fulfillment, customers, and fleet operations.
+      Commission Management is active and accessible via the dedicated Commission Management section.
     </div>
   </div>
 );
@@ -65,11 +71,34 @@ export const AdminLayout = () => {
 
   const renderActiveTabContent = () => {
     switch (activeTab) {
+      case 'referral_dashboard':
+      case 'referral-dashboard':
+        return <ReferralDashboard onNavigateTab={(tab) => setActiveTab(tab)} />;
+      case 'referral_settings':
+      case 'referral-settings':
+        return <ReferralSettings />;
+      case 'referral_list':
+      case 'referral-list':
+      case 'referrals':
+        return <ReferralList />;
+      case 'referral_management':
+      case 'referral-management':
+      case 'referral':
+        return <ReferralManagement />;
+      case 'commission_management':
+      case 'commission-management':
+      case 'commissions':
+      case 'commission':
+        return <CommissionManagement />;
+      case 'captain-registration-fee':
+      case 'captain_registration_fee':
+      case 'captain_fee':
+        return <CaptainRegistrationFeeAdmin />;
       case 'seller-registration-fee':
       case 'seller_registration_fee':
       case 'registration_fee':
       case 'seller-fee':
-        return <FinancialAuthorityTransferred />;
+        return <SellerRegistrationFeeAdmin />;
       case 'location':
         return <AdminLocationDashboard />;
       case 'dashboard':
@@ -117,8 +146,25 @@ export const AdminLayout = () => {
       case 'orders_out_for_delivery':
       case 'orders_delivered':
       case 'orders_cancelled':
-      case 'orders_return':
         return <OrderManagement />;
+      case 'orders_return':
+      case 'returns':
+      case 'return_management':
+        return <ReturnManagement />;
+      case 'transport':
+      case 'transport_all':
+      case 'vehicle_logistics':
+      case 'logistics':
+        return <TransportManagement initialTab="ALL" />;
+      case 'transport_searching':
+        return <TransportManagement initialTab="SEARCHING_CAPTAIN" />;
+      case 'transport_active':
+      case 'transport_in_progress':
+        return <TransportManagement initialTab="IN_PROGRESS" />;
+      case 'transport_completed':
+        return <TransportManagement initialTab="RIDE_COMPLETED" />;
+      case 'transport_cancelled':
+        return <TransportManagement initialTab="CANCELLED" />;
       case 'deliveries':
         return <DeliveryManagement />;
       case 'fund_transfer':

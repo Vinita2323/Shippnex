@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, MapPin, Check, Plus, ChevronRight, X, Loader2, Banknote
-  // Clock, CreditCard, Wallet, Building2, ShieldCheck
+  ArrowLeft, MapPin, Check, Plus, ChevronRight, X, Loader2, Banknote,
+  CreditCard, Wallet, Building2, ShieldCheck, Smartphone
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useLocationContext } from '../../../context/LocationContext';
@@ -15,15 +15,13 @@ const availableSlots = [
   { id: 's4', date: 'Tomorrow', time: '04:00 PM - 06:00 PM' },
 ];
 
-// Only Cash on Delivery option available
+// Available Payment Options
 const paymentMethods = [
   { id: 'COD', name: 'Cash on Delivery', icon: Banknote, description: 'Pay cash upon delivery' },
-  /*
-  { id: 'UPI', name: 'UPI (GPay / PhonePe / Paytm)', icon: Wallet, description: 'Instant UPI payment' },
+  { id: 'UPI', name: 'UPI (GPay / PhonePe / Paytm)', icon: Smartphone, description: 'Instant UPI payment' },
   { id: 'CARD', name: 'Credit / Debit Card', icon: CreditCard, description: 'Visa, Mastercard, RuPay' },
   { id: 'NETBANKING', name: 'Net Banking', icon: Building2, description: 'All major banks supported' },
   { id: 'WALLET', name: 'Mobile Wallets', icon: Wallet, description: 'Paytm Wallet, Mobikwik, etc.' },
-  */
 ];
 
 const Checkout = () => {
@@ -32,6 +30,7 @@ const Checkout = () => {
   const { currentLocation } = useLocationContext();
 
   const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
   const [userPhone, setUserPhone] = useState('');
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
@@ -150,6 +149,7 @@ const Checkout = () => {
     }
 
     setUserName(name);
+    setUserEmail(email);
     setUserPhone(phone);
     setProfileForm({
       fullName: name && name !== 'Customer' && name !== 'User' ? name : '',
@@ -193,6 +193,7 @@ const Checkout = () => {
     }
 
     setUserName(cleanName);
+    setUserEmail(cleanEmail);
     setUserPhone(cleanPhone);
     setNewAddrForm((prev) => ({ ...prev, fullName: cleanName, phone: cleanPhone }));
 
@@ -267,6 +268,104 @@ const Checkout = () => {
   };
 
   // Order Placement Action
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const handleRazorpayPayment = async (orderPayload) => {
+    try {
+      // Load Razorpay script
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        setErrorMsg('Failed to load payment gateway. Please try again.');
+        return;
+      }
+
+      // Create order on backend
+      const orderRes = await orderService.placeOrder(orderPayload);
+      if (!orderRes || !orderRes.success || !orderRes.order) {
+        setErrorMsg('Failed to create order.');
+        return;
+      }
+
+      const orderId = orderRes.order._id || orderRes.order.orderId;
+      const amount = Math.round(finalGrandTotal * 100); // Razorpay expects amount in paise
+
+      // Create Razorpay order
+      const razorpayOrderRes = await orderService.createRazorpayOrder(amount, orderId);
+      if (!razorpayOrderRes || !razorpayOrderRes.success || !razorpayOrderRes.orderId) {
+        setErrorMsg('Failed to initialize payment. Please try again.');
+        return;
+      }
+
+      const userEmail = profileForm.email || localStorage.getItem('shippnex_user_email') || (selectedAddress && selectedAddress.email) || '';
+
+      // Open Razorpay payment modal
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: amount,
+        currency: 'INR',
+        name: 'ShippNex',
+        description: `Order #${orderPayload.orderId || 'SHOP'}`,
+        order_id: razorpayOrderRes.orderId,
+        prefill: {
+          name: userName,
+          email: userEmail,
+          contact: userPhone,
+        },
+        handler: async (response) => {
+          // Verify payment
+          try {
+            const verifyRes = await orderService.verifyRazorpayPayment({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              orderId: orderId,
+            });
+
+            if (verifyRes && verifyRes.success) {
+              setPlacedOrder(orderRes.order);
+              await clearCart();
+              // Sync user data
+              if (orderRes.user) {
+                if (orderRes.user.name) localStorage.setItem('shippnex_user_name', orderRes.user.name);
+                if (orderRes.user.email) localStorage.setItem('shippnex_user_email', orderRes.user.email);
+                if (orderRes.user.phone) localStorage.setItem('shippnex_user_phone', orderRes.user.phone);
+                localStorage.setItem('shippnex_user_data', JSON.stringify(orderRes.user));
+                if (orderRes.user.addresses) {
+                  localStorage.setItem('shippnex_saved_addresses', JSON.stringify(orderRes.user.addresses));
+                }
+              }
+            } else {
+              setErrorMsg(verifyRes?.message || 'Payment verification failed. Please contact support.');
+            }
+          } catch (err) {
+            console.error('Payment verification failed:', err);
+            setErrorMsg('Payment verification failed. Please contact support.');
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setErrorMsg('Payment cancelled. Please try again.');
+          },
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (err) {
+      console.error('Payment error:', err);
+      setErrorMsg(err.response?.data?.message || 'Payment failed. Please try again.');
+    }
+  };
+
   const handlePlaceOrder = async () => {
     setErrorMsg('');
 
@@ -290,12 +389,7 @@ const Checkout = () => {
     try {
       setPlacingOrder(true);
 
-      const userEmail = profileForm.email || localStorage.getItem('shippnex_user_email') || (selectedAddress && selectedAddress.email) || '';
-
       const orderPayload = {
-        name: userName,
-        email: userEmail,
-        phone: userPhone,
         items: cartItems.map((item) => ({
           product: item.productId || item.id || item._id,
           name: item.name,
@@ -326,22 +420,28 @@ const Checkout = () => {
         paymentMethod: selectedPayment,
       };
 
-      const res = await orderService.placeOrder(orderPayload);
-      if (res && res.success && res.order) {
-        // Sync returned updated user document to localStorage
-        if (res.user) {
-          if (res.user.name) localStorage.setItem('shippnex_user_name', res.user.name);
-          if (res.user.email) localStorage.setItem('shippnex_user_email', res.user.email);
-          if (res.user.phone) localStorage.setItem('shippnex_user_phone', res.user.phone);
-          localStorage.setItem('shippnex_user_data', JSON.stringify(res.user));
-          if (res.user.addresses && Array.isArray(res.user.addresses)) {
-            localStorage.setItem('shippnex_saved_addresses', JSON.stringify(res.user.addresses));
-          }
-        }
-        setPlacedOrder(res.order);
-        await clearCart();
+      // If online payment method, handle via Razorpay
+      if (['UPI', 'CARD', 'NETBANKING', 'WALLET'].includes(selectedPayment)) {
+        await handleRazorpayPayment(orderPayload);
       } else {
-        setErrorMsg(res.message || 'Failed to place order.');
+        // COD - place order directly
+        const res = await orderService.placeOrder(orderPayload);
+        if (res && res.success && res.order) {
+          // Sync returned updated user document to localStorage
+          if (res.user) {
+            if (res.user.name) localStorage.setItem('shippnex_user_name', res.user.name);
+            if (res.user.email) localStorage.setItem('shippnex_user_email', res.user.email);
+            if (res.user.phone) localStorage.setItem('shippnex_user_phone', res.user.phone);
+            localStorage.setItem('shippnex_user_data', JSON.stringify(res.user));
+            if (res.user.addresses && Array.isArray(res.user.addresses)) {
+              localStorage.setItem('shippnex_saved_addresses', JSON.stringify(res.user.addresses));
+            }
+          }
+          setPlacedOrder(res.order);
+          await clearCart();
+        } else {
+          setErrorMsg(res.message || 'Failed to place order.');
+        }
       }
     } catch (err) {
       console.error('Order placement failed:', err);

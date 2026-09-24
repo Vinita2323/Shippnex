@@ -6,6 +6,7 @@ import SellerMembership from '../models/SellerMembership.model.js';
 import SellerMembershipPlan from '../models/SellerMembershipPlan.model.js';
 import { sendOtpSMS, normalizePhoneNumber } from '../services/smsIndiaHubService.js';
 import crypto from 'crypto';
+import { applyReferralCodeAtRegistration } from './referralController.js';
 
 // Send / Resend OTP
 export const sendOtp = async (req, res, next) => {
@@ -181,7 +182,8 @@ export const registerSeller = async (req, res, next) => {
       razorpayPaymentId,
       razorpayOrderId,
       razorpaySignature,
-      paymentMethod
+      paymentMethod,
+      referralCode
     } = req.body;
 
     if (!phone || !businessName) {
@@ -292,6 +294,22 @@ export const registerSeller = async (req, res, next) => {
       seller = await existingSeller.save();
     } else {
       seller = await Seller.create(sellerData);
+    }
+
+    // Process referral code if provided
+    if (referralCode) {
+      try {
+        await applyReferralCodeAtRegistration({
+          referralCode,
+          referrerRole: 'seller',
+          referredId: seller._id,
+          referredRole: 'seller',
+          referredPhone: cleanPhone,
+          referredName: businessName || ownerName || 'Seller',
+        });
+      } catch (refErr) {
+        console.warn('Referral registration error for seller:', refErr.message);
+      }
     }
 
     // Process Membership if planId provided

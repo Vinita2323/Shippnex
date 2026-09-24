@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, Lock, Eye, EyeOff, Loader2, ArrowRight, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { authService } from '../../../services/authService';
+import { useAuth } from '../../../context/AuthContext';
 
 const CaptainLogin = () => {
   const navigate = useNavigate();
+  const { syncAuthFromStorage } = useAuth();
   const [mobileNumber, setMobileNumber] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -56,6 +58,7 @@ const CaptainLogin = () => {
       const res = await authService.captainLogin(cleanPhone, password);
 
       if (res.success && res.token) {
+        syncAuthFromStorage();
         /* Temporarily commented out: Captain Membership redirect
         if (res.requiresMembership) {
           navigate('/captain/membership');
@@ -156,6 +159,7 @@ const CaptainLogin = () => {
       if (res.success) {
         if (res.token) {
           // Approved captain: directly logged in
+          syncAuthFromStorage();
           setSuccessMsg('Password set successfully! Redirecting to Captain dashboard...');
           setTimeout(() => {
             navigate('/captain/dashboard');

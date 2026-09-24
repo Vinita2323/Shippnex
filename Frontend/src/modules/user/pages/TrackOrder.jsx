@@ -1,10 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, HelpCircle, ChevronRight, Check, Truck, MapPin, CreditCard, Box, ShieldCheck, Clock, User, Phone, KeyRound, Star } from 'lucide-react';
+import { 
+  ChevronLeft, HelpCircle, ChevronRight, Check, Truck, MapPin, 
+  CreditCard, Box, ShieldCheck, Clock, User, Phone, KeyRound, Star, 
+  RotateCcw, AlertTriangle, X, ArrowRight, RefreshCw, Loader2, CheckCircle2,
+  PackageCheck, HelpCircle as HelpIcon, Sparkles
+} from 'lucide-react';
 import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
-import { orderService } from '../../../services/authService';
+import { orderService, returnService } from '../../../services/authService';
 import productReviewService from '../../../services/productReviewService';
 import ProductRatingModal from '../../../components/ProductRatingModal';
+import LiveDeliveryMap from '../components/LiveDeliveryMap';
+
+const RETURN_REASONS = [
+  'Damaged / Defective product received',
+  'Wrong item or variant delivered',
+  'Product quality not as expected',
+  'Missing items or parts from order',
+  'Received expired or near-expiry product',
+  'Product different from description',
+  'Item no longer needed',
+  'Other reason'
+];
 
 const TrackOrder = () => {
   const navigate = useNavigate();
@@ -19,6 +36,30 @@ const TrackOrder = () => {
   const [selectedProductToRate, setSelectedProductToRate] = useState(null);
   const [selectedReviewToEdit, setSelectedReviewToEdit] = useState(null);
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
+
+  // Item-Level Returns State
+  const [orderReturns, setOrderReturns] = useState([]);
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [selectedItemToReturn, setSelectedItemToReturn] = useState(null);
+  const [returnQuantity, setReturnQuantity] = useState(1);
+  const [returnReason, setReturnReason] = useState(RETURN_REASONS[0]);
+  const [returnRemarks, setReturnRemarks] = useState('');
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+  const [returnSuccessToast, setReturnSuccessToast] = useState('');
+  const [returnErrorToast, setReturnErrorToast] = useState('');
+
+  // Fetch returns for this order
+  const fetchOrderReturns = async (targetOrderId) => {
+    if (!targetOrderId) return;
+    try {
+      const res = await returnService.getMyReturns({ orderId: targetOrderId });
+      if (res && res.success && Array.isArray(res.returns)) {
+        setOrderReturns(res.returns);
+      }
+    } catch (err) {
+      console.warn('TrackOrder fetch returns error:', err.message);
+    }
+  };
 
   // Fetch reviews for this delivered order
   const fetchOrderReviews = async (targetOrderId) => {
@@ -44,8 +85,10 @@ const TrackOrder = () => {
         const res = await orderService.getOrderById(targetId);
         if (isMounted && res.success && res.order) {
           setLiveOrder(res.order);
-          if (res.order.orderStatus === 'Delivered' || res.order.captainStatus === 'Delivered') {
+          const oStat = res.order.orderStatus;
+          if (oStat === 'Delivered' || res.order.captainStatus === 'Delivered' || ['Return Requested', 'Return Approved', 'Returned'].includes(oStat)) {
             fetchOrderReviews(res.order.orderId || res.order._id);
+            fetchOrderReturns(res.order.orderId || res.order._id);
           }
         }
       } catch (err) {
@@ -56,6 +99,7 @@ const TrackOrder = () => {
     };
 
     fetchLive();
+    fetchOrderReturns(targetId);
     const interval = setInterval(fetchLive, 4000);
     return () => {
       isMounted = false;
@@ -65,13 +109,25 @@ const TrackOrder = () => {
 
   const order = liveOrder || initialOrder;
 
+  const orderStatus = order?.orderStatus || order?.status || 'Placed';
+  const captainStatus = order?.captainStatus || '';
+  const deliveryOtp = order?.deliveryOtp || '';
+
+  const isRefundCompleted = orderStatus === 'Refund Completed' || order?.refundStatus === 'Completed' || order?.returnStatus === 'Refunded' || orderReturns.some(r => ['REFUNDED', 'COMPLETED'].includes(r.status));
+  const isReturned = orderStatus === 'Returned' || order?.returnStatus === 'Completed';
+  const isReturnApproved = orderStatus === 'Return Approved' || order?.returnStatus === 'Approved';
+  const isReturnRejected = orderStatus === 'Return Rejected' || order?.returnStatus === 'Rejected';
+  const isReturnRequested = orderStatus === 'Return Requested' || order?.returnStatus === 'Pending' || order?.returnStatus === 'Requested' || orderReturns.length > 0;
+  const isDelivered = orderStatus === 'Delivered' || captainStatus === 'Delivered' || order?.status === 'Delivered' || ['Return Requested', 'Return Approved', 'Returned', 'Return Rejected', 'Refund Completed', 'Refunded'].includes(orderStatus) || isRefundCompleted;
+  const hasReturnRecord = isRefundCompleted || isReturnRequested || isReturnApproved || isReturnRejected || isReturned || orderReturns.length > 0;
+
   useEffect(() => {
     const targetOrderId = order?.orderId || order?._id || order?.id;
-    const isDelivered = order?.orderStatus === 'Delivered' || order?.captainStatus === 'Delivered' || order?.status === 'Delivered';
     if (targetOrderId && isDelivered) {
       fetchOrderReviews(targetOrderId);
+      fetchOrderReturns(targetOrderId);
     }
-  }, [order?.orderStatus, order?.captainStatus, order?.status]);
+  }, [order?.orderStatus, order?.captainStatus, order?.status, isDelivered]);
 
   const handleOpenRateModal = (item, existingRev = null) => {
     const prodObj = {
@@ -97,12 +153,54 @@ const TrackOrder = () => {
     if (targetOrderId) fetchOrderReviews(targetOrderId);
   };
 
+  // Open Return Modal for a specific item
+  const handleOpenReturnModal = (item = null) => {
+    const targetItem = item || (order?.items && order.items[0]);
+    setSelectedItemToReturn(targetItem);
+    setReturnQuantity(1);
+    setReturnReason(RETURN_REASONS[0]);
+    setReturnRemarks('');
+    setReturnErrorToast('');
+    setIsReturnModalOpen(true);
+  };
+
+  // Handle Return Request Submission
+  const handleReturnSubmit = async (e) => {
+    e?.preventDefault();
+    const targetOrderId = order?.orderId || order?._id || order?.id;
+    if (!targetOrderId || !selectedItemToReturn) return;
+
+    setSubmittingReturn(true);
+    setReturnErrorToast('');
+    try {
+      const res = await returnService.requestItemReturn({
+        orderId: targetOrderId,
+        orderItemId: selectedItemToReturn._id,
+        productId: selectedItemToReturn.product?._id || selectedItemToReturn.product,
+        quantity: returnQuantity,
+        reason: returnReason,
+        customerNotes: returnRemarks.trim(),
+      });
+
+      if (res && res.success) {
+        setIsReturnModalOpen(false);
+        setReturnSuccessToast('Item return request submitted! Track pickup status below.');
+        fetchOrderReturns(targetOrderId);
+        setTimeout(() => setReturnSuccessToast(''), 4500);
+      } else {
+        setReturnErrorToast(res?.message || 'Failed to submit return request.');
+      }
+    } catch (err) {
+      console.error('Error submitting return:', err);
+      setReturnErrorToast(err.response?.data?.message || err.message || 'Error processing return request.');
+    } finally {
+      setSubmittingReturn(false);
+    }
+  };
+
   // Order Details
   const orderId = order?.id || order?.orderId || order?._id || 'ORD-849201';
   const orderDate = order?.date || (order?.createdAt ? new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today');
-  const orderStatus = order?.orderStatus || order?.status || 'Placed';
-  const captainStatus = order?.captainStatus || '';
-  const deliveryOtp = order?.deliveryOtp || '';
 
   const items = order?.items && order.items.length > 0 ? order.items : [
     { name: 'Basmati Rice Premium 5kg', price: 540, quantity: 1, image: grainsImg }
@@ -119,16 +217,34 @@ const TrackOrder = () => {
   const paymentMethod = order?.paymentMethod || 'COD';
   const paymentStatus = order?.paymentStatus || (paymentMethod === 'COD' ? 'Pending' : 'Paid');
 
+  // Live captain tracking (map + polyline) — only while the order is out for delivery
+  const isOutForDelivery = !isDelivered && (orderStatus === 'Out for Delivery' || captainStatus === 'In Transit' || captainStatus === 'Picked Up');
+  const captainLiveCoords = order?.captainId?.liveLocation?.coordinates;
+  const captainPosition = Array.isArray(captainLiveCoords) && captainLiveCoords.length === 2
+    ? { lat: captainLiveCoords[1], lng: captainLiveCoords[0] }
+    : null;
+  const destinationAddress = [
+    shippingAddress.addressLine1 || shippingAddress.address,
+    shippingAddress.landmark,
+    shippingAddress.city,
+    shippingAddress.state,
+    shippingAddress.pincode || shippingAddress.zip,
+  ].filter(Boolean).join(', ');
+
   // Status steps mapping
   const steps = [
     { key: 'Placed', label: 'Order Placed', sub: 'Order received' },
     { key: 'Processing', label: 'Store Processing', sub: captainStatus === 'At Pickup' ? 'Captain at Store' : 'Preparing items' },
     { key: 'Out for Delivery', label: 'Out for Delivery', sub: 'On the way to you' },
-    { key: 'Delivered', label: 'Delivered', sub: 'Order completed' },
+    { 
+      key: 'Delivered', 
+      label: isRefundCompleted ? 'Refund Completed' : hasReturnRecord ? 'Return Process' : 'Delivered', 
+      sub: isRefundCompleted ? 'Refund credited to wallet' : hasReturnRecord ? 'Under return process' : 'Order completed' 
+    },
   ];
 
   const getStepIndex = () => {
-    if (orderStatus === 'Delivered' || captainStatus === 'Delivered') return 3;
+    if (isDelivered) return 3;
     if (orderStatus === 'Out for Delivery' || captainStatus === 'In Transit' || captainStatus === 'Picked Up') return 2;
     if (orderStatus === 'Accepted' || orderStatus === 'Processing' || orderStatus === 'Reached Store / Pickup' || ['Assigned', 'Accepted', 'At Pickup'].includes(captainStatus)) return 1;
     return 0;
@@ -137,6 +253,11 @@ const TrackOrder = () => {
   const currentStepIndex = getStepIndex();
 
   const getDisplayStatusBadge = () => {
+    if (isRefundCompleted) return { text: 'Refund Completed', color: 'bg-emerald-50 text-emerald-800 border-emerald-300 font-black' };
+    if (isReturned) return { text: 'Returned', color: 'bg-purple-50 text-purple-700 border-purple-200' };
+    if (isReturnApproved) return { text: 'Return Approved', color: 'bg-teal-50 text-teal-700 border-teal-200' };
+    if (isReturnRejected) return { text: 'Return Rejected', color: 'bg-rose-50 text-rose-700 border-rose-200' };
+    if (isReturnRequested) return { text: 'Return Requested', color: 'bg-amber-50 text-amber-700 border-amber-200' };
     if (orderStatus === 'Delivered' || captainStatus === 'Delivered') return { text: 'Delivered', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
     if (orderStatus === 'Out for Delivery' || captainStatus === 'In Transit') return { text: 'Out for Delivery', color: 'bg-amber-50 text-amber-700 border-amber-200' };
     if (captainStatus === 'At Pickup' || orderStatus === 'Reached Store / Pickup') return { text: 'Captain at Store', color: 'bg-blue-50 text-blue-700 border-blue-200' };
@@ -150,6 +271,14 @@ const TrackOrder = () => {
   return (
     <div className="w-full max-w-[480px] md:max-w-6xl mx-auto h-[100dvh] md:h-auto md:min-h-screen bg-[#f8fafc] font-sans text-slate-800 relative shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col overflow-hidden md:overflow-visible md:px-6 md:py-8">
       
+      {/* Toast Notification */}
+      {returnSuccessToast && (
+        <div className="fixed top-5 right-5 z-50 bg-[#002625] text-white px-4 py-3 rounded-2xl shadow-2xl border border-white/20 text-xs font-bold animate-in fade-in slide-in-from-top-3 flex items-center gap-2.5 max-w-md">
+          <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+          <span>{returnSuccessToast}</span>
+        </div>
+      )}
+
       {/* Mobile Header */}
       <header className="md:hidden flex justify-between items-center py-4 px-4 bg-white border-b border-slate-100 z-10 sticky top-0 shadow-xs">
         <div className="flex items-center gap-3">
@@ -194,7 +323,7 @@ const TrackOrder = () => {
       <div className="flex-1 overflow-y-auto pb-[40px] md:pb-12 [&::-webkit-scrollbar]:hidden p-4 md:p-0 md:overflow-visible">
         <div className="flex flex-col md:grid md:grid-cols-12 md:gap-8 space-y-4 md:space-y-0">
           
-          {/* Left Column (Col 7 on Desktop): Status, Progress, Captain, Address */}
+          {/* Left Column (Col 7 on Desktop): Status, Progress, Return CTA, Captain (only before delivery), Address */}
           <div className="md:col-span-7 flex flex-col gap-4">
             
             {/* Order Header Summary Card */}
@@ -211,7 +340,7 @@ const TrackOrder = () => {
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-[12px] md:text-sm font-bold text-slate-500">Live Delivery Status</span>
+                <span className="text-[12px] md:text-sm font-bold text-slate-500">Live Status</span>
                 <span className={`text-[11px] md:text-xs font-extrabold px-3.5 py-1 rounded-full uppercase border ${statusBadge.color}`}>
                   {statusBadge.text}
                 </span>
@@ -266,8 +395,152 @@ const TrackOrder = () => {
               </div>
             </div>
 
-            {/* Captain Information (If Assigned) */}
-            {order?.captainId && (
+            {/* RETURN & REFUND SECTION (Visible on Delivered Orders) */}
+            {isDelivered && (
+              <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-xs space-y-3">
+                {orderReturns.length > 0 ? (
+                  /* Item-Level Return Tracking Cards */
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <RotateCcw size={18} className="text-amber-600" />
+                        <h3 className="text-[13px] md:text-sm font-extrabold text-slate-900 m-0">
+                          Active Return & Pickup ({orderReturns.length})
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenReturnModal()}
+                        className="text-xs font-bold text-[#ea580c] hover:underline cursor-pointer border-none bg-transparent flex items-center gap-1"
+                      >
+                        + Return Another Item
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                      {orderReturns.map((ret, rIdx) => {
+                        const isPendingPickup = ['REQUESTED', 'APPROVED', 'CAPTAIN_ASSIGNMENT_PENDING', 'CAPTAIN_ASSIGNED', 'PICKUP_STARTED', 'PICKUP_ARRIVED'].includes(ret.status);
+                        const isCompletedReturn = ['REFUNDED', 'COMPLETED'].includes(ret.status);
+                        const isRejectedReturn = ['REJECTED', 'VERIFICATION_FAILED'].includes(ret.status);
+
+                        return (
+                          <div key={ret._id || rIdx} className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-2.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="text-[10px] font-extrabold uppercase text-slate-400 block tracking-wider">
+                                  Return #{ret.returnId}
+                                </span>
+                                <h4 className="text-xs md:text-sm font-bold text-slate-900 m-0 line-clamp-1">
+                                  {ret.productName} <span className="text-slate-400 font-semibold">× {ret.quantity}</span>
+                                </h4>
+                              </div>
+
+                              <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border shrink-0 ${
+                                isCompletedReturn ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                isRejectedReturn ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                                'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}>
+                                {ret.status.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+
+                            {/* Return Pickup OTP Card (Active when waiting for Captain pickup) */}
+                            {isPendingPickup && ret.returnOtp && (
+                              <div className="bg-gradient-to-r from-orange-500 to-amber-500 text-white p-3 rounded-xl shadow-xs flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <KeyRound size={18} className="text-white shrink-0" />
+                                  <div>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider block text-orange-100">
+                                      Return Pickup OTP
+                                    </span>
+                                    <span className="text-base md:text-lg font-black tracking-widest text-white">
+                                      {ret.returnOtp}
+                                    </span>
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-medium text-orange-100 max-w-[130px] text-right">
+                                  Share with Captain during item collection
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Return Details breakdown */}
+                            <div className="text-[11px] text-slate-600 space-y-1 bg-white p-2.5 rounded-xl border border-slate-100">
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Reason:</span>
+                                <span className="font-semibold text-slate-800 text-right">{ret.reason}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Refund Method:</span>
+                                <span className="font-bold text-slate-800">{ret.refundMethod === 'WALLET' ? 'Wallet Credit' : 'Original Payment Source'}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Estimated Refund:</span>
+                                <span className="font-black text-[#ea580c]">₹{Number(ret.refundAmount || 0).toFixed(2)}</span>
+                              </div>
+                              {ret.captain?.name && (
+                                <div className="flex justify-between pt-1 border-t border-slate-100">
+                                  <span className="text-slate-400">Pickup Captain:</span>
+                                  <span className="font-bold text-emerald-700">{ret.captain.name} ({ret.captain.vehicleType || 'Partner'})</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Return Process Narrative Note */}
+                            <p className="text-[10px] text-slate-500 m-0 italic">
+                              {ret.status === 'REQUESTED' && '⏳ Request under review. Once approved, a Captain will be assigned for doorstep pickup.'}
+                              {['APPROVED', 'CAPTAIN_ASSIGNMENT_PENDING'].includes(ret.status) && '✓ Return approved. Finding nearest Captain for doorstep collection.'}
+                              {['CAPTAIN_ASSIGNED', 'PICKUP_STARTED', 'PICKUP_ARRIVED'].includes(ret.status) && '🚚 Captain is on the way for item collection. Please have the item and OTP ready.'}
+                              {['PICKED_UP', 'IN_TRANSIT_TO_SELLER'].includes(ret.status) && '📦 Item collected by Captain. In transit to seller warehouse for quality verification.'}
+                              {['RECEIVED_BY_SELLER', 'UNDER_VERIFICATION'].includes(ret.status) && '🔍 Item received at seller facility. Quality and packaging inspection in progress.'}
+                              {ret.status === 'VERIFICATION_PASSED' && '✓ Quality check passed! Initiating refund transaction.'}
+                              {isCompletedReturn && '🎉 Return completed! Refund amount has been credited.'}
+                              {isRejectedReturn && '✕ Return could not be approved or verification failed.'}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  /* Initial Return Call-to-Action if no items returned yet */
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <RotateCcw size={17} className="text-[#ea580c]" />
+                        <h3 className="text-[13px] md:text-sm font-extrabold text-slate-900 m-0">Return / Replacement</h3>
+                      </div>
+                      <p className="text-[11px] text-slate-500 m-0">
+                        Items eligible for return within <span className="font-bold text-slate-700">7 days of delivery</span>. Easy door-step pickup by Captain.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenReturnModal()}
+                      className="px-4 py-2.5 bg-orange-50 hover:bg-orange-100 text-[#ea580c] font-bold text-xs rounded-xl border border-orange-200 cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-2xs whitespace-nowrap"
+                    >
+                      <RotateCcw size={14} />
+                      Return Product
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Live Delivery Map (captain position + route polyline, only while Out for Delivery) */}
+            {isOutForDelivery && captainPosition && (
+              <div className="bg-white rounded-2xl p-3 md:p-4 border border-slate-100 shadow-xs flex flex-col gap-2">
+                <div className="flex items-center gap-2 px-1">
+                  <Truck size={16} className="text-[#ea580c]" />
+                  <h3 className="text-[12px] md:text-sm font-extrabold text-slate-900 uppercase tracking-wider m-0">Live Delivery Tracking</h3>
+                </div>
+                <LiveDeliveryMap captainPosition={captainPosition} destinationAddress={destinationAddress} />
+              </div>
+            )}
+
+            {/* Captain Information (ONLY shown when order is NOT yet delivered) */}
+            {order?.captainId && !isDelivered && (
               <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-xs flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 md:gap-4">
                   <div className="w-11 h-11 md:w-14 md:h-14 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
@@ -331,7 +604,11 @@ const TrackOrder = () => {
                   const itemSubtotal = itemPrice * qty;
                   const prodId = item.product?._id || item.product || item.productId || item.id;
                   const itemReview = prodId ? orderReviews[prodId] : null;
-                  const isDelivered = orderStatus === 'Delivered' || captainStatus === 'Delivered' || order?.status === 'Delivered';
+
+                  // Find matching return for this item
+                  const itemReturn = orderReturns.find(
+                    (r) => String(r.orderItemId) === String(item._id) || String(r.product) === String(prodId)
+                  );
 
                   return (
                     <div key={idx} className="py-3 flex flex-col gap-2 first:pt-0 last:pb-0">
@@ -350,34 +627,50 @@ const TrackOrder = () => {
                         </span>
                       </div>
 
-                      {/* Rating CTA for delivered orders */}
+                      {/* Delivered Item Actions: Rating & Item-Level Return */}
                       {isDelivered && (
-                        <div className="pt-2 border-t border-dashed border-slate-100 flex items-center justify-between">
-                          {itemReview ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                        <div className="pt-2 border-t border-dashed border-slate-100 flex items-center justify-between flex-wrap gap-2">
+                          
+                          {/* Rating or Review Status */}
+                          <div className="flex items-center gap-1.5">
+                            {itemReview ? (
+                              <div className="flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
                                 <Star size={10} className="fill-amber-500 text-amber-500" /> Rated {itemReview.rating}/5
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenRateModal(item, itemReview)}
+                                className="px-2 py-1 text-[10px] font-bold rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100 text-[#ea580c] cursor-pointer flex items-center gap-1 transition-all"
+                              >
+                                <Star size={10} className="fill-[#ea580c] text-[#ea580c]" /> Rate
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Item-Level Return Status or Button */}
+                          {itemReturn ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 uppercase">
+                                Return {itemReturn.status.replace(/_/g, ' ')}
                               </span>
-                              <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-0.5">
-                                <ShieldCheck size={11} /> Verified
-                              </span>
+                              {itemReturn.returnOtp && ['REQUESTED', 'APPROVED', 'CAPTAIN_ASSIGNED', 'PICKUP_STARTED', 'PICKUP_ARRIVED'].includes(itemReturn.status) && (
+                                <span className="text-[10px] font-black text-white bg-slate-900 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                                  <KeyRound size={9} /> OTP {itemReturn.returnOtp}
+                                </span>
+                              )}
                             </div>
                           ) : (
-                            <span className="text-[11px] text-slate-400 font-medium">How was this product?</span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenReturnModal(item)}
+                              className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer flex items-center gap-1 transition-all shadow-2xs"
+                            >
+                              <RotateCcw size={11} className="text-slate-500" />
+                              Return Item
+                            </button>
                           )}
 
-                          <button
-                            type="button"
-                            onClick={() => handleOpenRateModal(item, itemReview)}
-                            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border cursor-pointer flex items-center gap-1 transition-all active:scale-95 shadow-2xs ${
-                              itemReview
-                                ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                                : 'bg-orange-50 hover:bg-orange-100 text-[#ea580c] border-orange-200/80'
-                            }`}
-                          >
-                            <Star size={11} className={itemReview ? 'text-slate-500' : 'fill-[#ea580c] text-[#ea580c]'} />
-                            {itemReview ? 'Edit Review' : 'Rate Product'}
-                          </button>
                         </div>
                       )}
                     </div>
@@ -435,6 +728,190 @@ const TrackOrder = () => {
         existingReview={selectedReviewToEdit}
         onSuccess={handleReviewSuccess}
       />
+
+      {/* Item-Level Return Modal */}
+      {isReturnModalOpen && selectedItemToReturn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-100 text-[#ea580c] flex items-center justify-center">
+                  <RotateCcw size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 m-0">Item Return & Refund</h3>
+                  <span className="text-[11px] font-bold text-slate-400">Order #{orderId}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!submittingReturn) setIsReturnModalOpen(false);
+                }}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center cursor-pointer border-none transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleReturnSubmit} className="p-6 overflow-y-auto flex flex-col gap-4">
+              
+              {returnErrorToast && (
+                <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2 font-medium">
+                  <AlertTriangle size={16} className="shrink-0 text-rose-500" />
+                  <span>{returnErrorToast}</span>
+                </div>
+              )}
+
+              {/* Item Selector Dropdown if multiple items */}
+              {items.length > 1 && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+                    Select Item to Return
+                  </label>
+                  <select
+                    value={selectedItemToReturn._id || selectedItemToReturn.product}
+                    onChange={(e) => {
+                      const found = items.find((it) => (it._id || it.product) === e.target.value);
+                      if (found) {
+                        setSelectedItemToReturn(found);
+                        setReturnQuantity(1);
+                      }
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs md:text-sm font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-[#ea580c] transition-colors"
+                  >
+                    {items.map((it, idx) => (
+                      <option key={idx} value={it._id || it.product}>
+                        {it.name || it.product?.name} (Purchased: {it.quantity || 1})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Selected Item Summary Card */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                  <img
+                    src={selectedItemToReturn.image || selectedItemToReturn.product?.mainImage || grainsImg}
+                    alt={selectedItemToReturn.name}
+                    className="w-[85%] h-[85%] object-contain"
+                  />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-xs md:text-sm font-bold text-slate-900 m-0 line-clamp-1">
+                    {selectedItemToReturn.name || selectedItemToReturn.product?.name || 'Item'}
+                  </h4>
+                  <span className="text-xs font-semibold text-slate-500">
+                    Price: ₹{Number(selectedItemToReturn.price || selectedItemToReturn.product?.salePrice || 0).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Quantity Selector */}
+              <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span className="text-xs font-bold text-slate-700">Return Quantity:</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={returnQuantity <= 1}
+                    onClick={() => setReturnQuantity((q) => Math.max(1, q - 1))}
+                    className="w-7 h-7 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-black text-sm flex items-center justify-center disabled:opacity-40 cursor-pointer"
+                  >
+                    -
+                  </button>
+                  <span className="text-sm font-black text-slate-900 w-6 text-center">{returnQuantity}</span>
+                  <button
+                    type="button"
+                    disabled={returnQuantity >= (selectedItemToReturn.quantity || 1)}
+                    onClick={() => setReturnQuantity((q) => Math.min(selectedItemToReturn.quantity || 1, q + 1))}
+                    className="w-7 h-7 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-black text-sm flex items-center justify-center disabled:opacity-40 cursor-pointer"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Reason Selector */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+                  Reason for Return <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs md:text-sm font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-[#ea580c] transition-colors"
+                >
+                  {RETURN_REASONS.map((reason, idx) => (
+                    <option key={idx} value={reason}>
+                      {reason}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Remarks / Comments */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+                  Additional Details / Remarks (Optional)
+                </label>
+                <textarea
+                  value={returnRemarks}
+                  onChange={(e) => setReturnRemarks(e.target.value)}
+                  placeholder="Provide additional details about the defect, wrong item, or reason for return..."
+                  rows={2}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs md:text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-[#ea580c] transition-colors resize-none"
+                />
+              </div>
+
+              {/* Estimated Refund Summary */}
+              <div className="p-3 bg-orange-50/70 border border-orange-200/80 rounded-xl flex items-center justify-between text-xs">
+                <div>
+                  <span className="font-extrabold text-slate-800 block">Estimated Refund</span>
+                  <span className="text-[10px] text-slate-500">Credited to wallet / payment source upon verification</span>
+                </div>
+                <span className="text-base font-black text-[#ea580c]">
+                  ₹{(Number(selectedItemToReturn.price || 0) * returnQuantity).toFixed(2)}
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={submittingReturn}
+                  onClick={() => setIsReturnModalOpen(false)}
+                  className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border-none cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingReturn}
+                  className="flex-1 py-2.5 px-4 bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-60 text-white text-xs font-extrabold rounded-xl border-none cursor-pointer transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  {submittingReturn ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw size={15} />
+                      <span>Submit Return</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

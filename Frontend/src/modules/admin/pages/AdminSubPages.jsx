@@ -35,175 +35,653 @@ import {
   ShieldCheck,
   RotateCcw,
   AlertCircle,
-  HelpCircle
+  HelpCircle,
+  Sparkles,
+  Loader2,
+  User,
+  Check,
+  X,
+  Filter,
+  Printer,
+  ExternalLink,
+  Calendar,
+  CreditCard,
+  Banknote,
+  ShieldAlert,
+  Users,
+  ShoppingBag,
+  ArrowUpRight,
+  Undo2,
+  Copy,
+  ZoomIn,
+  Building2,
+  FileCheck,
+  Maximize2
 } from 'lucide-react';
+import ProductVariantBuilder from '../../seller/components/ProductVariantBuilder';
 
 /* =========================================================================
-   1. USER MANAGEMENT PAGE
+   1. USER MANAGEMENT PAGE (USERS, USER ORDERS & RETURN ORDERS TABS)
    ========================================================================= */
 export const UserManagement = () => {
-  const [users, setUsers] = useState(mockUsers);
+  const [activeSubTab, setActiveSubTab] = useState('users_orders'); // 'users_orders' | 'return_orders'
+  const [users, setUsers] = useState([]);
+  const [returnOrders, setReturnOrders] = useState([]);
+  const [overallStats, setOverallStats] = useState({
+    totalUsers: 0,
+    totalOrdersPlaced: 0,
+    totalReturnOrders: 0,
+    totalRevenue: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(10);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  // User Drawer & Order History States
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [userOrders, setUserOrders] = useState([]);
+  const [loadingUserOrders, setLoadingUserOrders] = useState(false);
 
-  const fetchUsers = async () => {
+  // Return Status Modal State
+  const [selectedReturnOrder, setSelectedReturnOrder] = useState(null);
+  const [returnStatusInput, setReturnStatusInput] = useState('');
+  const [updatingReturn, setUpdatingReturn] = useState(false);
+  const [toastMsg, setToastMsg] = useState(null);
+
+  const showToast = (text, isError = false) => {
+    setToastMsg({ text, isError });
+    setTimeout(() => setToastMsg(null), 4000);
+  };
+
+  const fetchUsersData = async (isManual = false) => {
+    if (isManual) setRefreshing(true);
+    else setLoading(true);
+
     try {
-      const res = await adminService.getUsers();
-      if (res && res.success && Array.isArray(res.users) && res.users.length > 0) {
-        const mappedUsers = res.users.map(u => ({
-          id: u._id,
-          name: u.name || 'User',
-          email: u.email || 'N/A',
-          phone: u.phone || 'N/A',
-          avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'User')}&background=0D8ABC&color=fff`,
-          ordersCount: 0,
-          walletBalance: `₹${Number(u.walletBalance || 0).toFixed(2)}`,
-          joinedDate: u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : '2025-01-01',
-          status: u.isVerified !== false ? 'Active' : 'Pending'
-        }));
-        setUsers(mappedUsers);
+      const res = await adminService.getUsers(true);
+      if (res && res.success) {
+        if (Array.isArray(res.users)) {
+          const mappedUsers = res.users.map((u) => ({
+            id: u._id,
+            _id: u._id,
+            name: u.name || 'Customer',
+            email: u.email || 'N/A',
+            phone: u.phone || 'N/A',
+            avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'User')}&background=FF5500&color=fff`,
+            ordersCount: Number(u.ordersCount || 0),
+            returnsCount: Number(u.returnsCount || 0),
+            totalSpent: Number(u.totalSpent || 0),
+            walletBalance: `₹${Number(u.walletBalance || 0).toFixed(2)}`,
+            joinedDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A',
+            status: u.isVerified !== false ? 'Active' : 'Pending',
+            raw: u,
+          }));
+          setUsers(mappedUsers);
+        } else {
+          setUsers([]);
+        }
+
+        if (Array.isArray(res.returnOrders)) {
+          setReturnOrders(res.returnOrders);
+        }
+
+        if (res.overallStats) {
+          setOverallStats(res.overallStats);
+        }
       }
     } catch (err) {
-      console.warn('Failed to fetch real users, using fallback mock data:', err.message);
+      console.error('Failed to fetch real users data:', err);
+      showToast('Error loading live users data', true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const filteredUsers = users.filter(u => 
-    u.name.toLowerCase().includes(search.toLowerCase()) || 
-    u.email.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    fetchUsersData();
+  }, []);
 
-  const totalPages = Math.ceil(filteredUsers.length / entriesPerPage) || 1;
+  // Fetch individual user's orders when opening drawer
+  const handleOpenUserDrawer = async (user) => {
+    setSelectedUser(user);
+    setIsDrawerOpen(true);
+    setUserOrders([]);
+    setLoadingUserOrders(true);
+
+    try {
+      const res = await adminService.getUserOrders(user.id || user._id);
+      if (res && res.success && Array.isArray(res.orders)) {
+        setUserOrders(res.orders);
+      }
+    } catch (err) {
+      console.error('Failed to fetch user order history:', err);
+    } finally {
+      setLoadingUserOrders(false);
+    }
+  };
+
+  // Update Return Order Status Handler
+  const handleUpdateReturnStatus = async () => {
+    if (!selectedReturnOrder || !returnStatusInput) return;
+    try {
+      setUpdatingReturn(true);
+      const res = await adminService.updateReturnStatus(selectedReturnOrder._id || selectedReturnOrder.orderId, {
+        returnStatus: returnStatusInput,
+        orderStatus: returnStatusInput === 'Approved' ? 'Returned' : (returnStatusInput === 'Rejected' ? 'Delivered' : selectedReturnOrder.orderStatus),
+      });
+
+      if (res && res.success) {
+        showToast(`Return status updated to ${returnStatusInput}`);
+        setSelectedReturnOrder(null);
+        await fetchUsersData(true);
+      } else {
+        showToast(res?.message || 'Failed to update return status', true);
+      }
+    } catch (err) {
+      console.error('Failed to update return status:', err);
+      showToast(err.response?.data?.message || 'Error updating return status', true);
+    } finally {
+      setUpdatingReturn(false);
+    }
+  };
+
+  // Filtered Users List
+  const filteredUsers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter(
+      (u) =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        u.phone.toLowerCase().includes(q) ||
+        String(u.id).toLowerCase().includes(q)
+    );
+  }, [users, search]);
+
+  // Filtered Return Orders List
+  const filteredReturns = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return returnOrders;
+    return returnOrders.filter((ro) => {
+      const custName = ro.user?.name || ro.shippingAddress?.fullName || '';
+      const custPhone = ro.user?.phone || ro.shippingAddress?.phone || '';
+      const orderId = ro.orderId || ro._id || '';
+      const reason = ro.returnReason || '';
+      return (
+        custName.toLowerCase().includes(q) ||
+        custPhone.toLowerCase().includes(q) ||
+        orderId.toLowerCase().includes(q) ||
+        reason.toLowerCase().includes(q)
+      );
+    });
+  }, [returnOrders, search]);
+
+  // Pagination for Active Tab
+  const activeItemsCount = activeSubTab === 'users_orders' ? filteredUsers.length : filteredReturns.length;
+  const totalPages = Math.ceil(activeItemsCount / entriesPerPage) || 1;
   const indexOfLastItem = currentPage * entriesPerPage;
   const indexOfFirstItem = indexOfLastItem - entriesPerPage;
   const currentUsers = filteredUsers.slice(indexOfFirstItem, indexOfLastItem);
+  const currentReturns = filteredReturns.slice(indexOfFirstItem, indexOfLastItem);
 
-  const handleSearchChange = (e) => {
-    setSearch(e.target.value);
-    setCurrentPage(1);
-  };
-
-  const handleEntriesChange = (e) => {
-    setEntriesPerPage(Number(e.target.value));
-    setCurrentPage(1);
+  // Return Status Badge Helper
+  const renderReturnBadge = (status, returnStatus) => {
+    const activeStat = returnStatus || status;
+    switch (activeStat) {
+      case 'Approved':
+      case 'Returned':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><CheckCircle size={12} /> Return Completed</span>;
+      case 'Rejected':
+      case 'Return Rejected':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700 border border-red-200"><X size={12} /> Return Rejected</span>;
+      case 'Pending':
+      case 'Return Requested':
+      default:
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200"><Undo2 size={12} /> Return Requested</span>;
+    }
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6 animate-fadeIn pb-8">
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div
+          className={`fixed top-5 right-5 z-[9999] px-4 py-3 rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 border transition-all ${
+            toastMsg.isError ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}
+        >
+          {toastMsg.isError ? <AlertCircle size={16} /> : <CheckCircle size={16} />}
+          <span>{toastMsg.text}</span>
+        </div>
+      )}
+
+      {/* Top Banner & Refresh Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">User Management</h2>
-          <p className="text-xs text-slate-500">View, search, filter, and manage platform customer accounts</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-slate-900 m-0">Customer & Orders Management</h2>
+            <span className="bg-orange-100 text-[#ff5500] text-[11px] font-black px-2.5 py-0.5 rounded-full">
+              {users.length} Customers
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 font-medium mt-1 m-0">
+            Track user orders, lifetime spending, returns count, and customer return requests
+          </p>
         </div>
-        <button 
-          onClick={() => alert('Exporting Users CSV (UI Only)')}
-          className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition-all flex items-center gap-1.5 cursor-pointer"
-        >
-          <Download size={15} /> Export Users
-        </button>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => fetchUsersData(true)}
+            disabled={refreshing || loading}
+            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 text-xs font-bold rounded-xl transition-all border-none cursor-pointer flex items-center gap-1.5"
+            title="Refresh Live Data"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            <span>{refreshing ? 'Refreshing...' : 'Live Refresh'}</span>
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* 4 KPI Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Total Users</span>
+            <span className="text-xl font-black text-slate-900 mt-0.5 block">{overallStats.totalUsers || users.length}</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-orange-50 text-[#ff5500] flex items-center justify-center font-bold">
+            <Users size={20} />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Total User Orders</span>
+            <span className="text-xl font-black text-blue-600 mt-0.5 block">
+              {overallStats.totalOrdersPlaced || users.reduce((sum, u) => sum + u.ordersCount, 0)}
+            </span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+            <ShoppingBag size={20} />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Total Return Orders</span>
+            <span className="text-xl font-black text-amber-600 mt-0.5 block">
+              {overallStats.totalReturnOrders || returnOrders.length || users.reduce((sum, u) => sum + u.returnsCount, 0)}
+            </span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+            <Undo2 size={20} />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Total Customer Spend</span>
+            <span className="text-xl font-black text-emerald-600 mt-0.5 block">
+              ₹{(overallStats.totalRevenue || users.reduce((sum, u) => sum + u.totalSpent, 0)).toFixed(2)}
+            </span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+            <DollarSign size={20} />
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area with 2 Primary Tabs */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* Tab Navigation Buttons */}
+        <div className="flex border-b border-slate-200 bg-slate-50/70 p-2 gap-2">
+          <button
+            onClick={() => {
+              setActiveSubTab('users_orders');
+              setCurrentPage(1);
+            }}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer border-none flex items-center gap-2 ${
+              activeSubTab === 'users_orders'
+                ? 'bg-[#ff5500] text-white shadow-sm shadow-orange-500/20'
+                : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <Users size={15} />
+            <span>Total Users / Orders</span>
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                activeSubTab === 'users_orders' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {filteredUsers.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveSubTab('return_orders');
+              setCurrentPage(1);
+            }}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer border-none flex items-center gap-2 ${
+              activeSubTab === 'return_orders'
+                ? 'bg-[#ff5500] text-white shadow-sm shadow-orange-500/20'
+                : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <Undo2 size={15} />
+            <span>Total Return Orders</span>
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                activeSubTab === 'return_orders' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {filteredReturns.length}
+            </span>
+          </button>
+        </div>
+
+        {/* Filter Controls Bar */}
+        <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="relative flex-1 max-w-sm">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search user by name or email..."
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder={
+                activeSubTab === 'users_orders'
+                  ? 'Search by Customer Name, Phone, Email...'
+                  : 'Search by Order ID, Customer, Return Reason...'
+              }
               value={search}
-              onChange={handleSearchChange}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#ff5500]"
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-[#ff5500]"
             />
           </div>
 
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span>Show</span>
+            <span className="font-semibold">Show entries:</span>
             <select
               value={entriesPerPage}
-              onChange={handleEntriesChange}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#ff5500]"
+              onChange={(e) => {
+                setEntriesPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-bold outline-none focus:border-[#ff5500]"
             >
               <option value={5}>5</option>
               <option value={10}>10</option>
               <option value={20}>20</option>
               <option value={50}>50</option>
+              <option value={100}>100</option>
             </select>
-            <span>entries</span>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 text-slate-500 uppercase font-mono text-[10px]">
-                <th className="py-3 px-4">User</th>
-                <th className="py-3 px-4">Contact</th>
-                <th className="py-3 px-4">Orders</th>
-                <th className="py-3 px-4">Wallet</th>
-                <th className="py-3 px-4">Joined Date</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {currentUsers.length > 0 ? (
-                currentUsers.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover border border-slate-200" />
-                        <div>
-                          <p className="font-bold text-slate-900 leading-none">{u.name}</p>
-                          <span className="text-[10px] text-slate-400 font-mono">{u.id}</span>
-                        </div>
+        {/* TAB 1: TOTAL USERS / ORDERS TABLE */}
+        {activeSubTab === 'users_orders' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse min-w-[850px]">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
+                  <th className="py-3 px-4">Customer</th>
+                  <th className="py-3 px-4">Contact Info</th>
+                  <th className="py-3 px-4 text-center">Total Orders</th>
+                  <th className="py-3 px-4 text-center">Return Orders</th>
+                  <th className="py-3 px-4">Lifetime Spend</th>
+                  <th className="py-3 px-4">Wallet Balance</th>
+                  <th className="py-3 px-4">Joined Date</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {loading ? (
+                  <tr>
+                    <td colSpan="9" className="py-12 text-center text-slate-400">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Loader2 size={24} className="animate-spin text-[#ff5500]" />
+                        <span className="text-xs font-semibold text-slate-600">Loading customers and order counts...</span>
                       </div>
                     </td>
-                    <td className="py-3 px-4">
-                      <p className="text-slate-900">{u.email}</p>
-                      <p className="text-[10px] text-slate-400">{u.phone}</p>
-                    </td>
-                    <td className="py-3 px-4 font-mono font-bold text-slate-900">{u.ordersCount}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-[#ff5500]">{u.walletBalance}</td>
-                    <td className="py-3 px-4 text-slate-500 font-mono">{u.joinedDate}</td>
-                    <td className="py-3 px-4"><StatusBadge status={u.status} /></td>
-                    <td className="py-3 px-4 text-right space-x-2">
-                      <button 
-                        onClick={() => { setSelectedUser(u); setIsDrawerOpen(true); }}
-                        className="p-1.5 bg-slate-100 hover:bg-[#ff5500] hover:text-white text-slate-700 rounded-lg transition-colors border-none cursor-pointer"
-                        title="View Details"
-                      >
-                        <Eye size={14} />
-                      </button>
+                  </tr>
+                ) : currentUsers.length > 0 ? (
+                  currentUsers.map((u) => (
+                    <tr key={u.id} className="hover:bg-orange-50/20 transition-colors">
+                      {/* Customer */}
+                      <td className="py-3.5 px-4 align-middle">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={u.avatar}
+                            alt={u.name}
+                            className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-2xs"
+                          />
+                          <div>
+                            <p className="font-bold text-slate-900 m-0 text-xs">{u.name}</p>
+                            <span className="text-[10px] text-slate-400 font-mono">ID: {String(u.id).slice(-6)}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Contact Info */}
+                      <td className="py-3.5 px-4 align-middle">
+                        <p className="font-medium text-slate-800 m-0">{u.phone}</p>
+                        <p className="text-[11px] text-slate-400 m-0 mt-0.5">{u.email}</p>
+                      </td>
+
+                      {/* Total Orders Count */}
+                      <td className="py-3.5 px-4 align-middle text-center">
+                        <span
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black ${
+                            u.ordersCount > 0
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          <ShoppingBag size={12} /> {u.ordersCount} {u.ordersCount === 1 ? 'Order' : 'Orders'}
+                        </span>
+                      </td>
+
+                      {/* Total Return Orders Count */}
+                      <td className="py-3.5 px-4 align-middle text-center">
+                        <span
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black ${
+                            u.returnsCount > 0
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-slate-100 text-slate-400'
+                          }`}
+                        >
+                          <Undo2 size={12} /> {u.returnsCount} {u.returnsCount === 1 ? 'Return' : 'Returns'}
+                        </span>
+                      </td>
+
+                      {/* Total Spent */}
+                      <td className="py-3.5 px-4 align-middle">
+                        <span className="font-black text-slate-900 font-mono text-xs">
+                          ₹{Number(u.totalSpent || 0).toFixed(2)}
+                        </span>
+                      </td>
+
+                      {/* Wallet Balance */}
+                      <td className="py-3.5 px-4 align-middle">
+                        <span className="font-bold text-[#ff5500] font-mono text-xs">{u.walletBalance}</span>
+                      </td>
+
+                      {/* Joined Date */}
+                      <td className="py-3.5 px-4 align-middle font-mono text-slate-500 text-[11px]">
+                        {u.joinedDate}
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-3.5 px-4 align-middle">
+                        <StatusBadge status={u.status} />
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-4 align-middle text-center">
+                        <button
+                          onClick={() => handleOpenUserDrawer(u)}
+                          className="px-2.5 py-1.5 bg-orange-50 hover:bg-[#ff5500] text-[#ff5500] hover:text-white rounded-lg transition-colors border border-orange-200 hover:border-[#ff5500] cursor-pointer text-[11px] font-bold inline-flex items-center gap-1"
+                          title="View Complete Profile & Order History"
+                        >
+                          <Eye size={12} />
+                          <span>View Orders</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="9" className="py-12 text-center text-slate-400 italic text-xs">
+                      No users found matching search criteria
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="7" className="py-8 text-center text-slate-400 italic text-xs">
-                    No users found matching search criteria
-                  </td>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* TAB 2: TOTAL RETURN ORDERS TABLE */}
+        {activeSubTab === 'return_orders' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse min-w-[900px]">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
+                  <th className="py-3 px-4">Order ID & Date</th>
+                  <th className="py-3 px-4">Customer Details</th>
+                  <th className="py-3 px-4 text-center">User Total Returns</th>
+                  <th className="py-3 px-4">Returned Items</th>
+                  <th className="py-3 px-4">Order Total</th>
+                  <th className="py-3 px-4">Return Reason</th>
+                  <th className="py-3 px-4">Return Status</th>
+                  <th className="py-3 px-4 text-center">Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {loading ? (
+                  <tr>
+                    <td colSpan="8" className="py-12 text-center text-slate-400">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Loader2 size={24} className="animate-spin text-[#ff5500]" />
+                        <span className="text-xs font-semibold text-slate-600">Loading return orders...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : currentReturns.length > 0 ? (
+                  currentReturns.map((ro) => {
+                    const custName = ro.user?.name || ro.shippingAddress?.fullName || 'Customer';
+                    const custPhone = ro.user?.phone || ro.shippingAddress?.phone || 'N/A';
+                    const matchedUser = users.find((u) => String(u.id) === String(ro.user?._id || ro.user));
+                    const userReturnCount = matchedUser ? matchedUser.returnsCount : 1;
+                    const items = Array.isArray(ro.items) ? ro.items : [];
+
+                    return (
+                      <tr key={ro._id || ro.orderId} className="hover:bg-amber-50/20 transition-colors">
+                        {/* Order ID & Date */}
+                        <td className="py-3.5 px-4 align-middle">
+                          <span className="font-mono font-bold text-[#ff5500] text-xs block">
+                            {ro.orderId || ro._id}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-mono mt-0.5 block">
+                            {ro.createdAt ? new Date(ro.createdAt).toLocaleDateString() : 'Today'}
+                          </span>
+                        </td>
+
+                        {/* Customer */}
+                        <td className="py-3.5 px-4 align-middle">
+                          <p className="font-bold text-slate-900 m-0 text-xs">{custName}</p>
+                          <p className="text-[11px] text-slate-500 m-0 mt-0.5">📞 {custPhone}</p>
+                        </td>
+
+                        {/* User Total Returns */}
+                        <td className="py-3.5 px-4 align-middle text-center">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200">
+                            <Undo2 size={12} /> {userReturnCount} {userReturnCount === 1 ? 'Return' : 'Returns'}
+                          </span>
+                        </td>
+
+                        {/* Returned Items */}
+                        <td className="py-3.5 px-4 align-middle">
+                          <div className="font-semibold text-slate-800 text-xs">
+                            {items[0]?.name || 'Returned Products'}
+                            {items.length > 1 && (
+                              <span className="text-[10px] font-bold text-[#ff5500] bg-orange-50 px-1.5 py-0.5 rounded-md ml-1">
+                                +{items.length - 1} more
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-slate-400">
+                            Qty: {items.reduce((sum, it) => sum + (it.quantity || 1), 0)}
+                          </span>
+                        </td>
+
+                        {/* Order Total */}
+                        <td className="py-3.5 px-4 align-middle font-black text-slate-900 font-mono text-xs">
+                          ₹{Number(ro.grandTotal || 0).toFixed(2)}
+                        </td>
+
+                        {/* Return Reason */}
+                        <td className="py-3.5 px-4 align-middle">
+                          <span className="text-slate-600 text-xs italic">
+                            "{ro.returnReason || 'Customer requested return'}"
+                          </span>
+                        </td>
+
+                        {/* Return Status */}
+                        <td className="py-3.5 px-4 align-middle">
+                          {renderReturnBadge(ro.orderStatus, ro.returnStatus)}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3.5 px-4 align-middle text-center">
+                          <button
+                            onClick={() => {
+                              setSelectedReturnOrder(ro);
+                              setReturnStatusInput(ro.returnStatus || 'Approved');
+                            }}
+                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-[#ff5500] text-slate-700 hover:text-white rounded-lg transition-colors border border-slate-200 hover:border-[#ff5500] cursor-pointer text-[11px] font-bold inline-flex items-center gap-1"
+                          >
+                            <Edit3 size={12} />
+                            <span>Action</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="8" className="py-12 text-center text-slate-400 italic text-xs">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Undo2 size={28} className="text-slate-300" />
+                        <span className="font-semibold text-slate-600">No return orders found</span>
+                        <span className="text-[11px] text-slate-400">
+                          When users request or complete returns, they will show up here.
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Table Footer & Pagination */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs text-slate-500">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-t border-slate-100 text-xs text-slate-500">
           <span>
-            Showing {filteredUsers.length > 0 ? indexOfFirstItem + 1 : 0} to {Math.min(indexOfLastItem, filteredUsers.length)} of {filteredUsers.length} entries
+            Showing {activeItemsCount > 0 ? indexOfFirstItem + 1 : 0} to{' '}
+            {Math.min(indexOfLastItem, activeItemsCount)} of {activeItemsCount} entries
           </span>
-          
+
           <div className="inline-flex rounded-xl border border-slate-200 p-0.5 bg-slate-50 items-center">
-            <button 
-              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
               disabled={currentPage === 1}
               className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
             >
@@ -212,8 +690,8 @@ export const UserManagement = () => {
             <span className="px-3 py-1 bg-[#ff5500] text-white text-xs font-bold rounded-lg shadow-2xs">
               {currentPage} of {totalPages}
             </span>
-            <button 
-              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
               disabled={currentPage === totalPages || totalPages === 0}
               className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
             >
@@ -223,24 +701,188 @@ export const UserManagement = () => {
         </div>
       </div>
 
-      <Drawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} title="User Profile Drawer">
+      {/* ── USER PROFILE & ORDER HISTORY DRAWER ── */}
+      <Drawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        title={selectedUser ? `Customer Profile: ${selectedUser.name}` : 'User Profile'}
+      >
         {selectedUser && (
-          <div className="space-y-4">
-            <div className="text-center pb-4 border-b border-slate-100">
-              <img src={selectedUser.avatar} alt={selectedUser.name} className="w-20 h-20 rounded-full mx-auto mb-2 object-cover border-2 border-[#ff5500]" />
-              <h3 className="text-lg font-bold text-slate-900">{selectedUser.name}</h3>
-              <p className="text-xs text-[#ff5500] font-mono">{selectedUser.id}</p>
+          <div className="space-y-5 text-xs">
+            {/* Header Profile Info */}
+            <div className="text-center pb-4 border-b border-slate-100 bg-slate-50 p-4 rounded-xl">
+              <img
+                src={selectedUser.avatar}
+                alt={selectedUser.name}
+                className="w-16 h-16 rounded-full mx-auto mb-2 object-cover border-2 border-[#ff5500] shadow-sm"
+              />
+              <h3 className="text-base font-black text-slate-900 m-0">{selectedUser.name}</h3>
+              <p className="text-xs text-[#ff5500] font-mono m-0 mt-0.5">ID: {selectedUser.id}</p>
+              <div className="mt-2 flex items-center justify-center gap-2">
+                <StatusBadge status={selectedUser.status} />
+                <span className="text-[11px] text-slate-400 font-mono">Joined {selectedUser.joinedDate}</span>
+              </div>
             </div>
-            <div className="space-y-2 text-xs text-slate-600">
-              <p><strong className="text-slate-900">Email:</strong> {selectedUser.email}</p>
-              <p><strong className="text-slate-900">Phone:</strong> {selectedUser.phone}</p>
-              <p><strong className="text-slate-900">Status:</strong> <StatusBadge status={selectedUser.status} /></p>
-              <p><strong className="text-slate-900">Total Orders:</strong> {selectedUser.ordersCount}</p>
-              <p><strong className="text-slate-900">Wallet Balance:</strong> <span className="text-[#ff5500] font-mono font-bold">{selectedUser.walletBalance}</span></p>
+
+            {/* 4 Stats Chips */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="bg-blue-50/60 p-3 rounded-xl border border-blue-100">
+                <span className="text-[10px] font-bold text-blue-700 uppercase block">Total Orders</span>
+                <span className="text-base font-black text-blue-900 mt-0.5 block">{selectedUser.ordersCount}</span>
+              </div>
+              <div className="bg-amber-50/60 p-3 rounded-xl border border-amber-100">
+                <span className="text-[10px] font-bold text-amber-700 uppercase block">Return Orders</span>
+                <span className="text-base font-black text-amber-900 mt-0.5 block">{selectedUser.returnsCount}</span>
+              </div>
+              <div className="bg-emerald-50/60 p-3 rounded-xl border border-emerald-100">
+                <span className="text-[10px] font-bold text-emerald-700 uppercase block">Total Spent</span>
+                <span className="text-base font-black text-emerald-900 mt-0.5 block">
+                  ₹{Number(selectedUser.totalSpent || 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="bg-orange-50/60 p-3 rounded-xl border border-orange-100">
+                <span className="text-[10px] font-bold text-[#ff5500] uppercase block">Wallet Balance</span>
+                <span className="text-base font-black text-[#ff5500] mt-0.5 block">{selectedUser.walletBalance}</span>
+              </div>
+            </div>
+
+            {/* Contact Details */}
+            <div className="space-y-2 text-xs text-slate-600 bg-white p-3.5 rounded-xl border border-slate-200">
+              <h4 className="font-bold text-slate-900 m-0 mb-1 text-xs">Contact Information</h4>
+              <p className="m-0 flex items-center justify-between">
+                <span className="text-slate-400 font-semibold">Phone:</span>
+                <span className="font-bold text-slate-800">{selectedUser.phone}</span>
+              </p>
+              <p className="m-0 flex items-center justify-between">
+                <span className="text-slate-400 font-semibold">Email:</span>
+                <span className="font-bold text-slate-800">{selectedUser.email}</span>
+              </p>
+            </div>
+
+            {/* Live Order History for This User */}
+            <div>
+              <h4 className="font-black text-slate-900 m-0 mb-2 flex items-center justify-between text-xs">
+                <span>Orders History ({userOrders.length})</span>
+                {loadingUserOrders && <Loader2 size={13} className="animate-spin text-[#ff5500]" />}
+              </h4>
+
+              {loadingUserOrders ? (
+                <div className="py-6 text-center text-slate-400">Loading user orders...</div>
+              ) : userOrders.length > 0 ? (
+                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                  {userOrders.map((ord) => {
+                    const isReturn = ['Returned', 'Return Requested', 'Return Approved', 'Return Rejected'].includes(ord.orderStatus);
+                    return (
+                      <div
+                        key={ord._id || ord.orderId}
+                        className={`p-3 rounded-xl border ${
+                          isReturn ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200 bg-slate-50/60'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-mono font-bold text-[#ff5500] text-xs">#{ord.orderId || ord._id}</span>
+                          <span className="font-bold text-slate-900 text-xs">₹{Number(ord.grandTotal || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] text-slate-500">
+                          <span>{ord.createdAt ? new Date(ord.createdAt).toLocaleDateString() : 'Recent'}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              ord.orderStatus === 'Delivered'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : isReturn
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}
+                          >
+                            {ord.orderStatus}
+                          </span>
+                        </div>
+                        {ord.items && ord.items.length > 0 && (
+                          <div className="text-[10px] text-slate-500 mt-1 truncate">
+                            Items: {ord.items.map((it) => `${it.name} (x${it.quantity || 1})`).join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  No orders placed yet by this customer.
+                </div>
+              )}
             </div>
           </div>
         )}
       </Drawer>
+
+      {/* ── RETURN ORDER ACTION MODAL ── */}
+      {selectedReturnOrder && (
+        <div className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-amber-600 to-amber-700 text-white flex justify-between items-center">
+              <div>
+                <h3 className="text-base font-black m-0 text-white">Return Request Action</h3>
+                <p className="text-xs text-amber-100 m-0 mt-0.5">Order #{selectedReturnOrder.orderId || selectedReturnOrder._id}</p>
+              </div>
+              <button
+                onClick={() => setSelectedReturnOrder(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white border-none cursor-pointer flex items-center justify-center"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
+                <div className="flex justify-between text-slate-600">
+                  <span>Customer:</span>
+                  <span className="font-bold text-slate-900">{selectedReturnOrder.user?.name || selectedReturnOrder.shippingAddress?.fullName}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Refund Amount:</span>
+                  <span className="font-black text-[#ff5500]">₹{Number(selectedReturnOrder.grandTotal || 0).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Reason:</span>
+                  <span className="font-semibold text-slate-800 italic">"{selectedReturnOrder.returnReason || 'Customer requested return'}"</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5">Update Return Status *</label>
+                <select
+                  value={returnStatusInput}
+                  onChange={(e) => setReturnStatusInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 font-bold outline-none focus:border-[#ff5500]"
+                >
+                  <option value="Approved">Approved (Accept Return & Process Refund)</option>
+                  <option value="Completed">Completed (Item Received & Refunded)</option>
+                  <option value="Rejected">Rejected (Decline Return Request)</option>
+                  <option value="Pending">Pending (Under Review)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+              <button
+                onClick={() => setSelectedReturnOrder(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl border-none cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={updatingReturn}
+                onClick={handleUpdateReturnStatus}
+                className="px-4 py-2 bg-[#ff5500] hover:bg-[#e04b00] disabled:opacity-50 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5"
+              >
+                {updatingReturn && <Loader2 size={14} className="animate-spin" />}
+                <span>Save Return Status</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -931,7 +1573,7 @@ export const SellerManagement = () => {
                   <div>
                     <label className="text-slate-500 font-medium block mb-1">Commission (%)</label>
                     <div className="flex items-center gap-2">
-                      <input 
+                      <input
                         type="text"
                         readOnly
                         value={editFormData.commission ? `${editFormData.commission}%` : 'Standard (10%)'}
@@ -941,6 +1583,16 @@ export const SellerManagement = () => {
                         Super Admin Managed
                       </span>
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="text-slate-500 font-medium block mb-1">Wallet Balance (₹)</label>
+                    <input
+                      type="number"
+                      value={editFormData.balance}
+                      onChange={(e) => setEditFormData({ ...editFormData, balance: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                    />
                   </div>
                 </div>
               </div>
@@ -1226,16 +1878,36 @@ export const SellerManagement = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex justify-end shrink-0">
-              <button 
+            <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+              <button
                 type="button"
-                onClick={() => {
-                  setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, name: editFormData.name, storeName: editFormData.storeName, commission: editFormData.commission } : s));
-                  setEditingSellerModal(null);
-                }}
+                onClick={() => setEditingSellerModal(null)}
                 className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl border-none cursor-pointer transition-colors"
               >
-                Close
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const response = await adminService.updateSellerDetails(editingSellerModal.id, {
+                      name: editFormData.name,
+                      storeName: editFormData.storeName,
+                      commission: editFormData.commission,
+                      balance: editFormData.balance
+                    });
+                    if (response && response.success) {
+                      setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, name: editFormData.name, storeName: editFormData.storeName, commission: editFormData.commission, balance: editFormData.balance } : s));
+                      setEditingSellerModal(null);
+                    }
+                  } catch (err) {
+                    console.error('Error updating seller details:', err);
+                    alert('Failed to update seller details');
+                  }
+                }}
+                className="px-5 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer transition-colors"
+              >
+                Save Changes
               </button>
             </div>
 
@@ -1698,8 +2370,17 @@ export const CaptainManagement = () => {
                             </button>
                           )}
 
+                          {/* Edit Icon */}
+                          <button
+                            onClick={() => setEditingCaptain(captain)}
+                            className="p-1 rounded-md text-blue-600 hover:bg-blue-50 border-none bg-transparent cursor-pointer transition-colors"
+                            title="Edit Captain Details"
+                          >
+                            <Edit3 size={15} />
+                          </button>
+
                           {/* Delete Icon */}
-                          <button 
+                          <button
                             onClick={() => handleDelete(captain._id)}
                             className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border-none bg-transparent cursor-pointer transition-colors"
                             title="Delete Captain"
@@ -2269,16 +2950,31 @@ export const CaptainManagement = () => {
             </div>
 
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
-              <button 
+              <button
                 onClick={() => setEditingCaptain(null)}
                 className="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border-none cursor-pointer"
               >
                 Cancel
               </button>
-              <button 
-                onClick={() => {
-                  setCaptains(prev => prev.map(d => d.id === editingCaptain.id ? editingCaptain : d));
-                  setEditingCaptain(null);
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await adminService.updateCaptainDetails(editingCaptain.id, {
+                      name: editingCaptain.name,
+                      mobile: editingCaptain.mobile,
+                      city: editingCaptain.city,
+                      address: editingCaptain.address,
+                      balance: editingCaptain.balance,
+                      cashCollected: editingCaptain.cashCollected
+                    });
+                    if (response && response.success) {
+                      setCaptains(prev => prev.map(d => d.id === editingCaptain.id ? editingCaptain : d));
+                      setEditingCaptain(null);
+                    }
+                  } catch (err) {
+                    console.error('Error updating captain details:', err);
+                    alert('Failed to update captain details');
+                  }
                 }}
                 className="px-5 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-2xs"
               >
@@ -3434,13 +4130,6 @@ export const ProductManagement = () => {
 
     const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
 
-    const defaultMock = [
-      { id: '5e17-0', name: 'Pyaaj', seller: 'Keshari Vagitl Shope', category: 'Groceries & Grains', image: 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?w=100&auto=format&fit=crop&q=80', variation: '1kg', stock: 40, status: 'Published' },
-      { id: '5d01-0', name: 'Aalu', seller: 'Keshari Vagitl Shope', category: 'Groceries & Grains', image: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=100&auto=format&fit=crop&q=80', variation: '1 kg', stock: 1000, status: 'Published' },
-      { id: '3c8e-0', name: 'Khira', seller: 'Keshari Vagitl Shope', category: 'Groceries & Grains', image: 'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=100&auto=format&fit=crop&q=80', variation: '1 kg', stock: 100, status: 'Published' },
-      { id: '2f5f-0', name: 'Tamatar', seller: 'Keshari Vagitl Shope', category: 'Groceries & Grains', image: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=100&auto=format&fit=crop&q=80', variation: '1 kg', stock: 500, status: 'Published' }
-    ];
-
     // 1. Convert API products from MongoDB as primary source of truth
     const combined = apiProducts.map(ap => ({
       _id: ap._id,
@@ -3468,18 +4157,12 @@ export const ProductManagement = () => {
 
     // 2. Add local storage items only if they are not already in MongoDB
     localSaved.forEach(localItem => {
-      const matchExists = combined.some(c => 
-        (c._id && localItem._id && c._id === localItem._id) || 
+      const matchExists = combined.some(c =>
+        (c._id && localItem._id && c._id === localItem._id) ||
         (c.name.trim().toLowerCase() === localItem.name.trim().toLowerCase())
       );
       if (!matchExists) {
         combined.push(localItem);
-      }
-    });
-
-    defaultMock.forEach(dm => {
-      if (!combined.some(c => c.id === dm.id || c.name === dm.name)) {
-        combined.push(dm);
       }
     });
 
@@ -3509,12 +4192,37 @@ export const ProductManagement = () => {
   const [currentPage, setCurrentPage] = React.useState(1);
 
   // Edit / Delete Actions
-  const handleDeleteProduct = (id) => {
-    if (window.confirm('Are you sure you want to delete this product stock item?')) {
-      setProducts(prev => prev.filter(p => p.id !== id));
-      const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
-      const updatedLocal = localSaved.filter(p => p.id !== id);
-      localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
+  const handleDeleteProduct = async (id) => {
+    const product = products.find(p => p.id === id || p._id === id);
+
+    // Check if product is a mock/default product (not from database)
+    if (!product || product.id?.includes('-0') || !product._id) {
+      alert('Default sample products cannot be deleted. You can only delete products created in the system.');
+      return;
+    }
+
+    if (window.confirm('Are you sure you want to delete this product stock item? This action cannot be undone.')) {
+      try {
+        // Use MongoDB _id for real products, fall back to id for custom products
+        const productId = product._id || id;
+
+        // Call backend API to delete
+        const res = await productService.deleteProduct(productId);
+        if (res && res.success) {
+          // Only remove from UI after successful backend deletion
+          setProducts(prev => prev.filter(p => p.id !== id && p._id !== id));
+          // Also remove from localStorage if it exists there
+          const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
+          const updatedLocal = localSaved.filter(p => p.id !== id);
+          localStorage.setItem('shippnex_custom_products', JSON.stringify(updatedLocal));
+          alert('Product deleted successfully!');
+        } else {
+          alert(res?.message || 'Failed to delete product. Please try again.');
+        }
+      } catch (err) {
+        console.error('Delete product error:', err);
+        alert(err?.response?.data?.message || 'Error deleting product. Please try again.');
+      }
     }
   };
 
@@ -3832,53 +4540,142 @@ export const ProductManagement = () => {
 };
 
 /* =========================================================================
-   7. ORDERS PAGE
+   7. ORDERS PAGE (LIVE DYNAMIC ORDER MANAGEMENT)
    ========================================================================= */
 export const OrderManagement = () => {
   const { activeTab } = useAdmin();
-  const [orders, setOrders] = useState(mockOrders);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('All');
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [captains, setCaptains] = useState([]);
+  
+  // Modals & Action States
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  
+  const [assignModalOrder, setAssignModalOrder] = useState(null);
+  const [selectedCaptainId, setSelectedCaptainId] = useState('');
+  const [captainEarningsInput, setCaptainEarningsInput] = useState('50');
+  
+  const [statusModalOrder, setStatusModalOrder] = useState(null);
+  const [newOrderStatus, setNewOrderStatus] = useState('');
+  
+  const [actionLoading, setActionLoading] = useState(false);
+  const [toastMsg, setToastMsg] = useState(null);
 
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        const res = await adminService.getOrders();
-        if (res && res.success && Array.isArray(res.orders) && res.orders.length > 0) {
-          const mappedOrders = res.orders.map(o => ({
+  const showToast = (msg, isError = false) => {
+    setToastMsg({ text: msg, isError });
+    setTimeout(() => setToastMsg(null), 4000);
+  };
+
+  const fetchOrders = async (isManual = false) => {
+    if (isManual) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      const res = await adminService.getOrders();
+      if (res && res.success && Array.isArray(res.orders)) {
+        const mappedOrders = res.orders.map((o) => {
+          const custName = o.shippingAddress?.fullName || o.user?.name || 'Customer';
+          const custPhone = o.shippingAddress?.phone || o.user?.phone || 'N/A';
+          const custEmail = o.shippingAddress?.email || o.user?.email || '';
+          const itemsList = Array.isArray(o.items) ? o.items : [];
+          const totalQty = itemsList.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
+          const firstSeller = itemsList[0]?.seller?.businessName || itemsList[0]?.seller || 'ShippNex Store';
+          
+          return {
             id: o.orderId || o._id,
             _id: o._id,
-            customer: o.user?.name || o.deliveryAddress?.fullName || 'Customer',
-            seller: o.items?.[0]?.seller?.businessName || o.items?.[0]?.sellerName || 'ShippNex Store',
-            warehouse: 'Central Hub',
-            total: `₹${Number(o.grandTotal || o.totalAmount || 0).toFixed(2)}`,
-            status: o.orderStatus || 'Pending',
-            date: o.createdAt ? new Date(o.createdAt).toISOString().split('T')[0] : 'Today',
-            raw: o
-          }));
-          setOrders(mappedOrders);
-        }
-      } catch (err) {
-        console.warn('Failed to fetch real orders, using fallback mock data:', err.message);
+            customer: custName,
+            customerPhone: custPhone,
+            customerEmail: custEmail,
+            shippingAddress: o.shippingAddress || {},
+            deliverySlot: o.deliverySlot || { date: 'Today', time: 'Express Delivery' },
+            deliveryInstructions: o.deliveryInstructions || '',
+            seller: firstSeller,
+            items: itemsList,
+            itemsCount: totalQty,
+            warehouse: o.shippingAddress?.city ? `${o.shippingAddress.city} Central Hub` : 'Main Logistics Hub',
+            total: `₹${Number(o.grandTotal || 0).toFixed(2)}`,
+            rawTotal: Number(o.grandTotal || 0),
+            itemsTotal: Number(o.itemsTotal || 0),
+            shippingFee: Number(o.shippingFee || 0),
+            discount: Number(o.discount || 0),
+            paymentMethod: o.paymentMethod || 'COD',
+            paymentStatus: o.paymentStatus || (o.paymentMethod === 'COD' ? 'Pending' : 'Paid'),
+            status: o.orderStatus || 'Placed',
+            sellerStatus: o.sellerStatus || 'Pending',
+            captain: o.captainId?.name || (o.captainStatus === 'Assigned' ? 'Assigned' : 'Unassigned'),
+            captainDetails: o.captainId || null,
+            captainStatus: o.captainStatus || null,
+            captainEarnings: o.captainEarnings || 0,
+            deliveryOtp: o.deliveryOtp || '',
+            commission: {
+              sellerRate: o.sellerCommissionRate ?? 10,
+              sellerAmount: o.sellerCommissionAmount ?? 0,
+              sellerEarning: o.sellerEarning ?? 0,
+              captainRate: o.captainCommissionRate ?? 5,
+              captainAmount: o.captainCommissionAmount ?? 0,
+              captainEarning: o.captainEarning ?? 0,
+            },
+            date: o.createdAt ? new Date(o.createdAt).toLocaleString('en-IN', {
+              day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            }) : 'Today',
+            rawDate: o.createdAt ? new Date(o.createdAt) : new Date(),
+            raw: o,
+          };
+        });
+        setOrders(mappedOrders);
+      } else {
+        setOrders([]);
       }
-    };
+    } catch (err) {
+      console.error('Failed to fetch live admin orders:', err);
+      showToast('Error loading live orders from server', true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const fetchCaptainsList = async () => {
+    try {
+      const res = await adminService.getAvailableCaptains();
+      if (res && res.success && Array.isArray(res.captains)) {
+        setCaptains(res.captains);
+      } else {
+        const allCapRes = await adminService.getCaptains(true);
+        if (allCapRes && allCapRes.success && Array.isArray(allCapRes.captains)) {
+          setCaptains(allCapRes.captains.filter((c) => c.status === 'approved'));
+        }
+      }
+    } catch (e) {
+      console.warn('Could not load online captains:', e.message);
+    }
+  };
+
+  useEffect(() => {
     fetchOrders();
+    fetchCaptainsList();
   }, []);
 
   // Map activeTab sub-item to status filter
   const getTabTitleAndFilter = () => {
     switch (activeTab) {
       case 'orders_pending':
-        return { title: 'Pending Orders', filter: 'Pending' };
+        return { title: 'Pending & Placed Orders', filter: 'Pending' };
       case 'orders_received':
-        return { title: 'Received Orders', filter: 'Processing' };
+        return { title: 'Accepted / Received Orders', filter: 'Accepted' };
       case 'orders_processed':
-        return { title: 'Processed Orders', filter: 'Processed' };
+        return { title: 'Processing Orders', filter: 'Processing' };
       case 'orders_shipped':
-        return { title: 'Shipped Orders', filter: 'Dispatched' };
+        return { title: 'At Store / Pickup Orders', filter: 'Reached Store / Pickup' };
       case 'orders_out_for_delivery':
-        return { title: 'Out for Delivery Orders', filter: 'In Transit' };
+        return { title: 'Out for Delivery Orders', filter: 'Out for Delivery' };
       case 'orders_delivered':
         return { title: 'Delivered Orders', filter: 'Delivered' };
       case 'orders_cancelled':
@@ -3887,112 +4684,477 @@ export const OrderManagement = () => {
         return { title: 'Returned Orders', filter: 'Return' };
       case 'orders_all':
       default:
-        return { title: 'All Orders List', filter: 'All' };
+        return { title: 'All Orders List (Live)', filter: 'All' };
     }
   };
 
   const { title: pageTitle, filter: statusFilter } = getTabTitleAndFilter();
 
-  const filteredOrders = orders.filter(o => {
-    const matchesStatus = statusFilter === 'All' || o.status.toLowerCase() === statusFilter.toLowerCase();
-    const matchesSearch = 
-      o.id.toLowerCase().includes(search.toLowerCase()) ||
-      o.customer.toLowerCase().includes(search.toLowerCase()) ||
-      o.seller.toLowerCase().includes(search.toLowerCase());
-    return matchesStatus && matchesSearch;
-  });
+  // Metrics Calculations
+  const metrics = useMemo(() => {
+    const totalCount = orders.length;
+    const activeCount = orders.filter((o) => ['Placed', 'Pending', 'Accepted', 'Processing', 'Reached Store / Pickup', 'Out for Delivery'].includes(o.status)).length;
+    const deliveredCount = orders.filter((o) => o.status === 'Delivered').length;
+    const cancelledCount = orders.filter((o) => o.status === 'Cancelled').length;
+    const totalGrossRevenue = orders.reduce((sum, o) => sum + (o.rawTotal || 0), 0);
+    return { totalCount, activeCount, deliveredCount, cancelledCount, totalGrossRevenue };
+  }, [orders]);
+
+  // Filter Orders
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      // Status matching
+      let matchesStatus = true;
+      if (statusFilter !== 'All') {
+        const sLower = o.status.toLowerCase();
+        const fLower = statusFilter.toLowerCase();
+        if (fLower === 'pending') {
+          matchesStatus = sLower === 'pending' || sLower === 'placed';
+        } else if (fLower === 'accepted') {
+          matchesStatus = sLower === 'accepted' || sLower === 'processing';
+        } else if (fLower === 'out for delivery') {
+          matchesStatus = sLower === 'out for delivery' || sLower === 'in transit';
+        } else {
+          matchesStatus = sLower.includes(fLower);
+        }
+      }
+
+      // Payment method matching
+      let matchesPayment = true;
+      if (paymentFilter !== 'All') {
+        matchesPayment = o.paymentMethod.toUpperCase() === paymentFilter.toUpperCase();
+      }
+
+      // Search matching (Order ID, Customer, Phone, Seller, Products)
+      const q = search.trim().toLowerCase();
+      let matchesSearch = true;
+      if (q) {
+        const itemsStr = o.items.map((it) => it.name || '').join(' ').toLowerCase();
+        matchesSearch =
+          o.id.toLowerCase().includes(q) ||
+          o.customer.toLowerCase().includes(q) ||
+          o.customerPhone.toLowerCase().includes(q) ||
+          o.seller.toLowerCase().includes(q) ||
+          itemsStr.includes(q);
+      }
+
+      return matchesStatus && matchesPayment && matchesSearch;
+    });
+  }, [orders, statusFilter, paymentFilter, search]);
 
   const totalPages = Math.ceil(filteredOrders.length / entriesPerPage) || 1;
   const indexOfLastItem = currentPage * entriesPerPage;
   const indexOfFirstItem = indexOfLastItem - entriesPerPage;
   const currentOrders = filteredOrders.slice(indexOfFirstItem, indexOfLastItem);
 
+  // Status Change Handler
+  const handleUpdateOrderStatus = async () => {
+    if (!statusModalOrder || !newOrderStatus) return;
+    try {
+      setActionLoading(true);
+      const res = await adminService.updateOrderStatus(statusModalOrder._id || statusModalOrder.id, {
+        orderStatus: newOrderStatus,
+      });
+      if (res && res.success) {
+        showToast(`Order #${statusModalOrder.id} status updated to ${newOrderStatus}`);
+        setStatusModalOrder(null);
+        await fetchOrders(true);
+      } else {
+        showToast(res?.message || 'Failed to update order status', true);
+      }
+    } catch (err) {
+      console.error('Status update failed:', err);
+      showToast(err.response?.data?.message || 'Error updating order status', true);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Assign Captain Handler
+  const handleAssignCaptain = async () => {
+    if (!assignModalOrder || !selectedCaptainId) {
+      showToast('Please select a captain to assign', true);
+      return;
+    }
+    try {
+      setActionLoading(true);
+      const res = await adminService.assignCaptainToOrder(
+        assignModalOrder._id || assignModalOrder.id,
+        selectedCaptainId,
+        Number(captainEarningsInput) || 50
+      );
+      if (res && res.success) {
+        showToast(`Captain successfully assigned! Delivery OTP: ${res.deliveryOtp || 'Generated'}`);
+        setAssignModalOrder(null);
+        setSelectedCaptainId('');
+        await fetchOrders(true);
+      } else {
+        showToast(res?.message || 'Failed to assign captain', true);
+      }
+    } catch (err) {
+      console.error('Captain assignment failed:', err);
+      showToast(err.response?.data?.message || 'Error assigning captain', true);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleExport = () => {
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + ["Order ID,Customer,Seller,Warehouse,Total,Status,Date"].concat(
-        filteredOrders.map(o => `"${o.id}","${o.customer}","${o.seller}","${o.warehouse}","${o.total}","${o.status}","${o.date}"`)
-      ).join("\n");
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [
+        'Order ID,Customer Name,Phone,Seller Store,Items Count,Total Amount (INR),Payment Method,Payment Status,Order Status,Captain,Created Date',
+      ]
+        .concat(
+          filteredOrders.map(
+            (o) =>
+              `"${o.id}","${o.customer}","${o.customerPhone}","${o.seller}","${o.itemsCount}","${o.total.replace('₹', '')}","${o.paymentMethod}","${o.paymentStatus}","${o.status}","${o.captain}","${o.date}"`
+          )
+        )
+        .join('\n');
     const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `orders_export_${statusFilter.toLowerCase()}.csv`);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `shippnex_orders_${statusFilter.toLowerCase()}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
+  // Dynamic Status Badge Helper
+  const renderStatusBadge = (status) => {
+    switch (status) {
+      case 'Delivered':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80"><CheckCircle size={12} /> Delivered</span>;
+      case 'Out for Delivery':
+      case 'In Transit':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80"><Truck size={12} /> Out for Delivery</span>;
+      case 'Processing':
+      case 'Accepted':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200/80"><Package size={12} /> Processing</span>;
+      case 'Reached Store / Pickup':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200/80"><Store size={12} /> At Store</span>;
+      case 'Cancelled':
+      case 'Rejected':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700 border border-red-200/80"><X size={12} /> Cancelled</span>;
+      case 'Placed':
+      default:
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-orange-50 text-[#ff5500] border border-orange-200/80"><Clock size={12} /> Placed</span>;
+    }
+  };
+
   return (
-    <div className="space-y-6 animate-fadeIn pb-6">
+    <div className="space-y-6 animate-fadeIn pb-8">
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div
+          className={`fixed top-5 right-5 z-[9999] px-4 py-3 rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 border transition-all ${
+            toastMsg.isError
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}
+        >
+          {toastMsg.isError ? <AlertCircle size={16} /> : <CheckCircle size={16} />}
+          <span>{toastMsg.text}</span>
+        </div>
+      )}
+
+      {/* Top Banner & Refresh Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">{pageTitle}</h2>
-          <p className="text-xs text-slate-500">Monitor order lifecycle, seller fulfillment, and dispatch states</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-slate-900 m-0">{pageTitle}</h2>
+            <span className="bg-orange-100 text-[#ff5500] text-[11px] font-black px-2.5 py-0.5 rounded-full">
+              {filteredOrders.length} {filteredOrders.length === 1 ? 'Order' : 'Orders'}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 font-medium mt-1 m-0">
+            Real-time live order dispatch, fulfillment tracking & captain dispatch management
+          </p>
         </div>
-        <button 
-          onClick={handleExport}
-          className="px-3.5 py-2 bg-[#ff661a] hover:bg-[#e65200] text-white text-xs font-bold rounded-xl transition-all border-none cursor-pointer flex items-center gap-1.5 shadow-sm"
-        >
-          <Download size={14} /> Export Orders
-        </button>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => fetchOrders(true)}
+            disabled={refreshing || loading}
+            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 text-xs font-bold rounded-xl transition-all border-none cursor-pointer flex items-center gap-1.5"
+            title="Refresh Live Data"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            <span>{refreshing ? 'Refreshing...' : 'Live Refresh'}</span>
+          </button>
+
+          <button
+            onClick={handleExport}
+            disabled={filteredOrders.length === 0}
+            className="px-3.5 py-2 bg-[#ff5500] hover:bg-[#e04b00] disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all border-none cursor-pointer flex items-center gap-1.5 shadow-sm shadow-orange-500/20"
+          >
+            <Download size={14} /> Export CSV
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
-          <div className="flex items-center gap-2">
-            <span>Show</span>
-            <select
-              value={entriesPerPage}
-              onChange={(e) => { setEntriesPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#ff661a]"
-            >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
-            <span>entries</span>
+      {/* KPI Stats Strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Total Orders</span>
+            <span className="text-xl font-black text-slate-900 mt-0.5 block">{metrics.totalCount}</span>
           </div>
-
-          <div className="relative flex-1 max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search by Order ID, Customer..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#ff661a]"
-            />
+          <div className="w-10 h-10 rounded-xl bg-orange-50 text-[#ff5500] flex items-center justify-center font-bold">
+            <Package size={20} />
           </div>
         </div>
 
-        <div className="overflow-x-auto border border-slate-100 rounded-xl">
-          <table className="w-full text-left text-xs border-collapse">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Active In-Transit</span>
+            <span className="text-xl font-black text-amber-600 mt-0.5 block">{metrics.activeCount}</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+            <Truck size={20} />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Delivered</span>
+            <span className="text-xl font-black text-emerald-600 mt-0.5 block">{metrics.deliveredCount}</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+            <CheckCircle size={20} />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Total Volume</span>
+            <span className="text-xl font-black text-slate-900 mt-0.5 block">₹{metrics.totalGrossRevenue.toFixed(2)}</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+            <DollarSign size={20} />
+          </div>
+        </div>
+      </div>
+
+      {/* Controls & Filter Bar */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+          {/* Search Box */}
+          <div className="relative flex-1 max-w-md">
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by Order ID, Customer, Phone, Seller, Item..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-[#ff5500] transition-colors"
+            />
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Payment Method Filter */}
+            <div className="flex items-center gap-1.5 text-slate-600">
+              <span className="font-semibold text-slate-500">Payment:</span>
+              <select
+                value={paymentFilter}
+                onChange={(e) => {
+                  setPaymentFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-bold outline-none focus:border-[#ff5500]"
+              >
+                <option value="All">All Payment Modes</option>
+                <option value="COD">Cash on Delivery (COD)</option>
+                <option value="UPI">UPI Payment</option>
+                <option value="CARD">Credit / Debit Card</option>
+                <option value="NETBANKING">Net Banking</option>
+                <option value="WALLET">Wallet</option>
+                <option value="ONLINE">Online</option>
+              </select>
+            </div>
+
+            {/* Entries Per Page */}
+            <div className="flex items-center gap-1.5 text-slate-600">
+              <span className="font-semibold text-slate-500">Show:</span>
+              <select
+                value={entriesPerPage}
+                onChange={(e) => {
+                  setEntriesPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800 font-bold outline-none focus:border-[#ff5500]"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic Orders Table */}
+        <div className="overflow-x-auto border border-slate-200/80 rounded-xl">
+          <table className="w-full text-left text-xs border-collapse min-w-[900px]">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
-                <th className="py-3 px-4">Order ID</th>
-                <th className="py-3 px-4">Customer</th>
-                <th className="py-3 px-4">Seller Store</th>
-                <th className="py-3 px-4">Warehouse</th>
-                <th className="py-3 px-4">Total Amount</th>
+              <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
+                <th className="py-3 px-4">Order ID & Date</th>
+                <th className="py-3 px-4">Customer Details</th>
+                <th className="py-3 px-4">Items</th>
+                <th className="py-3 px-4">Store / Seller</th>
+                <th className="py-3 px-4">Amount & Payment</th>
+                <th className="py-3 px-4">Captain</th>
                 <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {currentOrders.length > 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan="8" className="py-12 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Loader2 size={24} className="animate-spin text-[#ff5500]" />
+                      <span className="text-xs font-semibold text-slate-600">Loading dynamic orders from database...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : currentOrders.length > 0 ? (
                 currentOrders.map((o) => (
-                  <tr key={o.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-3 px-4 font-mono font-bold text-[#ff661a]">{o.id}</td>
-                    <td className="py-3 px-4 text-slate-900 font-bold">{o.customer}</td>
-                    <td className="py-3 px-4 text-slate-600">{o.seller}</td>
-                    <td className="py-3 px-4 text-slate-500">{o.warehouse}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-slate-900">{o.total}</td>
-                    <td className="py-3 px-4"><StatusBadge status={o.status} /></td>
+                  <tr key={o.id} className="hover:bg-orange-50/20 transition-colors">
+                    {/* Order ID & Date */}
+                    <td className="py-3.5 px-4 align-middle">
+                      <div className="font-mono font-bold text-[#ff5500] text-[13px]">{o.id}</div>
+                      <div className="text-[11px] text-slate-400 font-medium mt-0.5 flex items-center gap-1">
+                        <Clock size={11} /> {o.date}
+                      </div>
+                    </td>
+
+                    {/* Customer */}
+                    <td className="py-3.5 px-4 align-middle">
+                      <div className="font-bold text-slate-900 text-xs">{o.customer}</div>
+                      <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
+                        <Phone size={11} className="text-slate-400" /> {o.customerPhone}
+                      </div>
+                      <div className="text-[10px] text-slate-400 truncate max-w-[150px]">
+                        {o.shippingAddress?.city || 'Noida'}, {o.shippingAddress?.pincode || '201301'}
+                      </div>
+                    </td>
+
+                    {/* Items */}
+                    <td className="py-3.5 px-4 align-middle">
+                      <div className="font-semibold text-slate-800 text-xs">
+                        {o.items[0]?.name || 'Items'}
+                        {o.items.length > 1 && (
+                          <span className="text-[10px] font-bold text-[#ff5500] bg-orange-50 px-1.5 py-0.5 rounded-md ml-1">
+                            +{o.items.length - 1} more
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-400">Total Qty: {o.itemsCount}</span>
+                    </td>
+
+                    {/* Store / Seller */}
+                    <td className="py-3.5 px-4 align-middle">
+                      <div className="font-medium text-slate-800 text-xs truncate max-w-[140px] flex items-center gap-1">
+                        <Store size={12} className="text-slate-400 shrink-0" />
+                        <span>{o.seller}</span>
+                      </div>
+                    </td>
+
+                    {/* Amount & Payment */}
+                    <td className="py-3.5 px-4 align-middle">
+                      <div className="font-black text-slate-900 text-[13px]">{o.total}</div>
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-slate-100 text-slate-700">
+                          {o.paymentMethod}
+                        </span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            o.paymentStatus === 'Paid'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}
+                        >
+                          {o.paymentStatus}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Captain */}
+                    <td className="py-3.5 px-4 align-middle">
+                      {o.captain !== 'Unassigned' ? (
+                        <div>
+                          <div className="font-bold text-slate-800 text-xs flex items-center gap-1 text-emerald-700">
+                            <Truck size={12} /> {o.captain}
+                          </div>
+                          {o.deliveryOtp && (
+                            <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                              OTP: <span className="font-bold text-slate-800">{o.deliveryOtp}</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setAssignModalOrder(o);
+                            setSelectedCaptainId('');
+                            setCaptainEarningsInput(String(o.commission?.captainEarning || 50));
+                          }}
+                          className="px-2 py-1 bg-orange-50 hover:bg-orange-100 text-[#ff5500] border border-orange-200 rounded-lg text-[10px] font-bold cursor-pointer transition-colors flex items-center gap-1"
+                        >
+                          <Plus size={10} /> Assign Driver
+                        </button>
+                      )}
+                    </td>
+
+                    {/* Status */}
+                    <td className="py-3.5 px-4 align-middle">
+                      {renderStatusBadge(o.status)}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3.5 px-4 align-middle text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setSelectedOrder(o);
+                            setIsDetailsModalOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-600 hover:text-[#ff5500] hover:bg-orange-50 border border-slate-200 bg-white cursor-pointer transition-colors"
+                          title="View Order Invoice Details"
+                        >
+                          <Eye size={13} />
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setStatusModalOrder(o);
+                            setNewOrderStatus(o.status);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-blue-50 border border-slate-200 bg-white cursor-pointer transition-colors"
+                          title="Update Order Status"
+                        >
+                          <Edit3 size={13} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-slate-400 italic text-xs">
-                    No orders found matching criteria
+                  <td colSpan="8" className="py-12 text-center text-slate-400 italic text-xs">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Package size={32} className="text-slate-300" />
+                      <span className="font-semibold text-slate-600">No dynamic orders found</span>
+                      <span className="text-[11px] text-slate-400">
+                        {search ? 'Try adjusting your search keywords or status filter' : 'Orders placed by users will appear here automatically.'}
+                      </span>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -4001,24 +5163,25 @@ export const OrderManagement = () => {
         </div>
 
         {/* Pagination Footer */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-slate-500">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs text-slate-500">
           <span>
-            Showing {filteredOrders.length > 0 ? indexOfFirstItem + 1 : 0} to {Math.min(indexOfLastItem, filteredOrders.length)} of {filteredOrders.length} entries
+            Showing {filteredOrders.length > 0 ? indexOfFirstItem + 1 : 0} to{' '}
+            {Math.min(indexOfLastItem, filteredOrders.length)} of {filteredOrders.length} entries
           </span>
 
           <div className="inline-flex rounded-xl border border-slate-200 p-0.5 bg-slate-50 items-center">
-            <button 
-              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
               disabled={currentPage === 1}
               className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
             >
               ‹
             </button>
-            <span className="px-3 py-1 bg-[#ff661a] text-white text-xs font-bold rounded-lg">
+            <span className="px-3 py-1 bg-[#ff5500] text-white text-xs font-bold rounded-lg">
               {currentPage} of {totalPages}
             </span>
-            <button 
-              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
               disabled={currentPage === totalPages || totalPages === 0}
               className="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 border-none bg-transparent cursor-pointer disabled:opacity-40"
             >
@@ -4027,9 +5190,322 @@ export const OrderManagement = () => {
           </div>
         </div>
       </div>
+
+      {/* ── 1. ORDER DETAILS & INVOICE BREAKDOWN MODAL ── */}
+      {isDetailsModalOpen && selectedOrder && (
+        <div className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex justify-between items-center">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-black m-0 text-white">Order #{selectedOrder.id}</h3>
+                  {renderStatusBadge(selectedOrder.status)}
+                </div>
+                <p className="text-xs text-slate-300 m-0 mt-1">Placed on {selectedOrder.date}</p>
+              </div>
+              <button
+                onClick={() => setIsDetailsModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white border-none cursor-pointer flex items-center justify-center"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto space-y-5 text-xs">
+              {/* Customer & Delivery Card */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+                <div>
+                  <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs m-0">
+                    <User size={14} className="text-[#ff5500]" /> Customer Information
+                  </h4>
+                  <p className="font-bold text-slate-800 m-0 text-sm">{selectedOrder.customer}</p>
+                  <p className="text-slate-600 m-0 mt-0.5">📞 {selectedOrder.customerPhone}</p>
+                  {selectedOrder.customerEmail && <p className="text-slate-600 m-0 mt-0.5">✉️ {selectedOrder.customerEmail}</p>}
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-1.5 text-xs m-0">
+                    <MapPin size={14} className="text-[#ff5500]" /> Shipping Address
+                  </h4>
+                  <p className="text-slate-700 m-0 leading-relaxed">
+                    {selectedOrder.shippingAddress?.addressLine1 || selectedOrder.shippingAddress?.address || 'Address not provided'}
+                    {selectedOrder.shippingAddress?.addressLine2 && `, ${selectedOrder.shippingAddress.addressLine2}`}
+                    {selectedOrder.shippingAddress?.landmark && ` (Near ${selectedOrder.shippingAddress.landmark})`}
+                    <br />
+                    {selectedOrder.shippingAddress?.city || 'Noida'}, {selectedOrder.shippingAddress?.state || 'UP'} - {selectedOrder.shippingAddress?.pincode || '201301'}
+                  </p>
+                  {selectedOrder.deliverySlot && (
+                    <p className="text-slate-500 font-medium m-0 mt-1">
+                      🕒 Slot: {selectedOrder.deliverySlot.date} ({selectedOrder.deliverySlot.time})
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Order Items Table */}
+              <div>
+                <h4 className="font-bold text-slate-900 mb-2 text-xs m-0">Itemized Breakdown</h4>
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 text-[10px] uppercase">
+                      <tr>
+                        <th className="py-2.5 px-3">Product</th>
+                        <th className="py-2.5 px-3 text-center">Unit Price</th>
+                        <th className="py-2.5 px-3 text-center">Qty</th>
+                        <th className="py-2.5 px-3 text-right">Line Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {selectedOrder.items.map((it, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50">
+                          <td className="py-2.5 px-3 flex items-center gap-2">
+                            {it.image && (
+                              <img src={it.image} alt={it.name} className="w-8 h-8 rounded-lg object-cover border border-slate-200" />
+                            )}
+                            <div>
+                              <div className="font-bold text-slate-900">{it.name}</div>
+                              <div className="text-[10px] text-slate-400">{it.seller || selectedOrder.seller}</div>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-medium text-slate-700">₹{Number(it.price || 0).toFixed(2)}</td>
+                          <td className="py-2.5 px-3 text-center font-bold text-slate-900">x{it.quantity || 1}</td>
+                          <td className="py-2.5 px-3 text-right font-black text-slate-900">
+                            ₹{(Number(it.price || 0) * (it.quantity || 1)).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Financial Breakdown & Commission Snapshot */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Platform Commission Snapshot */}
+                <div className="bg-orange-50/60 p-4 rounded-xl border border-orange-200/80 space-y-1.5 text-xs">
+                  <h4 className="font-black text-[#ff5500] m-0 mb-1 flex items-center gap-1">
+                    <DollarSign size={14} /> Commission Snapshot
+                  </h4>
+                  <div className="flex justify-between text-slate-600">
+                    <span>Seller Commission Rate:</span>
+                    <span className="font-bold text-slate-900">{selectedOrder.commission.sellerRate}%</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600">
+                    <span>Admin Share from Seller:</span>
+                    <span className="font-bold text-[#ff5500]">₹{selectedOrder.commission.sellerAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600">
+                    <span>Seller Net Earnings:</span>
+                    <span className="font-bold text-emerald-700">₹{selectedOrder.commission.sellerEarning.toFixed(2)}</span>
+                  </div>
+                  <div className="pt-1.5 border-t border-orange-200/80 flex justify-between text-slate-600">
+                    <span>Captain Payout:</span>
+                    <span className="font-bold text-blue-700">₹{selectedOrder.captainEarnings || selectedOrder.commission.captainEarning}</span>
+                  </div>
+                </div>
+
+                {/* Bill Summary */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5 text-xs">
+                  <h4 className="font-bold text-slate-900 m-0 mb-1">Billing Summary</h4>
+                  <div className="flex justify-between text-slate-600">
+                    <span>Items Subtotal:</span>
+                    <span className="font-semibold text-slate-900">₹{selectedOrder.itemsTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600">
+                    <span>Delivery Charge:</span>
+                    <span className="font-semibold text-slate-900">{selectedOrder.shippingFee === 0 ? 'FREE' : `₹${selectedOrder.shippingFee.toFixed(2)}`}</span>
+                  </div>
+                  {selectedOrder.discount > 0 && (
+                    <div className="flex justify-between text-emerald-600 font-medium">
+                      <span>Discount:</span>
+                      <span>- ₹{selectedOrder.discount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="pt-2 border-t border-dashed border-slate-300 flex justify-between items-center text-sm font-black text-slate-900">
+                    <span>Grand Total:</span>
+                    <span className="text-base text-[#ff5500]">{selectedOrder.total}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-medium mt-1">
+                    Mode: <strong className="text-slate-800">{selectedOrder.paymentMethod}</strong> ({selectedOrder.paymentStatus})
+                  </div>
+                </div>
+              </div>
+
+              {/* Captain Assignment Block */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-center">
+                <div>
+                  <span className="text-[11px] font-bold text-slate-400 block uppercase">Assigned Captain</span>
+                  <span className="text-xs font-bold text-slate-900">
+                    {selectedOrder.captain !== 'Unassigned' ? selectedOrder.captain : 'No captain assigned yet'}
+                  </span>
+                  {selectedOrder.deliveryOtp && (
+                    <span className="text-[11px] text-slate-500 block">OTP: <strong>{selectedOrder.deliveryOtp}</strong></span>
+                  )}
+                </div>
+                {selectedOrder.captain === 'Unassigned' && (
+                  <button
+                    onClick={() => {
+                      setIsDetailsModalOpen(false);
+                      setAssignModalOrder(selectedOrder);
+                      setSelectedCaptainId('');
+                      setCaptainEarningsInput(String(selectedOrder.commission?.captainEarning || 50));
+                    }}
+                    className="px-3 py-1.5 bg-[#ff5500] hover:bg-[#e04b00] text-white rounded-lg text-xs font-bold border-none cursor-pointer"
+                  >
+                    Assign Captain Now
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+              <button
+                onClick={() => setIsDetailsModalOpen(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl border-none cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 2. ASSIGN CAPTAIN MODAL ── */}
+      {assignModalOrder && (
+        <div className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 bg-[#ff5500] text-white flex justify-between items-center">
+              <div>
+                <h3 className="text-base font-black m-0 text-white">Assign Captain</h3>
+                <p className="text-xs text-orange-100 m-0 mt-0.5">Order #{assignModalOrder.id}</p>
+              </div>
+              <button
+                onClick={() => setAssignModalOrder(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white border-none cursor-pointer flex items-center justify-center"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5">Select Online Captain *</label>
+                <select
+                  value={selectedCaptainId}
+                  onChange={(e) => setSelectedCaptainId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 font-bold outline-none focus:border-[#ff5500]"
+                >
+                  <option value="">-- Choose an Approved Captain --</option>
+                  {captains.map((c) => (
+                    <option key={c._id || c.id} value={c._id || c.id}>
+                      {c.name} ({c.phone}) - {c.vehicleType || 'Bike'} {c.isOnline ? '🟢 Online' : ''}
+                    </option>
+                  ))}
+                </select>
+                {captains.length === 0 && (
+                  <p className="text-[11px] text-amber-600 mt-1">
+                    ⚠️ No online captains found. Showing all approved captains.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5">Captain Delivery Payout (₹) *</label>
+                <input
+                  type="number"
+                  value={captainEarningsInput}
+                  onChange={(e) => setCaptainEarningsInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 font-bold outline-none focus:border-[#ff5500]"
+                  placeholder="e.g. 50"
+                  min="0"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  This payout will be credited to the captain upon successful OTP-verified delivery.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+              <button
+                onClick={() => setAssignModalOrder(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl border-none cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={actionLoading || !selectedCaptainId}
+                onClick={handleAssignCaptain}
+                className="px-4 py-2 bg-[#ff5500] hover:bg-[#e04b00] disabled:opacity-50 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5"
+              >
+                {actionLoading && <Loader2 size={14} className="animate-spin" />}
+                <span>Confirm Assignment</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 3. UPDATE ORDER STATUS MODAL ── */}
+      {statusModalOrder && (
+        <div className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 bg-slate-900 text-white flex justify-between items-center">
+              <div>
+                <h3 className="text-base font-black m-0 text-white">Update Order Status</h3>
+                <p className="text-xs text-slate-400 m-0 mt-0.5">Order #{statusModalOrder.id}</p>
+              </div>
+              <button
+                onClick={() => setStatusModalOrder(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white border-none cursor-pointer flex items-center justify-center"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-700 font-bold mb-1.5">New Order Status *</label>
+                <select
+                  value={newOrderStatus}
+                  onChange={(e) => setNewOrderStatus(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 font-bold outline-none focus:border-[#ff5500]"
+                >
+                  <option value="Placed">Placed (Pending confirmation)</option>
+                  <option value="Accepted">Accepted (Store accepted)</option>
+                  <option value="Processing">Processing (Packing / Preparing)</option>
+                  <option value="Reached Store / Pickup">Reached Store / Pickup (Captain arrived)</option>
+                  <option value="Out for Delivery">Out for Delivery (In transit to customer)</option>
+                  <option value="Delivered">Delivered (Completed)</option>
+                  <option value="Cancelled">Cancelled (Order terminated)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+              <button
+                onClick={() => setStatusModalOrder(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl border-none cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={actionLoading}
+                onClick={handleUpdateOrderStatus}
+                className="px-4 py-2 bg-[#ff5500] hover:bg-[#e04b00] disabled:opacity-50 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5"
+              >
+                {actionLoading && <Loader2 size={14} className="animate-spin" />}
+                <span>Save Changes</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 
 /* =========================================================================
    8. DELIVERIES PAGE
@@ -7014,6 +8490,10 @@ export const RoleManagement = () => {
 export const SettingManagement = () => {
   const [fcmTesting, setFcmTesting] = useState(false);
   const [fcmTestResult, setFcmTestResult] = useState(null);
+  const [commissionFee, setCommissionFee] = useState('2.5');
+  const [deliverySurcharge, setDeliverySurcharge] = useState('4.50');
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
 
   const handleTestFCM = async () => {
     setFcmTesting(true);
@@ -7031,6 +8511,28 @@ export const SettingManagement = () => {
     }
   };
 
+  const handleSaveSettings = async () => {
+    setSaving(true);
+    setSaveMessage('');
+    try {
+      localStorage.setItem('platform_commission_fee', commissionFee);
+      localStorage.setItem('delivery_surcharge', deliverySurcharge);
+      setSaveMessage('✓ Settings saved successfully!');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      setSaveMessage('✗ Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  React.useEffect(() => {
+    const saved_fee = localStorage.getItem('platform_commission_fee');
+    const saved_surcharge = localStorage.getItem('delivery_surcharge');
+    if (saved_fee) setCommissionFee(saved_fee);
+    if (saved_surcharge) setDeliverySurcharge(saved_surcharge);
+  }, []);
+
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
@@ -7044,11 +8546,23 @@ export const SettingManagement = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-xs text-slate-500 block mb-1">Platform Commission Fee (%)</label>
-              <input type="text" defaultValue="2.5%" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900" />
+              <input
+                type="number"
+                step="0.1"
+                value={commissionFee}
+                onChange={(e) => setCommissionFee(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+              />
             </div>
             <div>
               <label className="text-xs text-slate-500 block mb-1">Base Delivery Surcharge (₹)</label>
-              <input type="text" defaultValue="₹4.50" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900" />
+              <input
+                type="number"
+                step="0.01"
+                value={deliverySurcharge}
+                onChange={(e) => setDeliverySurcharge(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+              />
             </div>
           </div>
         </div>
@@ -7092,9 +8606,18 @@ export const SettingManagement = () => {
           </div>
         </div>
 
-        <div className="pt-4 border-t border-slate-100 flex justify-end">
-          <button onClick={() => alert('Settings Saved Successfully')} className="px-5 py-2.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl cursor-pointer border-none">
-            Save System Configurations
+        <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
+          {saveMessage && (
+            <div className={`text-xs font-bold ${saveMessage.includes('✓') ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {saveMessage}
+            </div>
+          )}
+          <button
+            onClick={handleSaveSettings}
+            disabled={saving}
+            className="ml-auto px-5 py-2.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl cursor-pointer border-none disabled:opacity-60 transition-colors"
+          >
+            {saving ? 'Saving...' : 'Save System Configurations'}
           </button>
         </div>
       </div>
@@ -7530,69 +9053,173 @@ export const SkuAuditManagement = () => {
 export const SellersOverview = () => {
   const [sellersList, setSellersList] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
+  const [actionLoading, setActionLoading] = React.useState(false);
+  const [statusMessage, setStatusMessage] = React.useState(null);
+  const [copiedKey, setCopiedKey] = React.useState(null);
+  const [previewDocModal, setPreviewDocModal] = React.useState(null);
+  const [search, setSearch] = React.useState('');
+  const [filterTab, setFilterTab] = React.useState('All');
+  const [selectedSeller, setSelectedSeller] = React.useState(null);
+  const [inventoryActiveTab, setInventoryActiveTab] = React.useState('All');
+  const [isAddProductModalOpen, setIsAddProductModalOpen] = React.useState(false);
+  const [newProduct, setNewProduct] = React.useState({ name: '', price: '', stock: '', category: '', description: '' });
+  const [productImagePreview, setProductImagePreview] = React.useState(null);
+  const fileInputRef = React.useRef(null);
+
+  const loadLiveSellers = React.useCallback(async (force = false) => {
+    setLoading(true);
+    try {
+      const data = await adminService.getSellers(force);
+      if (data && (data.success || Array.isArray(data.sellers) || Array.isArray(data))) {
+        const raw = data.sellers || (Array.isArray(data) ? data : []);
+        const mapped = raw.map(s => {
+          const rawStatus = (s.accountStatus || s.status || 'under_review').toLowerCase();
+          let displayStatus = 'Pending';
+          if (rawStatus === 'approved') displayStatus = 'Approved';
+          else if (rawStatus === 'rejected') displayStatus = 'Rejected';
+          else if (rawStatus === 'suspended') displayStatus = 'Suspended';
+          else if (rawStatus === 'pending_otp') displayStatus = 'Pending OTP';
+
+          const bName = s.businessName || s.ownerName || 'Seller Store';
+          const oName = s.ownerName || s.businessName || 'Seller Partner';
+          const loc = s.warehouseLocation || {};
+          const coords = loc.location?.coordinates || [0, 0];
+          const lat = coords[1];
+          const lng = coords[0];
+          const hasCoords = (lat !== undefined && lng !== undefined && (lat !== 0 || lng !== 0));
+
+          return {
+            id: String(s._id || s.id || ''),
+            _id: String(s._id || s.id || ''),
+            name: oName,
+            ownerName: s.ownerName || '',
+            businessName: s.businessName || '',
+            storeName: bName,
+            email: s.email || 'N/A',
+            mobile: s.phone || 'N/A',
+            phone: s.phone || 'N/A',
+            storeLogo: s.storeLogo || '',
+            logoText: (bName || 'SN').substring(0, 2).toUpperCase(),
+            logoBg: 'bg-orange-500',
+            status: displayStatus,
+            rawStatus: rawStatus,
+            joinedOn: s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recent',
+            createdAtFormatted: s.createdAt ? new Date(s.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'Recent',
+            createdAt: s.createdAt,
+            businessType: s.businessType || 'Retail',
+            serviceRadius: s.serviceRadius || 5,
+            areaRadius: `${loc.city || 'Local'} (${s.serviceRadius || 5}km)`,
+            taxInfo: s.gstNumber || s.panNumber || 'None',
+            gstNumber: s.gstNumber || '',
+            panNumber: s.panNumber || '',
+            fssaiLicense: s.fssaiLicense || '',
+            gstPhoto: s.gstPhoto || '',
+            bankPassbookPhoto: s.bankPassbookPhoto || '',
+            bankName: s.bankName || '',
+            accountNumber: s.accountNumber || '',
+            ifscCode: s.ifscCode || '',
+            tagline: s.tagline || '',
+            categories: Array.isArray(s.categories) ? s.categories : [],
+            walletBalance: Number(s.walletBalance || 0).toFixed(2),
+            pendingBalance: Number(s.pendingBalance || 0).toFixed(2),
+            totalEarnings: Number(s.totalEarnings || 0).toFixed(2),
+            commissionPercentage: s.commissionPercentage != null ? s.commissionPercentage : 10,
+            registrationFeeStatus: s.registrationFeeStatus || 'not_required',
+            registrationFeeAmount: s.registrationFeeAmount || 0,
+            registrationFeePaidAt: s.registrationFeePaidAt ? new Date(s.registrationFeePaidAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : null,
+            membershipStatus: s.membershipStatus || 'none',
+            referralCode: s.referralCode || '',
+            referredBy: s.referredBy || null,
+            warehouseLocation: loc,
+            address: loc.storeAddress || [loc.area, loc.city, loc.state, loc.pincode].filter(Boolean).join(', ') || 'Address not provided',
+            city: loc.city || '',
+            state: loc.state || '',
+            district: loc.district || loc.area || '',
+            pincode: loc.pincode || '',
+            lat: hasCoords ? lat : null,
+            lng: hasCoords ? lng : null,
+            hasCoords: hasCoords,
+            mapUrl: hasCoords ? `https://www.google.com/maps?q=${lat},${lng}` : null,
+            products: Array.isArray(s.products) ? s.products : [],
+            raw: s
+          };
+        });
+        setSellersList(mapped);
+
+        // Update selected seller if already viewing
+        if (selectedSeller) {
+          const freshSelected = mapped.find(m => m.id === selectedSeller.id);
+          if (freshSelected) {
+            setSelectedSeller(freshSelected);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load sellers in overview:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedSeller]);
 
   React.useEffect(() => {
-    const loadLiveSellers = async () => {
-      setLoading(true);
-      try {
-        const data = await adminService.getSellers();
-        if (data && (data.success || Array.isArray(data.sellers))) {
-          const raw = data.sellers || (Array.isArray(data) ? data : []);
-          const mapped = raw.map(s => {
-            const rawStatus = s.accountStatus || s.status || 'under_review';
-            let displayStatus = 'Pending';
-            if (rawStatus === 'approved') displayStatus = 'Approved';
-            else if (rawStatus === 'rejected') displayStatus = 'Rejected';
-            else if (rawStatus === 'suspended') displayStatus = 'Suspended';
-
-            const bName = s.businessName || s.ownerName || 'Seller Store';
-            return {
-              id: String(s._id || s.id || ''),
-              name: s.ownerName || s.businessName || 'Seller',
-              email: s.email || 'N/A',
-              storeName: bName,
-              logoText: (bName || 'SN').substring(0, 2).toUpperCase(),
-              logoBg: 'bg-emerald-500',
-              status: displayStatus,
-              joinedOn: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'Recent',
-              mobile: s.phone || 'N/A',
-              businessType: s.businessType || 'Retail',
-              areaRadius: `${s.warehouseLocation?.city || 'Local'} (${s.serviceRadius || 5}km)`,
-              taxInfo: s.gstNumber || s.panNumber || 'None',
-              address: s.warehouseLocation?.storeAddress || `${s.warehouseLocation?.city || ''} ${s.warehouseLocation?.state || ''}`,
-              products: Array.isArray(s.products) ? s.products : [],
-              raw: s
-            };
-          });
-          setSellersList(mapped);
-        }
-      } catch (err) {
-        console.error('Failed to load sellers in overview:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadLiveSellers();
   }, []);
 
-  const [search, setSearch] = React.useState('');
-  const [selectedSeller, setSelectedSeller] = React.useState(null);
-  const [activeTab, setActiveTab] = React.useState('All');
-  const [isAddProductModalOpen, setIsAddProductModalOpen] = React.useState(false);
-  const [newProduct, setNewProduct] = React.useState({ name: '', price: '', stock: '' });
+  const copyToClipboard = (text, key) => {
+    if (!text || text === 'N/A' || text === 'None') return;
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const handleToggleStatus = async (sellerId, newStatus) => {
+    setActionLoading(true);
+    try {
+      const res = await adminService.toggleSellerStatus(sellerId, newStatus);
+      if (res && res.success) {
+        let displayStatus = 'Pending';
+        if (newStatus === 'approved') displayStatus = 'Approved';
+        else if (newStatus === 'rejected') displayStatus = 'Rejected';
+        else if (newStatus === 'suspended') displayStatus = 'Suspended';
+        else if (newStatus === 'under_review') displayStatus = 'Under Review';
+
+        setSellersList(prev => prev.map(s => s.id === sellerId ? { ...s, status: displayStatus, rawStatus: newStatus } : s));
+        if (selectedSeller && selectedSeller.id === sellerId) {
+          setSelectedSeller(prev => ({ ...prev, status: displayStatus, rawStatus: newStatus }));
+        }
+        setStatusMessage({ type: 'success', text: `Seller successfully updated to ${displayStatus}!` });
+        setTimeout(() => setStatusMessage(null), 3500);
+      } else {
+        setStatusMessage({ type: 'error', text: res?.message || 'Failed to update seller status' });
+      }
+    } catch (err) {
+      console.error('Error toggling seller status:', err);
+      setStatusMessage({ type: 'error', text: err?.response?.data?.message || 'Error updating seller status' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const filtered = React.useMemo(() => {
     const q = String(search || '').toLowerCase().trim();
-    return (sellersList || []).filter(s => 
-      String(s.name || '').toLowerCase().includes(q) || 
-      String(s.storeName || '').toLowerCase().includes(q) ||
-      String(s.email || '').toLowerCase().includes(q) ||
-      String(s.mobile || '').toLowerCase().includes(q)
-    );
-  }, [sellersList, search]);
+    return (sellersList || []).filter(s => {
+      const matchesSearch = 
+        String(s.name || '').toLowerCase().includes(q) || 
+        String(s.storeName || '').toLowerCase().includes(q) ||
+        String(s.email || '').toLowerCase().includes(q) ||
+        String(s.mobile || '').toLowerCase().includes(q) ||
+        String(s.city || '').toLowerCase().includes(q) ||
+        String(s.gstNumber || '').toLowerCase().includes(q);
 
-  const fileInputRef = React.useRef(null);
-  const [productImagePreview, setProductImagePreview] = React.useState(null);
+      if (!matchesSearch) return false;
+      if (filterTab === 'All') return true;
+      if (filterTab === 'Pending') return s.status === 'Pending' || s.rawStatus === 'under_review' || s.rawStatus === 'pending_otp';
+      if (filterTab === 'Approved') return s.status === 'Approved';
+      if (filterTab === 'Rejected') return s.status === 'Rejected';
+      if (filterTab === 'Suspended') return s.status === 'Suspended';
+      return true;
+    });
+  }, [sellersList, search, filterTab]);
 
   const handleImageFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -7602,7 +9229,6 @@ export const SellersOverview = () => {
     }
   };
 
-  // Add Product Handler
   const handleAddProduct = (e) => {
     e.preventDefault();
     if (!newProduct.name || !newProduct.price) return;
@@ -7615,115 +9241,620 @@ export const SellersOverview = () => {
     };
     setSelectedSeller(prev => ({
       ...prev,
-      products: [...prev.products, added]
+      products: [...(prev.products || []), added]
     }));
-    setNewProduct({ name: '', price: '', stock: '' });
+    setNewProduct({ name: '', price: '', stock: '', category: '', description: '' });
     setProductImagePreview(null);
     setIsAddProductModalOpen(false);
   };
 
-  // Delete Product Handler
   const handleDeleteProduct = (productId) => {
     if (window.confirm('Delete this product from inventory?')) {
       setSelectedSeller(prev => ({
         ...prev,
-        products: prev.products.filter(p => p.id !== productId)
+        products: (prev.products || []).filter(p => p.id !== productId)
       }));
     }
   };
 
-  // IF DETAILED SELLER PAGE IS ACTIVE
+  // =========================================================================
+  // IF DETAILED SELLER VIEW IS ACTIVE
+  // =========================================================================
   if (selectedSeller) {
     return (
-      <div className="space-y-6 animate-fadeIn pb-12">
-        {/* Back Button & Store Header */}
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setSelectedSeller(null)}
-            className="w-9 h-9 rounded-full bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-slate-700 hover:text-[#ff5500] hover:border-[#ff5500] cursor-pointer transition-all shrink-0"
-            title="Back to Sellers List"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight m-0">{selectedSeller.storeName}</h1>
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mt-0.5">
-              SELLER MANAGEMENT / <span className="text-[#ff5500]">{selectedSeller.name}</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Top Cards Grid (Profile + Shop Overview) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          
-          {/* Card 1: Seller Profile */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between items-center text-center space-y-4">
-            <div className="w-20 h-20 rounded-full bg-orange-50 text-[#ff5500] font-extrabold flex items-center justify-center text-2xl border-2 border-orange-100 shadow-2xs">
-              {selectedSeller.logoText}
+      <div className="space-y-6 animate-fadeIn pb-16">
+        
+        {/* Toast / Alert message banner */}
+        {statusMessage && (
+          <div className={`p-4 rounded-2xl border flex items-center justify-between shadow-sm animate-fadeIn ${
+            statusMessage.type === 'success' 
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+              : 'bg-rose-50 border-rose-200 text-rose-900'
+          }`}>
+            <div className="flex items-center gap-2.5 font-bold text-xs">
+              {statusMessage.type === 'success' ? <CheckCircle size={18} className="text-emerald-600" /> : <AlertCircle size={18} className="text-rose-600" />}
+              <span>{statusMessage.text}</span>
             </div>
+            <button 
+              onClick={() => setStatusMessage(null)}
+              className="text-slate-400 hover:text-slate-700 border-none bg-transparent cursor-pointer font-bold"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
+        {/* Top Navigation & Status Bar */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <button 
+              onClick={() => setSelectedSeller(null)}
+              className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs flex items-center justify-center text-slate-700 hover:text-[#ff5500] hover:bg-orange-50 hover:border-[#ff5500] cursor-pointer transition-all shrink-0"
+              title="Back to Sellers List"
+            >
+              <ChevronLeft size={20} />
+            </button>
             <div>
-              <h3 className="text-base font-bold text-slate-900 m-0">{selectedSeller.name}</h3>
-              <p className="text-xs text-slate-400 font-mono mt-0.5">{selectedSeller.email}</p>
-            </div>
-
-            <div className="w-full pt-3 border-t border-slate-100 flex justify-between items-center text-xs">
-              <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">MOBILE</span>
-              <span className="font-mono font-bold text-slate-800">{selectedSeller.mobile}</span>
-            </div>
-
-            <div className="w-full flex justify-between items-center text-xs">
-              <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">STATUS</span>
-              <span className="font-bold text-amber-600 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 text-[11px]">
-                {selectedSeller.status}
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg md:text-xl font-extrabold text-slate-900 tracking-tight m-0">
+                  {selectedSeller.storeName}
+                </h1>
+                <span className={`px-3 py-0.5 rounded-full text-xs font-bold border ${
+                  selectedSeller.status === 'Approved' 
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                    : selectedSeller.status === 'Rejected'
+                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                    : selectedSeller.status === 'Suspended'
+                    ? 'bg-slate-100 text-slate-700 border-slate-300'
+                    : 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
+                }`}>
+                  {selectedSeller.status}
+                </span>
+                {selectedSeller.registrationFeeStatus === 'paid' && (
+                  <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <CheckCircle size={12} /> Fee Paid (₹{selectedSeller.registrationFeeAmount || 150})
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mt-1">
+                SELLER MANAGEMENT / <span className="text-[#ff5500]">{selectedSeller.ownerName || selectedSeller.name}</span>
+                <span className="text-slate-300 mx-2">|</span>
+                <span className="text-slate-500 font-mono normal-case">Joined: {selectedSeller.joinedOn}</span>
+              </p>
             </div>
           </div>
 
-          {/* Card 2: Shop Overview */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-6">
-            <h3 className="text-sm font-bold text-slate-900 m-0 flex items-center gap-2">
-              <Store size={18} className="text-[#ff5500]" /> Shop Overview
-            </h3>
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-2 flex-wrap w-full md:w-auto justify-end">
+            <button
+              onClick={() => loadLiveSellers(true)}
+              disabled={loading}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 cursor-pointer flex items-center gap-1.5 transition-all"
+              title="Refresh Live Details"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+            </button>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">BUSINESS TYPE</span>
-                <span className="font-bold text-slate-900 text-sm">{selectedSeller.businessType}</span>
-              </div>
+            {selectedSeller.status !== 'Approved' && (
+              <button 
+                onClick={() => handleToggleStatus(selectedSeller.id, 'approved')}
+                disabled={actionLoading}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 disabled:opacity-50"
+              >
+                <CheckCircle size={15} /> Approve Seller
+              </button>
+            )}
 
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">AREA / RADIUS</span>
-                <span className="font-bold text-slate-900 text-sm">{selectedSeller.areaRadius}</span>
-              </div>
+            {selectedSeller.status !== 'Rejected' && (
+              <button 
+                onClick={() => handleToggleStatus(selectedSeller.id, 'rejected')}
+                disabled={actionLoading}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 disabled:opacity-50"
+              >
+                <X size={15} /> Reject
+              </button>
+            )}
 
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">TAX INFO</span>
-                <span className="font-bold text-slate-900 text-sm">{selectedSeller.taxInfo}</span>
-              </div>
+            {selectedSeller.status !== 'Suspended' && (
+              <button 
+                onClick={() => handleToggleStatus(selectedSeller.id, 'suspended')}
+                disabled={actionLoading}
+                className="px-3.5 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 disabled:opacity-50"
+              >
+                <ShieldAlert size={14} /> Suspend
+              </button>
+            )}
 
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">JOINED</span>
-                <span className="font-bold text-slate-900 text-sm">{selectedSeller.joinedOn}</span>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-100 text-xs">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">ADDRESS</span>
-              <p className="text-slate-600 italic font-medium m-0">{selectedSeller.address}</p>
-            </div>
+            {selectedSeller.status !== 'Pending' && selectedSeller.status !== 'Under Review' && (
+              <button 
+                onClick={() => handleToggleStatus(selectedSeller.id, 'under_review')}
+                disabled={actionLoading}
+                className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold rounded-xl border border-amber-300 cursor-pointer flex items-center gap-1.5 transition-all"
+              >
+                <Clock size={14} /> Under Review
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Section 2: Inventory Control */}
+        {/* Top 3 Column Overview Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          
+          {/* Card 1: Seller Profile & Store Identity */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between space-y-4 relative overflow-hidden">
+            <div className="flex items-center gap-4">
+              {selectedSeller.storeLogo ? (
+                <div 
+                  className="relative group cursor-pointer w-20 h-20 rounded-2xl overflow-hidden border-2 border-orange-200 bg-white shadow-sm shrink-0 flex items-center justify-center"
+                  onClick={() => setPreviewDocModal({ title: `Store Logo - ${selectedSeller.storeName}`, src: selectedSeller.storeLogo })}
+                  title="Click to zoom Store Logo"
+                >
+                  <img 
+                    src={selectedSeller.storeLogo} 
+                    alt={selectedSeller.storeName} 
+                    className="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform" 
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold">
+                    <ZoomIn size={16} />
+                  </div>
+                </div>
+              ) : (
+                <div className="w-20 h-20 rounded-2xl bg-orange-50 text-[#ff5500] font-extrabold flex items-center justify-center text-2xl border-2 border-orange-100 shadow-2xs shrink-0">
+                  {selectedSeller.logoText}
+                </div>
+              )}
+
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base font-extrabold text-slate-900 m-0 truncate">{selectedSeller.storeName}</h3>
+                <p className="text-xs font-semibold text-slate-600 m-0 mt-0.5 flex items-center gap-1">
+                  <User size={13} className="text-[#ff5500]" /> {selectedSeller.ownerName || selectedSeller.name}
+                </p>
+                <div className="mt-2">
+                  <span className="inline-block text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+                    Role: {selectedSeller.raw?.role || 'Seller Partner'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2.5 pt-3 border-t border-slate-100 text-xs">
+              {/* Phone / Mobile */}
+              <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
+                  <Phone size={12} className="text-emerald-600" /> MOBILE
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <a href={`tel:${selectedSeller.mobile}`} className="font-mono font-bold text-slate-900 hover:text-[#ff5500] no-underline">
+                    {selectedSeller.mobile}
+                  </a>
+                  <button 
+                    onClick={() => copyToClipboard(selectedSeller.mobile, 'mobile')}
+                    className="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 cursor-pointer"
+                    title="Copy Phone Number"
+                  >
+                    {copiedKey === 'mobile' ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Email */}
+              <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
+                  <Send size={12} className="text-blue-600" /> EMAIL
+                </span>
+                <div className="flex items-center gap-1.5 max-w-[65%] truncate">
+                  <a href={`mailto:${selectedSeller.email}`} className="font-mono text-slate-800 hover:text-[#ff5500] truncate no-underline text-xs" title={selectedSeller.email}>
+                    {selectedSeller.email}
+                  </a>
+                  <button 
+                    onClick={() => copyToClipboard(selectedSeller.email, 'email')}
+                    className="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 cursor-pointer shrink-0"
+                    title="Copy Email"
+                  >
+                    {copiedKey === 'email' ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Referral Code */}
+              {selectedSeller.referralCode && (
+                <div className="flex justify-between items-center bg-orange-50/50 p-2.5 rounded-xl border border-orange-200/60">
+                  <span className="text-orange-700 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
+                    <Sparkles size={12} className="text-[#ff5500]" /> REFERRAL CODE
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-extrabold text-[#ff5500] text-xs">
+                      {selectedSeller.referralCode}
+                    </span>
+                    <button 
+                      onClick={() => copyToClipboard(selectedSeller.referralCode, 'ref')}
+                      className="p-1 text-orange-600 hover:text-orange-900 bg-white rounded border border-orange-200 cursor-pointer"
+                      title="Copy Referral Code"
+                    >
+                      {copiedKey === 'ref' ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Referred By */}
+              {selectedSeller.referredBy && (
+                <div className="flex justify-between items-center text-[11px] text-slate-500 px-1">
+                  <span>Referred By Partner:</span>
+                  <span className="font-bold text-slate-800">
+                    {selectedSeller.referredBy.businessName || selectedSeller.referredBy.ownerName || 'Active Seller'}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2: Shop Overview & Business Details */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4 flex flex-col justify-between">
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900 m-0 flex items-center gap-2 pb-3 border-b border-slate-100">
+                <Store size={18} className="text-[#ff5500]" /> Business & Operational Details
+              </h3>
+
+              <div className="grid grid-cols-2 gap-3.5 mt-4 text-xs">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">BUSINESS TYPE</span>
+                  <span className="font-bold text-slate-900 text-sm">{selectedSeller.businessType}</span>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">SERVICE RADIUS</span>
+                  <span className="font-bold text-slate-900 text-sm">{selectedSeller.serviceRadius} km</span>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">COMMISSION RATE</span>
+                  <span className="font-bold text-[#ff5500] text-sm">{selectedSeller.commissionPercentage}%</span>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">WALLET BALANCE</span>
+                  <span className="font-bold text-emerald-700 text-sm">₹{selectedSeller.walletBalance}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Product Categories */}
+            <div className="pt-2 border-t border-slate-100">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-2">
+                SELECTED CATEGORIES ({selectedSeller.categories.length})
+              </span>
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                {selectedSeller.categories && selectedSeller.categories.length > 0 ? (
+                  selectedSeller.categories.map((cat, idx) => (
+                    <span 
+                      key={idx} 
+                      className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-semibold rounded-lg"
+                    >
+                      🏷️ {cat}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-400 italic">No specific categories selected</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Warehouse Location & Store Address */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4 flex flex-col justify-between">
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900 m-0 flex items-center gap-2 pb-3 border-b border-slate-100">
+                <MapPin size={18} className="text-[#ff5500]" /> Store Warehouse & Address
+              </h3>
+
+              <div className="mt-3.5 space-y-2.5 text-xs">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">COMPLETE STORE ADDRESS</span>
+                  <p className="text-slate-800 font-medium m-0 leading-relaxed">{selectedSeller.address}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">CITY / STATE</span>
+                    <span className="font-bold text-slate-900">{selectedSeller.city || 'N/A'}{selectedSeller.state ? `, ${selectedSeller.state}` : ''}</span>
+                  </div>
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">PINCODE</span>
+                    <span className="font-bold font-mono text-slate-900">{selectedSeller.pincode || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* GPS Coordinates & Google Maps Link */}
+            <div className="pt-3 border-t border-slate-100">
+              {selectedSeller.hasCoords ? (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-mono text-slate-600">
+                    📍 {selectedSeller.lat?.toFixed(4)}, {selectedSeller.lng?.toFixed(4)}
+                  </span>
+                  <a 
+                    href={selectedSeller.mapUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-[#002625] hover:bg-[#003d3c] text-white text-[11px] font-bold rounded-xl no-underline inline-flex items-center gap-1 transition-all"
+                  >
+                    <ExternalLink size={12} /> View Map
+                  </a>
+                </div>
+              ) : (
+                <div className="text-slate-400 italic text-[11px] flex items-center gap-1.5">
+                  <MapPin size={13} className="text-slate-300" /> GPS Coordinates not provided
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Verification Documents & Legal Compliance Card (CRITICAL) */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+          
+          {/* Header Banner */}
+          <div className="bg-[#fff4ed] border-b border-orange-200/70 text-[#002625] px-6 py-4 flex items-center justify-between">
+            <h3 className="text-sm font-extrabold text-[#002625] m-0 flex items-center gap-2">
+              <FileCheck size={18} className="text-[#ff5500]" />
+              Legal Identification & Uploaded Documents
+            </h3>
+            <span className="text-xs font-bold text-orange-800 bg-orange-100 px-3 py-1 rounded-full border border-orange-200">
+              KYC & Verification
+            </span>
+          </div>
+
+          <div className="p-6 space-y-6">
+            
+            {/* Legal Identification Numbers Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              
+              {/* GST Number */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">GSTIN / TAX NUMBER</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-extrabold text-sm text-slate-900">
+                    {selectedSeller.gstNumber || 'Not Provided'}
+                  </span>
+                  {selectedSeller.gstNumber && (
+                    <button 
+                      onClick={() => copyToClipboard(selectedSeller.gstNumber, 'gst')}
+                      className="p-1.5 text-slate-400 hover:text-slate-700 bg-white rounded-lg border border-slate-200 cursor-pointer"
+                      title="Copy GST Number"
+                    >
+                      {copiedKey === 'gst' ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* PAN Number */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">PAN CARD NUMBER</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-extrabold text-sm text-slate-900 uppercase">
+                    {selectedSeller.panNumber || 'Not Provided'}
+                  </span>
+                  {selectedSeller.panNumber && (
+                    <button 
+                      onClick={() => copyToClipboard(selectedSeller.panNumber, 'pan')}
+                      className="p-1.5 text-slate-400 hover:text-slate-700 bg-white rounded-lg border border-slate-200 cursor-pointer"
+                      title="Copy PAN Number"
+                    >
+                      {copiedKey === 'pan' ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* FSSAI License */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">FSSAI FOOD LICENSE</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-extrabold text-sm text-slate-900">
+                    {selectedSeller.fssaiLicense || 'Not Provided'}
+                  </span>
+                  {selectedSeller.fssaiLicense && (
+                    <button 
+                      onClick={() => copyToClipboard(selectedSeller.fssaiLicense, 'fssai')}
+                      className="p-1.5 text-slate-400 hover:text-slate-700 bg-white rounded-lg border border-slate-200 cursor-pointer"
+                      title="Copy FSSAI Number"
+                    >
+                      {copiedKey === 'fssai' ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Document Preview Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Document 1: GST Certificate / Photo */}
+              <div className="bg-slate-50/70 p-5 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText size={16} className="text-[#ff5500]" />
+                    <span className="text-xs font-bold text-slate-800">GST Certificate / Tax Document</span>
+                  </div>
+                  {selectedSeller.gstPhoto ? (
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      Uploaded
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-slate-200 text-slate-600 font-bold px-2.5 py-0.5 rounded-full">
+                      Not Provided
+                    </span>
+                  )}
+                </div>
+
+                {selectedSeller.gstPhoto ? (
+                  <div className="space-y-3">
+                    <div 
+                      className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-slate-900 h-52 flex items-center justify-center shadow-inner"
+                      onClick={() => setPreviewDocModal({ title: `GST Certificate - ${selectedSeller.storeName}`, src: selectedSeller.gstPhoto })}
+                      title="Click to view full image"
+                    >
+                      <img 
+                        src={selectedSeller.gstPhoto} 
+                        alt="GST Document" 
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300" 
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs gap-2 backdrop-blur-[2px]">
+                        <ZoomIn size={18} /> Click to Zoom Document
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 pt-1">
+                      <button 
+                        type="button"
+                        onClick={() => setPreviewDocModal({ title: `GST Certificate - ${selectedSeller.storeName}`, src: selectedSeller.gstPhoto })}
+                        className="px-3.5 py-2 bg-white hover:bg-orange-50 text-[#ff5500] hover:text-[#e04a00] border border-orange-200 rounded-xl text-xs font-bold cursor-pointer inline-flex items-center gap-1.5 transition-all shadow-2xs"
+                      >
+                        <Eye size={14} /> Full View Lightbox
+                      </button>
+
+                      <a 
+                        href={selectedSeller.gstPhoto}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold no-underline inline-flex items-center gap-1.5 transition-all shadow-2xs"
+                      >
+                        <ExternalLink size={14} /> Open in New Tab
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-44 flex flex-col items-center justify-center bg-white rounded-xl border-2 border-dashed border-slate-200 text-xs text-slate-400 p-4 text-center">
+                    <FileText size={28} className="text-slate-300 mb-1.5" />
+                    <p className="font-semibold m-0 text-slate-600">No GST Document Uploaded</p>
+                    <p className="text-[11px] text-slate-400 mt-1 m-0">Seller did not attach a GST certificate photo during registration</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Document 2: Bank Passbook / Cheque */}
+              <div className="bg-slate-50/70 p-5 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Building2 size={16} className="text-teal-600" />
+                    <span className="text-xs font-bold text-slate-800">Bank Passbook / Cancelled Cheque</span>
+                  </div>
+                  {selectedSeller.bankPassbookPhoto ? (
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      Uploaded
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-slate-200 text-slate-600 font-bold px-2.5 py-0.5 rounded-full">
+                      Not Provided
+                    </span>
+                  )}
+                </div>
+
+                {selectedSeller.bankPassbookPhoto ? (
+                  <div className="space-y-3">
+                    <div 
+                      className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-slate-900 h-52 flex items-center justify-center shadow-inner"
+                      onClick={() => setPreviewDocModal({ title: `Bank Passbook - ${selectedSeller.storeName}`, src: selectedSeller.bankPassbookPhoto })}
+                      title="Click to view full image"
+                    >
+                      <img 
+                        src={selectedSeller.bankPassbookPhoto} 
+                        alt="Bank Passbook Document" 
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300" 
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs gap-2 backdrop-blur-[2px]">
+                        <ZoomIn size={18} /> Click to Zoom Document
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 pt-1">
+                      <button 
+                        type="button"
+                        onClick={() => setPreviewDocModal({ title: `Bank Passbook - ${selectedSeller.storeName}`, src: selectedSeller.bankPassbookPhoto })}
+                        className="px-3.5 py-2 bg-white hover:bg-teal-50 text-teal-700 hover:text-teal-900 border border-teal-200 rounded-xl text-xs font-bold cursor-pointer inline-flex items-center gap-1.5 transition-all shadow-2xs"
+                      >
+                        <Eye size={14} /> Full View Lightbox
+                      </button>
+
+                      <a 
+                        href={selectedSeller.bankPassbookPhoto}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold no-underline inline-flex items-center gap-1.5 transition-all shadow-2xs"
+                      >
+                        <ExternalLink size={14} /> Open in New Tab
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-44 flex flex-col items-center justify-center bg-white rounded-xl border-2 border-dashed border-slate-200 text-xs text-slate-400 p-4 text-center">
+                    <Building2 size={28} className="text-slate-300 mb-1.5" />
+                    <p className="font-semibold m-0 text-slate-600">No Bank Passbook Uploaded</p>
+                    <p className="text-[11px] text-slate-400 mt-1 m-0">Seller did not attach a passbook or cancelled cheque photo during registration</p>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Bank Settlement Account Details */}
+            <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-3">
+              <h4 className="text-xs font-extrabold text-slate-800 m-0 flex items-center gap-2">
+                <CreditCard size={15} className="text-[#ff5500]" /> Bank Account Details for Payouts
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div className="bg-white p-3 rounded-lg border border-slate-200">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">BANK NAME</span>
+                  <span className="font-bold text-slate-900 text-sm">{selectedSeller.bankName || 'Not Provided'}</span>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-slate-200">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">ACCOUNT NUMBER</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-slate-900 text-sm">{selectedSeller.accountNumber || 'Not Provided'}</span>
+                    {selectedSeller.accountNumber && (
+                      <button 
+                        onClick={() => copyToClipboard(selectedSeller.accountNumber, 'acc')}
+                        className="p-1 text-slate-400 hover:text-slate-700 bg-slate-50 rounded border border-slate-200 cursor-pointer"
+                        title="Copy Account Number"
+                      >
+                        {copiedKey === 'acc' ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-slate-200">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">IFSC CODE</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-slate-900 text-sm uppercase">{selectedSeller.ifscCode || 'Not Provided'}</span>
+                    {selectedSeller.ifscCode && (
+                      <button 
+                        onClick={() => copyToClipboard(selectedSeller.ifscCode, 'ifsc')}
+                        className="p-1 text-slate-400 hover:text-slate-700 bg-slate-50 rounded border border-slate-200 cursor-pointer"
+                        title="Copy IFSC Code"
+                      >
+                        {copiedKey === 'ifsc' ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Section: Inventory Control */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
           
           {/* Header Bar with + Add Product Button */}
           <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <h3 className="text-sm font-bold text-slate-900 m-0 flex items-center gap-2">
-              <Package size={18} className="text-[#ff5500]" /> Inventory Control
+              <Package size={18} className="text-[#ff5500]" /> Store Products & Inventory ({selectedSeller.products?.length || 0})
             </h3>
 
             <button 
@@ -7738,79 +9869,70 @@ export const SellersOverview = () => {
           <div className="p-6 space-y-6">
             <div className="flex gap-2">
               <button 
-                onClick={() => setActiveTab('All')}
+                onClick={() => setInventoryActiveTab('All')}
                 className={`px-4 py-1.5 rounded-xl text-xs font-bold border-none cursor-pointer transition-all ${
-                  activeTab === 'All' ? 'bg-[#ff5500] text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  inventoryActiveTab === 'All' ? 'bg-[#ff5500] text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                All ({selectedSeller.products.length})
-              </button>
-              <button 
-                onClick={() => setActiveTab('1111111111')}
-                className={`px-4 py-1.5 rounded-xl text-xs font-bold border-none cursor-pointer transition-all ${
-                  activeTab === '1111111111' ? 'bg-[#ff5500] text-white shadow-2xs' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                }`}
-              >
-                1111111111
+                All ({(selectedSeller.products || []).length})
               </button>
             </div>
 
             {/* Products Card Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {selectedSeller.products.map((product) => (
-                <div key={product.id} className="group bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden relative hover:shadow-md transition-all">
-                  {/* Action Icons Overlay */}
-                  <div className="absolute top-2 right-2 flex flex-col gap-1 z-10 opacity-90">
-                    <button 
-                      onClick={() => alert(`Edit product: ${product.name}`)}
-                      className="w-7 h-7 rounded-full bg-white text-teal-600 border border-slate-200 shadow-2xs flex items-center justify-center cursor-pointer hover:bg-teal-50"
-                      title="Edit Product"
-                    >
-                      <Edit3 size={12} />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteProduct(product.id)}
-                      className="w-7 h-7 rounded-full bg-white text-rose-600 border border-slate-200 shadow-2xs flex items-center justify-center cursor-pointer hover:bg-rose-50"
-                      title="Delete Product"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
+            {(selectedSeller.products || []).length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {selectedSeller.products.map((product) => (
+                  <div key={product.id} className="group bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden relative hover:shadow-md transition-all">
+                    {/* Action Icons Overlay */}
+                    <div className="absolute top-2 right-2 flex flex-col gap-1 z-10 opacity-90">
+                      <button 
+                        onClick={() => handleDeleteProduct(product.id)}
+                        className="w-7 h-7 rounded-full bg-white text-rose-600 border border-slate-200 shadow-2xs flex items-center justify-center cursor-pointer hover:bg-rose-50"
+                        title="Delete Product"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
 
-                  {/* Product Image */}
-                  <div className="h-32 bg-slate-50 overflow-hidden flex items-center justify-center">
-                    <img 
-                      src={product.img} 
-                      alt={product.name} 
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
+                    {/* Product Image */}
+                    <div className="h-32 bg-slate-50 overflow-hidden flex items-center justify-center">
+                      <img 
+                        src={product.img} 
+                        alt={product.name} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
 
-                  {/* Product Info */}
-                  <div className="p-3.5 space-y-2">
-                    <h4 className="text-xs font-bold text-slate-900 m-0 truncate">{product.name}</h4>
-                    <div className="flex items-center justify-between">
-                      <span className="font-extrabold text-[#ff5500] text-xs">₹{product.price}</span>
-                      <span className="text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200">
-                        {product.stock}
-                      </span>
+                    {/* Product Info */}
+                    <div className="p-3.5 space-y-2">
+                      <h4 className="text-xs font-bold text-slate-900 m-0 truncate">{product.name}</h4>
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-[#ff5500] text-xs">₹{product.price}</span>
+                        <span className="text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200">
+                          {product.stock} in stock
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-slate-400 font-medium text-xs bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                <Package size={28} className="text-slate-300 mx-auto mb-2" />
+                No products listed by this seller yet.
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Add Product Modal matching full detailed layout */}
+        {/* Add Product Modal */}
         {isAddProductModalOpen && (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-fadeIn">
-              {/* Header with theme color */}
               <div className="bg-[#fff4ed] border-b border-orange-200/70 text-[#002625] px-6 py-4 flex items-center justify-between">
                 <h3 className="text-base font-bold text-[#002625] m-0 flex items-center gap-2">
                   <Plus size={18} className="text-[#ff5500]" />
-                  Add New Product
+                  Add New Product for {selectedSeller.storeName}
                 </h3>
                 <button 
                   onClick={() => setIsAddProductModalOpen(false)}
@@ -7822,8 +9944,6 @@ export const SellersOverview = () => {
 
               <form onSubmit={handleAddProduct} className="p-6 space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  {/* Left Column: Form Fields */}
                   <div className="space-y-4">
                     <div>
                       <label className="text-xs font-bold text-slate-700 block mb-1">Product Name</label>
@@ -7839,25 +9959,7 @@ export const SellersOverview = () => {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-xs font-bold text-slate-700 block mb-1">Category</label>
-                        <select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none focus:border-[#ff5500] bg-slate-50 cursor-pointer">
-                          <option value="">Select</option>
-                          <option value="vagitable">Vagitable</option>
-                          <option value="groceries">Groceries</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-700 block mb-1">Subcategory</label>
-                        <select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none focus:border-[#ff5500] bg-slate-50 cursor-pointer">
-                          <option value="">Select</option>
-                          <option value="fresh">Fresh Vegetables</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-bold text-slate-700 block mb-1">Price</label>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">Price (₹)</label>
                         <input 
                           type="number" 
                           required
@@ -7871,7 +9973,7 @@ export const SellersOverview = () => {
                         <label className="text-xs font-bold text-slate-700 block mb-1">Stock</label>
                         <input 
                           type="number" 
-                          placeholder="0"
+                          placeholder="50"
                           value={newProduct.stock}
                           onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
                           className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
@@ -7880,7 +9982,6 @@ export const SellersOverview = () => {
                     </div>
                   </div>
 
-                  {/* Right Column: Image Upload & Description */}
                   <div className="space-y-4">
                     <div>
                       <label className="text-xs font-bold text-slate-700 block mb-1">Product Image</label>
@@ -7893,10 +9994,10 @@ export const SellersOverview = () => {
                       />
                       <div 
                         onClick={() => fileInputRef.current?.click()}
-                        className="border-2 border-dashed border-slate-200 hover:border-[#ff5500] rounded-2xl p-4 text-center bg-slate-50/50 hover:bg-orange-50/20 transition-all cursor-pointer flex flex-col items-center justify-center min-h-[140px] relative overflow-hidden group"
+                        className="border-2 border-dashed border-slate-200 hover:border-[#ff5500] rounded-2xl p-4 text-center bg-slate-50/50 hover:bg-orange-50/20 transition-all cursor-pointer flex flex-col items-center justify-center min-h-[120px] relative overflow-hidden group"
                       >
                         {productImagePreview ? (
-                          <div className="relative w-full h-32">
+                          <div className="relative w-full h-28">
                             <img src={productImagePreview} alt="Preview" className="w-full h-full object-cover rounded-xl" />
                             <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl text-white font-bold text-xs">
                               Change Image
@@ -7904,28 +10005,17 @@ export const SellersOverview = () => {
                           </div>
                         ) : (
                           <>
-                            <div className="w-10 h-10 rounded-full bg-orange-50 text-[#ff5500] flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                              <Plus size={20} />
+                            <div className="w-9 h-9 rounded-full bg-orange-50 text-[#ff5500] flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+                              <Plus size={18} />
                             </div>
                             <span className="text-xs font-bold text-slate-600 group-hover:text-[#ff5500] transition-colors">Upload Image</span>
                           </>
                         )}
                       </div>
                     </div>
-
-                    <div>
-                      <label className="text-xs font-bold text-slate-700 block mb-1">Description</label>
-                      <textarea 
-                        rows="3"
-                        placeholder="Brief description..."
-                        className="w-full border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-[#ff5500] resize-none"
-                      ></textarea>
-                    </div>
                   </div>
-
                 </div>
 
-                {/* Modal Action Buttons */}
                 <div className="pt-3 flex justify-end gap-3 border-t border-slate-100">
                   <button 
                     type="button"
@@ -7945,16 +10035,99 @@ export const SellersOverview = () => {
             </div>
           </div>
         )}
+
+        {/* Global Document Lightbox Zoom Modal */}
+        {previewDocModal && (
+          <div 
+            className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
+            onClick={() => setPreviewDocModal(null)}
+          >
+            <div 
+              className="bg-white rounded-2xl max-w-4xl w-full border border-slate-800 shadow-2xl overflow-hidden animate-scaleUp flex flex-col max-h-[92vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Lightbox Header */}
+              <div className="bg-[#002625] text-white px-6 py-4 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <FileText size={18} className="text-[#ff5500]" />
+                  <h3 className="text-sm font-bold m-0">{previewDocModal.title}</h3>
+                </div>
+                <div className="flex items-center gap-3">
+                  <a 
+                    href={previewDocModal.src} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-xs font-bold text-emerald-400 hover:text-emerald-300 no-underline inline-flex items-center gap-1 bg-white/10 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <ExternalLink size={13} /> Open Original
+                  </a>
+                  <button 
+                    onClick={() => setPreviewDocModal(null)}
+                    className="text-slate-400 hover:text-white border-none bg-transparent cursor-pointer text-2xl font-bold p-0 leading-none"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {/* Lightbox Body */}
+              <div className="p-4 bg-slate-950 flex-1 overflow-auto flex items-center justify-center min-h-[300px]">
+                <img 
+                  src={previewDocModal.src} 
+                  alt={previewDocModal.title} 
+                  className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-2xl" 
+                />
+              </div>
+
+              {/* Lightbox Footer */}
+              <div className="bg-slate-900 px-6 py-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 shrink-0">
+                <span>Verification Document Preview</span>
+                <button 
+                  onClick={() => setPreviewDocModal(null)}
+                  className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700 font-bold cursor-pointer transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     );
   }
 
-  // MAIN SELLERS LIST VIEW WITH DETAILS MODAL POPUP
+  // =========================================================================
+  // MAIN SELLERS LIST OVERVIEW TABLE
+  // =========================================================================
   return (
     <div className="space-y-6 animate-fadeIn">
+      {/* Toast / Alert message banner */}
+      {statusMessage && (
+        <div className={`p-4 rounded-2xl border flex items-center justify-between shadow-sm animate-fadeIn ${
+          statusMessage.type === 'success' 
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+            : 'bg-rose-50 border-rose-200 text-rose-900'
+        }`}>
+          <div className="flex items-center gap-2.5 font-bold text-xs">
+            {statusMessage.type === 'success' ? <CheckCircle size={18} className="text-emerald-600" /> : <AlertCircle size={18} className="text-rose-600" />}
+            <span>{statusMessage.text}</span>
+          </div>
+          <button 
+            onClick={() => setStatusMessage(null)}
+            className="text-slate-400 hover:text-slate-700 border-none bg-transparent cursor-pointer font-bold"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Top Header & Breadcrumb */}
       <div className="flex justify-between items-center">
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Sellers</h1>
+        <div>
+          <h1 className="text-xl font-extrabold text-slate-900 tracking-tight m-0">Sellers Directory</h1>
+          <p className="text-xs text-slate-400 font-medium mt-0.5">Manage partner stores, verify documents, and control approval statuses</p>
+        </div>
         <div className="text-xs text-slate-500 font-medium">
           Dashboard / <span className="text-[#ff5500] font-semibold">Sellers</span>
         </div>
@@ -7962,22 +10135,49 @@ export const SellersOverview = () => {
 
       {/* Main Container Card */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        {/* Light Orange Header Banner with Integrated Search Input */}
-        <div className="bg-[#fff4ed] border-b border-orange-200/70 text-[#002625] px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <h2 className="text-base font-bold tracking-tight text-[#002625] flex items-center gap-2 m-0">
-            <ChevronRight size={18} className="text-[#ff5500]" />
-            Seller Management
-          </h2>
+        
+        {/* Filter Tabs Bar & Search */}
+        <div className="bg-[#fff4ed] border-b border-orange-200/70 text-[#002625] px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+          
+          {/* Status Filter Tabs */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {['All', 'Pending', 'Approved', 'Rejected', 'Suspended'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setFilterTab(tab)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border cursor-pointer transition-all ${
+                  filterTab === tab 
+                    ? 'bg-[#ff5500] text-white border-[#ff5500] shadow-2xs' 
+                    : 'bg-white/80 text-slate-700 border-orange-200/80 hover:bg-white'
+                }`}
+              >
+                {tab}
+                {tab === 'All' && ` (${sellersList.length})`}
+                {tab === 'Pending' && ` (${sellersList.filter(s => s.status === 'Pending' || s.rawStatus === 'under_review' || s.rawStatus === 'pending_otp').length})`}
+              </button>
+            ))}
+          </div>
 
-          <div className="relative w-full sm:w-64">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search sellers..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-[#ff5500] transition-all"
-            />
+          <div className="flex items-center gap-2.5 w-full md:w-auto">
+            <button
+              onClick={() => loadLiveSellers(true)}
+              disabled={loading}
+              className="p-2 bg-white border border-slate-200 rounded-xl text-slate-700 hover:text-[#ff5500] hover:border-[#ff5500] cursor-pointer transition-all shadow-2xs shrink-0"
+              title="Refresh Sellers"
+            >
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            </button>
+
+            <div className="relative w-full md:w-64">
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search by store, name, phone, city..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-[#ff5500] transition-all shadow-2xs"
+              />
+            </div>
           </div>
         </div>
 
@@ -7988,22 +10188,24 @@ export const SellersOverview = () => {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
                   <th className="py-3.5 px-4 text-center w-16">LOGO</th>
-                  <th className="py-3.5 px-4">SELLER INFO</th>
-                  <th className="py-3.5 px-4">STORE NAME</th>
+                  <th className="py-3.5 px-4">SELLER & STORE</th>
+                  <th className="py-3.5 px-4">BUSINESS & CITY</th>
+                  <th className="py-3.5 px-4">DOCUMENTS</th>
+                  <th className="py-3.5 px-4">REG. FEE</th>
                   <th className="py-3.5 px-4">STATUS</th>
-                  <th className="py-3.5 px-4">JOINED ON</th>
+                  <th className="py-3.5 px-4">JOINED</th>
                   <th className="py-3.5 px-4 text-right">ACTIONS</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="py-16 text-center">
+                    <td colSpan="8" className="py-16 text-center">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="w-9 h-9 border-3 border-orange-500/20 border-t-[#ff5500] rounded-full animate-spin"></div>
                         <div>
-                          <p className="text-sm font-bold text-slate-800 tracking-tight">Loading Sellers...</p>
-                          <p className="text-xs text-slate-400 mt-0.5">Fetching registered seller overview records</p>
+                          <p className="text-sm font-bold text-slate-800 tracking-tight">Loading Sellers Directory...</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Fetching complete registration and document records</p>
                         </div>
                       </div>
                     </td>
@@ -8013,25 +10215,76 @@ export const SellersOverview = () => {
                     <tr key={seller.id} className="hover:bg-slate-50/80 transition-colors">
                       {/* LOGO */}
                       <td className="py-3.5 px-4 text-center">
-                        <span className={`w-8 h-8 rounded-full ${seller.logoBg} text-white font-extrabold flex items-center justify-center mx-auto text-xs shadow-2xs`}>
-                          {seller.logoText}
+                        {seller.storeLogo ? (
+                          <div 
+                            className="w-9 h-9 rounded-xl overflow-hidden border border-orange-200 bg-white shadow-2xs mx-auto flex items-center justify-center cursor-pointer group"
+                            onClick={() => setSelectedSeller(seller)}
+                            title="View Seller Profile"
+                          >
+                            <img src={seller.storeLogo} alt={seller.storeName} className="w-full h-full object-contain p-0.5 group-hover:scale-110 transition-transform" />
+                          </div>
+                        ) : (
+                          <span className={`w-9 h-9 rounded-xl ${seller.logoBg} text-white font-extrabold flex items-center justify-center mx-auto text-xs shadow-2xs`}>
+                            {seller.logoText}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* SELLER & STORE INFO */}
+                      <td className="py-3.5 px-4 space-y-0.5">
+                        <p className="font-extrabold text-slate-900 text-xs m-0">{seller.storeName}</p>
+                        <p className="text-[11px] text-slate-600 m-0 font-medium">{seller.ownerName || seller.name}</p>
+                        <p className="text-[10px] text-slate-400 font-mono m-0">{seller.mobile} • {seller.email}</p>
+                      </td>
+
+                      {/* BUSINESS & CITY */}
+                      <td className="py-3.5 px-4 space-y-0.5">
+                        <span className="font-bold text-slate-800 block">{seller.businessType}</span>
+                        <span className="text-[11px] text-slate-500 block">📍 {seller.city || 'Local'} ({seller.serviceRadius}km)</span>
+                      </td>
+
+                      {/* DOCUMENTS UPLOAD STATUS */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            seller.gstPhoto 
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                              : 'bg-slate-100 text-slate-400 border border-slate-200'
+                          }`} title={seller.gstPhoto ? 'GST Document Uploaded' : 'No GST Document'}>
+                            GST {seller.gstPhoto ? '✓' : '✕'}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            seller.bankPassbookPhoto 
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                              : 'bg-slate-100 text-slate-400 border border-slate-200'
+                          }`} title={seller.bankPassbookPhoto ? 'Bank Passbook Uploaded' : 'No Passbook'}>
+                            Bank {seller.bankPassbookPhoto ? '✓' : '✕'}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* REGISTRATION FEE */}
+                      <td className="py-3.5 px-4">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          seller.registrationFeeStatus === 'paid' 
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                            : seller.registrationFeeStatus === 'not_required'
+                            ? 'bg-slate-100 text-slate-600'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          {seller.registrationFeeStatus === 'paid' ? 'Paid' : (seller.registrationFeeStatus === 'not_required' ? 'Waived' : 'Pending')}
                         </span>
                       </td>
 
-                      {/* SELLER INFO */}
-                      <td className="py-3.5 px-4 space-y-0.5">
-                        <p className="font-bold text-slate-900 text-xs">{seller.name}</p>
-                        <p className="text-[11px] text-slate-400 font-mono">{seller.email}</p>
-                      </td>
-
-                      {/* STORE NAME */}
-                      <td className="py-3.5 px-4 font-semibold text-slate-800">{seller.storeName}</td>
-
                       {/* STATUS */}
                       <td className="py-3.5 px-4">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                           seller.status === 'Approved' 
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                            : seller.status === 'Rejected'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : seller.status === 'Suspended'
+                            ? 'bg-slate-100 text-slate-700 border border-slate-300'
                             : 'bg-amber-50 text-amber-700 border border-amber-200'
                         }`}>
                           {seller.status}
@@ -8039,23 +10292,49 @@ export const SellersOverview = () => {
                       </td>
 
                       {/* JOINED ON */}
-                      <td className="py-3.5 px-4 font-mono text-slate-600 font-medium">{seller.joinedOn}</td>
+                      <td className="py-3.5 px-4 font-mono text-slate-600 font-medium text-[11px]">
+                        {seller.joinedOn}
+                      </td>
 
                       {/* ACTIONS */}
                       <td className="py-3.5 px-4 text-right">
-                        <button 
-                          onClick={() => setSelectedSeller(seller)}
-                          className="text-[#ff5500] hover:text-[#e04a00] font-bold text-xs cursor-pointer border-none bg-transparent hover:underline"
-                        >
-                          View Details
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button 
+                            onClick={() => setSelectedSeller(seller)}
+                            className="px-3 py-1.5 bg-orange-50 hover:bg-[#ff5500] text-[#ff5500] hover:text-white rounded-lg text-xs font-bold cursor-pointer transition-all border border-orange-200/80 inline-flex items-center gap-1 shadow-2xs"
+                          >
+                            <Eye size={12} /> View Details
+                          </button>
+
+                          {seller.status !== 'Approved' && (
+                            <button
+                              onClick={() => handleToggleStatus(seller.id, 'approved')}
+                              disabled={actionLoading}
+                              className="p-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white rounded-lg text-xs font-bold cursor-pointer transition-all border border-emerald-200"
+                              title="Quick Approve Seller"
+                            >
+                              <Check size={13} />
+                            </button>
+                          )}
+
+                          {seller.status !== 'Rejected' && (
+                            <button
+                              onClick={() => handleToggleStatus(seller.id, 'rejected')}
+                              disabled={actionLoading}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white rounded-lg text-xs font-bold cursor-pointer transition-all border border-rose-200"
+                              title="Quick Reject Seller"
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="6" className="py-12 text-center text-slate-400 font-medium text-xs">
-                      No sellers found matching your criteria.
+                    <td colSpan="8" className="py-12 text-center text-slate-400 font-medium text-xs">
+                      No sellers found matching your search filter.
                     </td>
                   </tr>
                 )}
@@ -8065,335 +10344,6 @@ export const SellersOverview = () => {
         </div>
       </div>
 
-      {/* SELLER DETAILS MODAL POPUP */}
-      {selectedSeller && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-50 rounded-2xl max-w-5xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-fadeIn my-6 max-h-[90vh] flex flex-col">
-            
-            {/* Modal Header */}
-            <div className="bg-[#fff4ed] border-b border-orange-200/70 text-[#002625] px-6 py-4 flex items-center justify-between shrink-0">
-              <div>
-                <h3 className="text-base font-bold text-[#002625] m-0">{selectedSeller.storeName}</h3>
-                <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-wider font-semibold">
-                  SELLER MANAGEMENT / <span className="text-[#ff5500]">{selectedSeller.name}</span>
-                </p>
-              </div>
-              <button 
-                onClick={() => setSelectedSeller(null)}
-                className="text-slate-400 hover:text-slate-900 border-none bg-transparent cursor-pointer text-2xl font-bold p-1 leading-none"
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 space-y-6 overflow-y-auto flex-1 text-xs">
-              
-              {/* Top Cards Grid (Profile + Shop Overview) */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                
-                {/* Card 1: Seller Profile */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between items-center text-center space-y-4">
-                  <div className="w-20 h-20 rounded-full bg-orange-50 text-[#ff5500] font-extrabold flex items-center justify-center text-2xl border-2 border-orange-100 shadow-2xs">
-                    {selectedSeller.logoText}
-                  </div>
-
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 m-0">{selectedSeller.name}</h3>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">{selectedSeller.email}</p>
-                  </div>
-
-                  <div className="w-full pt-3 border-t border-slate-100 flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">MOBILE</span>
-                    <span className="font-mono font-bold text-slate-800">{selectedSeller.mobile}</span>
-                  </div>
-
-                  <div className="w-full flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">STATUS</span>
-                    <span className="font-bold text-amber-600 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 text-[11px]">
-                      {selectedSeller.status}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card 2: Shop Overview */}
-                <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-6">
-                  <h3 className="text-sm font-bold text-slate-900 m-0 flex items-center gap-2">
-                    <Store size={18} className="text-[#ff5500]" /> Shop Overview
-                  </h3>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">BUSINESS TYPE</span>
-                      <span className="font-bold text-slate-900 text-sm">{selectedSeller.businessType}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">AREA / RADIUS</span>
-                      <span className="font-bold text-slate-900 text-sm">{selectedSeller.areaRadius}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">TAX INFO</span>
-                      <span className="font-bold text-slate-900 text-sm">{selectedSeller.taxInfo}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">JOINED</span>
-                      <span className="font-bold text-slate-900 text-sm">{selectedSeller.joinedOn}</span>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-100 text-xs">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">ADDRESS</span>
-                    <p className="text-slate-600 italic font-medium m-0">{selectedSeller.address}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 2: Inventory Control */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-                
-                {/* Header Bar with + Add Product Button */}
-                <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                  <h3 className="text-sm font-bold text-slate-900 m-0 flex items-center gap-2">
-                    <Package size={18} className="text-teal-600" /> Inventory Control
-                  </h3>
-
-                  <button 
-                    onClick={() => setIsAddProductModalOpen(true)}
-                    className="px-4 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 shrink-0"
-                  >
-                    <Plus size={15} /> Add Product
-                  </button>
-                </div>
-
-                {/* Filter Pill Tabs */}
-                <div className="p-6 space-y-6">
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => setActiveTab('All')}
-                      className={`px-4 py-1.5 rounded-xl text-xs font-bold border-none cursor-pointer transition-all ${
-                        activeTab === 'All' ? 'bg-[#ff5500] text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      All ({selectedSeller.products.length})
-                    </button>
-                    <button 
-                      onClick={() => setActiveTab('1111111111')}
-                      className={`px-4 py-1.5 rounded-xl text-xs font-bold border-none cursor-pointer transition-all ${
-                        activeTab === '1111111111' ? 'bg-[#ff5500] text-white shadow-2xs' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                      }`}
-                    >
-                      1111111111
-                    </button>
-                  </div>
-
-                  {/* Products Card Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {selectedSeller.products.map((product) => (
-                      <div key={product.id} className="group bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden relative hover:shadow-md transition-all">
-                        {/* Action Icons Overlay */}
-                        <div className="absolute top-2 right-2 flex flex-col gap-1 z-10 opacity-90">
-                          <button 
-                            onClick={() => alert(`Edit product: ${product.name}`)}
-                            className="w-7 h-7 rounded-full bg-white text-teal-600 border border-slate-200 shadow-2xs flex items-center justify-center cursor-pointer hover:bg-teal-50"
-                            title="Edit Product"
-                          >
-                            <Edit3 size={12} />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteProduct(product.id)}
-                            className="w-7 h-7 rounded-full bg-white text-rose-600 border border-slate-200 shadow-2xs flex items-center justify-center cursor-pointer hover:bg-rose-50"
-                            title="Delete Product"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-
-                        {/* Product Image */}
-                        <div className="h-32 bg-slate-50 overflow-hidden flex items-center justify-center">
-                          <img 
-                            src={product.img} 
-                            alt={product.name} 
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                        </div>
-
-                        {/* Product Info */}
-                        <div className="p-3.5 space-y-2">
-                          <h4 className="text-xs font-bold text-slate-900 m-0 truncate">{product.name}</h4>
-                          <div className="flex items-center justify-between">
-                            <span className="font-extrabold text-[#ff5500] text-xs">₹{product.price}</span>
-                            <span className="text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200">
-                              {product.stock}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Modal Footer */}
-            <div className="bg-slate-100 px-6 py-3 border-t border-slate-200 flex justify-end shrink-0">
-              <button 
-                onClick={() => setSelectedSeller(null)}
-                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl border-none cursor-pointer transition-colors"
-              >
-                Close Details
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* Add Product Modal matching user screenshot */}
-      {isAddProductModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-fadeIn">
-            {/* Header with theme color */}
-            <div className="bg-[#fff4ed] border-b border-orange-200/70 text-[#002625] px-6 py-4 flex items-center justify-between">
-              <h3 className="text-base font-bold text-[#002625] m-0 flex items-center gap-2">
-                <Plus size={18} className="text-[#ff5500]" />
-                Add New Product
-              </h3>
-              <button 
-                onClick={() => setIsAddProductModalOpen(false)}
-                className="text-slate-400 hover:text-slate-900 border-none bg-transparent cursor-pointer text-xl font-bold p-1 leading-none"
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={handleAddProduct} className="p-6 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Left Column: Form Fields */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Product Name</label>
-                    <input 
-                      type="text" 
-                      required
-                      placeholder="Enter product name"
-                      value={newProduct.name}
-                      onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                      className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-700 block mb-1">Category</label>
-                      <select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none focus:border-[#ff5500] bg-slate-50 cursor-pointer">
-                        <option value="">Select</option>
-                        <option value="vagitable">Vagitable</option>
-                        <option value="groceries">Groceries</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-700 block mb-1">Subcategory</label>
-                      <select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none focus:border-[#ff5500] bg-slate-50 cursor-pointer">
-                        <option value="">Select</option>
-                        <option value="fresh">Fresh Vegetables</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-700 block mb-1">Price</label>
-                      <input 
-                        type="number" 
-                        required
-                        placeholder="0.00"
-                        value={newProduct.price}
-                        onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-                        className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-700 block mb-1">Stock</label>
-                      <input 
-                        type="number" 
-                        placeholder="0"
-                        value={newProduct.stock}
-                        onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
-                        className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Column: Image Upload & Description */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Product Image</label>
-                    <input 
-                      type="file" 
-                      onChange={handleImageFileChange}
-                      className="hidden"
-                      id="modal-product-image-file-input"
-                    />
-                    <label 
-                      htmlFor="modal-product-image-file-input"
-                      className="border-2 border-dashed border-slate-200 hover:border-[#ff5500] rounded-2xl p-4 text-center bg-slate-50/50 hover:bg-orange-50/20 transition-all cursor-pointer flex flex-col items-center justify-center min-h-[140px] relative overflow-hidden group block"
-                    >
-                      {productImagePreview ? (
-                        <div className="relative w-full h-32">
-                          <img src={productImagePreview} alt="Preview" className="w-full h-full object-cover rounded-xl" />
-                          <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl text-white font-bold text-xs">
-                            Change Image
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="w-10 h-10 rounded-full bg-orange-50 text-[#ff5500] flex items-center justify-center mb-2 group-hover:scale-110 transition-transform mx-auto">
-                            <Plus size={20} />
-                          </div>
-                          <span className="text-xs font-bold text-slate-600 group-hover:text-[#ff5500] transition-colors">Upload Image</span>
-                        </>
-                      )}
-                    </label>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Description</label>
-                    <textarea 
-                      rows="3"
-                      placeholder="Brief description..."
-                      className="w-full border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-[#ff5500] resize-none"
-                    ></textarea>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Modal Action Buttons */}
-              <div className="pt-3 flex justify-end gap-3 border-t border-slate-100">
-                <button 
-                  type="button"
-                  onClick={() => setIsAddProductModalOpen(false)}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border-none cursor-pointer transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="px-6 py-2.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-2xs transition-all active:scale-95"
-                >
-                  Create Product
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -8429,7 +10379,10 @@ export const AddProductPage = () => {
     returnPolicy: editingProductData.returnPolicy || '7 Days Returnable / Replacement',
     mainImage: editingProductData.image || editingProductData.mainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
     mainImageFile: null,
-    galleryImages: editingProductData.galleryImages || []
+    galleryImages: editingProductData.galleryImages || [],
+    hasVariants: Boolean(editingProductData.hasVariants || (Array.isArray(editingProductData.variants) && editingProductData.variants.length > 0)),
+    variantOptions: editingProductData.variantOptions || [],
+    variants: editingProductData.variants || []
   } : {
     name: '',
     category: 'Groceries & Grains',
@@ -8454,7 +10407,10 @@ export const AddProductPage = () => {
     returnPolicy: '7 Days Returnable / Replacement',
     mainImage: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
     mainImageFile: null,
-    galleryImages: []
+    galleryImages: [],
+    hasVariants: false,
+    variantOptions: [],
+    variants: []
   };
 
   const [formData, setFormData] = React.useState(initialData);
@@ -8618,13 +10574,63 @@ export const AddProductPage = () => {
 
   const handleFormSubmit = async (e, statusToSave = 'Published') => {
     e.preventDefault();
+
+    if (formData.hasVariants) {
+      const validOptions = (formData.variantOptions || []).filter(
+        opt => opt.name && opt.name.trim() && Array.isArray(opt.values) && opt.values.length > 0
+      );
+      if (validOptions.length === 0) {
+        showToast('Please add at least one variant option with values (e.g. Size: 4, 5, 6, 7).');
+        return;
+      }
+    }
+
+    if (formData.salePrice === '' || isNaN(formData.salePrice) || Number(formData.salePrice) < 0) {
+      showToast('Please provide a valid Selling Price (₹).');
+      return;
+    }
+    if (formData.mrp === '' || isNaN(formData.mrp) || Number(formData.mrp) < 0) {
+      showToast('Please provide a valid MRP Price (₹).');
+      return;
+    }
+    if (formData.stock === '' || isNaN(formData.stock) || Number(formData.stock) < 0) {
+      showToast('Please provide a valid Initial Stock Quantity.');
+      return;
+    }
+
     setIsSubmitting(true);
     let res = null;
     try {
+      const finalSalePrice = Number(formData.salePrice || 0);
+      const finalMrp = Number(formData.mrp || formData.salePrice || 0);
+      const finalStock = Number(formData.stock || 0);
+      const finalSku = formData.sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const syncedVariants = (formData.hasVariants && Array.isArray(formData.variants))
+        ? formData.variants.map(v => ({
+            ...v,
+            price: finalSalePrice,
+            originalPrice: finalMrp,
+            stock: finalStock,
+            image: v.image || formData.mainImage || ''
+          }))
+        : [];
+
+      const cleanVariantOptions = formData.hasVariants && Array.isArray(formData.variantOptions)
+        ? formData.variantOptions.filter(o => o.name && o.name.trim() && Array.isArray(o.values) && o.values.length > 0)
+        : [];
+
       const payload = {
         ...formData,
         homeSections: selectedHomeSections,
-        status: statusToSave
+        status: statusToSave,
+        sku: finalSku,
+        mrp: finalMrp,
+        salePrice: finalSalePrice,
+        stock: finalStock,
+        hasVariants: Boolean(formData.hasVariants && cleanVariantOptions.length > 0),
+        variantOptions: cleanVariantOptions,
+        variants: syncedVariants
       };
 
       if (editingProductData && (editingProductData._id || editingProductData.id)) {
@@ -8637,7 +10643,30 @@ export const AddProductPage = () => {
     } finally {
       setIsSubmitting(false);
 
-      const generatedSku = res?.product?.sku || formData.sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+      const cleanVariantOptions = formData.hasVariants && Array.isArray(formData.variantOptions)
+        ? formData.variantOptions.filter(o => o.name && o.name.trim() && Array.isArray(o.values) && o.values.length > 0)
+        : [];
+
+      const syncedVariants = (formData.hasVariants && Array.isArray(formData.variants))
+        ? formData.variants.map(v => ({
+            ...v,
+            price: Number(formData.salePrice || 0),
+            originalPrice: Number(formData.mrp || formData.salePrice || 0),
+            stock: Number(formData.stock || 0),
+            image: v.image || ''
+          }))
+        : [];
+
+      const firstActiveVariant = (formData.hasVariants && Array.isArray(syncedVariants) && syncedVariants.length > 0)
+        ? (syncedVariants.find(v => v.active !== false) || syncedVariants[0])
+        : null;
+
+      const finalVariation = formData.hasVariants && firstActiveVariant 
+        ? firstActiveVariant.title 
+        : `${formData.unitValue || 1} ${formData.unitType || 'kg'}`;
+
+      const generatedSku = res?.product?.sku || formData.sku || (firstActiveVariant ? firstActiveVariant.sku : '') || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+
       const newProductObj = {
         _id: res?.product?._id || editingProductData?._id,
         id: res?.product?._id || editingProductData?.id || generatedSku,
@@ -8647,12 +10676,15 @@ export const AddProductPage = () => {
         subCategory: formData.subCategory,
         image: formData.mainImage || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
         galleryImages: formData.galleryImages || [],
-        variation: `${formData.unitValue || 1} ${formData.unitType || 'kg'}`,
+        variation: finalVariation,
         stock: Number(formData.stock || 0),
         status: statusToSave,
-        mrp: Number(formData.mrp || 0),
+        mrp: Number(formData.mrp || formData.salePrice || 0),
         salePrice: Number(formData.salePrice || 0),
-        homeSections: selectedHomeSections
+        homeSections: selectedHomeSections,
+        hasVariants: Boolean(formData.hasVariants && cleanVariantOptions.length > 0),
+        variantOptions: cleanVariantOptions,
+        variants: syncedVariants
       };
 
       const existingLocal = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
@@ -8750,7 +10782,7 @@ export const AddProductPage = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Registered Category *</label>
               <select 
@@ -8787,41 +10819,6 @@ export const AddProductPage = () => {
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Unit / Weight Variant *</label>
-              <div className="flex items-center gap-2">
-                <input 
-                  type="text" 
-                  required
-                  placeholder="Quantity (e.g. 1, 500, 250)"
-                  value={formData.unitValue}
-                  onChange={(e) => handleInputChange('unitValue', e.target.value)}
-                  className="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-[#ff5500]"
-                />
-                <select 
-                  value={formData.unitType}
-                  onChange={(e) => handleInputChange('unitType', e.target.value)}
-                  className="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:border-[#ff5500]"
-                >
-                  <option value="kg">kg (Kilograms)</option>
-                  <option value="g">g (Grams)</option>
-                  <option value="L">L (Liters)</option>
-                  <option value="ml">ml (Milliliters)</option>
-                  <option value="Pcs">Pcs (Pieces)</option>
-                  <option value="Pack">Pack</option>
-                  <option value="Dozen">Dozen (12 Pcs)</option>
-                  <option value="Bunch">Bunch</option>
-                  <option value="Box">Box</option>
-                  <option value="Bottle">Bottle</option>
-                  <option value="Sachet">Sachet</option>
-                  <option value="Combo">Combo Pack</option>
-                </select>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">Preview Variant: <span className="font-semibold text-[#ff5500]">{formData.unitValue || '1'} {formData.unitType || 'kg'}</span></p>
-            </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Seller / Merchant</label>
@@ -8848,6 +10845,26 @@ export const AddProductPage = () => {
             />
           </div>
         </div>
+
+        {/* Card 2: Dynamic Product Variants System */}
+        <ProductVariantBuilder 
+          category={formData.category}
+          basePrice={formData.salePrice}
+          baseMrp={formData.mrp}
+          baseStock={formData.stock}
+          baseSku={formData.sku}
+          productName={formData.name}
+          unitValue={formData.unitValue}
+          unitType={formData.unitType}
+          onUnitChange={(field, val) => handleInputChange(field, val)}
+          hasVariants={formData.hasVariants}
+          onHasVariantsChange={(val) => handleInputChange('hasVariants', val)}
+          variantOptions={formData.variantOptions}
+          onVariantOptionsChange={(opts) => handleInputChange('variantOptions', opts)}
+          variants={formData.variants}
+          onVariantsChange={(vars) => handleInputChange('variants', vars)}
+          availableImages={[formData.mainImage, ...(formData.galleryImages || [])].filter(Boolean)}
+        />
 
         {/* Card 2: Device File Upload Section */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
@@ -9026,13 +11043,17 @@ export const AddProductPage = () => {
 
         {/* Card 4: Pricing & Tax */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
-            <DollarSign size={18} className="text-[#ff5500]" /> Pricing, Discounts & Taxation
-          </h3>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <DollarSign size={18} className="text-[#ff5500]" /> Pricing, Discounts & Taxation
+            </h3>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">MRP Price (₹) *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                MRP Price (₹) *
+              </label>
               <input 
                 type="number" 
                 required
@@ -9044,7 +11065,9 @@ export const AddProductPage = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Selling Price (₹) *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Selling Price (₹) *
+              </label>
               <input 
                 type="number" 
                 required
@@ -9084,13 +11107,17 @@ export const AddProductPage = () => {
 
         {/* Card 5: Inventory & SKU */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
-            <Boxes size={18} className="text-[#ff5500]" /> Inventory & Stock Control
-          </h3>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <Boxes size={18} className="text-[#ff5500]" /> Inventory & Stock Control
+            </h3>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Initial Stock Quantity *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Initial Stock Quantity *
+              </label>
               <input 
                 type="number" 
                 required

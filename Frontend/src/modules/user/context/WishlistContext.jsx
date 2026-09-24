@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { wishlistService } from '../../../services/authService';
+import { useAuth } from '../../../context/AuthContext';
 
 const WishlistContext = createContext();
 
@@ -16,14 +17,15 @@ export const useWishlist = () => {
 export const WishlistProvider = ({ children }) => {
   const [wishlistItems, setWishlistItems] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  const isAuthenticated = () => {
-    return !!localStorage.getItem('shippnex_user_token');
-  };
+  const { isAuthenticated: authContextIsAuthenticated, isAuthInitializing, userRole } = useAuth();
 
   // Fetch wishlist from server or local storage
   const refreshWishlist = useCallback(async () => {
-    if (isAuthenticated()) {
+    if (isAuthInitializing) {
+      return;
+    }
+
+    if (authContextIsAuthenticated && userRole === 'user') {
       try {
         setLoading(true);
         const res = await wishlistService.getWishlist();
@@ -45,7 +47,12 @@ export const WishlistProvider = ({ children }) => {
           setWishlistItems(normalized);
         }
       } catch (err) {
-        console.error('Failed to load server wishlist:', err);
+        if (err?.response?.status === 401) {
+          localStorage.removeItem('shippnex_user_token');
+          setWishlistItems([]);
+        } else if (err?.response?.status !== 403) {
+          console.error('Failed to load server wishlist:', err);
+        }
       } finally {
         setLoading(false);
       }
@@ -63,7 +70,7 @@ export const WishlistProvider = ({ children }) => {
         setWishlistItems([]);
       }
     }
-  }, []);
+  }, [authContextIsAuthenticated, isAuthInitializing, userRole]);
 
   useEffect(() => {
     refreshWishlist();
@@ -71,7 +78,7 @@ export const WishlistProvider = ({ children }) => {
 
   // Sync guest local wishlist items with server after login
   const syncWishlistWithServer = async () => {
-    if (!isAuthenticated()) return;
+    if (!authContextIsAuthenticated || userRole !== 'user') return;
     try {
       const saved = localStorage.getItem(GUEST_WISHLIST_KEY);
       let localItems = [];
@@ -99,7 +106,7 @@ export const WishlistProvider = ({ children }) => {
     const itemId = String(product.id || product._id);
     const normalizedProduct = { ...product, id: itemId };
 
-    if (isAuthenticated()) {
+    if (authContextIsAuthenticated && userRole === 'user') {
       try {
         const res = await wishlistService.toggleWishlist(itemId);
         if (res && res.success) {

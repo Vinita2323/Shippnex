@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Store, MapPin, FileText, CheckCircle, Check, Loader2, Search, Navigation, AlertCircle, Crown, Zap, Star, CreditCard, Banknote, Wallet, Building2, Smartphone, UploadCloud, Image, X, FileCheck, Layers, Eye, EyeOff, Lock, ShieldCheck, RotateCcw, DollarSign, Sparkles } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Store, MapPin, FileText, CheckCircle, Check, Loader2, Search, Navigation, AlertCircle, Crown, Zap, Star, CreditCard, Banknote, Wallet, Building2, Smartphone, UploadCloud, Image, X, FileCheck, Layers, Eye, EyeOff, Lock, ShieldCheck, RotateCcw, DollarSign, Sparkles, Gift } from 'lucide-react';
 import { authService, membershipService, categoryService, sellerRegistrationFeeService } from '../../../../services/authService';
 import { MapService } from '../../../../services/MapService';
 import LocationSearchModal from '../../../../components/LocationSearchModal';
@@ -51,6 +51,8 @@ const getCategoryBilingualLabel = (catName) => {
 
 const SellerRegister = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const refCodeFromUrl = searchParams.get('ref') || '';
   const [step, setStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -150,7 +152,20 @@ const SellerRegister = () => {
     gstPhoto: '',
     bankPassbookPhoto: '',
     planId: '',
+    referralCode: (refCodeFromUrl || (typeof window !== 'undefined' ? sessionStorage.getItem('seller_referral_code') : '') || '').trim().toUpperCase(),
   });
+
+  useEffect(() => {
+    if (refCodeFromUrl) {
+      sessionStorage.setItem('seller_referral_code', refCodeFromUrl.trim().toUpperCase());
+      setFormData(prev => ({ ...prev, referralCode: refCodeFromUrl.trim().toUpperCase() }));
+    } else {
+      const savedRef = sessionStorage.getItem('seller_referral_code');
+      if (savedRef) {
+        setFormData(prev => ({ ...prev, referralCode: savedRef }));
+      }
+    }
+  }, [refCodeFromUrl]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -448,6 +463,7 @@ const SellerRegister = () => {
         fssaiLicense: formData.fssaiLicense,
         gstPhoto: formData.gstPhoto,
         bankPassbookPhoto: formData.bankPassbookPhoto,
+        referralCode: (formData.referralCode || refCodeFromUrl || (typeof window !== 'undefined' ? sessionStorage.getItem('seller_referral_code') : '') || '').trim().toUpperCase(),
       };
 
       try {
@@ -588,6 +604,17 @@ const SellerRegister = () => {
                   <div className="p-1.5 bg-orange-50 text-[#ff5500] rounded-lg"><Store size={18} /></div>
                   <h3 className="text-base font-bold text-slate-800 m-0">Store Information & Password <span className="font-semibold text-slate-500 text-sm">/ दुकान की जानकारी और पासवर्ड</span></h3>
                 </div>
+
+                {(refCodeFromUrl || formData.referralCode) && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-2">
+                      <Gift size={16} className="text-emerald-600 shrink-0" />
+                      <span>Referred by: <span className="font-mono font-bold tracking-wider text-emerald-900 bg-emerald-100/80 px-2 py-0.5 rounded">{formData.referralCode || refCodeFromUrl}</span></span>
+                    </div>
+                    <span className="text-[11px] text-emerald-600 font-normal">Referral Applied ✓</span>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
                   <div className="col-span-1 sm:col-span-2 flex flex-col justify-between">
                     <label className="block text-xs font-semibold text-slate-700 mb-1 leading-snug">
@@ -687,6 +714,24 @@ const SellerRegister = () => {
                     </label>
                     <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-[#ff5500] hover:file:bg-orange-100 cursor-pointer" />
                     <span className="text-[10.5px] text-slate-400 block mt-0.5">Upload business logo or storefront image (JPG, PNG) / व्यवसाय का लोगो या दुकान का फोटो अपलोड करें (JPG, PNG)</span>
+                  </div>
+
+                  {/* Referral Code (Optional) */}
+                  <div className="col-span-1 sm:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1 leading-snug">
+                      Referral Code (Optional) <span className="font-normal text-slate-500">/ रेफरल कोड (वैकल्पिक)</span>
+                    </label>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        name="referralCode" 
+                        value={formData.referralCode} 
+                        onChange={(e) => setFormData(prev => ({ ...prev, referralCode: e.target.value.toUpperCase() }))} 
+                        className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff5500] font-mono text-xs uppercase tracking-wider transition-all placeholder:text-slate-400 placeholder:normal-case placeholder:tracking-normal placeholder:text-xs" 
+                        placeholder="e.g. SELL12345" 
+                      />
+                      <Gift size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    </div>
                   </div>
 
                   {/* Store Categories Selection */}

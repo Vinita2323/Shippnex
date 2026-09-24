@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Lock, Phone, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, KeyRound, ArrowLeft } from 'lucide-react';
 import { authService } from '../../../../services/authService';
+import { useAuth } from '../../../../context/AuthContext';
 
 const SellerLogin = () => {
   const navigate = useNavigate();
+  const { syncAuthFromStorage } = useAuth();
   const [mobileNumber, setMobileNumber] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -56,6 +58,7 @@ const SellerLogin = () => {
       const res = await authService.sellerLogin(cleanPhone, password);
 
       if (res.success && res.token) {
+        syncAuthFromStorage();
         if (res.requiresMembership) {
           navigate('/seller/membership');
         } else {
@@ -153,6 +156,7 @@ const SellerLogin = () => {
       if (res.success) {
         if (res.token) {
           // Approved seller: directly logged in
+          syncAuthFromStorage();
           setSuccessMsg('Password set successfully! Redirecting to dashboard...');
           setTimeout(() => {
             navigate('/seller/dashboard');

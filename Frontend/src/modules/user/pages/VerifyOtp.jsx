@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, ShieldCheck, Edit2, Loader2 } from 'lucide-react
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { authService } from '../../../services/authService';
+import { useAuth } from '../../../context/AuthContext';
 
 const VerifyOtp = () => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -15,6 +16,7 @@ const VerifyOtp = () => {
 
   const { syncWishlistWithServer } = useWishlist();
   const { fetchCart, addToCart } = useCart();
+  const { syncAuthFromStorage } = useAuth();
 
   const phone = location.state?.phone || '+91 9876543210';
 
@@ -27,6 +29,7 @@ const VerifyOtp = () => {
     try {
       setLoading(true);
       await authService.verifyUserOtp(phone, enteredOtp);
+      syncAuthFromStorage();
 
       // 1. Sync guest wishlist to backend database
       await syncWishlistWithServer();

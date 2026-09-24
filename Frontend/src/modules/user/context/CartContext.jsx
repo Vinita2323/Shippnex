@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
 import { cartService } from '../../../services/authService';
+import { useAuth } from '../../../context/AuthContext';
 
 const CartContext = createContext();
 
@@ -14,10 +15,7 @@ export const useCart = () => {
 export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  const isAuthenticated = () => {
-    return !!localStorage.getItem('shippnex_user_token');
-  };
+  const { isAuthenticated: authContextIsAuthenticated, isAuthInitializing, userRole } = useAuth();
 
   // Format backend cart items for frontend consumption
   const formatCartItems = (backendItems = []) => {
@@ -39,7 +37,8 @@ export const CartProvider = ({ children }) => {
   };
 
   const fetchCart = useCallback(async () => {
-    if (!isAuthenticated()) {
+    // Only fetch cart if user role is 'user' (not captain, seller, admin, etc.)
+    if (isAuthInitializing || !authContextIsAuthenticated || userRole !== 'user') {
       setCartItems([]);
       return;
     }
@@ -51,11 +50,16 @@ export const CartProvider = ({ children }) => {
         setCartItems(formatCartItems(res.cart.items || []));
       }
     } catch (err) {
-      console.error('Failed to fetch server cart:', err);
+      if (err?.response?.status === 401) {
+        localStorage.removeItem('shippnex_user_token');
+        setCartItems([]);
+      } else if (err?.response?.status !== 403) {
+        console.error('Failed to fetch server cart:', err);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [authContextIsAuthenticated, isAuthInitializing, userRole]);
 
   useEffect(() => {
     fetchCart();
@@ -66,8 +70,13 @@ export const CartProvider = ({ children }) => {
 
     const productId = product.id || product._id;
 
+    // Wait for auth initialization before checking authentication
+    if (isAuthInitializing) {
+      return { requiresAuth: true, message: 'Initializing authentication' };
+    }
+
     // Reject unauthenticated requests and save pending action
-    if (!isAuthenticated()) {
+    if (!authContextIsAuthenticated) {
       const pendingAction = {
         type: options.isBuyNow ? 'BUY_NOW' : 'ADD_TO_CART',
         product,
@@ -96,7 +105,7 @@ export const CartProvider = ({ children }) => {
   };
 
   const updateQuantity = async (productId, delta, exactQty) => {
-    if (!isAuthenticated()) return;
+    if (!authContextIsAuthenticated) return;
     try {
       const targetProd = cartItems.find((i) => String(i.id || i._id) === String(productId));
       const res = await cartService.updateCartItem(productId, delta, exactQty, targetProd);
@@ -111,7 +120,7 @@ export const CartProvider = ({ children }) => {
   };
 
   const removeFromCart = async (productId) => {
-    if (!isAuthenticated()) return;
+    if (!authContextIsAuthenticated) return;
     try {
       const res = await cartService.removeFromCart(productId);
       if (res && res.success && res.cart) {
@@ -125,7 +134,7 @@ export const CartProvider = ({ children }) => {
   };
 
   const clearCart = async () => {
-    if (!isAuthenticated()) {
+    if (!authContextIsAuthenticated) {
       setCartItems([]);
       return;
     }

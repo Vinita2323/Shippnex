@@ -21,10 +21,30 @@ export const transportService = {
     }
   },
 
-  // Create a new transport booking
+  // Create a new transport booking (Direct / Cash on Delivery)
   createBooking: async (bookingData) => {
     try {
       const response = await API.post('/transport/bookings', bookingData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  // Create a Razorpay payment order for online payment
+  createPaymentOrder: async (bookingData) => {
+    try {
+      const response = await API.post('/transport/bookings/create-payment-order', bookingData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  // Verify Razorpay payment and confirm transport booking
+  verifyPayment: async (paymentData) => {
+    try {
+      const response = await API.post('/transport/bookings/verify-payment', paymentData);
       return response.data;
     } catch (error) {
       throw error.response?.data || error.message;

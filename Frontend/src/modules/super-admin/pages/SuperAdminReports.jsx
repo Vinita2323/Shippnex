@@ -103,7 +103,7 @@ export const SuperAdminReports = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#020909] text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans">
       <SuperAdminHeader
         title="Financial Reports & Exports"
         subtitle="Generate, filter, and export comprehensive transaction, settlement, and revenue reports"
@@ -123,20 +123,20 @@ export const SuperAdminReports = () => {
                 onClick={() => setReportType(tab.id)}
                 className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
                   isSelected
-                    ? 'bg-[#06332d] border-emerald-500 text-white shadow-lg shadow-emerald-950/60'
-                    : 'bg-[#051716] border-emerald-950 text-slate-400 hover:text-white hover:border-emerald-900'
+                    ? 'bg-[#002625] border-[#002625] text-white shadow-md'
+                    : 'bg-white border-slate-200/80 text-slate-600 hover:text-slate-900 hover:border-slate-300 shadow-sm'
                 }`}
               >
                 <div
-                  className={`p-2 rounded-xl ${
-                    isSelected ? 'bg-emerald-500/20 text-emerald-300' : 'bg-black/30 text-slate-400'
+                  className={`p-2.5 rounded-xl ${
+                    isSelected ? 'bg-white/10 text-[#ff5500]' : 'bg-slate-100 text-slate-600'
                   }`}
                 >
                   <Icon size={20} />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white m-0">{tab.label}</h4>
-                  <p className="text-[10.5px] text-slate-400 m-0">Audited dataset export</p>
+                  <h4 className={`text-xs font-bold m-0 ${isSelected ? 'text-white' : 'text-slate-900'}`}>{tab.label}</h4>
+                  <p className={`text-[10.5px] m-0 ${isSelected ? 'text-teal-200/80' : 'text-slate-400'}`}>Audited dataset export</p>
                 </div>
               </button>
             );
@@ -144,24 +144,24 @@ export const SuperAdminReports = () => {
         </div>
 
         {/* Date Filter & Export Action */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#051716] border border-emerald-950 p-3.5 rounded-2xl">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200/80 p-4 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-400">From:</span>
+              <span className="text-slate-500 font-medium">From:</span>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="bg-[#020b0b] border border-emerald-950 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-emerald-500"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-[#002625] focus:bg-white transition-all font-medium"
               />
             </div>
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-400">To:</span>
+              <span className="text-slate-500 font-medium">To:</span>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="bg-[#020b0b] border border-emerald-950 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-emerald-500"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-[#002625] focus:bg-white transition-all font-medium"
               />
             </div>
           </div>
@@ -169,7 +169,7 @@ export const SuperAdminReports = () => {
           <button
             onClick={handleExport}
             disabled={reportData.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold text-xs rounded-xl border-none cursor-pointer shadow-md transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#ff5500] hover:bg-[#ea4e00] disabled:opacity-40 text-white font-bold text-xs rounded-xl border-none cursor-pointer shadow-sm transition-all"
           >
             <Download size={15} />
             <span>Export CSV Report ({reportData.length} records)</span>
@@ -177,12 +177,12 @@ export const SuperAdminReports = () => {
         </div>
 
         {/* Report Preview Table */}
-        <div className="bg-[#051716] border border-emerald-950/90 rounded-3xl shadow-xl overflow-hidden">
-          <div className="p-4 border-b border-emerald-950 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
+        <div className="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">
               Live Report Preview: {reportType?.replace(/-/g, ' ').toUpperCase()}
             </span>
-            <span className="text-xs text-emerald-400 font-mono font-bold">
+            <span className="text-xs text-[#002625] font-mono font-bold bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
               {reportData.length} rows loaded
             </span>
           </div>
@@ -190,97 +190,105 @@ export const SuperAdminReports = () => {
           <div className="overflow-x-auto max-h-[500px]">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-[#03100f] border-b border-emerald-950 text-slate-400 uppercase tracking-wider font-mono text-[10.5px] sticky top-0">
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-mono text-[10.5px] sticky top-0">
                   {reportType === 'transactions' && (
                     <>
-                      <th className="py-3 px-4">Txn ID</th>
-                      <th className="py-3 px-4">Category</th>
-                      <th className="py-3 px-4">Type</th>
-                      <th className="py-3 px-4">Amount</th>
-                      <th className="py-3 px-4">Entity</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4">Date</th>
+                      <th className="py-3 px-4 font-bold">Txn ID</th>
+                      <th className="py-3 px-4 font-bold">Category</th>
+                      <th className="py-3 px-4 font-bold">Type</th>
+                      <th className="py-3 px-4 font-bold">Amount</th>
+                      <th className="py-3 px-4 font-bold">Entity</th>
+                      <th className="py-3 px-4 font-bold">Status</th>
+                      <th className="py-3 px-4 font-bold">Date</th>
                     </>
                   )}
                   {reportType === 'seller-settlements' && (
                     <>
-                      <th className="py-3 px-4">Order ID</th>
-                      <th className="py-3 px-4">Seller Store</th>
-                      <th className="py-3 px-4">Gross Sales</th>
-                      <th className="py-3 px-4">Commission</th>
-                      <th className="py-3 px-4">Net Seller Amount</th>
-                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 font-bold">Order ID</th>
+                      <th className="py-3 px-4 font-bold">Seller Store</th>
+                      <th className="py-3 px-4 font-bold">Gross Sales</th>
+                      <th className="py-3 px-4 font-bold">Commission</th>
+                      <th className="py-3 px-4 font-bold">Net Seller Amount</th>
+                      <th className="py-3 px-4 font-bold">Status</th>
                     </>
                   )}
                   {reportType === 'captain-settlements' && (
                     <>
-                      <th className="py-3 px-4">Captain Name</th>
-                      <th className="py-3 px-4">Mobile</th>
-                      <th className="py-3 px-4">Vehicle</th>
-                      <th className="py-3 px-4">Wallet Balance</th>
-                      <th className="py-3 px-4">COD Cash Collected</th>
+                      <th className="py-3 px-4 font-bold">Captain Name</th>
+                      <th className="py-3 px-4 font-bold">Mobile</th>
+                      <th className="py-3 px-4 font-bold">Vehicle</th>
+                      <th className="py-3 px-4 font-bold">Wallet Balance</th>
+                      <th className="py-3 px-4 font-bold">COD Cash Collected</th>
                     </>
                   )}
                   {reportType === 'platform-revenue' && (
                     <>
-                      <th className="py-3 px-4">Date</th>
-                      <th className="py-3 px-4">Gross Volume</th>
-                      <th className="py-3 px-4">Items Total</th>
-                      <th className="py-3 px-4">Shipping Revenue</th>
-                      <th className="py-3 px-4">Order Count</th>
+                      <th className="py-3 px-4 font-bold">Date</th>
+                      <th className="py-3 px-4 font-bold">Gross Volume</th>
+                      <th className="py-3 px-4 font-bold">Items Total</th>
+                      <th className="py-3 px-4 font-bold">Shipping Revenue</th>
+                      <th className="py-3 px-4 font-bold">Order Count</th>
                     </>
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-emerald-950/60">
+              <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-slate-400">Generating report...</td>
                   </tr>
                 ) : reportData.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-500">No data found for this report and period.</td>
+                    <td colSpan={7} className="py-12 text-center text-slate-400">No data found for this report and period.</td>
                   </tr>
                 ) : (
                   reportData.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-emerald-950/20 transition-colors">
+                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
                       {reportType === 'transactions' && (
                         <>
-                          <td className="py-3 px-4 font-mono font-bold text-emerald-400">{item.transactionId}</td>
-                          <td className="py-3 px-4 text-white font-medium">{item.category}</td>
-                          <td className="py-3 px-4 font-mono">{item.type}</td>
-                          <td className="py-3 px-4 font-bold text-white font-mono">₹{Number(item.amount).toFixed(2)}</td>
-                          <td className="py-3 px-4 text-slate-300">{item.entityName || item.entityType}</td>
-                          <td className="py-3 px-4">{item.status}</td>
-                          <td className="py-3 px-4 font-mono text-slate-400 text-[11px]">{new Date(item.createdAt).toLocaleDateString('en-IN')}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-[#002625]">{item.transactionId}</td>
+                          <td className="py-3 px-4 text-slate-800 font-medium">{item.category}</td>
+                          <td className="py-3 px-4 font-mono text-slate-600">{item.type}</td>
+                          <td className="py-3 px-4 font-bold text-slate-900 font-mono">₹{Number(item.amount).toFixed(2)}</td>
+                          <td className="py-3 px-4 text-slate-700">{item.entityName || item.entityType}</td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                              {item.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-500 text-[11px]">{new Date(item.createdAt).toLocaleDateString('en-IN')}</td>
                         </>
                       )}
                       {reportType === 'seller-settlements' && (
                         <>
-                          <td className="py-3 px-4 font-mono font-bold text-emerald-400">#{item.orderId}</td>
-                          <td className="py-3 px-4 text-white font-bold">{item.sellerName}</td>
-                          <td className="py-3 px-4 font-mono font-bold text-slate-300">₹{Number(item.totalAmount || 0).toFixed(2)}</td>
-                          <td className="py-3 px-4 font-mono text-amber-400">₹{Number(item.commissionAmount || 0).toFixed(2)}</td>
-                          <td className="py-3 px-4 font-mono font-black text-white">₹{Number(item.netSellerAmount || 0).toFixed(2)}</td>
-                          <td className="py-3 px-4">{item.settlementStatus}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-[#002625]">#{item.orderId}</td>
+                          <td className="py-3 px-4 text-slate-900 font-bold">{item.sellerName}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-700">₹{Number(item.totalAmount || 0).toFixed(2)}</td>
+                          <td className="py-3 px-4 font-mono text-amber-600 font-bold">₹{Number(item.commissionAmount || 0).toFixed(2)}</td>
+                          <td className="py-3 px-4 font-mono font-black text-slate-900">₹{Number(item.netSellerAmount || 0).toFixed(2)}</td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                              {item.settlementStatus}
+                            </span>
+                          </td>
                         </>
                       )}
                       {reportType === 'captain-settlements' && (
                         <>
-                          <td className="py-3 px-4 text-white font-bold">{item.name}</td>
-                          <td className="py-3 px-4 font-mono text-slate-300">{item.phone}</td>
-                          <td className="py-3 px-4 text-slate-300">{item.vehicleType}</td>
-                          <td className="py-3 px-4 font-mono font-black text-amber-400">₹{Number(item.walletBalance || 0).toFixed(2)}</td>
-                          <td className="py-3 px-4 font-mono font-bold text-white">₹{Number(item.cashCollected || 0).toFixed(2)}</td>
+                          <td className="py-3 px-4 text-slate-900 font-bold">{item.name}</td>
+                          <td className="py-3 px-4 font-mono text-slate-600">{item.phone}</td>
+                          <td className="py-3 px-4 text-slate-600">{item.vehicleType}</td>
+                          <td className="py-3 px-4 font-mono font-black text-amber-600">₹{Number(item.walletBalance || 0).toFixed(2)}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{Number(item.cashCollected || 0).toFixed(2)}</td>
                         </>
                       )}
                       {reportType === 'platform-revenue' && (
                         <>
-                          <td className="py-3 px-4 font-mono font-bold text-emerald-400">{item._id}</td>
-                          <td className="py-3 px-4 font-mono font-bold text-white">₹{Number(item.grossVolume || 0).toFixed(2)}</td>
-                          <td className="py-3 px-4 font-mono text-slate-300">₹{Number(item.itemsTotal || 0).toFixed(2)}</td>
-                          <td className="py-3 px-4 font-mono text-slate-300">₹{Number(item.shippingRevenue || 0).toFixed(2)}</td>
-                          <td className="py-3 px-4 font-mono font-bold text-emerald-400">{item.orderCount}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-[#002625]">{item._id}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{Number(item.grossVolume || 0).toFixed(2)}</td>
+                          <td className="py-3 px-4 font-mono text-slate-600">₹{Number(item.itemsTotal || 0).toFixed(2)}</td>
+                          <td className="py-3 px-4 font-mono text-slate-600">₹{Number(item.shippingRevenue || 0).toFixed(2)}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-emerald-600">{item.orderCount}</td>
                         </>
                       )}
                     </tr>

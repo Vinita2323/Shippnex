@@ -21,6 +21,7 @@ const connectDB = async () => {
       serverSelectionTimeoutMS: 8000,
       socketTimeoutMS: 45000,
       connectTimeoutMS: 10000,
+      family: 4,
       retryWrites: true,
       w: 'majority',
     });
@@ -28,8 +29,8 @@ const connectDB = async () => {
     isConnected = true;
     console.log(`✅ MongoDB Connected: ${conn.connection.host} [DB: ${conn.connection.name}] (Pool: 5-50)`);
 
-    // Asynchronously trigger index sync once in background without blocking server startup
-    if (!indexesSynced) {
+    // Trigger index sync only when explicitly requested (avoids blocking Atlas connection pool on every nodemon reload)
+    if (!indexesSynced && process.env.SYNC_INDEXES_ON_STARTUP === 'true') {
       indexesSynced = true;
       import('../scripts/syncIndexes.js')
         .then((m) => m.syncAllIndexes())

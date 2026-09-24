@@ -123,6 +123,18 @@ const sellerSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    // Referral System
+    referralCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      sparse: true,
+    },
+    referredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Seller',
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -135,6 +147,7 @@ sellerSchema.index({ status: 1, createdAt: -1 });
 sellerSchema.index({ registrationFeeStatus: 1, createdAt: -1 });
 sellerSchema.index({ businessName: 1 });
 sellerSchema.index({ createdAt: -1 });
+sellerSchema.index({ referralCode: 1 }, { unique: true, sparse: true });
 
 // Hash password before saving
 sellerSchema.pre('save', async function () {

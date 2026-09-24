@@ -20,6 +20,7 @@ const SellerOrderNotifier = () => {
   const knownOrderIdsRef = useRef(new Set());
   const audioRef = useRef(null);
   const ringtoneIntervalRef = useRef(null);
+  const isPollingRef = useRef(false);
 
   const showToast = (msg) => {
     setToastMsg(msg);
@@ -77,8 +78,10 @@ const SellerOrderNotifier = () => {
 
   // Polling loop for active seller orders across ALL pages
   const pollSellerOrders = async () => {
+    if (isPollingRef.current) return;
+    isPollingRef.current = true;
     try {
-      const res = await orderService.getSellerNotifications();
+      const res = await orderService.getSellerNotifications({ limit: 15 });
       if (res && res.notifications && Array.isArray(res.notifications)) {
         
         // Broadcast updates to any listening components (e.g. Orders.jsx)
@@ -109,12 +112,14 @@ const SellerOrderNotifier = () => {
       }
     } catch (err) {
       // Ignore network silent errors during background poll
+    } finally {
+      isPollingRef.current = false;
     }
   };
 
   useEffect(() => {
     pollSellerOrders();
-    const interval = setInterval(pollSellerOrders, 4000);
+    const interval = setInterval(pollSellerOrders, 10000);
     return () => {
       clearInterval(interval);
       stopRingtone();

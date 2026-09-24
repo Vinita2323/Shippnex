@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import CaptainBottomNav from '../components/CaptainBottomNav';
-import { captainService } from '../../../services/authService';
+import { captainService, returnService } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
 import { markJobAsDismissed } from '../utils/jobDismissal';
 import RatingModal from '../../../components/RatingModal';
@@ -17,9 +17,10 @@ const CaptainJobs = () => {
   const [ratingJob, setRatingJob] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [transportRequests, setTransportRequests] = useState([]);
+  const [returnJobs, setReturnJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
-  const [counts, setCounts] = useState({ transport: 0, deliveries: 0, completed: 0 });
+  const [counts, setCounts] = useState({ transport: 0, deliveries: 0, returns: 0, completed: 0 });
 
   // Sync tab with URL search parameter if changed externally
   useEffect(() => {
@@ -31,14 +32,16 @@ const CaptainJobs = () => {
 
   const fetchTabCounts = useCallback(async () => {
     try {
-      const [transRes, delivRes, compRes] = await Promise.allSettled([
+      const [transRes, delivRes, retRes, compRes] = await Promise.allSettled([
         transportService.captainGetRequests(),
         captainService.getJobs('deliveries'),
+        returnService.getCaptainReturnJobs('available'),
         captainService.getJobs('completed'),
       ]);
       setCounts({
         transport: transRes.status === 'fulfilled' ? (transRes.value.requests?.length || 0) : 0,
         deliveries: delivRes.status === 'fulfilled' ? (delivRes.value.orders?.length || 0) : 0,
+        returns: retRes.status === 'fulfilled' ? (retRes.value.returnJobs?.length || 0) : 0,
         completed: compRes.status === 'fulfilled' ? (compRes.value.orders?.length || 0) : 0,
       });
     } catch (e) {}
@@ -52,6 +55,11 @@ const CaptainJobs = () => {
         const reqList = res.requests || [];
         setTransportRequests(reqList);
         setCounts((prev) => ({ ...prev, transport: reqList.length }));
+      } else if (tab === 'returns') {
+        const res = await returnService.getCaptainReturnJobs('available');
+        const retList = res.returnJobs || [];
+        setReturnJobs(retList);
+        setCounts((prev) => ({ ...prev, returns: retList.length }));
       } else {
         const res = await captainService.getJobs(tab);
         const orderList = res.orders || [];
@@ -61,6 +69,7 @@ const CaptainJobs = () => {
     } catch (err) {
       console.error('Fetch jobs error:', err);
       if (tab === 'transport') setTransportRequests([]);
+      else if (tab === 'returns') setReturnJobs([]);
       else setJobs([]);
     } finally {
       setLoading(false);
@@ -144,9 +153,35 @@ const CaptainJobs = () => {
     }
   };
 
+  // Accept return pickup request
+  const handleAcceptReturn = async (ret) => {
+    setActionLoading(ret._id);
+    try {
+      markJobAsDismissed(ret);
+      await returnService.captainAcceptReturnJob(ret._id || ret.returnId);
+      setAcceptedJob({
+        ...ret,
+        isReturn: true,
+        orderId: ret.returnId,
+        captainEarnings: ret.captainEarnings || 40,
+        shippingAddress: ret.customerAddress,
+      });
+      fetchJobs('returns');
+    } catch (err) {
+      console.error('Accept return error:', err);
+      alert(err?.response?.data?.message || 'Failed to accept return pickup job.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const confirmJobAcceptance = () => {
     if (!acceptedJob) {
       navigate('/captain/active-delivery');
+      return;
+    }
+    if (acceptedJob.isReturn) {
+      navigate(`/captain/active-delivery?type=return&returnId=${acceptedJob._id || acceptedJob.returnId}`);
       return;
     }
     const isTrp = acceptedJob.isTransport || acceptedJob.bookingId;
@@ -207,6 +242,20 @@ const CaptainJobs = () => {
     );
   });
 
+  const filteredReturns = returnJobs.filter((r) => {
+    const q = searchQuery.toLowerCase();
+    if (!q) return true;
+    return (
+      r.returnId?.toLowerCase().includes(q) ||
+      r.orderId?.toLowerCase().includes(q) ||
+      r.customerName?.toLowerCase().includes(q) ||
+      r.productName?.toLowerCase().includes(q) ||
+      r.reason?.toLowerCase().includes(q) ||
+      r.customerAddress?.city?.toLowerCase().includes(q) ||
+      r.customerAddress?.addressLine1?.toLowerCase().includes(q)
+    );
+  });
+
   const getStatusBadge = (status) => {
     const map = {
       'In Transit': 'bg-[#ff6000]/15 text-[#ff6000]',
@@ -214,6 +263,8 @@ const CaptainJobs = () => {
       'Accepted': 'bg-[#0a3d16] text-[#86efac]',
       'Assigned': 'bg-purple-100 text-purple-700',
       'Delivered': 'bg-emerald-100 text-emerald-800',
+      'CAPTAIN_ASSIGNMENT_PENDING': 'bg-orange-100 text-orange-800',
+      'CAPTAIN_ASSIGNED': 'bg-blue-100 text-blue-800',
     };
     return map[status] || 'bg-slate-100 text-slate-600';
   };
@@ -257,11 +308,12 @@ const CaptainJobs = () => {
           />
         </div>
 
-        {/* Tab Pills: 1. Transport Requests, 2. Delivery, 3. Completed (Shows all) */}
+        {/* Tab Pills: 1. Transport Requests, 2. Delivery, 3. Return Pickups, 4. Completed */}
         <div className="flex gap-2 overflow-x-auto hide-scrollbar py-0.5">
           {[
-            { key: 'transport', label: 'Transport Requests', icon: 'local_shipping', count: transportRequests.length },
+            { key: 'transport', label: 'Transport', icon: 'local_shipping', count: transportRequests.length },
             { key: 'deliveries', label: 'Delivery', icon: 'package_2', count: activeTab === 'deliveries' ? jobs.length : undefined },
+            { key: 'returns', label: 'Return Pickups', icon: 'keyboard_return', count: counts.returns },
             { key: 'completed', label: 'Completed', icon: 'check_circle', count: activeTab === 'completed' ? jobs.length : undefined },
           ].map((tab) => (
             <button
@@ -401,7 +453,7 @@ const CaptainJobs = () => {
         )}
 
         {/* ── TAB 2 & 3: DELIVERY ORDERS & COMPLETED ── */}
-        {!loading && activeTab !== 'transport' && (
+        {!loading && activeTab !== 'transport' && activeTab !== 'returns' && (
           <>
             {filteredJobs.length === 0 ? (
               <div className="bg-white rounded-xl p-8 border border-slate-200/80 flex flex-col items-center gap-3 text-center">
@@ -561,6 +613,137 @@ const CaptainJobs = () => {
                             </button>
                           )}
                         </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </>
+        )}
+
+        {/* ── TAB 3: RETURN PICKUPS ── */}
+        {!loading && activeTab === 'returns' && (
+          <>
+            {filteredReturns.length === 0 ? (
+              <div className="bg-white rounded-xl p-8 border border-slate-200/80 flex flex-col items-center gap-3 text-center">
+                <span className="material-symbols-outlined text-5xl text-slate-300">keyboard_return</span>
+                <p className="font-bold text-slate-700">No Return Pickups Available</p>
+                <p className="text-xs text-slate-400">
+                  When customers in your service area request product returns, return pickup jobs will appear here in real-time.
+                </p>
+              </div>
+            ) : (
+              filteredReturns.map((ret) => {
+                const isActing = actionLoading === ret._id;
+                const isAssignedToMe = ret.status === 'CAPTAIN_ASSIGNED' || ['PICKUP_STARTED', 'PICKUP_ARRIVED', 'PICKED_UP', 'IN_TRANSIT_TO_SELLER'].includes(ret.status);
+
+                return (
+                  <div
+                    key={ret._id || ret.returnId}
+                    className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:shadow-md transition-all space-y-2.5 overflow-hidden"
+                  >
+                    {/* Header Row: ID and Earnings */}
+                    <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-mono text-xs font-black text-slate-900 truncate">
+                          #{ret.returnId}
+                        </span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-orange-50 text-[#ea580c] border border-orange-200 shrink-0">
+                          Return Pickup
+                        </span>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] text-slate-400 font-semibold block">Payout</span>
+                        <span className="font-headline-md text-base font-black text-[#15803d]">
+                          ₹{(ret.captainEarnings || 40).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Customer Info & Product summary */}
+                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/60 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Customer</span>
+                        <p className="font-bold text-slate-900 m-0">{ret.customerName}</p>
+                      </div>
+                      {ret.customerPhone && (
+                        <a
+                          href={`tel:${ret.customerPhone}`}
+                          className="px-2 py-1 bg-[#15803d] text-white rounded-lg text-[11px] font-bold flex items-center gap-1 no-underline shadow-2xs"
+                        >
+                          <span className="material-symbols-outlined text-xs">call</span> Call
+                        </a>
+                      )}
+                    </div>
+
+                    {/* Pickup & Return Destinations */}
+                    <div className="space-y-1.5 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200/60">
+                      <div className="flex items-start gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1 shrink-0"></span>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Pickup From (Customer)</span>
+                          <p className="font-bold text-slate-800 text-[11px] m-0 leading-tight">
+                            {ret.customerAddress?.addressLine1}, {ret.customerAddress?.city} - {ret.customerAddress?.pincode}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2 pt-1 border-t border-slate-200/50">
+                        <span className="w-2 h-2 rounded-full bg-orange-500 mt-1 shrink-0"></span>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Deliver To (Seller / Store)</span>
+                          <p className="font-bold text-slate-800 text-[11px] m-0 leading-tight">
+                            {ret.sellerName || 'ShippNex Warehouse'} ({ret.sellerAddress?.city || 'Store'})
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Product & Reason badge */}
+                    <div className="text-[11px] text-slate-600 flex items-center justify-between pt-0.5">
+                      <span className="font-bold text-slate-800 truncate max-w-[200px]">
+                        📦 {ret.productName} (×{ret.quantity})
+                      </span>
+                      <span className="text-[10px] text-slate-500 italic truncate max-w-[140px]">
+                        Reason: {ret.reason}
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-2 pt-0.5">
+                      <button
+                        onClick={() => setSelectedDetailJob({
+                          ...ret,
+                          orderId: ret.returnId,
+                          shippingAddress: ret.customerAddress,
+                        })}
+                        className="w-1/2 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 py-2 rounded-lg text-xs font-bold text-slate-800 flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">info</span>
+                        <span>Details</span>
+                      </button>
+
+                      {isAssignedToMe ? (
+                        <button
+                          onClick={() => navigate(`/captain/active-delivery?type=return&returnId=${ret._id || ret.returnId}`)}
+                          className="w-1/2 bg-[#15803d] hover:bg-[#166534] py-2 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1 shadow-2xs transition-all cursor-pointer"
+                        >
+                          <span>Continue Pickup</span>
+                          <span className="material-symbols-outlined text-base">arrow_forward</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleAcceptReturn(ret)}
+                          disabled={isActing}
+                          className="w-1/2 bg-[#ea580c] hover:bg-[#c2410c] py-2 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1 shadow-2xs transition-all cursor-pointer disabled:opacity-60"
+                        >
+                          {isActing ? (
+                            <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+                          ) : (
+                            'Accept Pickup'
+                          )}
+                          {!isActing && <span className="material-symbols-outlined text-base">arrow_forward</span>}
+                        </button>
                       )}
                     </div>
                   </div>

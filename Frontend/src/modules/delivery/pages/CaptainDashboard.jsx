@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import IncomingGigModal from '../components/IncomingGigModal';
-import { captainService, getCachedCaptainDashboard } from '../../../services/authService';
+import { captainService, returnService, getCachedCaptainDashboard } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
 import { markJobAsDismissed, isJobDismissed } from '../utils/jobDismissal';
 import { MapService } from '../../../services/MapService';
@@ -30,6 +30,7 @@ const CaptainDashboard = () => {
   });
   const [pendingOrders, setPendingOrders] = useState(() => cachedInit?.pendingOrders || []);
   const [transportRequests, setTransportRequests] = useState(() => cachedInit?.transportRequests || []);
+  const [returnPickups, setReturnPickups] = useState([]);
   const [activeTransport, setActiveTransport] = useState(() => cachedInit?.activeTransport || null);
   const [taskFilter, setTaskFilter] = useState('all');
   const [cardActionLoading, setCardActionLoading] = useState(null);
@@ -84,16 +85,28 @@ const CaptainDashboard = () => {
     const hasCached = !!getCachedCaptainDashboard();
     if (!isBackground && !hasCached) setLoading(true);
     try {
-      const res = await captainService.getDashboardStats(isBackground);
-      if (res.success) {
-        setStats(res.stats);
-        const orders = res.pendingOrders || [];
-        const tRequests = res.transportRequests || [];
+      const [res, retRes] = await Promise.allSettled([
+        captainService.getDashboardStats(isBackground),
+        returnService.getCaptainReturnJobs('available'),
+      ]);
+
+      const retList = retRes.status === 'fulfilled' && retRes.value?.success ? retRes.value.returnJobs || [] : [];
+      setReturnPickups(retList);
+
+      if (res.status === 'fulfilled' && res.value?.success) {
+        const dashData = res.value;
+        const orders = dashData.pendingOrders || [];
+        const tRequests = dashData.transportRequests || [];
         setPendingOrders(orders);
         setTransportRequests(tRequests);
-        setActiveTransport(res.activeTransport || null);
+        setActiveTransport(dashData.activeTransport || null);
 
-        const wData = res.weeklyEarnings || [];
+        setStats({
+          ...dashData.stats,
+          pendingCount: (dashData.stats?.pendingCount || 0) + retList.length,
+        });
+
+        const wData = dashData.weeklyEarnings || [];
         const maxVal = Math.max(...wData.map((d) => d.value), 500);
         setWeeklyEarnings(
           wData.map((d, i) => ({
@@ -103,9 +116,9 @@ const CaptainDashboard = () => {
           }))
         );
 
-        if (res.stats.isOnline !== undefined) {
-          setIsOnline(res.stats.isOnline);
-          localStorage.setItem('shippnex_captain_online', String(res.stats.isOnline));
+        if (dashData.stats.isOnline !== undefined) {
+          setIsOnline(dashData.stats.isOnline);
+          localStorage.setItem('shippnex_captain_online', String(dashData.stats.isOnline));
         }
 
         const today = new Date();
@@ -302,6 +315,22 @@ const CaptainDashboard = () => {
       await fetchDashboard(true);
     } catch (err) {
       console.error('Reject transport error:', err);
+    } finally {
+      setCardActionLoading(null);
+    }
+  };
+
+  const handleCardAcceptReturn = async (ret) => {
+    setCardActionLoading(ret._id);
+    try {
+      markJobAsDismissed(ret);
+      const id = ret._id || ret.returnId;
+      await returnService.captainAcceptReturnJob(id);
+      await fetchDashboard(true);
+      navigate(`/captain/active-delivery?type=return&returnId=${id}`);
+    } catch (err) {
+      console.error('Accept return pickup error:', err);
+      alert(err?.response?.data?.message || err?.message || 'Failed to accept return pickup.');
     } finally {
       setCardActionLoading(null);
     }
@@ -852,7 +881,7 @@ const CaptainDashboard = () => {
               );
               const assignedPending = pendingOrders.filter((o) => o.captainStatus === 'Assigned');
               const activeCount = (activeTransport ? 1 : 0) + inProgressOrders.length;
-              const totalCount = activeCount + assignedPending.length + transportRequests.length;
+              const totalCount = activeCount + assignedPending.length + transportRequests.length + returnPickups.length;
 
               // Build prioritized list of all matching items based on current taskFilter
               const allMatchingTasks = [];
@@ -867,6 +896,9 @@ const CaptainDashboard = () => {
               }
               if (taskFilter === 'all' || taskFilter === 'requests') {
                 transportRequests.forEach((req) => allMatchingTasks.push({ type: 'transportRequest', data: req }));
+              }
+              if (taskFilter === 'all' || taskFilter === 'returns') {
+                returnPickups.forEach((ret) => allMatchingTasks.push({ type: 'returnPickup', data: ret }));
               }
 
               // Show ONLY 3 order cards on this dashboard page as requested
@@ -945,6 +977,18 @@ const CaptainDashboard = () => {
                           }`}
                         >
                           Requests ({transportRequests.length})
+                        </button>
+                      )}
+                      {returnPickups.length > 0 && (
+                        <button
+                          onClick={() => setTaskFilter('returns')}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                            taskFilter === 'returns'
+                              ? 'bg-[#ea580c] text-white shadow-2xs'
+                              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                          }`}
+                        >
+                          Returns ({returnPickups.length})
                         </button>
                       )}
                     </div>
@@ -1292,6 +1336,95 @@ const CaptainDashboard = () => {
                                 >
                                   {isActing ? 'Claiming…' : 'Accept Request'}
                                 </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (item.type === 'returnPickup') {
+                          const ret = item.data;
+                          const isActing = cardActionLoading === ret._id;
+                          const isAssignedToMe = ret.status === 'CAPTAIN_ASSIGNED' || ['PICKUP_STARTED', 'PICKUP_ARRIVED', 'PICKED_UP', 'IN_TRANSIT_TO_SELLER'].includes(ret.status);
+                          return (
+                            <div
+                              key={ret._id || ret.returnId}
+                              className="bg-white p-3.5 sm:p-4 rounded-xl border border-orange-200/90 shadow-2xs hover:shadow-md transition-all space-y-2.5 overflow-hidden"
+                            >
+                              <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse shrink-0"></span>
+                                  <span className="font-mono text-xs font-bold text-slate-800 truncate">
+                                    #{ret.returnId}
+                                  </span>
+                                </div>
+                                <span className="text-sm sm:text-base font-black text-[#15803d] shrink-0">
+                                  ₹{(ret.captainEarnings || 40).toFixed(2)}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 text-xs">
+                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-orange-50 text-[#ea580c] border border-orange-200 shrink-0 flex items-center gap-1">
+                                    <span>↩️</span> Return Pickup
+                                  </span>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+                                    {isAssignedToMe ? 'Assigned' : 'Available'}
+                                  </span>
+                                </div>
+                                <span className="text-xs font-medium text-slate-500 truncate">
+                                  📦 {ret.productName} (×{ret.quantity || 1})
+                                </span>
+                              </div>
+
+                              <div className="bg-slate-50/80 p-2.5 sm:p-3 rounded-lg border border-slate-100 text-xs space-y-2">
+                                <div className="flex items-start gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1 shrink-0"></span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-wider block">Pickup From (Customer)</span>
+                                    <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">
+                                      {ret.customerAddress?.addressLine1 || ret.customerAddress?.city || 'Customer Address'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-orange-500 mt-1 shrink-0"></span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-[8px] font-bold text-orange-700 uppercase tracking-wider block">Deliver To (Seller)</span>
+                                    <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">
+                                      {ret.sellerName || 'ShippNex Store'} ({ret.sellerAddress?.city || 'Warehouse'})
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex gap-2 pt-0.5">
+                                <button
+                                  onClick={() => setSelectedDetailTask({
+                                    ...ret,
+                                    orderId: ret.returnId,
+                                    shippingAddress: ret.customerAddress,
+                                  })}
+                                  className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 text-slate-700 font-bold text-xs rounded-lg transition-all cursor-pointer flex items-center justify-center"
+                                >
+                                  Details
+                                </button>
+                                {isAssignedToMe ? (
+                                  <button
+                                    onClick={() => navigate(`/captain/active-delivery?type=return&returnId=${ret._id || ret.returnId}`)}
+                                    className="flex-1 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-lg shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1"
+                                  >
+                                    <span>Continue</span>
+                                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleCardAcceptReturn(ret)}
+                                    disabled={isActing}
+                                    className="flex-1 py-2 bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-xs rounded-lg shadow-2xs transition-all cursor-pointer flex items-center justify-center disabled:opacity-60"
+                                  >
+                                    {isActing ? 'Accepting…' : 'Accept Pickup'}
+                                  </button>
+                                )}
                               </div>
                             </div>
                           );

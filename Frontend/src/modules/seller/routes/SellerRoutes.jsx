@@ -21,6 +21,7 @@ const Return = lazy(() => import('../pages/Return'));
 const SellerMembership = lazy(() => import('../pages/SellerMembership'));
 const SellerPolicyPage = lazy(() => import('../pages/SellerPolicyPage'));
 const SellerSupport = lazy(() => import('../pages/SellerSupport'));
+const SellerReferral = lazy(() => import('../pages/SellerReferral'));
 
 const SellerRoutes = () => {
   return (
@@ -59,6 +60,8 @@ const SellerRoutes = () => {
 
             {/* Finance & CRM */}
             <Route path="wallet" element={<Wallet />} />
+            <Route path="refer-earn" element={<SellerReferral />} />
+            <Route path="referral" element={<SellerReferral />} />
             <Route path="reports" element={<Reports />} />
             <Route path="reports/sales" element={<Reports />} />
             <Route path="return" element={<Return />} />

@@ -13,6 +13,7 @@ import {
   Star,
   Trash2,
   Crown,
+  Gift,
 } from 'lucide-react';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import { captainService, authService } from '../../../services/authService';
@@ -95,6 +96,8 @@ const CaptainProfile = () => {
       navigate('/captain/personal-details');
     } else if (id === 'wallet') {
       navigate('/captain/wallet');
+    } else if (id === 'refer-earn') {
+      navigate('/captain/refer-earn');
     /* Temporarily commented out:
     } else if (id === 'ratings') {
       setShowBreakdownModal(true);
@@ -150,6 +153,14 @@ const CaptainProfile = () => {
       label: 'Wallet & Payouts',
       sub: `Balance: ₹${(profile?.walletBalance || 0).toFixed(2)}`,
       icon: Wallet,
+    },
+    {
+      id: 'refer-earn',
+      label: 'Refer & Earn',
+      sub: 'Invite captains & earn cash rewards',
+      icon: Gift,
+      badge: 'Rewards',
+      badgeColor: 'bg-orange-50 text-[#ff5500] border-orange-200',
     },
     {
       id: 'service-areas',

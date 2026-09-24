@@ -73,7 +73,7 @@ export const SuperAdminCommissions = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#020909] text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans">
       <SuperAdminHeader
         title="Commission Governance Authority"
         subtitle="Exclusive authority to configure, audit, and modify platform seller commission percentages"
@@ -83,27 +83,27 @@ export const SuperAdminCommissions = () => {
 
       <div className="p-6 space-y-5 flex-1 max-w-7xl mx-auto w-full">
         {/* Search */}
-        <div className="bg-[#051716] border border-emerald-950 p-3.5 rounded-2xl flex items-center justify-between">
+        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-sm flex items-center justify-between flex-wrap gap-3">
           <div className="relative max-w-md w-full">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search Seller Store, Owner, Phone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#020b0b] border border-emerald-950 rounded-xl pl-10 pr-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-[#002625] focus:bg-white transition-all"
             />
           </div>
-          <span className="text-xs text-slate-400 font-medium">
-            Governing <span className="text-white font-bold">{sellers.length}</span> registered stores
+          <span className="text-xs text-slate-500 font-medium">
+            Governing <span className="text-[#002625] font-bold">{sellers.length}</span> registered stores
           </span>
         </div>
 
         {/* Table */}
-        <div className="bg-[#051716] border border-emerald-950/90 rounded-3xl shadow-xl overflow-hidden">
+        <div className="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-[#03100f] border-b border-emerald-950 text-slate-400 uppercase tracking-wider font-mono text-[11px]">
+              <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-mono text-[11px]">
                 <th className="py-3.5 px-4 font-bold">Seller Store</th>
                 <th className="py-3.5 px-4 font-bold">Owner & Phone</th>
                 <th className="py-3.5 px-4 font-bold">Current Commission</th>
@@ -113,38 +113,38 @@ export const SuperAdminCommissions = () => {
                 <th className="py-3.5 px-4 font-bold text-center">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-emerald-950/60">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">Loading commissions...</td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-500">No seller stores found.</td>
+                  <td colSpan={7} className="py-12 text-center text-slate-400">No seller stores found.</td>
                 </tr>
               ) : (
                 filtered.map((s) => (
-                  <tr key={s._id} className="hover:bg-emerald-950/20 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-white flex items-center gap-2">
-                      <span className="p-1 rounded-md bg-purple-500/10 text-purple-400">
+                  <tr key={s._id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
+                      <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100">
                         <Store size={14} />
                       </span>
                       <span>{s.businessName || 'Seller Store'}</span>
                     </td>
-                    <td className="py-3.5 px-4 text-slate-300">
-                      <div>{s.ownerName || 'Partner'}</div>
+                    <td className="py-3.5 px-4 text-slate-700">
+                      <div className="font-medium text-slate-800">{s.ownerName || 'Partner'}</div>
                       <span className="text-[10px] text-slate-400 font-mono">{s.phone}</span>
                     </td>
-                    <td className="py-3.5 px-4 font-black text-emerald-400 font-mono text-sm">
+                    <td className="py-3.5 px-4 font-black text-emerald-600 font-mono text-sm">
                       {s.commissionPercentage ?? 10}%
                     </td>
-                    <td className="py-3.5 px-4 font-mono font-bold text-amber-400">
+                    <td className="py-3.5 px-4 font-mono font-bold text-amber-600">
                       ₹{Number(s.totalCommissionDeducted || 0).toFixed(2)}
                     </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-300">
+                    <td className="py-3.5 px-4 font-mono text-slate-600 font-medium">
                       ₹{Number(s.totalEarnings || 0).toFixed(2)}
                     </td>
-                    <td className="py-3.5 px-4 font-mono font-bold text-white">
+                    <td className="py-3.5 px-4 font-mono font-bold text-[#002625]">
                       ₹{Number(s.walletBalance || 0).toFixed(2)}
                     </td>
                     <td className="py-3.5 px-4 text-center">
@@ -155,9 +155,9 @@ export const SuperAdminCommissions = () => {
                           setRemarks('');
                           setError('');
                         }}
-                        className="px-3 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 font-bold rounded-xl border border-emerald-500/30 cursor-pointer flex items-center gap-1.5 mx-auto"
+                        className="px-3 py-1.5 bg-[#002625] hover:bg-[#003837] text-white font-bold rounded-xl border-none cursor-pointer flex items-center gap-1.5 mx-auto shadow-sm transition-all text-[11px]"
                       >
-                        <Edit3 size={13} />
+                        <Edit3 size={12} />
                         <span>Edit Rate</span>
                       </button>
                     </td>
@@ -171,42 +171,42 @@ export const SuperAdminCommissions = () => {
 
       {/* Edit Commission Modal */}
       {selectedSeller && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-[#051716] border border-emerald-500/50 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-xs">
-            <h4 className="text-base font-bold text-white m-0">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-xs text-slate-800">
+            <h4 className="text-base font-bold text-slate-900 m-0">
               Update Commission: {selectedSeller.businessName}
             </h4>
-            <p className="text-slate-400 m-0">
+            <p className="text-slate-500 m-0 leading-relaxed">
               All future orders for this seller will be settled using this platform commission rate.
             </p>
 
             {error && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 font-semibold">
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 font-semibold">
                 {error}
               </div>
             )}
 
             <div className="space-y-3 pt-2">
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Commission Percentage (%)</label>
+                <label className="block text-slate-700 font-bold mb-1">Commission Percentage (%)</label>
                 <input
                   type="number"
                   min="0"
                   max="100"
                   value={newRate}
                   onChange={(e) => setNewRate(e.target.value)}
-                  className="w-full bg-[#020b0b] border border-emerald-950 rounded-xl px-3 py-2 text-white font-mono font-bold text-base outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono font-bold text-base outline-none focus:border-[#002625] focus:bg-white transition-all"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Audit Remarks / Justification</label>
+                <label className="block text-slate-700 font-bold mb-1">Audit Remarks / Justification</label>
                 <textarea
                   rows={2}
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
                   placeholder="e.g. High volume tier renegotiation"
-                  className="w-full bg-[#020b0b] border border-emerald-950 rounded-xl p-2.5 text-white outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 outline-none focus:border-[#002625] focus:bg-white transition-all"
                 />
               </div>
             </div>
@@ -215,13 +215,13 @@ export const SuperAdminCommissions = () => {
               <button
                 disabled={actionLoading}
                 onClick={handleUpdate}
-                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl border-none cursor-pointer"
+                className="flex-1 py-2.5 bg-[#ff5500] hover:bg-[#ea4e00] text-white font-bold rounded-xl border-none cursor-pointer shadow-sm transition-all"
               >
                 {actionLoading ? 'Saving Rate...' : 'Confirm Rate Update'}
               </button>
               <button
                 onClick={() => setSelectedSeller(null)}
-                className="py-2.5 px-4 bg-slate-800 text-slate-300 font-bold rounded-xl border-none cursor-pointer"
+                className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border-none cursor-pointer transition-all"
               >
                 Cancel
               </button>

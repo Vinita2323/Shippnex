@@ -16,7 +16,8 @@ import {
   LogOut, 
   ChevronDown, 
   ChevronUp,
-  HelpCircle
+  HelpCircle,
+  Gift
 } from 'lucide-react';
 
 const SellerSidebar = ({ isOpen, setIsOpen }) => {
@@ -215,7 +216,21 @@ const SellerSidebar = ({ isOpen, setIsOpen }) => {
           {isOpen && <span>Return</span>}
         </Link>
 
-        {/* 9. Help & Support */}
+        {/* 9. Refer & Earn */}
+        <Link
+          to="/seller/refer-earn"
+          className={`flex items-center ${isOpen ? 'gap-3 px-4' : 'justify-center px-2'} py-3 rounded-xl transition-all cursor-pointer font-semibold text-[15px] ${
+            isActive('/seller/refer-earn') || isActive('/seller/referral')
+              ? 'bg-[#0b3d3b] text-white shadow-sm font-bold border-l-4 border-[#ff5500]'
+              : 'text-slate-200 hover:bg-[#0b3d3b]/60'
+          }`}
+          title={!isOpen ? 'Refer & Earn' : undefined}
+        >
+          <Gift size={20} className="shrink-0 text-[#ff5500]" />
+          {isOpen && <span>Refer & Earn</span>}
+        </Link>
+
+        {/* 10. Help & Support */}
         <Link
           to="/seller/support"
           className={`flex items-center ${isOpen ? 'gap-3 px-4' : 'justify-center px-2'} py-3 rounded-xl transition-all cursor-pointer font-semibold text-[15px] ${

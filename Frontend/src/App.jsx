@@ -16,6 +16,7 @@ import { OrderProvider } from './modules/user/context/OrderContext';
 import { TransportProvider } from './modules/user/context/TransportContext';
 
 import { LocationProvider } from './context/LocationContext';
+import { AuthProvider } from './context/AuthContext';
 import { initializePushNotifications, setupForegroundNotificationHandler } from './services/pushNotificationService';
 
 function App() {
@@ -59,25 +60,27 @@ function App() {
   return (
     <div className="App">
       <ErrorBoundary>
-        <LocationProvider>
-          <WishlistProvider>
-            <CartProvider>
-              <OrderProvider>
-                <TransportProvider>
-                  <Suspense fallback={<PageSkeleton />}>
-                    <Routes>
-                      <Route path="/captain/*" element={<DeliveryRoutes />} />
-                      <Route path="/seller/*" element={<SellerRoutes />} />
-                      <Route path="/admin/*" element={<AdminRoutes />} />
-                      <Route path="/super-admin/*" element={<SuperAdminRoutes />} />
-                      <Route path="/*" element={<UserRoutes />} />
-                    </Routes>
-                  </Suspense>
-                </TransportProvider>
-              </OrderProvider>
-            </CartProvider>
-          </WishlistProvider>
-        </LocationProvider>
+        <AuthProvider>
+          <LocationProvider>
+            <WishlistProvider>
+              <CartProvider>
+                <OrderProvider>
+                  <TransportProvider>
+                    <Suspense fallback={<PageSkeleton />}>
+                      <Routes>
+                        <Route path="/captain/*" element={<DeliveryRoutes />} />
+                        <Route path="/seller/*" element={<SellerRoutes />} />
+                        <Route path="/admin/*" element={<AdminRoutes />} />
+                        <Route path="/super-admin/*" element={<SuperAdminRoutes />} />
+                        <Route path="/*" element={<UserRoutes />} />
+                      </Routes>
+                    </Suspense>
+                  </TransportProvider>
+                </OrderProvider>
+              </CartProvider>
+            </WishlistProvider>
+          </LocationProvider>
+        </AuthProvider>
       </ErrorBoundary>
     </div>
   );

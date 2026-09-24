@@ -98,12 +98,11 @@ export const SuperAdminPayouts = () => {
 
     try {
       const res = await superAdminService.getPayoutById(payout._id);
-      if (res.success) {
-        setSelectedPayout(res.payout);
+      if (res.success && res.recipientFinancials) {
         setRecipientFinancials(res.recipientFinancials);
       }
     } catch (err) {
-      console.warn('Failed to load recipient profile:', err);
+      console.error('Failed to load recipient financials:', err);
     } finally {
       setDetailLoading(false);
     }
@@ -116,9 +115,8 @@ export const SuperAdminPayouts = () => {
     setActionError('');
 
     try {
-      const amt = approvedAmount ? Number(approvedAmount) : selectedPayout.requestedAmount;
       const res = await superAdminService.approvePayout(selectedPayout._id, {
-        approvedAmount: amt,
+        approvedAmount: Number(approvedAmount) || selectedPayout.requestedAmount,
         remarks: actionRemarks,
       });
 
@@ -138,7 +136,7 @@ export const SuperAdminPayouts = () => {
   const handleReject = async () => {
     if (!selectedPayout) return;
     if (!rejectionReason.trim()) {
-      setActionError('Please specify the reason for rejecting this payout.');
+      setActionError('Rejection reason is required.');
       return;
     }
 
@@ -147,7 +145,7 @@ export const SuperAdminPayouts = () => {
 
     try {
       const res = await superAdminService.rejectPayout(selectedPayout._id, {
-        rejectionReason,
+        reason: rejectionReason,
         remarks: actionRemarks,
       });
 
@@ -202,7 +200,7 @@ export const SuperAdminPayouts = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#020909] text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans">
       <SuperAdminHeader
         title="Payout Requests Governance"
         subtitle="Exclusive authorization, review, and bank settlement execution for Sellers and Captains"
@@ -212,8 +210,8 @@ export const SuperAdminPayouts = () => {
 
       <div className="p-6 space-y-5 flex-1 max-w-7xl mx-auto w-full">
         {/* Recipient Type Tabs & Status Filters */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-emerald-950 pb-4">
-          <div className="flex items-center gap-2 bg-[#051716] p-1.5 rounded-2xl border border-emerald-950">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
+          <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-xs">
             {['ALL', 'SELLER', 'CAPTAIN'].map((tab) => (
               <button
                 key={tab}
@@ -223,8 +221,8 @@ export const SuperAdminPayouts = () => {
                 }}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-none cursor-pointer ${
                   recipientType === tab
-                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950'
-                    : 'text-slate-400 hover:text-white bg-transparent'
+                    ? 'bg-[#002625] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 bg-transparent'
                 }`}
               >
                 {tab === 'ALL' ? 'All Recipients' : tab === 'SELLER' ? 'Sellers Only' : 'Captains Only'}
@@ -240,14 +238,16 @@ export const SuperAdminPayouts = () => {
                   setStatus(st.id);
                   setPage(1);
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border-none cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border-none cursor-pointer flex items-center gap-1.5 ${
                   status === st.id
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                    : 'bg-[#051716] text-slate-400 hover:text-white border border-emerald-950'
+                    ? 'bg-[#ff5500] text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200/80'
                 }`}
               >
                 <span>{st.label}</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/40 text-slate-300 font-mono">
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                  status === st.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                }`}>
                   {st.count}
                 </span>
               </button>
@@ -258,7 +258,7 @@ export const SuperAdminPayouts = () => {
         {/* Search & Date Filter Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="relative sm:col-span-2">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search Payout ID, Recipient Name, Phone, UTR..."
@@ -267,7 +267,7 @@ export const SuperAdminPayouts = () => {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="w-full bg-[#051716] border border-emerald-950 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-500"
+              className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-[#ff5500] shadow-xs"
             />
           </div>
 
@@ -279,7 +279,7 @@ export const SuperAdminPayouts = () => {
                 setStartDate(e.target.value);
                 setPage(1);
               }}
-              className="w-full bg-[#051716] border border-emerald-950 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-emerald-500"
+              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none focus:border-[#ff5500] shadow-xs"
             />
             <input
               type="date"
@@ -288,112 +288,100 @@ export const SuperAdminPayouts = () => {
                 setEndDate(e.target.value);
                 setPage(1);
               }}
-              className="w-full bg-[#051716] border border-emerald-950 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-emerald-500"
+              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none focus:border-[#ff5500] shadow-xs"
             />
           </div>
         </div>
 
         {/* Payouts Table */}
-        <div className="bg-[#051716] border border-emerald-950/90 rounded-3xl shadow-xl overflow-hidden">
+        <div className="bg-white border border-slate-200/80 rounded-3xl shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-[#03100f] border-b border-emerald-950/90 text-slate-400 uppercase tracking-wider font-mono text-[11px]">
-                  <th className="py-3.5 px-4 font-bold">Payout ID</th>
-                  <th className="py-3.5 px-4 font-bold">Party</th>
-                  <th className="py-3.5 px-4 font-bold">Requested</th>
-                  <th className="py-3.5 px-4 font-bold">Approved</th>
-                  <th className="py-3.5 px-4 font-bold">Bank / Destination</th>
-                  <th className="py-3.5 px-4 font-bold">Status</th>
-                  <th className="py-3.5 px-4 font-bold">Requested Date</th>
-                  <th className="py-3.5 px-4 font-bold text-center">Actions</th>
+                <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 uppercase tracking-wider font-extrabold text-[11px]">
+                  <th className="py-3.5 px-4">Payout ID</th>
+                  <th className="py-3.5 px-4">Party</th>
+                  <th className="py-3.5 px-4">Requested</th>
+                  <th className="py-3.5 px-4">Approved</th>
+                  <th className="py-3.5 px-4">Bank / Destination</th>
+                  <th className="py-3.5 px-4">Status</th>
+                  <th className="py-3.5 px-4">Requested Date</th>
+                  <th className="py-3.5 px-4 text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-emerald-950/60">
+              <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-400">
+                    <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
                       Loading payout requests...
                     </td>
                   </tr>
                 ) : payouts.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-500">
-                      No payout requests found matching the active filters.
+                    <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
+                      No payout requests found matching the applied filters.
                     </td>
                   </tr>
                 ) : (
                   payouts.map((p) => {
-                    const isSeller = p.recipientType === 'SELLER';
+                    const isPending = p.status === 'PENDING';
+                    const isApproved = p.status === 'APPROVED';
+                    const isPaid = p.status === 'PAID';
+                    const isRejected = p.status === 'REJECTED';
+
                     return (
-                      <tr key={p._id} className="hover:bg-emerald-950/20 transition-colors">
-                        <td className="py-3.5 px-4 font-mono font-bold text-emerald-400">{p.payoutId}</td>
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`p-1 rounded-md ${
-                                isSeller ? 'bg-purple-500/10 text-purple-400' : 'bg-indigo-500/10 text-indigo-400'
-                              }`}
-                            >
-                              {isSeller ? <Store size={14} /> : <Truck size={14} />}
+                      <tr key={p._id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold text-[#ff5500]">#{p.payoutId}</td>
+                        <td className="py-3.5 px-4 text-slate-800">
+                          <div className="font-bold text-slate-900">{p.recipientName}</div>
+                          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                            <span className="font-semibold">{p.recipientPhone || 'No phone'}</span>
+                            <span>•</span>
+                            <span className="capitalize font-bold text-teal-800 bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200 text-[10px]">
+                              {p.recipientType}
                             </span>
-                            <div>
-                              <p className="font-bold text-white m-0">{p.recipientName || 'Partner'}</p>
-                              <p className="text-[10.5px] text-slate-400 m-0 font-mono">{p.recipientPhone || p.recipientType}</p>
-                            </div>
                           </div>
                         </td>
-                        <td className="py-3.5 px-4 font-black text-white font-mono text-sm">
-                          ₹{Number(p.requestedAmount).toFixed(2)}
+                        <td className="py-3.5 px-4 font-black text-slate-900 font-mono text-sm">
+                          ₹{Number(p.requestedAmount || 0).toFixed(2)}
                         </td>
-                        <td className="py-3.5 px-4 font-bold font-mono text-slate-300">
+                        <td className="py-3.5 px-4 font-black text-slate-900 font-mono text-sm">
                           {p.approvedAmount ? `₹${Number(p.approvedAmount).toFixed(2)}` : '—'}
                         </td>
-                        <td className="py-3.5 px-4 text-slate-300">
-                          {p.bankDetails?.bankName ? (
-                            <div>
-                              <span className="font-medium text-white">{p.bankDetails.bankName}</span>
-                              <span className="text-[10px] text-slate-400 block font-mono">
-                                ****{(p.bankDetails.accountNumber || '').slice(-4)} ({p.bankDetails.ifscCode})
-                              </span>
-                            </div>
-                          ) : p.bankDetails?.upiId ? (
-                            <span className="font-mono text-emerald-400">{p.bankDetails.upiId}</span>
-                          ) : (
-                            <span className="text-slate-500 font-mono">No details</span>
-                          )}
+                        <td className="py-3.5 px-4 text-slate-600">
+                          <div className="font-bold text-slate-800">{p.bankDetails?.bankName || 'Direct UPI'}</div>
+                          <div className="text-[11px] font-mono text-slate-500">
+                            {p.bankDetails?.accountNumber || p.bankDetails?.upiId || 'No details'}
+                          </div>
                         </td>
                         <td className="py-3.5 px-4">
                           <span
-                            className={`px-2.5 py-0.5 rounded-full font-bold text-[10.5px] font-mono ${
-                              p.status === 'PAID'
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                : p.status === 'APPROVED'
-                                ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                                : p.status === 'PENDING'
-                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                : p.status === 'REJECTED'
-                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                                : 'bg-slate-800 text-slate-300'
+                            className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+                              isPending
+                                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                : isApproved
+                                ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                                : isPaid
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : 'bg-rose-50 text-rose-800 border border-rose-200'
                             }`}
                           >
                             {p.status}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-slate-400 font-mono text-[11px]">
+                        <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
                           {new Date(p.createdAt).toLocaleDateString('en-IN', {
-                            month: 'short',
                             day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
                           })}
                         </td>
                         <td className="py-3.5 px-4 text-center">
                           <button
                             onClick={() => handleOpenDetail(p)}
-                            className="px-3 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 font-bold rounded-xl border border-emerald-500/30 cursor-pointer transition-all"
+                            className="px-3 py-1.5 bg-[#002625] hover:bg-[#003837] text-white font-extrabold rounded-xl border-none cursor-pointer transition-all shadow-2xs text-[11px] active:scale-95"
                           >
-                            Review
+                            Review & Act
                           </button>
                         </td>
                       </tr>
@@ -405,23 +393,23 @@ export const SuperAdminPayouts = () => {
           </div>
 
           {/* Pagination */}
-          <div className="p-4 bg-[#03100f] border-t border-emerald-950/80 flex items-center justify-between text-xs">
-            <span className="text-slate-400 font-medium">
-              Page <span className="text-white font-bold">{page}</span> of{' '}
-              <span className="text-white font-bold">{pages}</span>
+          <div className="p-4 bg-slate-50/80 border-t border-slate-200/80 flex items-center justify-between text-xs">
+            <span className="text-slate-500 font-medium">
+              Page <span className="text-slate-900 font-extrabold">{page}</span> of{' '}
+              <span className="text-slate-900 font-extrabold">{pages}</span>
             </span>
             <div className="flex items-center gap-2">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1.5 rounded-lg bg-emerald-950/40 text-slate-300 border border-emerald-950 hover:bg-emerald-900/60 disabled:opacity-40 cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 disabled:opacity-40 cursor-pointer shadow-2xs"
               >
                 <ChevronLeft size={14} />
               </button>
               <button
                 disabled={page >= pages}
                 onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1.5 rounded-lg bg-emerald-950/40 text-slate-300 border border-emerald-950 hover:bg-emerald-900/60 disabled:opacity-40 cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 disabled:opacity-40 cursor-pointer shadow-2xs"
               >
                 <ChevronRight size={14} />
               </button>
@@ -432,54 +420,54 @@ export const SuperAdminPayouts = () => {
 
       {/* Payout Detail & Review Modal */}
       {selectedPayout && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#051716] border border-emerald-500/40 rounded-3xl max-w-2xl w-full p-6 shadow-2xl shadow-black space-y-5 animate-fadeIn max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-emerald-950/80 pb-3">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 animate-fadeIn max-h-[90vh] overflow-y-auto border border-slate-200 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-wider font-bold">
+                <span className="text-[10px] font-mono text-[#ff5500] uppercase tracking-wider font-extrabold">
                   PAYOUT REQUEST VERIFICATION
                 </span>
-                <h3 className="text-xl font-bold text-white m-0">#{selectedPayout.payoutId}</h3>
+                <h3 className="text-xl font-black text-[#002625] m-0">#{selectedPayout.payoutId}</h3>
               </div>
               <button
                 onClick={() => setSelectedPayout(null)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-transparent border-none cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer border-none"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
             {actionError && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs font-semibold">
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold">
                 {actionError}
               </div>
             )}
 
             {/* Recipient Profile & Complete Financial Breakdown */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-[#020b0b] p-4 rounded-2xl border border-emerald-950 space-y-2 text-xs">
-                <span className="text-slate-400 font-bold block mb-1 uppercase tracking-wider text-[10px]">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                <span className="text-slate-500 font-bold block mb-1 uppercase tracking-wider text-[10px]">
                   Recipient Profile
                 </span>
-                <p className="font-bold text-white text-sm m-0">{selectedPayout.recipientName}</p>
-                <p className="text-slate-300 font-mono m-0">Phone: {selectedPayout.recipientPhone || 'N/A'}</p>
-                <p className="text-emerald-400 font-semibold m-0 capitalize">Role: {selectedPayout.recipientType}</p>
+                <p className="font-extrabold text-slate-900 text-sm m-0">{selectedPayout.recipientName}</p>
+                <p className="text-slate-600 font-mono m-0">Phone: {selectedPayout.recipientPhone || 'N/A'}</p>
+                <p className="text-teal-800 font-bold m-0 capitalize">Role: {selectedPayout.recipientType}</p>
 
-                <div className="pt-2 border-t border-emerald-950/80 space-y-1">
-                  <span className="text-slate-400 font-bold text-[10px] block uppercase">Bank Destination</span>
-                  <p className="text-white font-semibold m-0">{selectedPayout.bankDetails?.bankName || 'Direct UPI'}</p>
-                  <p className="text-slate-300 font-mono m-0">
+                <div className="pt-2 border-t border-slate-200 space-y-1">
+                  <span className="text-slate-500 font-bold text-[10px] block uppercase">Bank Destination</span>
+                  <p className="text-slate-900 font-bold m-0">{selectedPayout.bankDetails?.bankName || 'Direct UPI'}</p>
+                  <p className="text-slate-600 font-mono m-0">
                     A/C: {selectedPayout.bankDetails?.accountNumber || selectedPayout.bankDetails?.upiId}
                   </p>
                   {selectedPayout.bankDetails?.ifscCode && (
-                    <p className="text-slate-400 font-mono m-0">IFSC: {selectedPayout.bankDetails?.ifscCode}</p>
+                    <p className="text-slate-500 font-mono m-0">IFSC: {selectedPayout.bankDetails?.ifscCode}</p>
                   )}
                 </div>
               </div>
 
               {/* Financial Balance Summary */}
-              <div className="bg-[#020b0b] p-4 rounded-2xl border border-emerald-950 space-y-2 text-xs">
-                <span className="text-slate-400 font-bold block mb-1 uppercase tracking-wider text-[10px]">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                <span className="text-slate-500 font-bold block mb-1 uppercase tracking-wider text-[10px]">
                   Financial Health & Balances
                 </span>
                 {detailLoading ? (
@@ -487,44 +475,44 @@ export const SuperAdminPayouts = () => {
                 ) : recipientFinancials ? (
                   <div className="space-y-1.5 font-mono">
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Available Balance:</span>
-                      <span className="font-bold text-emerald-400">
+                      <span className="text-slate-500">Available Balance:</span>
+                      <span className="font-black text-emerald-700">
                         ₹{Number(recipientFinancials.availableBalance).toFixed(2)}
                       </span>
                     </div>
                     {recipientFinancials.totalEarnings !== undefined && (
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Total Order Earnings:</span>
-                        <span className="text-white font-bold">
+                        <span className="text-slate-500">Total Order Earnings:</span>
+                        <span className="text-slate-900 font-bold">
                           ₹{Number(recipientFinancials.totalEarnings).toFixed(2)}
                         </span>
                       </div>
                     )}
                     {recipientFinancials.totalCommissionDeducted !== undefined && (
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Total Commission:</span>
-                        <span className="text-amber-400">
+                        <span className="text-slate-500">Total Commission:</span>
+                        <span className="text-amber-700 font-bold">
                           ₹{Number(recipientFinancials.totalCommissionDeducted).toFixed(2)}
                         </span>
                       </div>
                     )}
                     {recipientFinancials.totalWithdrawn !== undefined && (
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Previously Paid:</span>
-                        <span className="text-blue-400 font-bold">
+                        <span className="text-slate-500">Previously Paid:</span>
+                        <span className="text-blue-700 font-bold">
                           ₹{Number(recipientFinancials.totalWithdrawn).toFixed(2)}
                         </span>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <p className="text-slate-500 italic">No additional profile found</p>
+                  <p className="text-slate-400 italic">No additional profile found</p>
                 )}
 
-                <div className="pt-2 border-t border-emerald-950/80">
+                <div className="pt-2 border-t border-slate-200">
                   <div className="flex justify-between items-baseline">
-                    <span className="text-slate-400 text-xs">Requested Payout:</span>
-                    <span className="text-lg font-black text-white font-mono">
+                    <span className="text-slate-600 font-bold text-xs">Requested Payout:</span>
+                    <span className="text-lg font-black text-slate-900 font-mono">
                       ₹{Number(selectedPayout.requestedAmount).toFixed(2)}
                     </span>
                   </div>
@@ -533,21 +521,21 @@ export const SuperAdminPayouts = () => {
             </div>
 
             {/* Current Payout Status & Payment Ref if Paid */}
-            <div className="p-3 bg-[#020b0b] rounded-2xl border border-emerald-950 text-xs flex items-center justify-between">
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs flex items-center justify-between">
               <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Status</span>
-                <span className="font-bold text-white font-mono text-sm">{selectedPayout.status}</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">Status</span>
+                <span className="font-extrabold text-slate-900 font-mono text-sm">{selectedPayout.status}</span>
               </div>
               {selectedPayout.paymentReference && (
                 <div className="text-right">
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Payment Reference</span>
-                  <span className="font-mono text-emerald-400 font-bold">{selectedPayout.paymentReference}</span>
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Payment Reference</span>
+                  <span className="font-mono text-emerald-700 font-bold">{selectedPayout.paymentReference}</span>
                 </div>
               )}
             </div>
 
             {/* Action Buttons for Super Admin */}
-            <div className="flex flex-wrap items-center justify-end gap-3 pt-3 border-t border-emerald-950/80">
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-3 border-t border-slate-100">
               {selectedPayout.status === 'PENDING' && (
                 <>
                   <button
@@ -556,7 +544,7 @@ export const SuperAdminPayouts = () => {
                       setActionRemarks('');
                       setActionModal('APPROVE');
                     }}
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl border-none cursor-pointer text-xs flex items-center gap-1.5 transition-all shadow-md"
+                    className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded-xl border-none cursor-pointer text-xs flex items-center gap-1.5 transition-all shadow-xs active:scale-95"
                   >
                     <Check size={16} />
                     <span>Approve Payout</span>
@@ -567,7 +555,7 @@ export const SuperAdminPayouts = () => {
                       setActionRemarks('');
                       setActionModal('REJECT');
                     }}
-                    className="px-5 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 font-bold rounded-xl border border-rose-500/40 cursor-pointer text-xs flex items-center gap-1.5 transition-all"
+                    className="px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold rounded-xl border border-rose-200 cursor-pointer text-xs flex items-center gap-1.5 transition-all active:scale-95"
                   >
                     <X size={16} />
                     <span>Reject Payout</span>
@@ -582,7 +570,7 @@ export const SuperAdminPayouts = () => {
                     setActionRemarks('');
                     setActionModal('PROCESS');
                   }}
-                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl border-none cursor-pointer text-xs flex items-center gap-1.5 transition-all shadow-lg"
+                  className="px-5 py-2.5 bg-[#ff5500] hover:bg-[#ea4e00] text-white font-extrabold rounded-xl border-none cursor-pointer text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95"
                 >
                   <CreditCard size={16} />
                   <span>Execute Payment & Mark as Paid</span>
@@ -591,7 +579,7 @@ export const SuperAdminPayouts = () => {
 
               <button
                 onClick={() => setSelectedPayout(null)}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl border-none cursor-pointer text-xs"
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border-none cursor-pointer text-xs"
               >
                 Close
               </button>
@@ -602,32 +590,32 @@ export const SuperAdminPayouts = () => {
 
       {/* Approve Modal Dialog */}
       {actionModal === 'APPROVE' && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-[#051716] border border-emerald-500/50 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-xs">
-            <h4 className="text-base font-bold text-white m-0">Approve Payout #{selectedPayout.payoutId}</h4>
-            <p className="text-slate-400 m-0">
+        <div className="fixed inset-0 z-[60] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-xs border border-slate-200">
+            <h4 className="text-base font-black text-[#002625] m-0">Approve Payout #{selectedPayout.payoutId}</h4>
+            <p className="text-slate-500 m-0">
               Confirm the authorized amount to release for {selectedPayout.recipientName}.
             </p>
 
             <div className="space-y-3 pt-2">
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Approved Amount (₹)</label>
+                <label className="block text-slate-700 font-extrabold mb-1">Approved Amount (₹)</label>
                 <input
                   type="number"
                   value={approvedAmount}
                   onChange={(e) => setApprovedAmount(e.target.value)}
-                  className="w-full bg-[#020b0b] border border-emerald-950 rounded-xl px-3 py-2 text-white font-mono font-bold text-sm outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono font-black text-sm outline-none focus:border-[#ff5500]"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Super Admin Remarks (Optional)</label>
+                <label className="block text-slate-700 font-extrabold mb-1">Super Admin Remarks (Optional)</label>
                 <textarea
                   rows={2}
                   value={actionRemarks}
                   onChange={(e) => setActionRemarks(e.target.value)}
                   placeholder="e.g. Verified against delivered orders"
-                  className="w-full bg-[#020b0b] border border-emerald-950 rounded-xl p-2.5 text-white outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 outline-none focus:border-[#ff5500]"
                 />
               </div>
             </div>
@@ -636,13 +624,13 @@ export const SuperAdminPayouts = () => {
               <button
                 disabled={actionLoading}
                 onClick={handleApprove}
-                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl border-none cursor-pointer"
+                className="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded-xl border-none cursor-pointer shadow-xs active:scale-95"
               >
                 {actionLoading ? 'Approving...' : 'Confirm Approval'}
               </button>
               <button
                 onClick={() => setActionModal(null)}
-                className="py-2.5 px-4 bg-slate-800 text-slate-300 font-bold rounded-xl border-none cursor-pointer"
+                className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border-none cursor-pointer"
               >
                 Cancel
               </button>
@@ -653,22 +641,22 @@ export const SuperAdminPayouts = () => {
 
       {/* Reject Modal Dialog */}
       {actionModal === 'REJECT' && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-[#051716] border border-rose-500/50 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-xs">
-            <h4 className="text-base font-bold text-white m-0">Reject Payout #{selectedPayout.payoutId}</h4>
-            <p className="text-slate-400 m-0">
+        <div className="fixed inset-0 z-[60] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-xs border border-rose-200">
+            <h4 className="text-base font-black text-rose-700 m-0">Reject Payout #{selectedPayout.payoutId}</h4>
+            <p className="text-slate-500 m-0">
               Rejecting will automatically restore ₹{Number(selectedPayout.requestedAmount).toFixed(2)} back to the recipient's available balance and generate an audited ledger reversal.
             </p>
 
             <div className="space-y-3 pt-2">
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Rejection Reason (Required)</label>
+                <label className="block text-slate-700 font-extrabold mb-1">Rejection Reason (Required)</label>
                 <textarea
                   rows={3}
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
                   placeholder="e.g. Invalid bank account details or pending verification"
-                  className="w-full bg-[#020b0b] border border-rose-950/80 rounded-xl p-2.5 text-white outline-none focus:border-rose-500"
+                  className="w-full bg-slate-50 border border-rose-200 rounded-xl p-2.5 text-slate-800 outline-none focus:border-rose-500"
                 />
               </div>
             </div>
@@ -677,13 +665,13 @@ export const SuperAdminPayouts = () => {
               <button
                 disabled={actionLoading}
                 onClick={handleReject}
-                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl border-none cursor-pointer"
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl border-none cursor-pointer shadow-xs active:scale-95"
               >
                 {actionLoading ? 'Rejecting & Reversing...' : 'Confirm Rejection'}
               </button>
               <button
                 onClick={() => setActionModal(null)}
-                className="py-2.5 px-4 bg-slate-800 text-slate-300 font-bold rounded-xl border-none cursor-pointer"
+                className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border-none cursor-pointer"
               >
                 Cancel
               </button>
@@ -694,20 +682,20 @@ export const SuperAdminPayouts = () => {
 
       {/* Process Payment & Mark Paid Modal Dialog */}
       {actionModal === 'PROCESS' && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-[#051716] border border-emerald-500/50 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-xs">
-            <h4 className="text-base font-bold text-white m-0">Execute Payout Payment</h4>
-            <p className="text-slate-400 m-0">
+        <div className="fixed inset-0 z-[60] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-xs border border-slate-200">
+            <h4 className="text-base font-black text-[#002625] m-0">Execute Payout Payment</h4>
+            <p className="text-slate-500 m-0">
               Mark this approved payout as completed by recording the bank transfer or payment gateway reference.
             </p>
 
             <div className="space-y-3 pt-2">
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Payment Method</label>
+                <label className="block text-slate-700 font-extrabold mb-1">Payment Method</label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full bg-[#020b0b] border border-emerald-950 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-bold outline-none focus:border-[#ff5500]"
                 >
                   <option value="BANK_TRANSFER">Bank Transfer (NEFT / IMPS / RTGS)</option>
                   <option value="UPI">UPI Direct</option>
@@ -716,24 +704,24 @@ export const SuperAdminPayouts = () => {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Payment Reference / UTR / Gateway Txn ID</label>
+                <label className="block text-slate-700 font-extrabold mb-1">Payment Reference / UTR / Gateway Txn ID</label>
                 <input
                   type="text"
                   placeholder="e.g. UTR123456789012"
                   value={paymentReference}
                   onChange={(e) => setPaymentReference(e.target.value)}
-                  className="w-full bg-[#020b0b] border border-emerald-950 rounded-xl px-3 py-2 text-white font-mono font-bold outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono font-bold outline-none focus:border-[#ff5500]"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Remarks</label>
+                <label className="block text-slate-700 font-extrabold mb-1">Remarks</label>
                 <textarea
                   rows={2}
                   value={actionRemarks}
                   onChange={(e) => setActionRemarks(e.target.value)}
                   placeholder="Additional transfer notes..."
-                  className="w-full bg-[#020b0b] border border-emerald-950 rounded-xl p-2.5 text-white outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 outline-none focus:border-[#ff5500]"
                 />
               </div>
             </div>
@@ -742,13 +730,13 @@ export const SuperAdminPayouts = () => {
               <button
                 disabled={actionLoading}
                 onClick={handleProcessPayment}
-                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl border-none cursor-pointer"
+                className="flex-1 py-2.5 bg-[#ff5500] hover:bg-[#ea4e00] text-white font-extrabold rounded-xl border-none cursor-pointer shadow-md active:scale-95"
               >
                 {actionLoading ? 'Recording Settlement...' : 'Confirm & Mark as Paid'}
               </button>
               <button
                 onClick={() => setActionModal(null)}
-                className="py-2.5 px-4 bg-slate-800 text-slate-300 font-bold rounded-xl border-none cursor-pointer"
+                className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border-none cursor-pointer"
               >
                 Cancel
               </button>

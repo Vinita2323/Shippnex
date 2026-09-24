@@ -22,6 +22,7 @@ const CaptainServiceAreas = lazy(() => import('../pages/CaptainServiceAreas'));
 const CaptainPolicyPage = lazy(() => import('../pages/CaptainPolicyPage'));
 const CaptainSupport = lazy(() => import('../pages/CaptainSupport'));
 const CaptainDeleteAccount = lazy(() => import('../pages/CaptainDeleteAccount'));
+const CaptainReferral = lazy(() => import('../pages/CaptainReferral'));
 
 const DeliveryRoutes = () => {
   return (
@@ -47,6 +48,8 @@ const DeliveryRoutes = () => {
             <Route path="/delivery-verification" element={<FinalVerification />} />
             <Route path="/navigate" element={<LogisticsNavigation />} />
             <Route path="/wallet" element={<CaptainWallet />} />
+            <Route path="/refer-earn" element={<CaptainReferral />} />
+            <Route path="/referral" element={<CaptainReferral />} />
             <Route path="/profile" element={<CaptainProfile />} />
             <Route path="/personal-details" element={<CaptainPersonalDetails />} />
             <Route path="/notifications" element={<CaptainNotifications />} />

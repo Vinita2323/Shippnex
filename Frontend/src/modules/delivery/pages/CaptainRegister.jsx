@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Bike, 
   Truck, 
@@ -19,12 +19,20 @@ import {
   EyeOff,
   ShieldCheck,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  CreditCard,
+  Banknote,
+  Wallet,
+  DollarSign,
+  Gift
 } from 'lucide-react';
-import { authService } from '../../../services/authService';
+import { authService, captainRegistrationFeeService } from '../../../services/authService';
+import { loadRazorpaySdk } from '../../../utils/razorpay';
 
 const CaptainRegister = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const refCodeFromUrl = searchParams.get('ref') || '';
   const [formData, setFormData] = useState({
     // Personal Details
     fullName: '',
@@ -73,15 +81,69 @@ const CaptainRegister = () => {
     // Password
     password: '',
     confirmPassword: '',
+
+    // Referral Code
+    referralCode: (refCodeFromUrl || (typeof window !== 'undefined' ? sessionStorage.getItem('captain_referral_code') : '') || '').trim().toUpperCase(),
   });
+
+  useEffect(() => {
+    if (refCodeFromUrl) {
+      sessionStorage.setItem('captain_referral_code', refCodeFromUrl.trim().toUpperCase());
+      setFormData(prev => ({ ...prev, referralCode: refCodeFromUrl.trim().toUpperCase() }));
+    } else {
+      const savedRef = sessionStorage.getItem('captain_referral_code');
+      if (savedRef) {
+        setFormData(prev => ({ ...prev, referralCode: savedRef }));
+      }
+    }
+  }, [refCodeFromUrl]);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [registrationStep, setRegistrationStep] = useState('form'); // 'form' | 'otp' | 'under_review'
+  const [registrationStep, setRegistrationStep] = useState('form'); // 'form' | 'payment' | 'otp' | 'under_review'
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isResendingOtp, setIsResendingOtp] = useState(false);
   const [otpSuccessMsg, setOtpSuccessMsg] = useState('');
+
+  // Dynamic Captain Registration Fee States
+  const [feeConfig, setFeeConfig] = useState({
+    amount: 150,
+    currency: 'INR',
+    isActive: true,
+    description: '',
+    loading: true,
+  });
+  const [pendingCaptainId, setPendingCaptainId] = useState(null);
+  const [pendingOrderData, setPendingOrderData] = useState(null);
+  const [paymentFailed, setPaymentFailed] = useState(false);
+  const [paymentErrorMessage, setPaymentErrorMessage] = useState('');
+  const [isRetryingPayment, setIsRetryingPayment] = useState(false);
+
+  // Fetch Registration Fee Config on Mount
+  useEffect(() => {
+    const fetchFeeConfig = async () => {
+      try {
+        setFeeConfig(prev => ({ ...prev, loading: true }));
+        const res = await captainRegistrationFeeService.getPublicFeeConfig();
+        if (res && res.success) {
+          setFeeConfig({
+            amount: res.amount !== undefined ? res.amount : 150,
+            currency: res.currency || 'INR',
+            isActive: Boolean(res.isActive),
+            description: res.description || '',
+            loading: false,
+          });
+        } else {
+          setFeeConfig(prev => ({ ...prev, loading: false }));
+        }
+      } catch (err) {
+        console.warn('Could not fetch captain registration fee config:', err);
+        setFeeConfig(prev => ({ ...prev, loading: false }));
+      }
+    };
+    fetchFeeConfig();
+  }, []);
 
   const [files, setFiles] = useState({
     drivingLicense: null,
@@ -159,7 +221,11 @@ const CaptainRegister = () => {
       setCameraStream(stream);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play().catch((err) => console.error('Video play error:', err));
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch((err) => {
+            if (err.name !== 'AbortError') console.warn('Video play error:', err);
+          });
+        };
       }
     } catch (err) {
       console.error('Camera access error:', err);
@@ -236,14 +302,47 @@ const CaptainRegister = () => {
     }
   };
 
-  const fileToBase64 = (file) => {
+  const compressImageFile = (file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) => {
     return new Promise((resolve) => {
       if (!file) return resolve('');
-      if (typeof file === 'string') return resolve(file); // Already a base64 / data URL string
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
-      reader.onerror = () => resolve('');
-      reader.readAsDataURL(file);
+      if (typeof file === 'string') {
+        if (!file.startsWith('data:image/') || file.length < 50000) return resolve(file);
+      }
+      const processSource = (src) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve(typeof file === 'string' ? file : '');
+        img.src = src;
+      };
+
+      if (typeof file === 'string') {
+        processSource(file);
+      } else {
+        const reader = new FileReader();
+        reader.onload = (e) => processSource(e.target.result);
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+      }
     });
   };
 
@@ -337,9 +436,108 @@ const CaptainRegister = () => {
     }
   };
 
+  // Launch Razorpay Checkout for Captain Registration Fee
+  const handleLaunchRazorpayCheckout = async (orderData) => {
+    const isLoaded = await loadRazorpaySdk();
+    if (!isLoaded || !window.Razorpay) {
+      setPaymentFailed(true);
+      setPaymentErrorMessage('Razorpay SDK failed to load. Please check your internet connection and retry.');
+      return;
+    }
+
+    const options = {
+      key: orderData.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TRZdg2aAOYv4KK',
+      amount: Math.round(orderData.amount * 100),
+      currency: orderData.currency || 'INR',
+      name: 'ShippNex Delivery Fleet',
+      description: `Captain Registration & Onboarding Fee (₹${orderData.amount})`,
+      order_id: orderData.orderId,
+      handler: async function (response) {
+        try {
+          setIsSubmitting(true);
+          setPaymentErrorMessage('');
+          const verifyPayload = {
+            captainId: orderData.captainId,
+            razorpayPaymentId: response.razorpay_payment_id,
+            razorpayOrderId: response.razorpay_order_id,
+            razorpaySignature: response.razorpay_signature,
+          };
+          const verifyRes = await captainRegistrationFeeService.verifyPayment(verifyPayload);
+          if (verifyRes && verifyRes.success) {
+            setOtpSuccessMsg(`Payment of ₹${orderData.amount} received successfully! Please verify your mobile number with the OTP.`);
+            setPaymentFailed(false);
+            setRegistrationStep('otp');
+          } else {
+            setPaymentFailed(true);
+            setPaymentErrorMessage(verifyRes?.message || 'Payment verification failed. Please retry.');
+          }
+        } catch (err) {
+          setPaymentFailed(true);
+          setPaymentErrorMessage(err.response?.data?.message || err.message || 'Payment verification error.');
+        } finally {
+          setIsSubmitting(false);
+        }
+      },
+      modal: {
+        ondismiss: function () {
+          setIsSubmitting(false);
+          setPaymentFailed(true);
+          setPaymentErrorMessage('Payment was cancelled or closed. Your application details are saved. Please complete payment to proceed.');
+        },
+      },
+      prefill: {
+        name: formData.fullName,
+        email: formData.email,
+        contact: formData.mobileNumber,
+      },
+      theme: {
+        color: '#15803d',
+      },
+    };
+
+    const rzp = new window.Razorpay(options);
+    rzp.on('payment.failed', function (resp) {
+      setPaymentFailed(true);
+      setPaymentErrorMessage(resp.error?.description || 'Payment failed. Please try again.');
+    });
+    rzp.open();
+  };
+
+  // Retry payment handler
+  const handleRetryPayment = async () => {
+    try {
+      setIsRetryingPayment(true);
+      setPaymentErrorMessage('');
+      const cleanPhone = formData.mobileNumber.replace(/\D/g, '').slice(-10);
+      const res = await captainRegistrationFeeService.retryOrder({
+        captainId: pendingCaptainId,
+        phone: cleanPhone,
+      });
+
+      if (res && res.alreadyPaid) {
+        setRegistrationStep('otp');
+        return;
+      }
+
+      if (res && res.orderId) {
+        setPendingOrderData(res);
+        setPendingCaptainId(res.captainId);
+        await handleLaunchRazorpayCheckout(res);
+      } else {
+        setPaymentErrorMessage(res?.message || 'Unable to initialize retry payment.');
+      }
+    } catch (err) {
+      setPaymentErrorMessage(err.response?.data?.message || 'Failed to retry payment. Please try again.');
+    } finally {
+      setIsRetryingPayment(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    setPaymentErrorMessage('');
+    setPaymentFailed(false);
 
     if (!formData.fullName || !formData.mobileNumber) {
       setErrorMsg('Full Name and Mobile Number are required.');
@@ -378,17 +576,17 @@ const CaptainRegister = () => {
         form21Doc,
         panDoc
       ] = await Promise.all([
-        fileToBase64(files.drivingLicense),
-        fileToBase64(files.rcDocument),
-        fileToBase64(files.aadhaarFront),
-        fileToBase64(files.aadhaarBack),
-        fileToBase64(files.profilePhoto),
-        fileToBase64(files.pucDocument),
-        fileToBase64(files.permitDocument),
-        fileToBase64(files.fitnessDocument),
-        fileToBase64(files.roadTaxDocument),
-        fileToBase64(files.form21Document),
-        fileToBase64(files.panCardDocument),
+        compressImageFile(files.drivingLicense),
+        compressImageFile(files.rcDocument),
+        compressImageFile(files.aadhaarFront),
+        compressImageFile(files.aadhaarBack),
+        compressImageFile(files.profilePhoto),
+        compressImageFile(files.pucDocument),
+        compressImageFile(files.permitDocument),
+        compressImageFile(files.fitnessDocument),
+        compressImageFile(files.roadTaxDocument),
+        compressImageFile(files.form21Document),
+        compressImageFile(files.panCardDocument),
       ]);
 
       const payload = {
@@ -409,11 +607,20 @@ const CaptainRegister = () => {
         },
       };
 
-      const res = await authService.registerCaptain(payload);
-      if (res.success) {
-        setRegistrationStep('otp');
+      const res = await captainRegistrationFeeService.initiateOrder(payload);
+
+      if (res && res.success) {
+        if (res.registrationFeeRequired && res.orderId) {
+          setPendingCaptainId(res.captainId);
+          setPendingOrderData(res);
+          setRegistrationStep('payment');
+          await handleLaunchRazorpayCheckout(res);
+        } else {
+          // Fee is inactive, ₹0, or waived
+          setRegistrationStep('otp');
+        }
       } else {
-        setErrorMsg(res.message || 'Failed to submit registration');
+        setErrorMsg(res?.message || 'Failed to submit registration');
       }
     } catch (err) {
       console.error('API submission failed:', err);
@@ -478,6 +685,90 @@ const CaptainRegister = () => {
                 className="w-full sm:w-auto px-8 py-3.5 bg-[#97fc43] hover:bg-[#86e835] text-[#002625] font-extrabold text-xs rounded-2xl shadow-md transition-all cursor-pointer"
               >
                 Go to Captain Login
+              </button>
+            </div>
+          </div>
+        ) : registrationStep === 'payment' ? (
+          /* 💳 REGISTRATION FEE PAYMENT STEP */
+          <div className="py-6 space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-emerald-50 text-[#15803d] rounded-2xl mx-auto flex items-center justify-center border border-emerald-200 mb-2 shadow-xs">
+                <CreditCard size={32} />
+              </div>
+              <h2 className="text-xl font-bold text-[#002625]">Captain Registration Fee</h2>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Your registration application is saved. Please complete the one-time registration fee payment to proceed with verification.
+              </p>
+            </div>
+
+            {/* Payment Summary Box */}
+            <div className="bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/60 border border-emerald-200 rounded-3xl p-6 shadow-sm space-y-4 max-w-md mx-auto">
+              <div className="flex items-center justify-between border-b border-emerald-100 pb-4">
+                <div>
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Registration Amount</span>
+                  <h3 className="text-2xl font-black text-slate-900 mt-0.5">
+                    ₹{pendingOrderData?.amount || feeConfig.amount || 150}
+                  </h3>
+                </div>
+                <div className="px-3 py-1 bg-emerald-100 text-emerald-800 text-[11px] font-extrabold rounded-full flex items-center gap-1">
+                  <ShieldCheck size={13} />
+                  <span>One-Time Fee</span>
+                </div>
+              </div>
+
+              <div className="space-y-2.5 text-xs text-slate-600">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                  <span>Background & Driving License Verification</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                  <span>Delivery Partner ID Card & Welcome Kit</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                  <span>Accidental Insurance & Instant Order Allocation</span>
+                </div>
+              </div>
+
+              <div className="pt-2 text-[11px] text-slate-500 bg-white/80 rounded-xl p-3 border border-emerald-100/60 flex items-center justify-between">
+                <span>Payment Gateway</span>
+                <span className="font-bold text-slate-700">Razorpay (Cards / UPI / NetBanking)</span>
+              </div>
+            </div>
+
+            {paymentErrorMessage && (
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs font-bold text-amber-800 flex items-start gap-2.5 max-w-md mx-auto">
+                <AlertCircle size={18} className="shrink-0 text-amber-600 mt-0.5" />
+                <span>{paymentErrorMessage}</span>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2 max-w-md mx-auto">
+              <button
+                type="button"
+                onClick={() => setRegistrationStep('form')}
+                className="order-2 sm:order-1 sm:w-1/3 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 border border-slate-200"
+              >
+                <ArrowLeft size={15} />
+                <span>Edit Details</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRetryPayment}
+                disabled={isRetryingPayment || isSubmitting}
+                className="order-1 sm:order-2 flex-1 py-3.5 bg-[#15803d] hover:bg-[#166534] text-white font-extrabold text-xs rounded-xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isRetryingPayment || isSubmitting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" /> Processing Payment...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard size={16} /> Pay ₹{pendingOrderData?.amount || feeConfig.amount || 150} & Continue
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -582,6 +873,48 @@ const CaptainRegister = () => {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
+
+            {/* Referral Applied Banner */}
+            {(refCodeFromUrl || formData.referralCode) && (
+              <div className="bg-emerald-50 border border-emerald-200/80 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <Gift size={16} />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">Referred by Captain</span>
+                    <span className="font-mono text-xs font-black text-emerald-950 bg-emerald-100/90 px-2 py-0.5 rounded tracking-wider">
+                      {formData.referralCode || refCodeFromUrl}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[11px] text-emerald-700 font-semibold bg-emerald-100/60 px-2.5 py-1 rounded-full">
+                  Applied ✓
+                </span>
+              </div>
+            )}
+
+            {/* Dynamic Registration Fee Banner */}
+            {!feeConfig.loading && feeConfig.isActive && feeConfig.amount > 0 && (
+              <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200/80 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <CreditCard size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-800">Registration & Onboarding Fee</span>
+                      <span className="text-[10px] bg-emerald-200/70 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full">
+                        ₹{feeConfig.amount}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      {feeConfig.description || 'One-time fee for onboarding and verification payable upon completing the form.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* 1. PERSONAL DETAILS */}
             <div className="space-y-4">
@@ -1454,6 +1787,22 @@ const CaptainRegister = () => {
               </div>
             )}
 
+            {/* Referral Code (Optional) */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <Gift size={15} className="text-[#15803d]" />
+                <span>Referral Code (Optional)</span>
+              </label>
+              <input
+                type="text"
+                name="referralCode"
+                value={formData.referralCode}
+                onChange={handleTextChange}
+                placeholder="e.g. CAP12345"
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 font-mono text-xs uppercase tracking-wider text-slate-800 outline-none focus:border-[#15803d] placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400"
+              />
+            </div>
+
             {/* Submit & Back Action Buttons */}
             <div className="pt-2 flex flex-col sm:flex-row gap-3">
               <button
@@ -1473,6 +1822,10 @@ const CaptainRegister = () => {
                 {isSubmitting ? (
                   <>
                     <Loader2 size={16} className="animate-spin" /> Submitting Application...
+                  </>
+                ) : feeConfig.isActive && feeConfig.amount > 0 ? (
+                  <>
+                    <CreditCard size={18} /> Proceed & Pay ₹{feeConfig.amount}
                   </>
                 ) : (
                   'Submit & Verify Mobile'

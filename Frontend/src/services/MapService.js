@@ -1,7 +1,7 @@
 // Google Maps API Service
-// Key: AIzaSyCqig06mCC6EI6mL0zY4gltI49j13cJSXA
+// Key is provided via the VITE_GOOGLE_MAPS_API_KEY environment variable (see Frontend/.env).
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyCqig06mCC6EI6mL0zY4gltI49j13cJSXA';
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyB0tFQwGvrhwJH71Jwhp-qeY3DoCm34Qb0';
 
 let googleMapsScriptPromise = null;
 

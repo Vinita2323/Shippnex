@@ -1,111 +1,319 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, IndianRupee, Package, CreditCard, Loader2, AlertCircle, MapPin, Truck } from 'lucide-react';
+import { 
+  ChevronLeft, 
+  IndianRupee, 
+  Package, 
+  CreditCard, 
+  Loader2, 
+  AlertCircle, 
+  MapPin, 
+  Truck,
+  Banknote,
+  Smartphone,
+  Wallet,
+  Check,
+  X,
+  ShieldCheck,
+  ChevronRight
+} from 'lucide-react';
 import { useTransport } from '../../context/TransportContext';
 import { transportService } from '../../../../services/transportService';
+import { loadRazorpaySdk } from '../../../../utils/razorpay';
+
+const PAYMENT_METHODS = [
+  {
+    id: 'CASH',
+    name: 'Cash on Delivery',
+    tagline: 'Pay directly to driver upon pickup/delivery',
+    icon: Banknote,
+    badge: 'Default',
+    badgeColor: 'bg-emerald-100 text-emerald-800',
+    iconBg: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+  },
+  {
+    id: 'UPI',
+    name: 'UPI / QR Code',
+    tagline: 'Google Pay, PhonePe, Paytm, BHIM & all UPI apps',
+    icon: Smartphone,
+    badge: 'Instant',
+    badgeColor: 'bg-purple-100 text-purple-800',
+    iconBg: 'bg-purple-50 text-purple-600 border-purple-100',
+  },
+  {
+    id: 'CARD',
+    name: 'Credit / Debit Card',
+    tagline: 'Visa, MasterCard, RuPay, Maestro & International',
+    icon: CreditCard,
+    badge: null,
+    badgeColor: '',
+    iconBg: 'bg-blue-50 text-blue-600 border-blue-100',
+  },
+  {
+    id: 'WALLET',
+    name: 'ShippNex Wallet',
+    tagline: 'Instant 1-click payment from your account balance',
+    icon: Wallet,
+    badge: null,
+    badgeColor: '',
+    iconBg: 'bg-amber-50 text-amber-600 border-amber-100',
+  },
+];
 
 const FareSummary = () => {
   const navigate = useNavigate();
   const { activeBooking, clearActiveBooking } = useTransport();
 
   const [paymentMethod, setPaymentMethod] = useState('CASH');
-  const [paymentOpen, setPaymentOpen] = useState(false);
-  const [fareEstimate, setFareEstimate] = useState(null);
-  const [estimateLoading, setEstimateLoading] = useState(true);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+
+  // Helper to extract clean display/payload address
+  const getCleanAddress = (loc) => {
+    if (!loc) return '';
+    if (typeof loc === 'string') return loc;
+    return loc.formattedAddress || loc.address || loc.name || '';
+  };
+
+  // Instant local fare calculation (0ms latency optimistic UI)
+  const calculateLocalEstimate = useCallback(() => {
+    if (!activeBooking.vehicle) return null;
+    const v = activeBooking.vehicle;
+    const pLat = activeBooking.pickup?.lat ?? activeBooking.pickup?.latitude;
+    const pLng = activeBooking.pickup?.lng ?? activeBooking.pickup?.longitude;
+    const dLat = activeBooking.drop?.lat ?? activeBooking.drop?.latitude;
+    const dLng = activeBooking.drop?.lng ?? activeBooking.drop?.longitude;
+
+    let dist = 5.0;
+    if (pLat != null && pLng != null && dLat != null && dLng != null) {
+      const R = 6371;
+      const dLatRad = ((dLat - pLat) * Math.PI) / 180;
+      const dLonRad = ((dLng - pLng) * Math.PI) / 180;
+      const a =
+        Math.sin(dLatRad / 2) * Math.sin(dLatRad / 2) +
+        Math.cos((pLat * Math.PI) / 180) * Math.cos((dLat * Math.PI) / 180) *
+        Math.sin(dLonRad / 2) * Math.sin(dLonRad / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      dist = Math.max(1, Math.round(R * c * 1.25 * 100) / 100);
+    }
+
+    const baseFare = v.baseFare || 30;
+    const perKmFare = v.perKmFare || 10;
+    const minimumFare = v.minimumFare || 50;
+    const platformFee = v.platformFee || 10;
+    const distanceCharge = Math.round(dist * perKmFare * 100) / 100;
+    const rawFare = baseFare + distanceCharge;
+    const cappedFare = Math.max(rawFare, minimumFare);
+    const totalFare = Math.round((cappedFare + platformFee) * 100) / 100;
+
+    return {
+      distanceKm: dist,
+      estimatedDurationMin: Math.max(10, Math.round(dist * 2.5)),
+      fareBreakdown: {
+        baseFare,
+        distanceCharge,
+        platformFee,
+        discount: 0,
+        totalFare,
+      },
+    };
+  }, [activeBooking.vehicle, activeBooking.pickup, activeBooking.drop]);
+
+  const [fareEstimate, setFareEstimate] = useState(() => calculateLocalEstimate());
+  const [estimateLoading, setEstimateLoading] = useState(false);
   const [estimateError, setEstimateError] = useState(null);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState(null);
 
-  const paymentOptions = ['CASH', 'UPI', 'CARD', 'WALLET'];
-
-  // Fetch real fare estimate from backend when page loads
-  const fetchFareEstimate = useCallback(async () => {
-    if (!activeBooking.vehicle || !activeBooking.pickup || !activeBooking.drop) return;
-
-    try {
-      setEstimateLoading(true);
-      setEstimateError(null);
-
-      const payload = {
-        pickupLocation: {
-          address: typeof activeBooking.pickup === 'string' ? activeBooking.pickup : activeBooking.pickup.address,
-          lat: activeBooking.pickup?.lat ?? null,
-          lng: activeBooking.pickup?.lng ?? null,
-        },
-        dropLocation: {
-          address: typeof activeBooking.drop === 'string' ? activeBooking.drop : activeBooking.drop.address,
-          lat: activeBooking.drop?.lat ?? null,
-          lng: activeBooking.drop?.lng ?? null,
-        },
-        vehicleTypeId: activeBooking.vehicle._id,
-      };
-
-      const data = await transportService.getFareEstimate(payload);
-      setFareEstimate(data.estimate);
-    } catch (err) {
-      console.error('Fare estimate failed:', err);
-      setEstimateError(err?.message || 'Could not calculate fare. Please try again.');
-    } finally {
-      setEstimateLoading(false);
-    }
-  }, [activeBooking.vehicle, activeBooking.pickup, activeBooking.drop]);
+  // Sync with backend fare calculation seamlessly in the background
+  const vehicleId = activeBooking.vehicle?._id;
+  const pickupRaw = activeBooking.pickup;
+  const dropRaw = activeBooking.drop;
 
   useEffect(() => {
-    fetchFareEstimate();
-  }, [fetchFareEstimate]);
+    if (!vehicleId || !pickupRaw || !dropRaw) return;
 
-  // Create booking via API
+    let isMounted = true;
+    const fetchEstimate = async () => {
+      try {
+        setEstimateError(null);
+
+        const pickupAddr = getCleanAddress(pickupRaw) || 'Pickup Location';
+        const dropAddr = getCleanAddress(dropRaw) || 'Drop Location';
+
+        const payload = {
+          pickupLocation: {
+            address: pickupAddr,
+            lat: pickupRaw?.lat ?? pickupRaw?.latitude ?? null,
+            lng: pickupRaw?.lng ?? pickupRaw?.longitude ?? null,
+          },
+          dropLocation: {
+            address: dropAddr,
+            lat: dropRaw?.lat ?? dropRaw?.latitude ?? null,
+            lng: dropRaw?.lng ?? dropRaw?.longitude ?? null,
+          },
+          vehicleTypeId: vehicleId,
+        };
+
+        const data = await transportService.getFareEstimate(payload);
+        if (isMounted && data && data.estimate) {
+          setFareEstimate(data.estimate);
+        }
+      } catch (err) {
+        console.warn('Fare estimate sync notice:', err);
+      }
+    };
+
+    fetchEstimate();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [vehicleId]);
+
+  // Create booking or launch Razorpay checkout
   const handleBookVehicle = async () => {
     if (bookingLoading) return;
     setBookingLoading(true);
     setBookingError(null);
 
-    try {
-      const pickupAddr = typeof activeBooking.pickup === 'string' ? activeBooking.pickup : activeBooking.pickup?.address;
-      const dropAddr = typeof activeBooking.drop === 'string' ? activeBooking.drop : activeBooking.drop?.address;
+    const pickupAddr = getCleanAddress(activeBooking.pickup);
+    const dropAddr = getCleanAddress(activeBooking.drop);
 
-      const payload = {
-        pickupLocation: {
-          address: pickupAddr,
-          landmark: activeBooking.pickup?.landmark || '',
-          city: activeBooking.pickup?.city || '',
-          state: activeBooking.pickup?.state || '',
-          pincode: activeBooking.pickup?.pincode || '',
-          lat: activeBooking.pickup?.lat ?? null,
-          lng: activeBooking.pickup?.lng ?? null,
+    const basePayload = {
+      pickupLocation: {
+        address: pickupAddr,
+        landmark: activeBooking.pickup?.landmark || '',
+        city: activeBooking.pickup?.city || '',
+        state: activeBooking.pickup?.state || '',
+        pincode: activeBooking.pickup?.pincode || activeBooking.pickup?.postalCode || '',
+        lat: activeBooking.pickup?.lat ?? activeBooking.pickup?.latitude ?? null,
+        lng: activeBooking.pickup?.lng ?? activeBooking.pickup?.longitude ?? null,
+      },
+      dropLocation: {
+        address: dropAddr,
+        landmark: activeBooking.drop?.landmark || '',
+        city: activeBooking.drop?.city || '',
+        state: activeBooking.drop?.state || '',
+        pincode: activeBooking.drop?.pincode || activeBooking.drop?.postalCode || '',
+        lat: activeBooking.drop?.lat ?? activeBooking.drop?.latitude ?? null,
+        lng: activeBooking.drop?.lng ?? activeBooking.drop?.longitude ?? null,
+      },
+      stops: (activeBooking.stops || []).filter(Boolean).map((s) => ({
+        address: getCleanAddress(s),
+        city: s?.city || '',
+        lat: s?.lat ?? s?.latitude ?? null,
+        lng: s?.lng ?? s?.longitude ?? null,
+      })),
+      goods: {
+        category: activeBooking.goods?.category || 'Other',
+        customCategory: activeBooking.goods?.customCategory || '',
+        weightKg: parseFloat(activeBooking.goods?.weight) || 1,
+        packages: parseInt(activeBooking.goods?.packages) || 1,
+        instructions: activeBooking.goods?.instructions || '',
+      },
+      vehicleTypeId: activeBooking.vehicle._id,
+      paymentMethod,
+    };
+
+    // ── 1. Cash On Delivery Flow ──────────────────────────────────────────
+    if (paymentMethod === 'CASH') {
+      try {
+        const result = await transportService.createBooking(basePayload);
+        clearActiveBooking();
+        navigate('/transport/success', {
+          state: { bookingId: result.booking.bookingId, booking: result.booking },
+        });
+      } catch (err) {
+        console.error('Booking creation failed:', err);
+        setBookingError(err?.message || 'Booking failed. Please try again.');
+        setBookingLoading(false);
+      }
+      return;
+    }
+
+    // ── 2. Online Payment Gateway (Razorpay) Flow ─────────────────────────
+    try {
+      const isLoaded = await loadRazorpaySdk();
+      if (!isLoaded || !window.Razorpay) {
+        setBookingLoading(false);
+        setBookingError('Razorpay Checkout failed to load. Please check your internet connection.');
+        return;
+      }
+
+      // Step A: Create payment order on backend
+      const orderData = await transportService.createPaymentOrder(basePayload);
+      if (!orderData || !orderData.orderId) {
+        throw new Error(orderData?.message || 'Unable to initiate payment gateway');
+      }
+
+      // Step B: Setup Razorpay Modal Options with prefilled customer details
+      const userName = localStorage.getItem('shippnex_user_name') || '';
+      const userEmail = localStorage.getItem('shippnex_user_email') || '';
+      const userPhone = localStorage.getItem('shippnex_user_phone') || '';
+
+      const razorpayOptions = {
+        key: orderData.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TRZdg2aAOYv4KK',
+        amount: orderData.amountPaise || Math.round(orderData.amount * 100),
+        currency: orderData.currency || 'INR',
+        name: 'ShippNex Transport',
+        description: `Booking payment for ${activeBooking.vehicle.name} (₹${orderData.amount})`,
+        order_id: orderData.orderId,
+        prefill: {
+          name: userName,
+          email: userEmail,
+          contact: userPhone,
         },
-        dropLocation: {
-          address: dropAddr,
-          landmark: activeBooking.drop?.landmark || '',
-          city: activeBooking.drop?.city || '',
-          state: activeBooking.drop?.state || '',
-          pincode: activeBooking.drop?.pincode || '',
-          lat: activeBooking.drop?.lat ?? null,
-          lng: activeBooking.drop?.lng ?? null,
+        theme: {
+          color: '#047857',
         },
-        stops: (activeBooking.stops || []).filter(Boolean).map(s =>
-          typeof s === 'string' ? { address: s } : s
-        ),
-        goods: {
-          category: activeBooking.goods?.category,
-          weightKg: parseFloat(activeBooking.goods?.weight) || 1,
-          packages: parseInt(activeBooking.goods?.packages) || 1,
-          instructions: activeBooking.goods?.instructions || '',
+        handler: async function (response) {
+          try {
+            setBookingLoading(true);
+            setBookingError(null);
+
+            const verifyPayload = {
+              ...basePayload,
+              paymentMethod,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            };
+
+            const verifyRes = await transportService.verifyPayment(verifyPayload);
+
+            if (verifyRes && verifyRes.success && verifyRes.booking) {
+              clearActiveBooking();
+              navigate('/transport/success', {
+                state: { bookingId: verifyRes.booking.bookingId, booking: verifyRes.booking },
+              });
+            } else {
+              setBookingError(verifyRes?.message || 'Payment verification failed. Please contact support.');
+              setBookingLoading(false);
+            }
+          } catch (verErr) {
+            console.error('Payment verification failed:', verErr);
+            setBookingError(verErr?.message || verErr?.response?.data?.message || 'Payment verification error.');
+            setBookingLoading(false);
+          }
         },
-        vehicleTypeId: activeBooking.vehicle._id,
-        paymentMethod,
+        modal: {
+          ondismiss: function () {
+            setBookingLoading(false);
+            setBookingError('Payment was cancelled. You can change payment method or retry anytime.');
+          },
+        },
       };
 
-      const result = await transportService.createBooking(payload);
-
-      // Clear the draft and go to success page with real booking ID
-      clearActiveBooking();
-      navigate('/transport/success', {
-        state: { bookingId: result.booking.bookingId, booking: result.booking }
+      const rzpInstance = new window.Razorpay(razorpayOptions);
+      rzpInstance.on('payment.failed', function (resp) {
+        console.error('Razorpay payment failed:', resp.error);
+        setBookingLoading(false);
+        setBookingError(resp.error?.description || 'Payment failed. Please try another payment method.');
       });
+      rzpInstance.open();
     } catch (err) {
-      console.error('Booking creation failed:', err);
-      setBookingError(err?.message || 'Booking failed. Please try again.');
+      console.error('Razorpay initialization failed:', err);
+      setBookingError(err?.message || 'Failed to start payment. Please try again.');
       setBookingLoading(false);
     }
   };
@@ -121,10 +329,13 @@ const FareSummary = () => {
     );
   }
 
-  const pickupText = typeof activeBooking.pickup === 'string' ? activeBooking.pickup : activeBooking.pickup?.address;
-  const dropText = typeof activeBooking.drop === 'string' ? activeBooking.drop : activeBooking.drop?.address;
+  const pickupText = getCleanAddress(activeBooking.pickup) || 'Pickup Location';
+  const dropText = getCleanAddress(activeBooking.drop) || 'Drop Location';
   const fare = fareEstimate?.fareBreakdown;
   const totalFare = fare?.totalFare || 0;
+
+  const currentPaymentInfo = PAYMENT_METHODS.find(m => m.id === paymentMethod) || PAYMENT_METHODS[0];
+  const CurrentIcon = currentPaymentInfo.icon;
 
   return (
     <div className="h-[100dvh] bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
@@ -137,7 +348,7 @@ const FareSummary = () => {
         <h2 className="text-[16px] font-bold tracking-tight m-0 text-slate-800 ml-3">Fare Summary</h2>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-5 pb-[100px] [&::-webkit-scrollbar]:hidden flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto px-5 py-5 pb-[110px] [&::-webkit-scrollbar]:hidden flex flex-col gap-4">
 
         {/* Locations */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex gap-4">
@@ -184,7 +395,7 @@ const FareSummary = () => {
             </div>
           </div>
           {fareEstimate && (
-            <div className="text-[13px] font-bold text-[#ff5500] bg-orange-50 px-2 py-1 rounded">
+            <div className="text-[13px] font-bold text-[#ff5500] bg-orange-50 px-2.5 py-1 rounded-lg">
               {fareEstimate.distanceKm} KM
             </div>
           )}
@@ -242,35 +453,36 @@ const FareSummary = () => {
           )}
         </div>
 
-        {/* Payment Method */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 relative">
+        {/* Payment Method Card with interactive Change Trigger */}
+        <div 
+          onClick={() => setPaymentModalOpen(true)}
+          className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:border-emerald-200 transition-all cursor-pointer flex items-center justify-between gap-3 group"
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center border ${currentPaymentInfo.iconBg} shrink-0 transition-transform group-hover:scale-105`}>
+              <CurrentIcon size={20} />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Payment Method</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[14px] font-black text-slate-900">{currentPaymentInfo.name}</span>
+                {currentPaymentInfo.badge && (
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${currentPaymentInfo.badgeColor}`}>
+                    {currentPaymentInfo.badge}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] text-slate-500 line-clamp-1">{currentPaymentInfo.tagline}</span>
+            </div>
+          </div>
           <button
-            className="flex items-center gap-3 w-full cursor-pointer bg-transparent border-none p-0 text-left"
-            onClick={() => setPaymentOpen(o => !o)}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setPaymentModalOpen(true); }}
+            className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-[12px] transition-colors cursor-pointer border-none flex items-center gap-1 shrink-0"
           >
-            <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center text-green-600">
-              <CreditCard size={18} />
-            </div>
-            <div className="flex flex-col flex-1">
-              <span className="text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Payment Method</span>
-              <span className="text-[14px] font-bold text-slate-800">{paymentMethod}</span>
-            </div>
-            <span className="text-[12px] font-bold text-blue-600">Change</span>
+            <span>Change</span>
+            <ChevronRight size={14} />
           </button>
-
-          {paymentOpen && (
-            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-2">
-              {paymentOptions.map(opt => (
-                <button
-                  key={opt}
-                  onClick={() => { setPaymentMethod(opt); setPaymentOpen(false); }}
-                  className={`px-4 py-2 rounded-xl text-[13px] font-bold border transition-all cursor-pointer ${paymentMethod === opt ? 'bg-[#047857] text-white border-[#047857]' : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'}`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* API booking error */}
@@ -293,11 +505,11 @@ const FareSummary = () => {
           {bookingLoading ? (
             <span className="flex items-center gap-2 mx-auto">
               <Loader2 size={18} className="animate-spin" />
-              Booking...
+              {paymentMethod === 'CASH' ? 'Booking Vehicle...' : 'Processing Payment...'}
             </span>
           ) : (
             <>
-              <span>Book Vehicle</span>
+              <span>{paymentMethod === 'CASH' ? 'Book Vehicle' : 'Pay & Book Vehicle'}</span>
               {fare && (
                 <span className="flex items-center text-[18px] font-black">
                   <IndianRupee size={16} strokeWidth={3} /> {totalFare}
@@ -308,8 +520,95 @@ const FareSummary = () => {
         </button>
       </div>
 
+      {/* 💳 PAYMENT METHOD SELECTION BOTTOM SHEET / MODAL */}
+      {paymentModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-t-3xl sm:rounded-3xl max-w-[480px] w-full p-5 sm:p-6 shadow-2xl space-y-4 border border-slate-100 animate-in slide-in-from-bottom duration-200"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-[16px] font-black text-slate-900 m-0">Choose Payment Method</h3>
+                <p className="text-[11px] text-slate-500 m-0 mt-0.5">Select how you want to pay for this transport trip</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPaymentModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer transition-colors border-none"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Methods List */}
+            <div className="space-y-2.5 py-1">
+              {PAYMENT_METHODS.map((method) => {
+                const MethodIcon = method.icon;
+                const isSelected = paymentMethod === method.id;
+                return (
+                  <div
+                    key={method.id}
+                    onClick={() => setPaymentMethod(method.id)}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                      isSelected
+                        ? 'bg-emerald-50/60 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                        : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${method.iconBg} shrink-0`}>
+                        <MethodIcon size={19} />
+                      </div>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[13px] font-bold ${isSelected ? 'text-emerald-950' : 'text-slate-800'}`}>
+                            {method.name}
+                          </span>
+                          {method.badge && (
+                            <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${method.badgeColor}`}>
+                              {method.badge}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          {method.tagline}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Radio Indicator */}
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border transition-all ${
+                      isSelected
+                        ? 'bg-[#047857] border-[#047857] text-white shadow-xs'
+                        : 'border-slate-300 bg-white'
+                    }`}>
+                      {isSelected && <Check size={12} strokeWidth={3} />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Confirm Action Button */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setPaymentModalOpen(false)}
+                className="w-full py-3.5 bg-[#047857] hover:bg-[#036348] text-white font-extrabold text-[13px] rounded-xl shadow-md transition-all cursor-pointer border-none flex items-center justify-center gap-1.5"
+              >
+                <span>Confirm Payment Method</span>
+                <Check size={15} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
 
 export default FareSummary;
+

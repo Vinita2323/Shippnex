@@ -57,9 +57,10 @@ const goodsSchema = new mongoose.Schema(
   {
     category: {
       type: String,
-      enum: ['Furniture', 'Electronics', 'Groceries', 'Textiles', 'Hardware', 'Other'],
       required: true,
+      trim: true,
     },
+    customCategory: { type: String, default: '', trim: true },
     weightKg: { type: Number, required: true, min: 0.1 },
     packages: { type: Number, required: true, min: 1 },
     instructions: { type: String, default: '', trim: true },
@@ -157,6 +158,24 @@ const transportBookingSchema = new mongoose.Schema(
       enum: ['Pending', 'Paid', 'Failed'],
       default: 'Pending',
     },
+    razorpayOrderId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    razorpayPaymentId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    razorpaySignature: {
+      type: String,
+      default: null,
+    },
+    paidAt: {
+      type: Date,
+      default: null,
+    },
 
     // ── Booking Status ────────────────────────────────────────────────
     status: {
@@ -179,7 +198,10 @@ const transportBookingSchema = new mongoose.Schema(
     captainRequests: { type: [captainRequestSchema], default: [] },
 
     // ── Captain Assignment & Payout ───────────────────────────────────
+    captainCommissionRate: { type: Number, default: 5 },
+    captainCommissionAmount: { type: Number, default: 0 },
     captainEarnings: { type: Number, default: 0 },
+    captainEarning: { type: Number, default: 0 },
 
     // ── Pickup OTP Verification (Stage 1) ─────────────────────────────
     pickupOtp: { type: String, default: null }, // 4-digit OTP shown to user when captain reaches pickup
@@ -218,6 +240,7 @@ const transportBookingSchema = new mongoose.Schema(
   {
     timestamps: true, // createdAt, updatedAt
     collection: 'transportbookings',
+    autoIndex: false,
   }
 );
 

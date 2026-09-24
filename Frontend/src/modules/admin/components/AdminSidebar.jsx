@@ -44,7 +44,10 @@ import {
   RefreshCw,
   Clock,
   Zap,
-  Crown
+  Crown,
+  Percent,
+  Gift,
+  Navigation
 } from 'lucide-react';
 
 export const AdminSidebar = () => {
@@ -67,7 +70,9 @@ export const AdminSidebar = () => {
     products: false, 
     manage_sellers: false, 
     manage_location: false, 
-    delivery_boy: false 
+    delivery_boy: false,
+    orders: false,
+    transport: false,
   });
   const searchInputRef = useRef(null);
 
@@ -119,7 +124,8 @@ export const AdminSidebar = () => {
           label: 'Manage Seller',
           icon: UserCheck,
           submenu: [
-            { id: 'manage_sellers', label: 'Manage Seller List' }
+            { id: 'manage_sellers', label: 'Manage Seller List' },
+            { id: 'seller_registration_fee', label: 'Seller Registration Fee' }
           ]
         },
       ]
@@ -133,7 +139,8 @@ export const AdminSidebar = () => {
           icon: Truck,
           badge: '15',
           submenu: [
-            { id: 'captains', label: 'Manage Captain' }
+            { id: 'captains', label: 'Manage Captain' },
+            { id: 'captain_registration_fee', label: 'Captain Registration Fee' }
           ]
         },
       ]
@@ -171,6 +178,23 @@ export const AdminSidebar = () => {
       ]
     },
     {
+      title: 'TRANSPORT & LOGISTICS',
+      items: [
+        {
+          id: 'transport',
+          label: 'Vehicle Logistics',
+          icon: Truck,
+          submenu: [
+            { id: 'transport_all', label: 'All Logistics Bookings', icon: Truck },
+            { id: 'transport_searching', label: 'Searching Captain', icon: Clock },
+            { id: 'transport_active', label: 'In-Transit Freight', icon: Navigation },
+            { id: 'transport_completed', label: 'Delivered Trips', icon: CheckCircle },
+            { id: 'transport_cancelled', label: 'Cancelled Trips', icon: XCircle },
+          ]
+        },
+      ]
+    },
+    {
       title: 'ORDER SECTION',
       items: [
         {
@@ -200,6 +224,20 @@ export const AdminSidebar = () => {
         { id: 'promo_bestseller', label: 'Bestseller Cards', icon: Star },
         { id: 'promo_home_banners', label: 'Home Banners', icon: Image },
         { id: 'promo_flash_sale', label: 'Flash Sale Section', icon: Zap },
+      ]
+    },
+    {
+      title: 'REFER & EARN',
+      items: [
+        { id: 'referral_dashboard', label: 'Referral Dashboard', icon: Gift },
+        { id: 'referral_settings', label: 'Referral Settings', icon: Settings },
+        { id: 'referral_list', label: 'All Referrals', icon: Users },
+      ]
+    },
+    {
+      title: 'COMMISSION MANAGEMENT',
+      items: [
+        { id: 'commission_management', label: 'Commission Management', icon: Percent },
       ]
     },
     {

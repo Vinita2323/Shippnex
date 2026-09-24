@@ -35,6 +35,10 @@ import reviewRoutes from './routes/reviewRoutes.js';
 import faqRoutes from './routes/faqRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
 import sellerRegistrationFeeRoutes from './routes/sellerRegistrationFeeRoutes.js';
+import captainRegistrationFeeRoutes from './routes/captainRegistrationFeeRoutes.js';
+import commissionRoutes from './routes/commissionRoutes.js';
+import referralRoutes from './routes/referralRoutes.js';
+import returnRoutes from './routes/returnRoutes.js';
 import compression from 'compression';
 import performanceLogger from './middleware/performanceMiddleware.js';
 
@@ -64,6 +68,16 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
 }));
+
+// CSP headers to allow Google Maps and other third-party services
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self' http://localhost:* ws://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://code.jquery.com http://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com http://localhost:*; img-src 'self' data: https: http://localhost:*; connect-src 'self' http://localhost:* https://maps.googleapis.com https://maps.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com; font-src 'self' https://fonts.gstatic.com http://localhost:*; frame-src 'self' https://maps.googleapis.com http://localhost:*;"
+  );
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -104,6 +118,7 @@ const registerRoutes = (prefix = '') => {
   app.use(`${prefix}/wishlist`, wishlistRoutes);
   app.use(`${prefix}/user/addresses`, addressRoutes);
   app.use(`${prefix}/orders`, orderRoutes);
+  app.use(`${prefix}/returns`, returnRoutes);
   app.use(`${prefix}/admin`, adminRoutes);
   app.use(`${prefix}/wallet`, walletRoutes);
   app.use(`${prefix}/membership`, membershipRoutes);
@@ -119,6 +134,9 @@ const registerRoutes = (prefix = '') => {
   app.use(`${prefix}/support-settings`, supportRoutes);
   app.use(`${prefix}/support`, supportRoutes);
   app.use(`${prefix}/seller-registration-fee`, sellerRegistrationFeeRoutes);
+  app.use(`${prefix}/captain-registration-fee`, captainRegistrationFeeRoutes);
+  app.use(`${prefix}/referral`, referralRoutes);
+  app.use(`${prefix}`, commissionRoutes);
 };
 
 app.use('', healthRoutes);

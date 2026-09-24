@@ -160,15 +160,27 @@ const CaptainWallet = () => {
               </div>
             </div>
 
-            {/* Weekly Breakdown */}
-            <section className="grid grid-cols-2 gap-4">
-              <div className="glass-panel p-4 rounded-2xl">
-                <p className="text-[11px] font-label-sm text-on-surface-variant uppercase tracking-wider">From Transport</p>
-                <p className="text-xl font-bold text-primary mt-1">₹{(walletData?.fromTransport || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+            {/* Metrics Breakdown Grid */}
+            <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="glass-panel p-3.5 rounded-2xl space-y-0.5">
+                <p className="text-[10.5px] font-label-sm text-on-surface-variant uppercase tracking-wider font-bold">Total Deliveries</p>
+                <p className="text-xl font-extrabold text-primary">{walletData?.totalDeliveries || transactions.filter(t => t.type === 'CREDIT').length || 0}</p>
+                <span className="text-[9.5px] text-on-surface-variant/80">Completed jobs</span>
               </div>
-              <div className="glass-panel p-4 rounded-2xl">
-                <p className="text-[11px] font-label-sm text-on-surface-variant uppercase tracking-wider">From Deliveries</p>
-                <p className="text-xl font-bold text-secondary mt-1">₹{(walletData?.fromDeliveries || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              <div className="glass-panel p-3.5 rounded-2xl space-y-0.5">
+                <p className="text-[10.5px] font-label-sm text-on-surface-variant uppercase tracking-wider font-bold">Total Earnings</p>
+                <p className="text-xl font-extrabold text-primary">₹{(walletData?.totalEarnings || (walletData?.fromTransport || 0) + (walletData?.fromDeliveries || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                <span className="text-[9.5px] text-on-surface-variant/80">Gross earnings</span>
+              </div>
+              <div className="glass-panel p-3.5 rounded-2xl space-y-0.5">
+                <p className="text-[10.5px] font-label-sm text-[#ff5500] uppercase tracking-wider font-bold">Commission</p>
+                <p className="text-xl font-extrabold text-[#ff5500]">₹{(walletData?.totalCommissionDeducted || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                <span className="text-[9.5px] text-on-surface-variant/80">Platform cut</span>
+              </div>
+              <div className="glass-panel p-3.5 rounded-2xl space-y-0.5">
+                <p className="text-[10.5px] font-label-sm text-secondary uppercase tracking-wider font-bold">Net Earnings</p>
+                <p className="text-xl font-extrabold text-secondary">₹{(walletData?.netEarnings || walletData?.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                <span className="text-[9.5px] text-on-surface-variant/80">Credited to wallet</span>
               </div>
             </section>
 
@@ -240,13 +252,20 @@ const CaptainWallet = () => {
               ) : (
                 <div className="space-y-3">
                   {transactions.map((trx) => (
-                    <div key={trx._id || trx.transactionId} className="flex justify-between items-center p-3 bg-surface-container-low/70 rounded-xl">
-                      <div>
+                    <div key={trx._id || trx.transactionId} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-surface-container-low/70 rounded-xl gap-2">
+                      <div className="space-y-0.5">
                         <p className="font-bold text-xs text-primary">{trx.description || trx.type}</p>
                         <p className="text-[11px] text-on-surface-variant">{formatDate(trx.createdAt)} • {trx.transactionId}</p>
+                        {trx.type === 'CREDIT' && (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10.5px] text-slate-600 font-medium pt-0.5">
+                            {trx.grossAmount > 0 && <span>Order/Fare: <strong>₹{trx.grossAmount.toFixed(2)}</strong></span>}
+                            {trx.commissionRate > 0 && <span>Commission: <strong className="text-amber-600">{trx.commissionRate}%</strong></span>}
+                            {trx.commissionAmount > 0 && <span>Fee: <strong className="text-rose-600">-₹{trx.commissionAmount.toFixed(2)}</strong></span>}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-right">
-                        <p className={`font-bold text-xs ${trx.type === 'CREDIT' ? 'text-secondary' : 'text-error'}`}>
+                      <div className="sm:text-right flex sm:flex-col justify-between items-center sm:items-end border-t sm:border-0 border-slate-200/50 pt-1.5 sm:pt-0">
+                        <p className={`font-black text-sm ${trx.type === 'CREDIT' ? 'text-secondary' : 'text-error'} m-0`}>
                           {trx.type === 'CREDIT' ? '+' : '-'}₹{trx.amount.toFixed(2)}
                         </p>
                         <span className="text-[10px] font-semibold text-outline-variant">{trx.status}</span>

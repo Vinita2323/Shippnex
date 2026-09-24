@@ -133,7 +133,9 @@ router.get('/', async (req, res) => {
         ownerName: plain.ownerName || '',
         businessType: plain.businessType || 'Retail Store',
         tagline: plain.tagline || 'Quality groceries & daily essentials',
-        storeLogo: plain.storeLogo || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=160&auto=format&fit=crop&q=80',
+        storeLogo: (plain.storeLogo && typeof plain.storeLogo === 'string' && !plain.storeLogo.startsWith('data:image/'))
+          ? plain.storeLogo 
+          : 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=160&auto=format&fit=crop&q=80',
         banner: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800&auto=format&fit=crop&q=80',
         categories: plain.categories && plain.categories.length > 0 ? plain.categories : ['Groceries', 'Daily Needs'],
         rating: 4.8,

@@ -29,6 +29,7 @@ export const getBaseApiUrl = () => {
 
 const API = axios.create({
   baseURL: getBaseApiUrl(),
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -44,32 +45,32 @@ API.interceptors.request.use(
     // Route-specific or endpoint-specific token resolution
     if (requestUrl.includes('/super-admin') || currentPath.startsWith('/super-admin')) {
       token = localStorage.getItem('shippnex_super_admin_token');
-    } else if (requestUrl.includes('/admin')) {
-      token = localStorage.getItem('shippnex_admin_token');
-    } else if (requestUrl.includes('/captain')) {
+    } else if (requestUrl.includes('/admin') || currentPath.startsWith('/admin')) {
+      token = localStorage.getItem('shippnex_admin_token') || localStorage.getItem('shippnex_super_admin_token');
+    } else if (requestUrl.includes('/captain') || currentPath.startsWith('/captain') || currentPath.startsWith('/delivery')) {
       token = localStorage.getItem('shippnex_captain_token');
-    } else if (requestUrl.includes('/seller')) {
+    } else if (requestUrl.includes('/seller') || currentPath.startsWith('/seller')) {
       token = localStorage.getItem('shippnex_seller_token');
     } else if (
       requestUrl.includes('/cart') ||
       requestUrl.includes('/wishlist') ||
       requestUrl.includes('/user/') ||
-      requestUrl.includes('/auth/user')
+      requestUrl.includes('/auth/user') ||
+      requestUrl.includes('/transport') ||
+      currentPath.startsWith('/transport')
     ) {
-      token = localStorage.getItem('shippnex_user_token');
-    } else if (currentPath.startsWith('/seller')) {
-      token = localStorage.getItem('shippnex_seller_token');
-    } else if (currentPath.startsWith('/admin')) {
-      token = localStorage.getItem('shippnex_admin_token');
-    } else if (currentPath.startsWith('/captain') || currentPath.startsWith('/delivery')) {
-      token = localStorage.getItem('shippnex_captain_token');
+      token =
+        localStorage.getItem('shippnex_user_token') ||
+        localStorage.getItem('shippnex_seller_token') ||
+        localStorage.getItem('shippnex_super_admin_token') ||
+        localStorage.getItem('shippnex_admin_token');
     } else {
       token =
-        localStorage.getItem('shippnex_super_admin_token') ||
         localStorage.getItem('shippnex_user_token') ||
         localStorage.getItem('shippnex_seller_token') ||
         localStorage.getItem('shippnex_captain_token') ||
-        localStorage.getItem('shippnex_admin_token');
+        localStorage.getItem('shippnex_admin_token') ||
+        localStorage.getItem('shippnex_super_admin_token');
     }
 
     if (token) {
