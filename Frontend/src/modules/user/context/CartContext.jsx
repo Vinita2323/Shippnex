@@ -38,23 +38,27 @@ export const CartProvider = ({ children }) => {
     };
   }, []);
 
-  // Format backend cart items for frontend consumption
+  // Format backend cart items for frontend consumption. Entries whose product
+  // was deleted after being added populate() to a null product server-side;
+  // drop those instead of rendering a blank row for a product that no longer exists.
   const formatCartItems = (backendItems = []) => {
-    return backendItems.map((item) => {
-      const prod = item.product || {};
-      const price = Number(prod.salePrice ?? prod.price ?? 0);
-      const originalPrice = Number(prod.mrp ?? prod.originalPrice ?? price);
-      return {
-        ...prod,
-        id: prod._id || prod.id,
-        productId: prod._id || prod.id,
-        name: prod.name,
-        image: prod.image || prod.mainImage,
-        price,
-        originalPrice,
-        quantity: item.quantity,
-      };
-    });
+    return backendItems
+      .filter((item) => item.product)
+      .map((item) => {
+        const prod = item.product || {};
+        const price = Number(prod.salePrice ?? prod.price ?? 0);
+        const originalPrice = Number(prod.mrp ?? prod.originalPrice ?? price);
+        return {
+          ...prod,
+          id: prod._id || prod.id,
+          productId: prod._id || prod.id,
+          name: prod.name,
+          image: prod.image || prod.mainImage,
+          price,
+          originalPrice,
+          quantity: item.quantity,
+        };
+      });
   };
 
   const fetchCart = useCallback(async () => {

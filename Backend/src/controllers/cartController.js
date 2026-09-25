@@ -39,6 +39,17 @@ const findOrCreateProduct = async (productId, productData = {}) => {
   return created;
 };
 
+// Drop cart entries whose referenced product was deleted after being added
+// (populate() resolves those to null), so a stale reference doesn't keep
+// rendering as a blank/undefined row every time the cart is fetched.
+const pruneDanglingCartItems = async (user) => {
+  if (!Array.isArray(user.cart) || user.cart.length === 0) return;
+  const hasDangling = user.cart.some((item) => !item.product);
+  if (!hasDangling) return;
+  user.cart = user.cart.filter((item) => item.product);
+  await user.save();
+};
+
 // Get user cart directly from User document
 export const getCart = async (req, res, next) => {
   try {
@@ -48,6 +59,8 @@ export const getCart = async (req, res, next) => {
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
+
+    await pruneDanglingCartItems(user);
 
     res.status(200).json({
       success: true,
@@ -98,6 +111,7 @@ export const addToCart = async (req, res, next) => {
 
     await user.save();
     await user.populate('cart.product');
+    await pruneDanglingCartItems(user);
 
     res.status(200).json({
       success: true,
@@ -170,6 +184,7 @@ export const updateCartItem = async (req, res, next) => {
 
     await user.save();
     await user.populate('cart.product');
+    await pruneDanglingCartItems(user);
 
     res.status(200).json({
       success: true,
@@ -203,6 +218,7 @@ export const removeFromCart = async (req, res, next) => {
       );
       await user.save();
       await user.populate('cart.product');
+      await pruneDanglingCartItems(user);
     }
 
     res.status(200).json({
@@ -266,6 +282,7 @@ export const syncCart = async (req, res, next) => {
 
     await user.save();
     await user.populate('cart.product');
+    await pruneDanglingCartItems(user);
 
     res.status(200).json({
       success: true,
