@@ -60,6 +60,7 @@ import {
   Maximize2
 } from 'lucide-react';
 import ProductVariantBuilder from '../../seller/components/ProductVariantBuilder';
+import { useDebounce } from '../../../hooks/useDebounce';
 
 /* =========================================================================
    1. USER MANAGEMENT PAGE (USERS, USER ORDERS & RETURN ORDERS TABS)
@@ -77,6 +78,7 @@ export const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(10);
 
@@ -190,9 +192,9 @@ export const UserManagement = () => {
     }
   };
 
-  // Filtered Users List
+  // Filtered Users List (debounced)
   const filteredUsers = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
     if (!q) return users;
     return users.filter(
       (u) =>
@@ -201,11 +203,11 @@ export const UserManagement = () => {
         u.phone.toLowerCase().includes(q) ||
         String(u.id).toLowerCase().includes(q)
     );
-  }, [users, search]);
+  }, [users, debouncedSearch]);
 
-  // Filtered Return Orders List
+  // Filtered Return Orders List (debounced)
   const filteredReturns = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
     if (!q) return returnOrders;
     return returnOrders.filter((ro) => {
       const custName = ro.user?.name || ro.shippingAddress?.fullName || '';
@@ -219,7 +221,7 @@ export const UserManagement = () => {
         reason.toLowerCase().includes(q)
       );
     });
-  }, [returnOrders, search]);
+  }, [returnOrders, debouncedSearch]);
 
   // Pagination for Active Tab
   const activeItemsCount = activeSubTab === 'users_orders' ? filteredUsers.length : filteredReturns.length;
@@ -955,6 +957,7 @@ export const SellerManagement = () => {
   }, [fetchSellers]);
 
   const [searchQuery, setSearchQuery] = React.useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [entriesPerPage, setEntriesPerPage] = React.useState('10');
   const [currentPage, setCurrentPage] = React.useState(1);
   const [sortField, setSortField] = React.useState('id');
@@ -1044,9 +1047,9 @@ export const SellerManagement = () => {
     setEditingSellerModal(null);
   };
 
-  // Filtered & Sorted Sellers
+  // Filtered & Sorted Sellers (debounced)
   const filteredSellers = React.useMemo(() => {
-    const q = String(searchQuery || '').toLowerCase().trim();
+    const q = String(debouncedSearchQuery || '').toLowerCase().trim();
     let result = (sellers || []).filter(s => 
       String(s.name || '').toLowerCase().includes(q) || 
       String(s.storeName || '').toLowerCase().includes(q) ||
@@ -1066,7 +1069,7 @@ export const SellerManagement = () => {
     });
 
     return result;
-  }, [sellers, searchQuery, sortField, sortDirection]);
+  }, [sellers, debouncedSearchQuery, sortField, sortDirection]);
 
   // Pagination bounds
   const totalPages = Math.max(1, Math.ceil(filteredSellers.length / Number(entriesPerPage)));
@@ -1972,6 +1975,7 @@ export const CaptainManagement = () => {
   const [statusFilter, setStatusFilter] = React.useState('All');
   const [availabilityFilter, setAvailabilityFilter] = React.useState('All');
   const [search, setSearch] = React.useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [entriesPerPage, setEntriesPerPage] = React.useState(10);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [sortField, setSortField] = React.useState(null);
@@ -2048,7 +2052,7 @@ export const CaptainManagement = () => {
     }
   };
 
-  // Filtered & Sorted Captains
+  // Filtered & Sorted Captains (debounced)
   const filteredCaptains = React.useMemo(() => {
     return (captains || []).filter(d => {
       const statusUpper = String(d.status || '').toUpperCase();
@@ -2059,7 +2063,7 @@ export const CaptainManagement = () => {
         statusUpper === filterUpper;
 
       const matchesAvailability = availabilityFilter === 'All' || d.available === availabilityFilter;
-      const q = String(search || '').toLowerCase().trim();
+      const q = String(debouncedSearch || '').toLowerCase().trim();
       const matchesSearch = 
         String(d.name || '').toLowerCase().includes(q) ||
         String(d.mobile || '').toLowerCase().includes(q) ||
@@ -2068,7 +2072,7 @@ export const CaptainManagement = () => {
         String(d.id || '').toLowerCase().includes(q);
       return matchesStatus && matchesAvailability && matchesSearch;
     });
-  }, [captains, statusFilter, availabilityFilter, search]);
+  }, [captains, statusFilter, availabilityFilter, debouncedSearch]);
 
   const sortedCaptains = React.useMemo(() => {
     return [...filteredCaptains].sort((a, b) => {
@@ -4210,6 +4214,7 @@ export const ProductManagement = () => {
   const [statusFilter, setStatusFilter] = React.useState('All Products');
   const [stockFilter, setStockFilter] = React.useState('All Products');
   const [searchQuery, setSearchQuery] = React.useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [entriesPerPage, setEntriesPerPage] = React.useState('10');
   const [currentPage, setCurrentPage] = React.useState(1);
 
@@ -4267,15 +4272,22 @@ export const ProductManagement = () => {
     link.click();
   };
 
-  // Filtering Logic
-  const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.seller.toLowerCase().includes(searchQuery.toLowerCase()) || p.id.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = categoryFilter === 'All Category' || p.category === categoryFilter;
-    const matchesSeller = sellerFilter === 'All Sellers' || p.seller === sellerFilter;
-    const matchesStatus = statusFilter === 'All Products' || p.status === statusFilter;
-    const matchesStock = stockFilter === 'All Products' || (stockFilter === 'In Stock' ? p.stock > 0 : p.stock === 0);
-    return matchesSearch && matchesCategory && matchesSeller && matchesStatus && matchesStock;
-  });
+  // Filtering Logic (debounced & memoized)
+  const filteredProducts = React.useMemo(() => {
+    const q = debouncedSearchQuery.toLowerCase().trim();
+    return products.filter(p => {
+      const matchesSearch = !q || (
+        (p.name && p.name.toLowerCase().includes(q)) || 
+        (p.seller && p.seller.toLowerCase().includes(q)) || 
+        (p.id && p.id.toLowerCase().includes(q))
+      );
+      const matchesCategory = categoryFilter === 'All Category' || p.category === categoryFilter;
+      const matchesSeller = sellerFilter === 'All Sellers' || p.seller === sellerFilter;
+      const matchesStatus = statusFilter === 'All Products' || p.status === statusFilter;
+      const matchesStock = stockFilter === 'All Products' || (stockFilter === 'In Stock' ? p.stock > 0 : p.stock === 0);
+      return matchesSearch && matchesCategory && matchesSeller && matchesStatus && matchesStock;
+    });
+  }, [products, debouncedSearchQuery, categoryFilter, sellerFilter, statusFilter, stockFilter]);
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -4570,6 +4582,7 @@ export const OrderManagement = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [paymentFilter, setPaymentFilter] = useState('All');
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
@@ -4748,7 +4761,7 @@ export const OrderManagement = () => {
       }
 
       // Search matching (Order ID, Customer, Phone, Seller, Products)
-      const q = search.trim().toLowerCase();
+      const q = debouncedSearch.trim().toLowerCase();
       let matchesSearch = true;
       if (q) {
         const itemsStr = o.items.map((it) => it.name || '').join(' ').toLowerCase();
@@ -4762,7 +4775,7 @@ export const OrderManagement = () => {
 
       return matchesStatus && matchesPayment && matchesSearch;
     });
-  }, [orders, statusFilter, paymentFilter, search]);
+  }, [orders, statusFilter, paymentFilter, debouncedSearch]);
 
   const totalPages = Math.ceil(filteredOrders.length / entriesPerPage) || 1;
   const indexOfLastItem = currentPage * entriesPerPage;

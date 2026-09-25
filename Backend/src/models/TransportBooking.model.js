@@ -246,7 +246,10 @@ const transportBookingSchema = new mongoose.Schema(
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
 transportBookingSchema.index({ user: 1, status: 1 });
+transportBookingSchema.index({ user: 1, createdAt: -1 });
 transportBookingSchema.index({ captainId: 1, status: 1 });
+transportBookingSchema.index({ captainId: 1, createdAt: -1 });
+transportBookingSchema.index({ status: 1, createdAt: -1 });
 transportBookingSchema.index({ 'captainRequests.captainId': 1, 'captainRequests.status': 1 });
 transportBookingSchema.index({ createdAt: -1 });
 

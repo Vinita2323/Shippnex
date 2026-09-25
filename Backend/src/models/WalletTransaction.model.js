@@ -73,6 +73,9 @@ const walletTransactionSchema = new mongoose.Schema(
 );
 
 walletTransactionSchema.index({ sellerId: 1, createdAt: -1 });
+walletTransactionSchema.index({ sellerId: 1, type: 1, createdAt: -1 });
+walletTransactionSchema.index({ sellerId: 1, settlementStatus: 1, createdAt: -1 });
+walletTransactionSchema.index({ type: 1, createdAt: -1 });
 walletTransactionSchema.index({ orderId: 1 });
 walletTransactionSchema.index({ createdAt: -1 });
 

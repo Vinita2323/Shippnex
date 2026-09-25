@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SuperAdminHeader } from '../components/SuperAdminHeader';
 import { superAdminService } from '../../../services/superAdminService';
+import { useDebounce } from '../../../hooks/useDebounce';
 import { ShieldAlert, Search, Lock, ChevronLeft, ChevronRight, Eye, X } from 'lucide-react';
 
 export const SuperAdminAuditLogs = () => {
@@ -11,7 +12,13 @@ export const SuperAdminAuditLogs = () => {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [selectedLog, setSelectedLog] = useState(null);
+
+  // Reset page when debounced search query changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   const fetchLogs = useCallback(
     async (isManual = false) => {
@@ -19,7 +26,7 @@ export const SuperAdminAuditLogs = () => {
       else setLoading(true);
 
       try {
-        const res = await superAdminService.getAuditLogs({ page, limit: 30, search });
+        const res = await superAdminService.getAuditLogs({ page, limit: 30, search: debouncedSearch });
         if (res.success) {
           setLogs(res.logs || []);
           setTotal(res.total || 0);
@@ -32,7 +39,7 @@ export const SuperAdminAuditLogs = () => {
         setRefreshing(false);
       }
     },
-    [page, search]
+    [page, debouncedSearch]
   );
 
   useEffect(() => {
@@ -57,10 +64,7 @@ export const SuperAdminAuditLogs = () => {
               type="text"
               placeholder="Search Log ID, Actor, Entity ID, Remarks..."
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-[#002625] focus:bg-white transition-all"
             />
           </div>

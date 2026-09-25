@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -14,6 +14,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { sellerService } from '../../../services/authService';
+import { useDebounce } from '../../../hooks/useDebounce';
 
 const fallbackSellersList = [
   {
@@ -102,7 +103,8 @@ const AllSellers = () => {
   const navigate = useNavigate();
   const [sellers, setSellers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearchQuery = useDebounce(searchInput, 300);
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   useEffect(() => {
@@ -128,19 +130,24 @@ const AllSellers = () => {
 
   const categories = ['All', 'Groceries', 'Fresh Produce', 'Organic', 'Dry Fruits', 'Superstore'];
 
-  const filteredSellers = sellers.filter(s => {
-    const nameMatch = s.businessName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                      s.tagline?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      s.businessType?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    if (selectedCategory === 'All') return nameMatch;
-    
-    const catMatch = s.categories?.some(cat => 
-      cat.toLowerCase().includes(selectedCategory.toLowerCase())
-    ) || s.businessType?.toLowerCase().includes(selectedCategory.toLowerCase());
+  const filteredSellers = useMemo(() => {
+    const q = (debouncedSearchQuery || '').toLowerCase().trim();
+    return sellers.filter(s => {
+      const nameMatch = !q || (
+        s.businessName?.toLowerCase().includes(q) || 
+        s.tagline?.toLowerCase().includes(q) ||
+        s.businessType?.toLowerCase().includes(q)
+      );
+      
+      if (selectedCategory === 'All') return nameMatch;
+      
+      const catMatch = s.categories?.some(cat => 
+        cat.toLowerCase().includes(selectedCategory.toLowerCase())
+      ) || s.businessType?.toLowerCase().includes(selectedCategory.toLowerCase());
 
-    return nameMatch && catMatch;
-  });
+      return nameMatch && catMatch;
+    });
+  }, [sellers, debouncedSearchQuery, selectedCategory]);
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 w-full shadow-none pb-12 px-0 md:px-5 md:py-6">
@@ -169,8 +176,8 @@ const AllSellers = () => {
           <input 
             type="text" 
             placeholder="Search stores by name, groceries, fruits..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="w-full border-none outline-none text-xs bg-transparent text-slate-800 placeholder:text-slate-400 font-medium"
           />
         </div>
@@ -193,8 +200,8 @@ const AllSellers = () => {
               <input 
                 type="text" 
                 placeholder="Search stores, categories, groceries..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full border-none outline-none text-sm bg-transparent text-slate-800 placeholder:text-slate-400 font-medium"
               />
             </div>

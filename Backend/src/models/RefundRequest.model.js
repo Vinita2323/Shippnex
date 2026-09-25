@@ -84,6 +84,7 @@ const refundRequestSchema = new mongoose.Schema(
 );
 
 refundRequestSchema.index({ orderId: 1, createdAt: -1 });
+refundRequestSchema.index({ userId: 1, createdAt: -1 });
 refundRequestSchema.index({ status: 1, createdAt: -1 });
 refundRequestSchema.index({ createdAt: -1 });
 

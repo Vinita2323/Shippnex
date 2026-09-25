@@ -79,6 +79,8 @@ const captainTransactionSchema = new mongoose.Schema(
 );
 
 captainTransactionSchema.index({ captainId: 1, type: 1, createdAt: -1 });
+captainTransactionSchema.index({ captainId: 1, createdAt: -1 });
+captainTransactionSchema.index({ type: 1, createdAt: -1 });
 captainTransactionSchema.index({ createdAt: -1 });
 
 const CaptainTransaction = mongoose.model('CaptainTransaction', captainTransactionSchema);

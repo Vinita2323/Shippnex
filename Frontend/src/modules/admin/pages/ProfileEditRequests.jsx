@@ -26,6 +26,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { profileEditRequestService } from '../../../services/authService';
+import { useDebounce } from '../../../hooks/useDebounce';
 
 export const ProfileEditRequests = () => {
   const [loading, setLoading] = useState(true);
@@ -43,10 +44,16 @@ export const ProfileEditRequests = () => {
   // Filter & Pagination States
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('pending');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearchQuery = useDebounce(searchInput, 300);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+
+  // Reset page when debounced search query changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchQuery]);
 
   // Selected Request for Modal
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -65,7 +72,7 @@ export const ProfileEditRequests = () => {
       const params = {
         role: roleFilter,
         status: statusFilter,
-        search: searchQuery,
+        search: debouncedSearchQuery,
         page,
         limit: 10,
       };
@@ -83,7 +90,7 @@ export const ProfileEditRequests = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [roleFilter, statusFilter, searchQuery, page]);
+  }, [roleFilter, statusFilter, debouncedSearchQuery, page]);
 
   useEffect(() => {
     fetchRequests();
@@ -377,8 +384,8 @@ export const ProfileEditRequests = () => {
             <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search by name, phone, email..."
               className="w-full pl-9 pr-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-[#ff7526] focus:bg-white transition-all"
             />

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SuperAdminHeader } from '../components/SuperAdminHeader';
 import { superAdminService } from '../../../services/superAdminService';
+import { useDebounce } from '../../../hooks/useDebounce';
 import { Search, CreditCard, CheckCircle, Clock, AlertCircle, ArrowDownLeft, ShieldCheck, RefreshCw } from 'lucide-react';
 
 export const SuperAdminPayments = () => {
@@ -8,6 +9,7 @@ export const SuperAdminPayments = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [payments, setPayments] = useState([]);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState('ALL');
 
   const fetchPayments = useCallback(async (isManual = false) => {
@@ -18,7 +20,7 @@ export const SuperAdminPayments = () => {
       const res = await superAdminService.getTransactions({
         category: 'CUSTOMER_PAYMENT',
         status: statusFilter,
-        search,
+        search: debouncedSearch,
         limit: 50,
       });
 
@@ -31,7 +33,7 @@ export const SuperAdminPayments = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [search, statusFilter]);
+  }, [debouncedSearch, statusFilter]);
 
   useEffect(() => {
     fetchPayments();

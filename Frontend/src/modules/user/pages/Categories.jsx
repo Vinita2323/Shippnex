@@ -17,6 +17,7 @@ import {
   homeCareImg,
   personalCareImg 
 } from '../../../utils/imageUtils';
+import { useDebounce } from '../../../hooks/useDebounce';
 
 const fallbackCategories = [
   { name: 'Grains & Flours', image: grainsImg },
@@ -55,7 +56,8 @@ const Categories = () => {
   const { addToCart, getItemQuantity, isInCart, removeFromCart } = useCart();
 
   const [toastMessage, setToastMessage] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearchTerm = useDebounce(searchInput, 300);
   
   // URL and Session synced state
   const urlCategory = searchParams.get('category');
@@ -210,17 +212,17 @@ const Categories = () => {
     }
   };
 
-  // Client-side search filtering
+  // Client-side search filtering (debounced)
   const filteredProducts = useMemo(() => {
-    if (!searchTerm.trim()) return products;
-    const term = searchTerm.toLowerCase().trim();
+    if (!debouncedSearchTerm.trim()) return products;
+    const term = debouncedSearchTerm.toLowerCase().trim();
     return products.filter(p => 
       (p.name && p.name.toLowerCase().includes(term)) ||
       (p.brand && p.brand.toLowerCase().includes(term)) ||
       (p.seller && typeof p.seller === 'string' && p.seller.toLowerCase().includes(term)) ||
       (p.category && p.category.toLowerCase().includes(term))
     );
-  }, [products, searchTerm]);
+  }, [products, debouncedSearchTerm]);
 
   // Dynamically compute subcategories for activeCategory
   const availableSubCategories = useMemo(() => {
@@ -284,14 +286,14 @@ const Categories = () => {
           <Search size={15} className="text-slate-400 shrink-0" />
           <input 
             type="text" 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search products or categories..." 
             className="bg-transparent border-none outline-none text-[12px] w-full text-slate-800 font-medium placeholder:text-slate-400"
           />
-          {searchTerm && (
+          {searchInput && (
             <button 
-              onClick={() => setSearchTerm('')} 
+              onClick={() => setSearchInput('')} 
               className="text-slate-400 hover:text-slate-600 p-0.5 border-none bg-transparent cursor-pointer"
             >
               <X size={14} />
@@ -409,14 +411,14 @@ const Categories = () => {
               <Search size={16} className="text-slate-400 shrink-0" />
               <input 
                 type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Filter by name, brand, seller..."
                 className="bg-transparent border-none outline-none text-xs w-full text-slate-800 font-medium placeholder:text-slate-400"
               />
-              {searchTerm && (
+              {searchInput && (
                 <button 
-                  onClick={() => setSearchTerm('')} 
+                  onClick={() => setSearchInput('')} 
                   className="text-slate-400 hover:text-slate-600 p-0.5 border-none bg-transparent cursor-pointer"
                 >
                   <X size={14} />
@@ -482,18 +484,18 @@ const Categories = () => {
                 <ShoppingBag size={32} />
               </div>
               <h3 className="text-lg font-black text-slate-900 m-0 mb-1.5">
-                {searchTerm ? 'No matching items found' : `No products in "${activeCategory}" yet`}
+                {debouncedSearchTerm ? 'No matching items found' : `No products in "${activeCategory}" yet`}
               </h3>
               <p className="text-xs text-slate-500 max-w-sm m-0 mb-5 leading-relaxed font-medium">
-                {searchTerm 
-                  ? `We couldn't find any products matching "${searchTerm}". Try a different keyword.` 
+                {debouncedSearchTerm 
+                  ? `We couldn't find any products matching "${debouncedSearchTerm}". Try a different keyword.` 
                   : 'Items in this category are being updated. You can browse all available products across all categories below.'}
               </p>
               
               <div className="flex flex-wrap items-center justify-center gap-3">
-                {searchTerm ? (
+                {debouncedSearchTerm ? (
                   <button 
-                    onClick={() => setSearchTerm('')}
+                    onClick={() => setSearchInput('')}
                     className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs cursor-pointer border-none hover:bg-slate-800 transition-all shadow-sm"
                   >
                     Clear Search

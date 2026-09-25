@@ -136,7 +136,9 @@ const orderSchema = new mongoose.Schema(
 // Targeted query pattern indexes
 orderSchema.index({ user: 1, createdAt: -1 });
 orderSchema.index({ captainId: 1, captainStatus: 1 });
+orderSchema.index({ captainId: 1, createdAt: -1 });
 orderSchema.index({ orderStatus: 1, createdAt: -1 });
+orderSchema.index({ paymentStatus: 1, createdAt: -1 });
 orderSchema.index({ sellerStatus: 1, createdAt: -1 });
 orderSchema.index({ createdAt: -1 });
 

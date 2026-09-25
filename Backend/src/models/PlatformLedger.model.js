@@ -106,6 +106,9 @@ const platformLedgerSchema = new mongoose.Schema(
 
 platformLedgerSchema.index({ category: 1, createdAt: -1 });
 platformLedgerSchema.index({ entityType: 1, entityId: 1, createdAt: -1 });
+platformLedgerSchema.index({ entityType: 1, createdAt: -1 });
+platformLedgerSchema.index({ status: 1, createdAt: -1 });
+platformLedgerSchema.index({ type: 1, createdAt: -1 });
 platformLedgerSchema.index({ createdAt: -1 });
 
 const PlatformLedger = mongoose.model('PlatformLedger', platformLedgerSchema);

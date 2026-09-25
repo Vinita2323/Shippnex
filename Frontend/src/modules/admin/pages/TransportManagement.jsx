@@ -8,6 +8,7 @@ import {
   Radio, KeyRound, Image as ImageIcon
 } from 'lucide-react';
 import { adminTransportService, adminService } from '../../../services/authService';
+import { useDebounce } from '../../../hooks/useDebounce';
 
 export const TransportManagement = ({ initialTab = 'ALL' }) => {
   const [activeSubTab, setActiveSubTab] = useState(initialTab);
@@ -17,7 +18,8 @@ export const TransportManagement = ({ initialTab = 'ALL' }) => {
   const [error, setError] = useState(null);
 
   // Search & Filter States
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearchQuery = useDebounce(searchInput, 300);
   const [selectedVehicle, setSelectedVehicle] = useState('ALL');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -25,6 +27,11 @@ export const TransportManagement = ({ initialTab = 'ALL' }) => {
   const [limit, setLimit] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+
+  // Reset page when debounced search query changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchQuery]);
 
   // Summary Metrics State
   const [stats, setStats] = useState({
@@ -61,7 +68,7 @@ export const TransportManagement = ({ initialTab = 'ALL' }) => {
     try {
       const params = {
         status: activeSubTab,
-        search: searchQuery.trim() || undefined,
+        search: debouncedSearchQuery.trim() || undefined,
         vehicleType: selectedVehicle !== 'ALL' ? selectedVehicle : undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
@@ -100,7 +107,7 @@ export const TransportManagement = ({ initialTab = 'ALL' }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeSubTab, searchQuery, selectedVehicle, startDate, endDate, page, limit]);
+  }, [activeSubTab, debouncedSearchQuery, selectedVehicle, startDate, endDate, page, limit]);
 
   // Fetch available captains for manual assignment
   const fetchCaptainsList = async () => {
@@ -469,16 +476,13 @@ export const TransportManagement = ({ initialTab = 'ALL' }) => {
           <input
             type="text"
             placeholder="Search by ID, customer, address, goods, or captain..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setPage(1);
-            }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-8 py-2 text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:border-emerald-600 focus:bg-white transition-all font-medium"
           />
-          {searchQuery && (
+          {searchInput && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => setSearchInput('')}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"
             >
               <X size={14} />
@@ -540,7 +544,7 @@ export const TransportManagement = ({ initialTab = 'ALL' }) => {
             <Truck size={44} className="text-slate-300" />
             <h3 className="text-base font-bold text-slate-700 m-0">No Transport Bookings Found</h3>
             <p className="text-xs text-slate-400 max-w-sm">
-              {searchQuery || selectedVehicle !== 'ALL' || startDate
+              {debouncedSearchQuery || selectedVehicle !== 'ALL' || startDate
                 ? 'No transport orders match the applied filters. Try adjusting your query.'
                 : 'There are no vehicle transport bookings in this status queue.'}
             </p>

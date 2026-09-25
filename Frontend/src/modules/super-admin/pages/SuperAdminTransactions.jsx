@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SuperAdminHeader } from '../components/SuperAdminHeader';
 import { superAdminService } from '../../../services/superAdminService';
+import { useDebounce } from '../../../hooks/useDebounce';
 import {
   Search,
   Filter,
@@ -29,8 +30,14 @@ export const SuperAdminTransactions = () => {
   const [type, setType] = useState('ALL');
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Reset page on search change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   // Selected Txn for Detail Drawer Modal
   const [selectedTxn, setSelectedTxn] = useState(null);
@@ -47,7 +54,7 @@ export const SuperAdminTransactions = () => {
           category,
           type,
           status,
-          search,
+          search: debouncedSearch,
           startDate,
           endDate,
         });
@@ -64,7 +71,7 @@ export const SuperAdminTransactions = () => {
         setRefreshing(false);
       }
     },
-    [page, limit, category, type, status, search, startDate, endDate]
+    [page, limit, category, type, status, debouncedSearch, startDate, endDate]
   );
 
   useEffect(() => {
@@ -128,10 +135,7 @@ export const SuperAdminTransactions = () => {
                 type="text"
                 placeholder="Search Txn ID, Order, Party..."
                 value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
+                onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-[#ff5500]"
               />
             </div>

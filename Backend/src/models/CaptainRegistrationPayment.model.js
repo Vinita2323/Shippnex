@@ -30,12 +30,10 @@ const captainRegistrationPaymentSchema = new mongoose.Schema(
     },
     gatewayOrderId: {
       type: String,
-      index: true,
       trim: true,
     },
     gatewayPaymentId: {
       type: String,
-      index: true,
       trim: true,
     },
     gatewaySignature: {

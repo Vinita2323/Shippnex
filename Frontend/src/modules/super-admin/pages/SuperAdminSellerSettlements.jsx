@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SuperAdminHeader } from '../components/SuperAdminHeader';
 import { superAdminService } from '../../../services/superAdminService';
+import { useDebounce } from '../../../hooks/useDebounce';
 import { Search, Store, Percent, CheckCircle, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export const SuperAdminSellerSettlements = () => {
@@ -16,7 +17,13 @@ export const SuperAdminSellerSettlements = () => {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [status, setStatus] = useState('ALL');
+
+  // Reset page when debounced search query changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   const fetchSettlements = useCallback(
     async (isManual = false) => {
@@ -27,7 +34,7 @@ export const SuperAdminSellerSettlements = () => {
         const res = await superAdminService.getSellerSettlements({
           page,
           status,
-          search,
+          search: debouncedSearch,
           limit: 25,
         });
 
@@ -43,7 +50,7 @@ export const SuperAdminSellerSettlements = () => {
         setRefreshing(false);
       }
     },
-    [page, status, search]
+    [page, status, debouncedSearch]
   );
 
   useEffect(() => {
@@ -87,10 +94,7 @@ export const SuperAdminSellerSettlements = () => {
               type="text"
               placeholder="Search Order ID, Seller Name..."
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-[#ff5500]"
             />
           </div>

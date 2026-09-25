@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SuperAdminHeader } from '../components/SuperAdminHeader';
 import { superAdminService } from '../../../services/superAdminService';
+import { useDebounce } from '../../../hooks/useDebounce';
 import {
   Search,
   Filter,
@@ -37,8 +38,14 @@ export const SuperAdminPayouts = () => {
   const [recipientType, setRecipientType] = useState(initialRecipientType);
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Reset page on search change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   // Modals
   const [selectedPayout, setSelectedPayout] = useState(null);
@@ -65,7 +72,7 @@ export const SuperAdminPayouts = () => {
           page,
           recipientType,
           status,
-          search,
+          search: debouncedSearch,
           startDate,
           endDate,
         });
@@ -82,7 +89,7 @@ export const SuperAdminPayouts = () => {
         setRefreshing(false);
       }
     },
-    [page, recipientType, status, search, startDate, endDate]
+    [page, recipientType, status, debouncedSearch, startDate, endDate]
   );
 
   useEffect(() => {
@@ -263,10 +270,7 @@ export const SuperAdminPayouts = () => {
               type="text"
               placeholder="Search Payout ID, Recipient Name, Phone, UTR..."
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-[#ff5500] shadow-xs"
             />
           </div>

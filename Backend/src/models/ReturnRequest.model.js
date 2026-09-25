@@ -319,9 +319,12 @@ const returnRequestSchema = new mongoose.Schema(
 
 returnRequestSchema.index({ order: 1, orderItemId: 1 });
 returnRequestSchema.index({ user: 1, createdAt: -1 });
-returnRequestSchema.index({ seller: 1, status: 1 });
+returnRequestSchema.index({ seller: 1, status: 1, createdAt: -1 });
+returnRequestSchema.index({ seller: 1, createdAt: -1 });
 returnRequestSchema.index({ captain: 1, status: 1 });
+returnRequestSchema.index({ captain: 1, createdAt: -1 });
 returnRequestSchema.index({ status: 1, createdAt: -1 });
+returnRequestSchema.index({ createdAt: -1 });
 
 const ReturnRequest = mongoose.model('ReturnRequest', returnRequestSchema);
 export default ReturnRequest;

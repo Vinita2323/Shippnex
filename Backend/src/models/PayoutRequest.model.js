@@ -99,6 +99,8 @@ const payoutRequestSchema = new mongoose.Schema(
 
 payoutRequestSchema.index({ recipientType: 1, status: 1, createdAt: -1 });
 payoutRequestSchema.index({ recipientId: 1, createdAt: -1 });
+payoutRequestSchema.index({ status: 1, paidAt: -1 });
+payoutRequestSchema.index({ status: 1, createdAt: -1 });
 payoutRequestSchema.index({ createdAt: -1 });
 
 const PayoutRequest = mongoose.model('PayoutRequest', payoutRequestSchema);

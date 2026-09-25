@@ -74,13 +74,6 @@ const SplashScreen = ({ onGetStarted }) => {
           </div>
         </div>
 
-        {/* Pagination Dots */}
-        <div className="flex gap-1.5 items-center my-0.5">
-          <span className="bg-[#1e2b4f] w-[6px] h-[6px] rounded-full"></span>
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-        </div>
-
         {/* Action Buttons Section */}
         <div className="w-full space-y-2 mt-1">
           {/* Primary CTA: Get Started */}

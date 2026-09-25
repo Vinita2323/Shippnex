@@ -23,13 +23,15 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { returnService, adminService } from '../../../services/authService';
+import { useDebounce } from '../../../hooks/useDebounce';
 
 export const ReturnManagement = () => {
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearchQuery = useDebounce(searchInput, 300);
   const [toastMsg, setToastMsg] = useState(null);
 
   // Available captains for assignment
@@ -201,7 +203,7 @@ export const ReturnManagement = () => {
     return { total, requested, activeLogistics, underInspection, completed, rejected, totalRefundValue };
   }, [returns]);
 
-  // Filtered Returns
+  // Filtered Returns (debounced)
   const filteredReturns = useMemo(() => {
     return returns.filter((r) => {
       // Tab filter
@@ -213,8 +215,8 @@ export const ReturnManagement = () => {
       if (activeTab === 'REJECTED' && !['REJECTED', 'VERIFICATION_FAILED', 'CANCELLED'].includes(r.status)) return false;
 
       // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+      if (debouncedSearchQuery.trim()) {
+        const q = debouncedSearchQuery.toLowerCase();
         const rId = (r.returnId || '').toLowerCase();
         const oId = (r.orderId || '').toLowerCase();
         const pName = (r.productName || r.product?.title || '').toLowerCase();
@@ -225,7 +227,7 @@ export const ReturnManagement = () => {
 
       return true;
     });
-  }, [returns, activeTab, searchQuery]);
+  }, [returns, activeTab, debouncedSearchQuery]);
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -356,8 +358,8 @@ export const ReturnManagement = () => {
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search Return ID, Order ID, Customer, Product…"
               className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-[#002625] focus:bg-white"
             />
