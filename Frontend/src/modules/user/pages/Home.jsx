@@ -40,7 +40,7 @@ import groceryImg from '../../../assets/user/categories/Grocery-removebg-preview
 import readyCookImg from '../../../assets/user/categories/readyfoot-removebg-preview.png';
 import homeCareImg from '../../../assets/user/categories/homecare-removebg-preview.png';
 import personalCareImg from '../../../assets/user/categories/personalcare-removebg-preview.png';
-import { getImageUrl, getCategoryFallbackImage } from '../../../utils/imageUtils';
+import { getImageUrl, getCategoryFallbackImage, handleImageError } from '../../../utils/imageUtils';
 
 const allProducts = [
   { id: 'p1', name: 'Basmati Rice', price: 75, originalPrice: 95, discount: '21% OFF', image: grainsImg, unit: '1kg' },
@@ -362,9 +362,17 @@ const Home = () => {
             {searchResults.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-5">
                 {searchResults.map(product => (
-                  <div key={product.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
-                    <img onClick={() => navigate(`/product/${product.id}`)} src={product.image} alt={product.name} loading="lazy" decoding="async" className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer" />
-                    <div className="flex flex-col p-3 pt-2">
+                    <div key={product.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col">
+                      <img 
+                        onClick={() => navigate(`/product/${product.id}`)} 
+                        src={getImageUrl(product.image, product.name)} 
+                        alt={product.name} 
+                        loading="lazy" 
+                        decoding="async" 
+                        className="w-full h-[110px] object-cover bg-slate-50 cursor-pointer"
+                        onError={(e) => handleImageError(e, product.name)} 
+                      />
+                      <div className="flex flex-col p-3 pt-2">
                       <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{product.name}</h4>
                       <p className="text-[11px] text-slate-400 m-0 mb-0.5">{product.unit}</p>
                       <p className="text-[10px] font-medium text-slate-500 m-0 mb-2 truncate">by:- <span className="font-bold text-slate-700">{product.seller || 'Fashion Hub'}</span></p>
@@ -475,10 +483,7 @@ const Home = () => {
                       loading="lazy"
                       decoding="async"
                       className="w-10 h-10 object-contain" 
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = fallbackImg;
-                      }}
+                      onError={(e) => handleImageError(e, cat.name)}
                     />
                   </div>
                   <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">
@@ -527,15 +532,12 @@ const Home = () => {
             <div key={prod.id} className="min-w-[155px] max-w-[155px] md:min-w-0 md:max-w-none bg-white border border-slate-100 rounded-xl md:rounded-2xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow flex flex-col justify-between">
               <div className="h-[125px] w-full overflow-hidden bg-slate-50 relative cursor-pointer" onClick={() => navigate(`/product/${prod.id}`)}>
                 <img 
-                  src={getImageUrl(prod.image, grainsImg)} 
+                  src={getImageUrl(prod.image, prod.name)} 
                   alt={prod.name} 
                   loading="lazy"
                   decoding="async"
                   className="w-full h-full object-cover" 
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = grainsImg;
-                  }}
+                  onError={(e) => handleImageError(e, prod.name)}
                 />
               </div>
               <div className="flex flex-col p-2.5 flex-1 justify-between gap-2">
@@ -664,15 +666,12 @@ const Home = () => {
             <div key={prod.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between">
               <div className="h-[125px] w-full overflow-hidden bg-slate-50 relative cursor-pointer" onClick={() => navigate(`/product/${prod.id}`)}>
                 <img 
-                  src={getImageUrl(prod.image, grainsImg)} 
+                  src={getImageUrl(prod.image, prod.name)} 
                   alt={prod.name} 
                   loading="lazy"
                   decoding="async"
                   className="w-full h-full object-cover" 
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = grainsImg;
-                  }}
+                  onError={(e) => handleImageError(e, prod.name)}
                 />
               </div>
               <div className="flex flex-col p-2.5 flex-1 justify-between gap-2">

@@ -25,7 +25,22 @@ export const WishlistProvider = ({ children }) => {
       return;
     }
 
-    if (authContextIsAuthenticated && userRole === 'user') {
+    const path = typeof window !== 'undefined' && window.location ? window.location.pathname : '';
+    const isPortalRoute =
+      path.startsWith('/admin') ||
+      path.startsWith('/super-admin') ||
+      path.startsWith('/seller') ||
+      path.startsWith('/captain') ||
+      path.startsWith('/delivery');
+
+    if (isPortalRoute) {
+      setWishlistItems([]);
+      return;
+    }
+
+    const userToken = typeof window !== 'undefined' ? localStorage.getItem('shippnex_user_token') : null;
+
+    if (userToken && userRole !== 'admin' && userRole !== 'seller' && userRole !== 'captain' && userRole !== 'super_admin') {
       try {
         setLoading(true);
         const res = await wishlistService.getWishlist();

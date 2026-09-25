@@ -1,22 +1,23 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdmin } from '../context/useAdmin';
+import { useAuth } from '../../../context/AuthContext';
+import { authService } from '../../../services/authService';
 import { X, Menu, Settings, Bell, User, LogOut } from 'lucide-react';
 
 export const AdminHeader = () => {
   const navigate = useNavigate();
   const { sidebarOpen, toggleSidebar, activeTab, setActiveTab, notificationsCount } = useAdmin();
+  const { logout } = useAuth();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const confirmLogout = () => {
-    localStorage.removeItem('adminToken');
-    localStorage.removeItem('adminUser');
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    sessionStorage.clear();
+    authService.logout('admin');
+    logout('admin');
     setShowLogoutModal(false);
-    navigate('/admin/login');
+    navigate('/admin/login', { replace: true });
   };
+
 
   const navLinks = [
     { id: 'orders', label: 'Orders' },

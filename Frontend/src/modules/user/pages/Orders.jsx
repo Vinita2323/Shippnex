@@ -5,6 +5,7 @@ import { useOrder } from '../context/OrderContext';
 import { orderService, getCachedUserOrders } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
 import RatingModal from '../../../components/RatingModal';
+import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
 
 const formatRawOrdersData = (rawList = []) => {
   return rawList.map(o => {
@@ -285,6 +286,7 @@ const Orders = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredOrders.map((order, index) => {
               const firstItemImg = order.items?.[0]?.image || order.items?.[0]?.product?.mainImage || order.items?.[0]?.product?.image;
+              const firstItemName = order.items?.[0]?.name || order.items?.[0]?.product?.name || order.id || 'Order';
               return (
               <div key={index} className="bg-white rounded-[16px] md:rounded-2xl p-4 md:p-5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between gap-3 hover:shadow-md transition-shadow">
                 
@@ -292,11 +294,12 @@ const Orders = () => {
                 <div className="flex items-start justify-between">
                   <div className="flex gap-3 items-center">
                     <div className="w-[44px] h-[44px] md:w-12 md:h-12 rounded-[12px] bg-[#f0f3f6] flex items-center justify-center shrink-0 overflow-hidden">
-                      {firstItemImg ? (
-                        <img src={firstItemImg} alt="Order Item" className="w-full h-full object-cover" />
-                      ) : (
-                        <Box size={22} className="text-slate-400" />
-                      )}
+                      <img 
+                        src={getImageUrl(firstItemImg, firstItemName)} 
+                        alt="Order Item" 
+                        className="w-full h-full object-cover" 
+                        onError={(e) => handleImageError(e, firstItemName)}
+                      />
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[14px] md:text-base font-extrabold text-slate-900 tracking-tight">{order.id}</span>

@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, Minus, Check, ShoppingCart, Heart, Zap, Trash2 } from 
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { productService } from '../../../services/authService';
+import { getImageUrl, getCategoryFallbackImage, handleImageError } from '../../../utils/imageUtils';
 
 import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
 import oilGheeImg from '../../../assets/user/categories/OilGhee-removebg-preview.png';
@@ -215,9 +216,10 @@ const FlashSale = () => {
                 {/* Image */}
                 <img 
                   onClick={() => navigate(`/product/${product.id}`)} 
-                  src={product.image} 
+                  src={getImageUrl(product.image, product.name)} 
                   alt={product.name} 
                   className="w-full h-[120px] sm:h-[150px] md:h-[180px] object-cover bg-slate-50 cursor-pointer transition-transform duration-300 hover:scale-105" 
+                  onError={(e) => handleImageError(e, product.name)}
                 />
 
                 {/* Details */}

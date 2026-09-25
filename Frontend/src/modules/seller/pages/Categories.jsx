@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Download, ChevronDown, FolderTree, CheckCircle2, XCircle, FileText, FileSpreadsheet, RefreshCw } from 'lucide-react';
 import { categoryService } from '../../../services/authService';
+import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
 
 const fallbackCategories = [
   { id: 'CAT-01', name: 'Grains & Flours', slug: 'grains-flours', subcategoriesCount: 6, productsCount: 42, status: 'Active', icon: '🌾' },
@@ -213,11 +214,12 @@ const Categories = () => {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center text-xl shrink-0 overflow-hidden">
-                        {cat.image ? (
-                          <img src={cat.image} alt={cat.name} className="w-full h-full object-contain p-1" />
-                        ) : (
-                          cat.icon
-                        )}
+                        <img 
+                          src={getImageUrl(cat.image, cat.name)} 
+                          alt={cat.name} 
+                          className="w-full h-full object-cover" 
+                          onError={(e) => handleImageError(e, cat.name)} 
+                        />
                       </div>
                       <div className="flex flex-col">
                         <span className="font-semibold text-slate-900">{cat.name}</span>

@@ -18,8 +18,14 @@ import {
   getUserOrdersForAdmin,
   updateReturnOrderStatus,
 } from '../controllers/adminController.js';
+import { getAdminProfile, updateAdminProfile } from '../controllers/adminAuthController.js';
 
 const router = express.Router();
+
+// Admin Profile
+router.get('/profile', protect('admin', 'super_admin'), getAdminProfile);
+router.put('/profile', protect('admin', 'super_admin'), updateAdminProfile);
+
 
 // Live Dashboard Stats
 router.get('/dashboard/stats', getDashboardStats);

@@ -11,6 +11,7 @@ import { orderService, returnService } from '../../../services/authService';
 import productReviewService from '../../../services/productReviewService';
 import ProductRatingModal from '../../../components/ProductRatingModal';
 import LiveDeliveryMap from '../components/LiveDeliveryMap';
+import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
 
 const RETURN_REASONS = [
   'Damaged / Defective product received',
@@ -614,7 +615,12 @@ const TrackOrder = () => {
                     <div key={idx} className="py-3 flex flex-col gap-2 first:pt-0 last:pb-0">
                       <div className="flex gap-3 items-center">
                         <div className="w-[54px] h-[54px] rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
-                          <img src={itemImg} alt={itemName} className="w-[85%] h-[85%] object-contain" />
+                          <img 
+                            src={getImageUrl(itemImg, itemName)} 
+                            alt={itemName} 
+                            className="w-[85%] h-[85%] object-contain" 
+                            onError={(e) => handleImageError(e, itemName)}
+                          />
                         </div>
                         <div className="flex-1 flex flex-col gap-0.5">
                           <h4 className="text-[13px] md:text-sm font-bold text-slate-900 m-0 line-clamp-1">{itemName}</h4>
@@ -796,9 +802,10 @@ const TrackOrder = () => {
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
                   <img
-                    src={selectedItemToReturn.image || selectedItemToReturn.product?.mainImage || grainsImg}
+                    src={getImageUrl(selectedItemToReturn.image || selectedItemToReturn.product?.mainImage, selectedItemToReturn.name || 'Item')}
                     alt={selectedItemToReturn.name}
                     className="w-[85%] h-[85%] object-contain"
+                    onError={(e) => handleImageError(e, selectedItemToReturn.name || 'Item')}
                   />
                 </div>
                 <div className="flex-1">

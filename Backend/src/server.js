@@ -85,20 +85,23 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const uploadsDir = fs.existsSync(path.join(__dirname, '../uploads')) 
   ? path.join(__dirname, '../uploads') 
   : path.join(process.cwd(), 'uploads');
-app.use('/uploads', express.static(uploadsDir, { 
+
+const serveUploads = express.static(uploadsDir, { 
   maxAge: '7d', 
   etag: true, 
   immutable: true 
-}));
-
-// Fallback for missing uploads images (prevents 404 image errors)
-app.use('/uploads', (req, res, next) => {
-  const fallbackFile = path.join(uploadsDir, 'categories', 'Grocery-removebg-preview.png');
-  if (fs.existsSync(fallbackFile)) {
-    return res.sendFile(fallbackFile);
-  }
-  next();
 });
+
+app.use('/uploads', serveUploads);
+app.use('/api/uploads', serveUploads);
+
+// Fallback for missing uploads images: return 404 so frontend gracefully displays initial letter
+const handleUploadFallback = (req, res, next) => {
+  res.status(404).send('Image not found');
+};
+
+app.use('/uploads', handleUploadFallback);
+app.use('/api/uploads', handleUploadFallback);
 
 // Core API Routes (Mounted under both /api and root for backwards compatibility)
 const registerRoutes = (prefix = '') => {

@@ -37,8 +37,18 @@ export const CartProvider = ({ children }) => {
   };
 
   const fetchCart = useCallback(async () => {
-    // Only fetch cart if user role is 'user' (not captain, seller, admin, etc.)
-    if (isAuthInitializing || !authContextIsAuthenticated || userRole !== 'user') {
+    const path = typeof window !== 'undefined' && window.location ? window.location.pathname : '';
+    const isPortalRoute =
+      path.startsWith('/admin') ||
+      path.startsWith('/super-admin') ||
+      path.startsWith('/seller') ||
+      path.startsWith('/captain') ||
+      path.startsWith('/delivery');
+
+    const userToken = typeof window !== 'undefined' ? localStorage.getItem('shippnex_user_token') : null;
+
+    // Only fetch cart if not in a back-office portal and user token is actually present
+    if (isPortalRoute || isAuthInitializing || !userToken || (userRole && userRole !== 'user')) {
       setCartItems([]);
       return;
     }

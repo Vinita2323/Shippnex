@@ -31,7 +31,7 @@ import {
   Tag
 } from 'lucide-react';
 import { bannerService, productService } from '../../../services/authService';
-import { getImageUrl } from '../../../utils/imageUtils';
+import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
 import { 
   initialPromotionStats, 
   initialHomeSections, 
@@ -994,8 +994,18 @@ export const PromoShopByStore = () => {
         {stores.map(s => (
           <div key={s.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-3">
             <div className="h-28 bg-slate-200 relative">
-              <img src={s.banner} alt={s.storeName} className="w-full h-full object-cover" />
-              <img src={s.logo} alt={s.storeName} className="w-14 h-14 rounded-full border-2 border-white absolute bottom-[-16px] left-4 object-cover shadow" />
+              <img 
+                src={getImageUrl(s.banner, s.storeName)} 
+                alt={s.storeName} 
+                className="w-full h-full object-cover" 
+                onError={(e) => handleImageError(e, s.storeName)}
+              />
+              <img 
+                src={getImageUrl(s.logo, s.storeName)} 
+                alt={s.storeName} 
+                className="w-14 h-14 rounded-full border-2 border-white absolute bottom-[-16px] left-4 object-cover shadow" 
+                onError={(e) => handleImageError(e, s.storeName)}
+              />
             </div>
             <div className="p-4 pt-4 space-y-1">
               <span className="text-[10px] font-bold text-[#ff661a] bg-orange-50 px-2 py-0.5 rounded border border-orange-200">{s.tag}</span>
@@ -1643,7 +1653,12 @@ export const PromoFlashSale = () => {
                   <td className="py-4 px-4 font-mono font-medium text-slate-400">#{idx + 1}</td>
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-3">
-                      <img src={p.image} alt={p.name} className="w-11 h-11 rounded-xl object-cover border border-slate-200" />
+                      <img 
+                        src={getImageUrl(p.image, p.name)} 
+                        alt={p.name} 
+                        className="w-11 h-11 rounded-xl object-cover border border-slate-200" 
+                        onError={(e) => handleImageError(e, p.name)}
+                      />
                       <div>
                         <p className="font-semibold text-slate-900 text-sm m-0">{p.name}</p>
                         <span className="text-xs text-slate-400 font-mono">{p.unit}</span>

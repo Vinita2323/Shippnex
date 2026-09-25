@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trash2, Heart } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
+import { getImageUrl, getCategoryFallbackImage, handleImageError } from '../../../utils/imageUtils';
 import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
 
 const Wishlist = () => {
@@ -42,7 +43,8 @@ const Wishlist = () => {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-5 pb-6">
             {wishlistItems.map((item) => {
-              const itemImg = item.image || item.mainImage || grainsImg;
+              const fallbackImg = getCategoryFallbackImage(item.category || item.name);
+              const itemImg = getImageUrl(item.image || item.mainImage, fallbackImg);
               const itemPrice = item.price || item.salePrice || 0;
               const itemMrp = item.originalPrice || item.mrp || itemPrice;
 
@@ -59,9 +61,9 @@ const Wishlist = () => {
                     </div>
                     
                     <img 
-                      src={itemImg} 
+                      src={getImageUrl(item.image || item.mainImage, item.name)} 
                       alt={item.name} 
-                      onError={(e) => { e.target.src = grainsImg; }}
+                      onError={(e) => handleImageError(e, item.name)}
                       className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" 
                     />
                   </div>

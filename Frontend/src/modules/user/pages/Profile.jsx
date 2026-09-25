@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, Pencil, Camera, Package, Heart, Gift, Headphones, 
   ChevronRight, Wallet, User, MapPin, Lock, FileText, HelpCircle, 
-  PhoneCall, LogOut, Trash2, Sparkles, Clock, ShoppingBag, Loader2, Star, ShieldCheck 
+  PhoneCall, LogOut, Trash2, Sparkles, Clock, ShoppingBag, Loader2, Star, ShieldCheck,
+  Share2, Check, Copy, ExternalLink, X, Send
 } from 'lucide-react';
 import { authService, orderService, getCachedUserOrders } from '../../../services/authService';
 import RatingBreakdownModal from '../../../components/RatingBreakdownModal';
@@ -63,7 +64,51 @@ const Profile = () => {
   const [userName, setUserName] = useState(getUserDisplayName);
   const [userProfile, setUserProfile] = useState(null);
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [copiedAppUrl, setCopiedAppUrl] = useState(false);
   const fileInputRef = useRef(null);
+
+  const APP_PLAYSTORE_URL = 'https://play.google.com/store/apps/details?id=com.shippnex.user';
+
+  const handleCopyAppUrl = async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(APP_PLAYSTORE_URL);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = APP_PLAYSTORE_URL;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedAppUrl(true);
+      setTimeout(() => setCopiedAppUrl(false), 3000);
+    } catch (e) {
+      setCopiedAppUrl(true);
+      setTimeout(() => setCopiedAppUrl(false), 3000);
+    }
+  };
+
+  const handleShareApp = async () => {
+    const shareData = {
+      title: 'ShippNex - Shopping & Express Delivery',
+      text: 'Download the ShippNex app for fast grocery & product delivery, shopping, and logistics on Google Play Store!',
+      url: APP_PLAYSTORE_URL,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+
+    // Open rich share modal if Web Share is not supported or declined
+    setShowShareModal(true);
+  };
   
   useEffect(() => {
     setUserName(getUserDisplayName());
@@ -455,9 +500,34 @@ const Profile = () => {
 
           {/* 4. Feedback & Information */}
           <div className="w-full bg-white rounded-[20px] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] mb-4 border border-slate-100/80">
-            <h4 className="text-[12px] font-extrabold text-[#1e1b4b] uppercase tracking-wider mb-2">Support & Legal</h4>
+            <h4 className="text-[12px] font-extrabold text-[#1e1b4b] uppercase tracking-wider mb-2">Support & App</h4>
             
             <div className="flex flex-col">
+              {/* Share App Option */}
+              <div 
+                className="flex items-center justify-between py-3 border-b border-slate-50 cursor-pointer group"
+                onClick={handleShareApp}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-[36px] h-[36px] rounded-[12px] bg-indigo-50 flex items-center justify-center shrink-0">
+                    <Share2 size={16} className="text-indigo-600" />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14px] font-bold text-[#1e1b4b]">Share App</span>
+                      <span className="text-[10px] font-extrabold bg-indigo-50 text-indigo-600 px-2 py-0.2 rounded-full border border-indigo-100">Play Store</span>
+                    </div>
+                    <span className="text-[11px] font-medium text-slate-400">Invite friends & share download link</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {copiedAppUrl && (
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">Copied!</span>
+                  )}
+                  <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
+                </div>
+              </div>
+
               <div 
                 className="flex items-center justify-between py-3 border-b border-slate-50 cursor-pointer group"
                 onClick={() => navigate('/privacy')}
@@ -618,6 +688,31 @@ const Profile = () => {
               </div>
 
               <div className="flex flex-col gap-1">
+                {/* Share App Option */}
+                <div 
+                  onClick={handleShareApp}
+                  className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 group-hover:bg-indigo-100 transition-colors">
+                      <Share2 size={16} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-[#1e1b4b] m-0 group-hover:text-indigo-600 transition-colors">Share ShippNex App</h4>
+                        <span className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-0.2 rounded-full border border-indigo-100">Play Store</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 m-0 font-medium">Invite friends to download user app</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {copiedAppUrl && (
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">Copied!</span>
+                    )}
+                    <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                </div>
+
                 {/* 24/7 Support */}
                 <div 
                   onClick={() => navigate('/support')}
@@ -918,6 +1013,85 @@ const Profile = () => {
           targetType="user"
           targetName={userName}
         />
+
+        {/* Share App Interactive Modal */}
+        {showShareModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative border border-slate-100 space-y-5 animate-scaleIn">
+              {/* Close Button */}
+              <button 
+                onClick={() => setShowShareModal(false)}
+                className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 border-none bg-transparent cursor-pointer transition-colors"
+                title="Close"
+              >
+                <X size={20} />
+              </button>
+
+              {/* Header with App Logo & Title */}
+              <div className="flex items-center gap-4 pr-6">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#ea580c] to-[#f97316] flex items-center justify-center text-white shadow-md shrink-0">
+                  <Package size={28} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 m-0">Share ShippNex App</h3>
+                  <p className="text-xs text-slate-500 m-0 mt-0.5">Express Shopping, Grocery & Logistics</p>
+                </div>
+              </div>
+
+              {/* Link Box with Copy Button */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-2">
+                <div className="truncate text-xs font-mono text-slate-600 select-all min-w-0">
+                  {APP_PLAYSTORE_URL}
+                </div>
+                <button
+                  onClick={handleCopyAppUrl}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border-none cursor-pointer flex items-center gap-1.5 shrink-0 transition-all ${
+                    copiedAppUrl 
+                      ? 'bg-emerald-600 text-white shadow-xs' 
+                      : 'bg-[#ea580c] hover:bg-[#c2410c] text-white shadow-xs'
+                  }`}
+                >
+                  {copiedAppUrl ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiedAppUrl ? 'Copied!' : 'Copy Link'}</span>
+                </button>
+              </div>
+
+              {/* Quick Social Share Buttons */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                {/* WhatsApp Share */}
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Hey! Download the ShippNex App for the fastest grocery delivery, shopping & logistics on Google Play Store:\n${APP_PLAYSTORE_URL}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 p-3 rounded-xl bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#128C7E] font-bold text-xs no-underline transition-colors border border-[#25D366]/20"
+                >
+                  <Send size={15} />
+                  <span>WhatsApp</span>
+                </a>
+
+                {/* Telegram Share */}
+                <a
+                  href={`https://t.me/share/url?url=${encodeURIComponent(APP_PLAYSTORE_URL)}&text=${encodeURIComponent('Download ShippNex User App on Google Play Store!')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 p-3 rounded-xl bg-[#0088cc]/10 hover:bg-[#0088cc]/20 text-[#0088cc] font-bold text-xs no-underline transition-colors border border-[#0088cc]/20"
+                >
+                  <Send size={15} />
+                  <span>Telegram</span>
+                </a>
+              </div>
+
+              {/* Open in Google Play Store Action */}
+              <button
+                onClick={() => window.open(APP_PLAYSTORE_URL, '_blank')}
+                className="w-full py-3 bg-[#002625] hover:bg-[#003836] text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-md transition-colors flex items-center justify-center gap-2"
+              >
+                <ExternalLink size={16} className="text-[#ff5500]" />
+                <span>Open in Google Play Store</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

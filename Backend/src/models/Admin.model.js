@@ -5,9 +5,23 @@ const adminSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: true,
       trim: true,
       default: 'Administrator',
+    },
+    firstName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    lastName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    mobile: {
+      type: String,
+      trim: true,
+      default: '',
     },
     email: {
       type: String,

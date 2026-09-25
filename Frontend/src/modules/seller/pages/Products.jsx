@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { productService, authService, categoryService } from '../../../services/authService';
+import { getImageUrl, handleImageError, getInitialSvgDataUrl } from '../../../utils/imageUtils';
 
 const Products = () => {
   const navigate = useNavigate();
@@ -526,11 +527,12 @@ const Products = () => {
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200 overflow-hidden">
-                        {product.image ? (
-                          <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <Package size={18} className="text-slate-400" />
-                        )}
+                        <img 
+                          src={getImageUrl(product.image, product.name)} 
+                          alt={product.name} 
+                          className="w-full h-full object-cover" 
+                          onError={(e) => handleImageError(e, product.name)}
+                        />
                       </div>
                       <div className="flex flex-col">
                         <span className="font-semibold text-slate-900 leading-tight">{product.name}</span>
@@ -804,11 +806,12 @@ const Products = () => {
                 </label>
                 <div className="flex items-center gap-3">
                   <div className="w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
-                    {editFormData.image ? (
-                      <img src={editFormData.image} alt="Preview" className="w-full h-full object-cover" />
-                    ) : (
-                      <Package size={24} className="text-slate-400" />
-                    )}
+                    <img 
+                      src={getImageUrl(editFormData.image, editFormData.name || 'Product')} 
+                      alt="Preview" 
+                      className="w-full h-full object-cover" 
+                      onError={(e) => handleImageError(e, editFormData.name || 'Product')}
+                    />
                   </div>
                   <div className="flex-1 space-y-1.5">
                     <input
@@ -920,13 +923,12 @@ const Products = () => {
             <div className="p-6 space-y-4">
               <div className="flex items-start gap-4">
                 <div className="w-24 h-24 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
-                  {viewingProduct.image ? (
-                    <img src={viewingProduct.image} alt={viewingProduct.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-400">
-                      <Package size={28} />
-                    </div>
-                  )}
+                  <img 
+                    src={getImageUrl(viewingProduct.image, viewingProduct.name)} 
+                    alt={viewingProduct.name} 
+                    className="w-full h-full object-cover" 
+                    onError={(e) => handleImageError(e, viewingProduct.name)}
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">

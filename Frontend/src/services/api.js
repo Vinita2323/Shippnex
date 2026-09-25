@@ -39,10 +39,29 @@ const API = axios.create({
 API.interceptors.request.use(
   (config) => {
     let token;
-    const currentPath = window.location.pathname;
+    const currentPath = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
     const requestUrl = config.url || '';
 
-    // Route-specific or endpoint-specific token resolution
+    // Never attach stale authorization headers to public login/otp endpoints
+    const isPublicAuthEndpoint =
+      requestUrl.includes('/auth/admin/login') ||
+      requestUrl.includes('/auth/super-admin/login') ||
+      requestUrl.includes('/auth/seller/login') ||
+      requestUrl.includes('/auth/seller/send-otp') ||
+      requestUrl.includes('/auth/seller/verify-otp') ||
+      requestUrl.includes('/auth/captain/login') ||
+      requestUrl.includes('/auth/captain/send-otp') ||
+      requestUrl.includes('/auth/user/send-otp') ||
+      requestUrl.includes('/auth/user/verify-otp');
+
+    if (isPublicAuthEndpoint) {
+      if (config.headers) {
+        delete config.headers.Authorization;
+      }
+      return config;
+    }
+
+    // Endpoint-specific token resolution
     if (requestUrl.includes('/super-admin') || currentPath.startsWith('/super-admin')) {
       token = localStorage.getItem('shippnex_super_admin_token');
     } else if (requestUrl.includes('/admin') || currentPath.startsWith('/admin')) {
@@ -55,10 +74,10 @@ API.interceptors.request.use(
       requestUrl.includes('/cart') ||
       requestUrl.includes('/wishlist') ||
       requestUrl.includes('/user/') ||
-      requestUrl.includes('/auth/user') ||
-      requestUrl.includes('/transport') ||
-      currentPath.startsWith('/transport')
+      requestUrl.includes('/auth/user')
     ) {
+      token = localStorage.getItem('shippnex_user_token');
+    } else if (requestUrl.includes('/transport') || currentPath.startsWith('/transport')) {
       token =
         localStorage.getItem('shippnex_user_token') ||
         localStorage.getItem('shippnex_seller_token') ||

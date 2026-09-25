@@ -8,20 +8,7 @@ import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { productService } from '../../../services/authService';
 import productReviewService from '../../../services/productReviewService';
-import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
-import oilGheeImg from '../../../assets/user/categories/OilGhee-removebg-preview.png';
-import masalaImg from '../../../assets/user/categories/masala-removebg-preview.png';
-import sugarImg from '../../../assets/user/categories/Sugar-removebg-preview.png';
-
-const getImageUrl = (url, fallback = grainsImg) => {
-  if (!url) return fallback;
-  if (url.startsWith('http') || url.startsWith('data:')) return url;
-  if (url.startsWith('/uploads')) {
-    const baseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : `http://${window.location.hostname}:5000`;
-    return `${baseUrl}${url}`;
-  }
-  return url;
-};
+import { getImageUrl, handleImageError, getInitialSvgDataUrl } from '../../../utils/imageUtils';
 
 const ProductDetails = () => {
   const navigate = useNavigate();
@@ -272,13 +259,10 @@ const ProductDetails = () => {
         {/* Full Edge-to-Edge Image Container */}
         <div className="w-full h-[320px] sm:h-[360px] md:h-[420px] lg:h-[480px] relative overflow-hidden bg-slate-100">
           <img 
-            src={getImageUrl(activeImage || product.mainImage || product.image || (Array.isArray(product.galleryImages) && product.galleryImages[0]))} 
+            src={getImageUrl(activeImage || product.mainImage || product.image || (Array.isArray(product.galleryImages) && product.galleryImages[0]), product.name)} 
             alt={product.name} 
             className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" 
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = product.mainImage || grainsImg;
-            }}
+            onError={(e) => handleImageError(e, product.name)}
           />
         </div>
 
@@ -299,7 +283,12 @@ const ProductDetails = () => {
                     : 'border-slate-200 opacity-70 hover:opacity-100'
                 }`}
               >
-                <img src={getImageUrl(imgUrl)} alt={`Thumbnail ${idx+1}`} className="w-full h-full object-cover" />
+                <img 
+                  src={getImageUrl(imgUrl, product.name)} 
+                  alt={`Thumbnail ${idx+1}`} 
+                  className="w-full h-full object-cover" 
+                  onError={(e) => handleImageError(e, product.name)}
+                />
               </button>
             );
           })}
@@ -732,7 +721,12 @@ const ProductDetails = () => {
                   className="min-w-[135px] w-[135px] md:min-w-0 md:w-full bg-white rounded-xl border border-slate-100 p-2.5 flex flex-col justify-between cursor-pointer shrink-0 md:shrink hover:shadow-md transition-shadow"
                 >
                   <div className="bg-slate-50 rounded-lg h-[90px] w-full flex items-center justify-center p-2 mb-2">
-                    <img src={item.image} alt={item.name} className="max-h-full max-w-full object-contain mix-blend-multiply" />
+                    <img 
+                      src={getImageUrl(item.image, item.name)} 
+                      alt={item.name} 
+                      className="max-h-full max-w-full object-contain mix-blend-multiply" 
+                      onError={(e) => handleImageError(e, item.name)}
+                    />
                   </div>
                   <div>
                     <h4 className="text-[11px] font-medium text-slate-800 m-0 truncate">{item.name}</h4>

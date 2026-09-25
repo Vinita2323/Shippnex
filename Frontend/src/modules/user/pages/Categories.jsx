@@ -7,6 +7,7 @@ import { categoryService, productService } from '../../../services/authService';
 import { 
   getImageUrl, 
   getCategoryFallbackImage,
+  handleImageError,
   grainsImg,
   oilGheeImg,
   masalaImg,
@@ -546,13 +547,10 @@ const Categories = () => {
                       </button>
                       
                       <img 
-                        src={getImageUrl(item.mainImage || item.image, grainsImg)} 
+                        src={getImageUrl(item.mainImage || item.image, item.name)} 
                         alt={item.name} 
                         className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
-                        onError={(e) => {
-                          e.currentTarget.onerror = null;
-                          e.currentTarget.src = grainsImg;
-                        }} 
+                        onError={(e) => handleImageError(e, item.name)} 
                       />
                       
                       {/* Out of stock badge */}

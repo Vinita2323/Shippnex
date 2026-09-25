@@ -5,37 +5,82 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+import fs from 'fs';
+import path from 'path';
+
 // High-speed In-memory Cache for Products listing
 const productsCache = new Map();
 export const invalidateProductsCache = () => {
   productsCache.clear();
 };
 
-const processImage = async (imgStr, folder = 'products') => {
-  if (!imgStr) return 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
-  
-  if (typeof imgStr === 'string' && imgStr.startsWith('data:image/')) {
-    try {
-      const uploadPromise = uploadToCloudinary(imgStr, folder);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Cloudinary upload timed out (5s limit)')), 5000)
-      );
-      const res = await Promise.race([uploadPromise, timeoutPromise]);
-      if (res && res.secure_url) return res.secure_url;
-    } catch (err) {
-      console.warn('Cloudinary upload bypassed/failed:', err.message);
+const saveBase64ImageLocally = (base64Str, subfolder = 'products') => {
+  try {
+    const matches = base64Str.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      return null;
     }
-    // If Cloudinary fails or is disabled, fallback to standard clean URL if base64 is large
-    if (imgStr.length > 500000) {
-      return 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
+
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    let ext = '.png';
+    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = '.jpg';
+    else if (mimeType.includes('webp')) ext = '.webp';
+    else if (mimeType.includes('svg')) ext = '.svg';
+    else if (mimeType.includes('gif')) ext = '.gif';
+
+    const targetDir = path.join(process.cwd(), 'uploads', subfolder.toLowerCase());
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
     }
+
+    const filename = `img-${Date.now()}-${Math.floor(10000 + Math.random() * 90000)}${ext}`;
+    const filePath = path.join(targetDir, filename);
+    fs.writeFileSync(filePath, buffer);
+
+    return `/uploads/${subfolder.toLowerCase()}/${filename}`;
+  } catch (err) {
+    console.error('Failed to save base64 image locally:', err.message);
+    return null;
   }
+};
+
+const processImage = async (imgStr, folder = 'products') => {
+  if (!imgStr || typeof imgStr !== 'string' || !imgStr.trim()) {
+    return '';
+  }
+  
+  if (imgStr.startsWith('data:image/')) {
+    // 1. Try Cloudinary if configured
+    if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_CLOUD_NAME !== 'your_cloud_name_here') {
+      try {
+        const uploadPromise = uploadToCloudinary(imgStr, folder);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Cloudinary upload timed out (6s limit)')), 6000)
+        );
+        const res = await Promise.race([uploadPromise, timeoutPromise]);
+        if (res && res.secure_url) return res.secure_url;
+      } catch (err) {
+        console.warn('[ProductController] Cloudinary upload failed, persisting locally:', err.message);
+      }
+    }
+
+    // 2. Persist to local disk uploads directory
+    const cleanFolder = folder.includes('/') ? folder.split('/')[0] : folder;
+    const localUrl = saveBase64ImageLocally(imgStr, cleanFolder);
+    if (localUrl) return localUrl;
+  }
+
   return imgStr;
 };
 
 const processImageWithCache = async (imgStr, folder = 'products', cache = new Map()) => {
-  if (!imgStr) return 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
-  if (typeof imgStr === 'string' && (imgStr.startsWith('http://') || imgStr.startsWith('https://'))) {
+  if (!imgStr || typeof imgStr !== 'string' || !imgStr.trim()) {
+    return '';
+  }
+  if (imgStr.startsWith('http://') || imgStr.startsWith('https://') || imgStr.startsWith('/uploads/')) {
     return imgStr;
   }
   if (cache.has(imgStr)) {

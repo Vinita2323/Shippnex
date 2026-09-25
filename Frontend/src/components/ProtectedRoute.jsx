@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import PageSkeleton from './PageSkeleton';
 
 const ProtectedRoute = ({ role, redirectPath }) => {
-  const { isAuthenticated, isAuthInitializing, userRole } = useAuth();
+  const { isAuthInitializing, isRoleAuthenticated } = useAuth();
 
   let defaultRedirect = '/login';
   if (role === 'seller') {
@@ -22,13 +22,10 @@ const ProtectedRoute = ({ role, redirectPath }) => {
     return <PageSkeleton />;
   }
 
-  // If not authenticated, redirect to login
-  if (!isAuthenticated) {
-    return <Navigate to={redirectPath || defaultRedirect} replace />;
-  }
+  // Check role-specific authentication
+  const isAuthForRole = isRoleAuthenticated(role);
 
-  // If role is specified, check if user has the correct role
-  if (role && userRole !== role) {
+  if (!isAuthForRole) {
     return <Navigate to={redirectPath || defaultRedirect} replace />;
   }
 
@@ -36,3 +33,4 @@ const ProtectedRoute = ({ role, redirectPath }) => {
 };
 
 export default ProtectedRoute;
+

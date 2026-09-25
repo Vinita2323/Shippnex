@@ -14,6 +14,7 @@ import {
   CreditCard, 
   BarChart3, 
   Users, 
+  User,
   Bell, 
   ShieldCheck, 
   ShieldAlert,
@@ -55,15 +56,44 @@ export const AdminSidebar = () => {
   const { sidebarOpen, activeTab, setActiveTab } = useAdmin();
   const [searchQuery, setSearchQuery] = useState('');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [adminUser, setAdminUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem('shippnex_admin_data') || localStorage.getItem('admin_user') || localStorage.getItem('adminUser') || localStorage.getItem('adminData');
+      return stored ? JSON.parse(stored) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const stored = localStorage.getItem('shippnex_admin_data') || localStorage.getItem('admin_user') || localStorage.getItem('adminUser') || localStorage.getItem('adminData');
+        if (stored) setAdminUser(JSON.parse(stored));
+      } catch (e) {}
+    };
+    handleStorageChange();
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('admin_profile_updated', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('admin_profile_updated', handleStorageChange);
+    };
+  }, []);
+
+  const adminName = adminUser?.name || adminUser?.fullName || 'Administrator';
+  const adminRole = adminUser?.role === 'super_admin' ? 'Super Administrator' : (adminUser?.role === 'admin' ? 'Root Administrator' : (adminUser?.role || 'Administrator'));
 
   const confirmLogout = () => {
+    localStorage.removeItem('shippnex_admin_token');
+    localStorage.removeItem('shippnex_admin_data');
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminUser');
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     sessionStorage.clear();
     setShowLogoutModal(false);
-    navigate('/admin/login');
+    navigate('/admin/login', { replace: true });
   };
   const [expandedMenus, setExpandedMenus] = useState({ 
     categories: false, 
@@ -416,29 +446,33 @@ export const AdminSidebar = () => {
       <div className="p-3 border-t border-[#0b3d3b] bg-[#00201f] shrink-0">
         <div className={`flex items-center ${sidebarOpen ? 'justify-between' : 'justify-center'} gap-2`}>
           {sidebarOpen ? (
-            <div className="flex items-center gap-3 overflow-hidden">
-              <img 
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80" 
-                alt="Admin Avatar"
-                className="w-9 h-9 rounded-xl border border-[#97fc43] object-cover shrink-0" 
-              />
-              <div className="truncate">
-                <p className="text-sm font-semibold text-white truncate">Elena Vance</p>
-                <p className="text-xs text-[#ff9966] truncate font-mono font-medium">Root Administrator</p>
+            <div 
+              onClick={() => setActiveTab('profile')}
+              className="flex items-center gap-3 overflow-hidden cursor-pointer group flex-1 min-w-0"
+              title="View Profile Settings"
+            >
+              <div className="w-9 h-9 rounded-xl bg-[#003836] border border-[#0d4a48] group-hover:border-[#ff5500] flex items-center justify-center text-[#ff5500] shrink-0 shadow-xs transition-colors">
+                <User size={18} />
+              </div>
+              <div className="truncate min-w-0">
+                <p className="text-sm font-semibold text-white truncate m-0 leading-tight group-hover:text-[#ff5500] transition-colors">{adminName}</p>
+                <p className="text-xs text-[#ff9966] truncate font-mono font-medium m-0 mt-0.5">{adminRole}</p>
               </div>
             </div>
           ) : (
-            <img 
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80" 
-              alt="Admin Avatar"
-              className="w-9 h-9 rounded-xl border border-[#97fc43] object-cover" 
-            />
+            <div 
+              onClick={() => setActiveTab('profile')}
+              className="w-9 h-9 rounded-xl bg-[#003836] border border-[#0d4a48] hover:border-[#ff5500] flex items-center justify-center text-[#ff5500] shadow-xs cursor-pointer transition-colors" 
+              title={`${adminName} (${adminRole})`}
+            >
+              <User size={18} />
+            </div>
           )}
 
           {sidebarOpen && (
             <button 
               onClick={() => setShowLogoutModal(true)}
-              className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors border-none bg-transparent cursor-pointer"
+              className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors border-none bg-transparent cursor-pointer shrink-0"
               title="Logout"
             >
               <LogOut size={18} />

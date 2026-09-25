@@ -1,29 +1,34 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Lock, Mail, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { authService } from '../../../services/authService';
 import { useAuth } from '../../../context/AuthContext';
 
 export const AdminLogin = () => {
   const navigate = useNavigate();
   const { syncAuthFromStorage } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@shippnex.com');
+  const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!email || !password) {
+      setErrorMsg('Please enter both admin email and password');
+      return;
+    }
+
     setErrorMsg('');
     setLoading(true);
     try {
       await authService.adminLogin(email, password);
-      syncAuthFromStorage();
+      syncAuthFromStorage('admin');
       setLoading(false);
-      navigate('/admin');
+      navigate('/admin', { replace: true });
     } catch (err) {
       setLoading(false);
-      setErrorMsg(err.response?.data?.message || 'Invalid email or password');
+      setErrorMsg(err.response?.data?.message || err.message || 'Invalid email or password');
     }
   };
 
@@ -46,10 +51,11 @@ export const AdminLogin = () => {
           <p className="text-xs text-teal-300/70">Enter your credentials to access the system panel</p>
         </div>
 
-        {/* Login Form */}
+        {/* Login Form Error Alert */}
         {errorMsg && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold p-3 rounded-xl text-center">
-            {errorMsg}
+          <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold p-3 rounded-xl text-center flex items-center justify-center gap-2">
+            <AlertCircle size={15} className="shrink-0" />
+            <span>{errorMsg}</span>
           </div>
         )}
 
@@ -87,9 +93,14 @@ export const AdminLogin = () => {
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-[#ff5500] hover:bg-[#e04a00] text-white font-bold py-3.5 px-4 rounded-xl text-sm transition-all flex items-center justify-center gap-2 border-none cursor-pointer shadow-lg shadow-[#ff5500]/20 mt-2"
+            className="w-full bg-[#ff5500] hover:bg-[#e04a00] text-white font-bold py-3.5 px-4 rounded-xl text-sm transition-all flex items-center justify-center gap-2 border-none cursor-pointer shadow-lg shadow-[#ff5500]/20 mt-2 disabled:opacity-50"
           >
-            {loading ? 'Authenticating...' : (
+            {loading ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                <span>Authenticating...</span>
+              </>
+            ) : (
               <>
                 <span>Sign In to Admin Panel</span>
                 <ArrowRight size={18} />
@@ -98,10 +109,22 @@ export const AdminLogin = () => {
           </button>
         </form>
 
-        <div className="text-center pt-2">
+        {/* Demo Credentials Helper */}
+        <div className="text-center pt-2 border-t border-[#0d4a48]/50 space-y-2">
+          <button
+            type="button"
+            onClick={() => {
+              setEmail('admin@shippnex.com');
+              setPassword('admin123');
+            }}
+            className="text-[11px] text-teal-300/80 hover:text-white underline bg-transparent border-none cursor-pointer font-mono transition-colors"
+          >
+            Autofill Default Admin Credentials
+          </button>
           <p className="text-[11px] text-teal-300/50 font-mono">ShippNex Secure Gateway v2.4</p>
         </div>
       </div>
     </div>
   );
 };
+

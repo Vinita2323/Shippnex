@@ -201,6 +201,32 @@ export const authService = {
     return response.data;
   },
 
+  getAdminProfile: async () => {
+    const response = await API.get('/auth/admin/profile');
+    if (response.data && response.data.admin) {
+      localStorage.setItem('shippnex_admin_data', JSON.stringify(response.data.admin));
+      try {
+        window.dispatchEvent(new Event('admin_profile_updated'));
+      } catch (e) {}
+    }
+    return response.data;
+  },
+
+  updateAdminProfile: async (profileData) => {
+    const response = await API.put('/auth/admin/profile', profileData);
+    if (response.data && response.data.admin) {
+      localStorage.setItem('shippnex_admin_data', JSON.stringify(response.data.admin));
+      if (response.data.token) {
+        localStorage.setItem('shippnex_admin_token', response.data.token);
+      }
+      try {
+        window.dispatchEvent(new Event('admin_profile_updated'));
+      } catch (e) {}
+    }
+    return response.data;
+  },
+
+
   // Logout utility
   logout: (role) => {
     removeFCMToken(role).catch(() => {});
@@ -1161,6 +1187,12 @@ export const adminService = {
   updateReturnStatus: async (orderId, payload) => {
     const response = await API.put(`/admin/orders/${orderId}/return-status`, payload);
     return response.data;
+  },
+  getProfile: async () => {
+    return authService.getAdminProfile();
+  },
+  updateProfile: async (payload) => {
+    return authService.updateAdminProfile(payload);
   },
 };
 

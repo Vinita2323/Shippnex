@@ -5,6 +5,7 @@ import { categoryService, bannerService, productService, walletService, captainS
 import { faqService } from '../../../services/faqService';
 import { supportService } from '../../../services/supportService';
 import { mockUsers, mockSellers, mockCaptains, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
+import { getImageUrl, handleImageError, getInitialSvgDataUrl } from '../../../utils/imageUtils';
 import { 
   Search, 
   Download, 
@@ -3450,7 +3451,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
       header: 'General',
       status: 'Active',
       order: (treeData.length + 1).toString(),
-      imageUrl: '/uploads/categories/default.png'
+      imageUrl: ''
     });
     setIsAddModalOpen(true);
   };
@@ -3464,7 +3465,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
       header: 'General',
       status: 'Active',
       order: '1',
-      imageUrl: '/uploads/categories/default.png'
+      imageUrl: ''
     });
     setIsAddModalOpen(true);
   };
@@ -3479,7 +3480,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
       header: cat.header || 'General',
       status: cat.status,
       order: String(cat.order || '1'),
-      imageUrl: cat.image || '/uploads/categories/default.png'
+      imageUrl: cat.image || ''
     });
     setIsAddModalOpen(true);
   };
@@ -3493,7 +3494,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
       header: 'General',
       status: 'Active',
       order: '1',
-      imageUrl: '/uploads/categories/default.png'
+      imageUrl: ''
     });
     setIsAddModalOpen(true);
   };
@@ -3782,7 +3783,12 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                         ) : (
                           <span className="w-5" />
                         )}
-                        <img src={sub.image} alt={sub.name} className="w-12 h-12 rounded-xl object-cover border border-slate-100 shadow-2xs" />
+                        <img 
+                          src={getImageUrl(sub.image, sub.name)} 
+                          alt={sub.name} 
+                          className="w-12 h-12 rounded-xl object-cover border border-slate-100 shadow-2xs" 
+                          onError={(e) => handleImageError(e, sub.name)}
+                        />
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <h3 className="text-sm font-bold text-slate-900">{sub.name}</h3>
@@ -3835,7 +3841,12 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                           <div key={child.id} className="bg-slate-50/70 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <ChevronRight size={14} className="text-[#ff5500]" />
-                              <img src={child.image} alt={child.name} className="w-9 h-9 rounded-lg object-cover border border-slate-200" />
+                              <img 
+                                src={getImageUrl(child.image, child.name)} 
+                                alt={child.name} 
+                                className="w-9 h-9 rounded-lg object-cover border border-slate-200" 
+                                onError={(e) => handleImageError(e, child.name)}
+                              />
                               <div>
                                 <div className="flex items-center gap-2">
                                   <h5 className="text-xs font-bold text-slate-900">{child.name}</h5>
@@ -3868,7 +3879,12 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                         <button onClick={() => toggleExpand(cat.id)} className="text-slate-400 hover:text-slate-600 cursor-pointer bg-transparent border-none p-1">
                           {expanded[cat.id] ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                         </button>
-                        <img src={cat.image} alt={cat.name} className="w-12 h-12 rounded-xl object-cover border border-slate-100 shadow-2xs" />
+                        <img 
+                          src={getImageUrl(cat.image, cat.name)} 
+                          alt={cat.name} 
+                          className="w-12 h-12 rounded-xl object-cover border border-slate-100 shadow-2xs" 
+                          onError={(e) => handleImageError(e, cat.name)}
+                        />
                         <div className="space-y-1">
                           <h3 className="text-sm font-bold text-slate-900">{cat.name}</h3>
                           <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
@@ -3904,7 +3920,12 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                             <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-3 flex items-center justify-between hover:bg-slate-100/70 transition-all">
                               <div className="flex items-center gap-3">
                                 <span className="w-5" />
-                                <img src={sub.image} alt={sub.name} className="w-10 h-10 rounded-lg object-cover border border-slate-200" />
+                                <img 
+                                  src={getImageUrl(sub.image, sub.name)} 
+                                  alt={sub.name} 
+                                  className="w-10 h-10 rounded-lg object-cover border border-slate-200" 
+                                  onError={(e) => handleImageError(e, sub.name)}
+                                />
                                 <div className="space-y-1">
                                   <div className="flex items-center gap-2">
                                     <h4 className="text-xs font-bold text-slate-900">{sub.name}</h4>
@@ -4040,9 +4061,10 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                 <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-2">
                   {formData.imageUrl ? (
                     <img 
-                      src={formData.imageUrl} 
+                      src={getImageUrl(formData.imageUrl, formData.name || 'Category')} 
                       alt="Category Preview" 
                       className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-2xs shrink-0" 
+                      onError={(e) => handleImageError(e, formData.name || 'Category')}
                     />
                   ) : (
                     <div className="w-12 h-12 rounded-xl bg-slate-100 border border-dashed border-slate-300 flex items-center justify-center text-slate-400 shrink-0">
@@ -8807,124 +8829,336 @@ export const TaxManagement = () => {
 };
 
 /* =========================================================================
-   16. ADMIN PROFILE PAGE
+   16. ADMIN PROFILE PAGE (PERSISTENT & API-DRIVEN)
    ========================================================================= */
 export const AdminProfile = () => {
   const [isEditing, setIsEditing] = useState(false);
-  const [profile, setProfile] = useState({
-    firstName: 'Harsh kkk',
-    lastName: 'Panchal',
-    email: 'harshvardhanpanc145@gmail.com',
-    mobile: '9111966732',
-    role: 'Super Admin',
-    createdAt: '12/13/2025, 4:35:56 PM'
-  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
 
-  const handleSave = (e) => {
+  const getInitialProfile = () => {
+    try {
+      const stored = localStorage.getItem('shippnex_admin_data') || localStorage.getItem('admin_user') || localStorage.getItem('adminUser');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const nameParts = (parsed.name || '').split(' ');
+        return {
+          firstName: parsed.firstName || nameParts[0] || 'Administrator',
+          lastName: parsed.lastName || nameParts.slice(1).join(' ') || '',
+          email: parsed.email || 'admin@shippnex.com',
+          mobile: parsed.mobile || parsed.phone || '',
+          role: parsed.role === 'super_admin' ? 'Super Admin' : (parsed.role === 'admin' ? 'Root Administrator' : (parsed.role || 'Admin')),
+          createdAt: parsed.createdAt ? new Date(parsed.createdAt).toLocaleString() : new Date().toLocaleString(),
+          password: '',
+          confirmPassword: '',
+        };
+      }
+    } catch (e) {}
+    return {
+      firstName: 'Administrator',
+      lastName: '',
+      email: 'admin@shippnex.com',
+      mobile: '',
+      role: 'Root Administrator',
+      createdAt: new Date().toLocaleString(),
+      password: '',
+      confirmPassword: '',
+    };
+  };
+
+  const [profile, setProfile] = useState(getInitialProfile);
+
+  // Fetch persisted admin profile from backend on mount
+  useEffect(() => {
+    let isMounted = true;
+    const loadProfile = async () => {
+      setIsLoading(true);
+      try {
+        const res = await adminService.getProfile();
+        if (isMounted && res && res.admin) {
+          const adm = res.admin;
+          const nameParts = (adm.name || '').split(' ');
+          setProfile(prev => ({
+            ...prev,
+            firstName: adm.firstName || nameParts[0] || '',
+            lastName: adm.lastName || nameParts.slice(1).join(' ') || '',
+            email: adm.email || prev.email,
+            mobile: adm.mobile || adm.phone || '',
+            role: adm.role === 'super_admin' ? 'Super Admin' : (adm.role === 'admin' ? 'Root Administrator' : (adm.role || 'Admin')),
+            createdAt: adm.createdAt ? new Date(adm.createdAt).toLocaleString() : prev.createdAt,
+            password: '',
+            confirmPassword: '',
+          }));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch admin profile from backend:', err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    loadProfile();
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleSave = async (e) => {
     e.preventDefault();
-    setIsEditing(false);
+    setStatusMessage(null);
+
+    if (profile.password && profile.password !== profile.confirmPassword) {
+      setStatusMessage({ type: 'error', text: 'Passwords do not match. Please verify.' });
+      return;
+    }
+
+    if (profile.password && profile.password.length < 4) {
+      setStatusMessage({ type: 'error', text: 'Password must be at least 4 characters.' });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        firstName: profile.firstName.trim(),
+        lastName: profile.lastName.trim(),
+        name: `${profile.firstName.trim()} ${profile.lastName.trim()}`.trim() || 'Administrator',
+        email: profile.email.trim(),
+        mobile: profile.mobile.trim(),
+      };
+
+      if (profile.password) {
+        payload.password = profile.password;
+      }
+
+      const res = await adminService.updateProfile(payload);
+      if (res && res.success) {
+        const updated = res.admin || payload;
+        const nameParts = (updated.name || '').split(' ');
+        setProfile(prev => ({
+          ...prev,
+          firstName: updated.firstName || nameParts[0] || prev.firstName,
+          lastName: updated.lastName || nameParts.slice(1).join(' ') || prev.lastName,
+          email: updated.email || prev.email,
+          mobile: updated.mobile || prev.mobile,
+          role: updated.role === 'super_admin' ? 'Super Admin' : (updated.role === 'admin' ? 'Root Administrator' : (updated.role || prev.role)),
+          createdAt: updated.createdAt ? new Date(updated.createdAt).toLocaleString() : prev.createdAt,
+          password: '',
+          confirmPassword: '',
+        }));
+
+        setStatusMessage({ type: 'success', text: 'Admin details updated and permanently saved!' });
+        setIsEditing(false);
+
+        // Notify other components (sidebar, header) in real time
+        try {
+          window.dispatchEvent(new Event('admin_profile_updated'));
+        } catch (e) {}
+      } else {
+        setStatusMessage({ type: 'error', text: res?.message || 'Failed to update profile.' });
+      }
+    } catch (err) {
+      console.error('Error updating admin profile:', err);
+      const msg = err.response?.data?.message || err.message || 'An error occurred while saving profile changes.';
+      setStatusMessage({ type: 'error', text: msg });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn font-sans">
+    <div className="space-y-6 animate-fadeIn font-sans max-w-4xl mx-auto pb-12">
       {/* Title Bar & Breadcrumb */}
       <div className="flex justify-between items-center bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-        <h1 className="text-xl font-bold text-slate-900 m-0">Admin Profile</h1>
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 m-0">Admin Profile</h1>
+          <p className="text-xs text-slate-500 m-0 mt-0.5">Manage your administrator account details and security credentials</p>
+        </div>
         <div className="text-xs text-slate-500 font-medium">
-          <span className="text-blue-600 font-semibold cursor-pointer">Home</span> / <span>Profile</span>
+          <span className="text-[#003836] font-semibold">Admin</span> / <span className="text-[#ff5500] font-semibold">Profile</span>
         </div>
       </div>
 
+      {/* Status Notification */}
+      {statusMessage && (
+        <div className={`p-4 rounded-2xl flex items-center justify-between text-xs font-semibold animate-fadeIn ${
+          statusMessage.type === 'success' 
+            ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
+            : 'bg-rose-50 border border-rose-200 text-rose-800'
+        }`}>
+          <div className="flex items-center gap-2">
+            {statusMessage.type === 'success' ? (
+              <CheckCircle size={16} className="text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle size={16} className="text-rose-600 shrink-0" />
+            )}
+            <span>{statusMessage.text}</span>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setStatusMessage(null)}
+            className="text-xs underline bg-transparent border-none cursor-pointer font-bold ml-4"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Main Profile Info Card */}
-      <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-4">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Card Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-          <h3 className="text-base font-bold text-slate-800 m-0">Profile Information</h3>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#003836] border border-[#0d4a48] flex items-center justify-center text-[#ff5500] font-bold shadow-xs">
+              <User size={20} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800 m-0">Profile Information</h3>
+              <p className="text-xs text-slate-500 m-0">Synchronized permanently with database</p>
+            </div>
+          </div>
+
           <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="px-4 py-2 bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-bold rounded-xl border-none transition-all shadow-sm cursor-pointer"
+            type="button"
+            onClick={() => {
+              setIsEditing(!isEditing);
+              setStatusMessage(null);
+            }}
+            className={`px-4 py-2 text-xs font-bold rounded-xl border-none transition-all shadow-sm cursor-pointer ${
+              isEditing 
+                ? 'bg-slate-200 hover:bg-slate-300 text-slate-700' 
+                : 'bg-[#ff5500] hover:bg-[#e04b00] text-white'
+            }`}
           >
             {isEditing ? 'Cancel Edit' : 'Edit Profile'}
           </button>
         </div>
 
         {/* Card Body */}
-        {isEditing ? (
-          <form onSubmit={handleSave} className="p-6 space-y-4">
+        {isLoading ? (
+          <div className="p-12 flex flex-col items-center justify-center text-slate-400 gap-3">
+            <RefreshCw size={24} className="animate-spin text-[#ff5500]" />
+            <span className="text-xs font-medium">Loading profile from server...</span>
+          </div>
+        ) : isEditing ? (
+          <form onSubmit={handleSave} className="p-6 space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
-                <label className="text-xs font-semibold text-slate-500 block mb-1">First Name</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">First Name</label>
                 <input
                   type="text"
+                  required
                   value={profile.firstName}
                   onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                  placeholder="e.g. Elena or Harsh"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff5500] focus:bg-white transition-colors"
                 />
               </div>
+
               <div>
-                <label className="text-xs font-semibold text-slate-500 block mb-1">Last Name</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">Last Name</label>
                 <input
                   type="text"
                   value={profile.lastName}
                   onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                  placeholder="e.g. Vance or Panchal"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff5500] focus:bg-white transition-colors"
                 />
               </div>
+
               <div>
-                <label className="text-xs font-semibold text-slate-500 block mb-1">Email</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">Email Address</label>
                 <input
                   type="email"
+                  required
                   value={profile.email}
                   onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                  placeholder="admin@shippnex.com"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff5500] focus:bg-white transition-colors"
                 />
               </div>
+
               <div>
-                <label className="text-xs font-semibold text-slate-500 block mb-1">Mobile</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">Mobile Number</label>
                 <input
                   type="text"
                   value={profile.mobile}
                   onChange={(e) => setProfile({ ...profile, mobile: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                  placeholder="e.g. 9876543210"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff5500] focus:bg-white transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">New Password <span className="text-slate-400 font-normal">(Leave blank to keep current)</span></label>
+                <input
+                  type="password"
+                  value={profile.password}
+                  onChange={(e) => setProfile({ ...profile, password: e.target.value })}
+                  placeholder="••••••••"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff5500] focus:bg-white transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={profile.confirmPassword}
+                  onChange={(e) => setProfile({ ...profile, confirmPassword: e.target.value })}
+                  placeholder="••••••••"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ff5500] focus:bg-white transition-colors"
                 />
               </div>
             </div>
-            <div className="pt-3 flex justify-end">
-              <button
-                type="submit"
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-sm"
-              >
-                Save Changes
-              </button>
+
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">Changes will be saved permanently to MongoDB database.</span>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border-none cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-sm transition-colors flex items-center gap-2"
+                >
+                  {isSaving && <RefreshCw size={14} className="animate-spin" />}
+                  {isSaving ? 'Saving Changes...' : 'Save Permanently'}
+                </button>
+              </div>
             </div>
           </form>
         ) : (
           <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-8 text-xs">
-            <div>
-              <span className="text-slate-500 font-medium block mb-1.5">First Name</span>
-              <span className="text-slate-800 font-semibold text-sm">{profile.firstName}</span>
+            <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
+              <span className="text-slate-500 font-medium block mb-1">First Name</span>
+              <span className="text-slate-800 font-bold text-sm">{profile.firstName || '—'}</span>
             </div>
-            <div>
-              <span className="text-slate-500 font-medium block mb-1.5">Last Name</span>
-              <span className="text-slate-800 font-semibold text-sm">{profile.lastName}</span>
+            <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
+              <span className="text-slate-500 font-medium block mb-1">Last Name</span>
+              <span className="text-slate-800 font-bold text-sm">{profile.lastName || '—'}</span>
             </div>
-            <div>
-              <span className="text-slate-500 font-medium block mb-1.5">Email</span>
-              <span className="text-slate-800 font-semibold text-sm">{profile.email}</span>
+            <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
+              <span className="text-slate-500 font-medium block mb-1">Email Address</span>
+              <span className="text-slate-800 font-bold text-sm">{profile.email || '—'}</span>
             </div>
-            <div>
-              <span className="text-slate-500 font-medium block mb-1.5">Mobile</span>
-              <span className="text-slate-800 font-semibold text-sm">{profile.mobile}</span>
+            <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
+              <span className="text-slate-500 font-medium block mb-1">Mobile Number</span>
+              <span className="text-slate-800 font-bold text-sm">{profile.mobile || '—'}</span>
             </div>
-            <div>
-              <span className="text-slate-500 font-medium block mb-1.5">Role</span>
-              <span className="inline-block bg-blue-100 text-blue-600 font-bold px-3 py-1 rounded-full text-xs">
+            <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
+              <span className="text-slate-500 font-medium block mb-1">Assigned Platform Role</span>
+              <span className="inline-block bg-[#003836] text-[#ff9966] font-bold px-3 py-1 rounded-full text-xs border border-[#0d4a48]">
                 {profile.role}
               </span>
             </div>
-            <div>
-              <span className="text-slate-500 font-medium block mb-1.5">Created At</span>
-              <span className="text-slate-800 font-semibold text-sm">{profile.createdAt}</span>
+            <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
+              <span className="text-slate-500 font-medium block mb-1">Account Created At</span>
+              <span className="text-slate-800 font-bold text-sm">{profile.createdAt}</span>
             </div>
           </div>
         )}
