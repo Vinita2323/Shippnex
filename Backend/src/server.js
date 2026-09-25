@@ -67,6 +67,10 @@ app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  // Let browsers cache the preflight so every cart/wishlist/order mutation
+  // (which carries a custom Authorization header) doesn't pay for a second
+  // OPTIONS round trip on top of the actual request.
+  maxAge: 86400,
 }));
 
 // CSP headers to allow Google Maps and other third-party services

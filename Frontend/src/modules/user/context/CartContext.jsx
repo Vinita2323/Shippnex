@@ -1,8 +1,13 @@
-import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { cartService } from '../../../services/authService';
 import { useAuth } from '../../../context/AuthContext';
 
 const CartContext = createContext();
+
+// Rapid +/- taps are coalesced into a single network call after this pause,
+// instead of firing one request per click (the previous cause of cart actions
+// appearing to "hang" for many seconds while a backlog of requests drained).
+const SYNC_DEBOUNCE_MS = 450;
 
 export const useCart = () => {
   const context = useContext(CartContext);
@@ -16,6 +21,22 @@ export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const { isAuthenticated: authContextIsAuthenticated, isAuthInitializing, userRole } = useAuth();
+
+  const cartItemsRef = useRef(cartItems);
+  useEffect(() => {
+    cartItemsRef.current = cartItems;
+  }, [cartItems]);
+
+  // Tracks product ids with a scheduled/in-flight server sync so an
+  // in-between fetchCart()/reconcile doesn't clobber the optimistic value.
+  const pendingSyncIds = useRef(new Set());
+  const syncTimers = useRef({});
+
+  useEffect(() => {
+    return () => {
+      Object.values(syncTimers.current).forEach(clearTimeout);
+    };
+  }, []);
 
   // Format backend cart items for frontend consumption
   const formatCartItems = (backendItems = []) => {
@@ -75,6 +96,74 @@ export const CartProvider = ({ children }) => {
     fetchCart();
   }, [fetchCart]);
 
+  // Merge authoritative server cart into local state without discarding
+  // optimistic edits that are still mid-flight for other products.
+  const reconcileServerCart = useCallback((serverItems) => {
+    const formatted = formatCartItems(serverItems);
+    setCartItems((prev) => {
+      const merged = [...formatted];
+      prev.forEach((localItem) => {
+        const pid = String(localItem.productId || localItem.id);
+        if (pendingSyncIds.current.has(pid)) {
+          const idx = merged.findIndex((m) => String(m.productId) === pid);
+          if (idx > -1) merged[idx] = localItem;
+          else merged.push(localItem);
+        }
+      });
+      return merged;
+    });
+    localStorage.setItem('shippnex_local_cart', JSON.stringify(formatted));
+  }, []);
+
+  const runSync = useCallback(async (productId) => {
+    const key = String(productId);
+    const item = cartItemsRef.current.find((i) => String(i.productId || i.id) === key);
+
+    try {
+      let res;
+      if (!item || (item.quantity || 0) <= 0) {
+        res = await cartService.removeFromCart(productId);
+      } else {
+        res = await cartService.updateCartItem(productId, undefined, item.quantity, item);
+      }
+      if (res && res.success && res.cart) {
+        reconcileServerCart(res.cart.items || []);
+      }
+      return res;
+    } catch (err) {
+      console.error('Cart sync failed for product', productId, err);
+      // Roll back to authoritative server state (e.g. stock ran out mid-edit)
+      fetchCart();
+      throw err;
+    } finally {
+      pendingSyncIds.current.delete(key);
+    }
+  }, [reconcileServerCart, fetchCart]);
+
+  // immediate:true (buy-now / remove) lets the caller see real success/failure.
+  // Debounced background syncs swallow the error here since runSync already
+  // rolled the optimistic state back to the server's authoritative version.
+  const scheduleSync = useCallback((productId, { immediate = false } = {}) => {
+    const key = String(productId);
+    pendingSyncIds.current.add(key);
+
+    if (syncTimers.current[key]) {
+      clearTimeout(syncTimers.current[key]);
+      delete syncTimers.current[key];
+    }
+
+    if (immediate) {
+      return runSync(key);
+    }
+
+    return new Promise((resolve) => {
+      syncTimers.current[key] = setTimeout(() => {
+        delete syncTimers.current[key];
+        runSync(key).catch(() => {}).finally(resolve);
+      }, SYNC_DEBOUNCE_MS);
+    });
+  }, [runSync]);
+
   const addToCart = async (product, quantity = 1, options = {}) => {
     if (!product) return { success: false };
 
@@ -100,57 +189,97 @@ export const CartProvider = ({ children }) => {
       return { requiresAuth: true };
     }
 
-    try {
-      const res = await cartService.addToCart(productId, quantity, product);
-      if (res && res.success && res.cart) {
-        const formatted = formatCartItems(res.cart.items || []);
-        setCartItems(formatted);
-        localStorage.setItem('shippnex_local_cart', JSON.stringify(formatted));
-        return { success: true };
+    // Update local cart instantly so the UI reflects the change on click,
+    // instead of waiting on the network round trip.
+    const price = Number(product.salePrice ?? product.price ?? 0);
+    const originalPrice = Number(product.mrp ?? product.originalPrice ?? price);
+
+    setCartItems((prev) => {
+      const idx = prev.findIndex((i) => String(i.productId || i.id) === String(productId));
+      if (idx > -1) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], quantity: (next[idx].quantity || 0) + Number(quantity) };
+        return next;
       }
-    } catch (err) {
-      console.error('Error adding to cart:', err);
-      return { success: false, message: err.response?.data?.message || 'Failed to add item to cart' };
+      return [
+        ...prev,
+        {
+          ...product,
+          id: productId,
+          productId,
+          name: product.name,
+          image: product.image || product.mainImage,
+          price,
+          originalPrice,
+          quantity: Number(quantity),
+        },
+      ];
+    });
+
+    if (options.isBuyNow) {
+      // Buy-now heads straight to checkout, so confirm the write actually landed
+      // (and surface the real error instead of assuming success).
+      try {
+        const res = await scheduleSync(productId, { immediate: true });
+        if (res && res.success) return { success: true };
+        return { success: false, message: res?.message || 'Failed to add item to cart' };
+      } catch (err) {
+        return { success: false, message: err.response?.data?.message || 'Failed to add item to cart' };
+      }
     }
+
+    scheduleSync(productId);
+    return { success: true };
   };
 
   const updateQuantity = async (productId, delta, exactQty) => {
     if (!authContextIsAuthenticated) return;
-    try {
-      const targetProd = cartItems.find((i) => String(i.id || i._id) === String(productId));
-      const res = await cartService.updateCartItem(productId, delta, exactQty, targetProd);
-      if (res && res.success && res.cart) {
-        const formatted = formatCartItems(res.cart.items || []);
-        setCartItems(formatted);
-        localStorage.setItem('shippnex_local_cart', JSON.stringify(formatted));
+
+    setCartItems((prev) => {
+      const idx = prev.findIndex((i) => String(i.productId || i.id) === String(productId));
+      if (idx === -1) return prev;
+      const current = prev[idx];
+      const newQty = exactQty !== undefined ? Number(exactQty) : (current.quantity || 0) + Number(delta);
+      if (newQty <= 0) {
+        return prev.filter((_, i) => i !== idx);
       }
-    } catch (err) {
-      console.error('Error updating cart item quantity:', err);
-    }
+      const next = [...prev];
+      next[idx] = { ...current, quantity: newQty };
+      return next;
+    });
+
+    scheduleSync(productId);
   };
 
   const removeFromCart = async (productId) => {
     if (!authContextIsAuthenticated) return;
+
+    const key = String(productId);
+    if (syncTimers.current[key]) {
+      clearTimeout(syncTimers.current[key]);
+      delete syncTimers.current[key];
+    }
+
+    setCartItems((prev) => prev.filter((i) => String(i.productId || i.id) !== key));
     try {
-      const res = await cartService.removeFromCart(productId);
-      if (res && res.success && res.cart) {
-        const formatted = formatCartItems(res.cart.items || []);
-        setCartItems(formatted);
-        localStorage.setItem('shippnex_local_cart', JSON.stringify(formatted));
-      }
-    } catch (err) {
-      console.error('Error removing item from cart:', err);
+      await scheduleSync(productId, { immediate: true });
+    } catch {
+      // runSync already rolled the optimistic removal back via fetchCart().
     }
   };
 
   const clearCart = async () => {
+    Object.values(syncTimers.current).forEach(clearTimeout);
+    syncTimers.current = {};
+    pendingSyncIds.current.clear();
+
     if (!authContextIsAuthenticated) {
       setCartItems([]);
       return;
     }
+    setCartItems([]);
     try {
       await cartService.clearCart();
-      setCartItems([]);
     } catch (err) {
       console.error('Error clearing cart:', err);
     }

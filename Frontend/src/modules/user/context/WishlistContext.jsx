@@ -14,6 +14,22 @@ export const useWishlist = () => {
   return context;
 };
 
+const normalizeWishlistProducts = (prods = []) => {
+  return prods.map((p) => {
+    if (typeof p === 'object' && p !== null) {
+      return {
+        ...p,
+        id: p._id || p.id,
+        image: p.image || p.mainImage || '',
+        price: p.salePrice !== undefined ? p.salePrice : (p.price || 0),
+        originalPrice: p.mrp !== undefined ? p.mrp : (p.originalPrice || p.price || 0),
+        brand: p.brand || p.seller || 'ShippNex Select',
+      };
+    }
+    return p;
+  });
+};
+
 export const WishlistProvider = ({ children }) => {
   const [wishlistItems, setWishlistItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -45,21 +61,7 @@ export const WishlistProvider = ({ children }) => {
         setLoading(true);
         const res = await wishlistService.getWishlist();
         if (res && res.success && res.wishlist) {
-          const prods = res.wishlist.products || [];
-          const normalized = prods.map((p) => {
-            if (typeof p === 'object' && p !== null) {
-              return {
-                ...p,
-                id: p._id || p.id,
-                image: p.image || p.mainImage || '',
-                price: p.salePrice !== undefined ? p.salePrice : (p.price || 0),
-                originalPrice: p.mrp !== undefined ? p.mrp : (p.originalPrice || p.price || 0),
-                brand: p.brand || p.seller || 'ShippNex Select',
-              };
-            }
-            return p;
-          });
-          setWishlistItems(normalized);
+          setWishlistItems(normalizeWishlistProducts(res.wishlist.products || []));
         }
       } catch (err) {
         if (err?.response?.status === 401) {
@@ -122,14 +124,30 @@ export const WishlistProvider = ({ children }) => {
     const normalizedProduct = { ...product, id: itemId };
 
     if (authContextIsAuthenticated && userRole === 'user') {
+      // Update instantly; reconcile with the server's response once it lands
+      // instead of the previous toggle-then-refetch round trip (two requests
+      // for one tap, and no visible change until both completed).
+      const wasInWishlist = isInWishlist(itemId);
+      setWishlistItems((prevItems) => {
+        if (wasInWishlist) {
+          return prevItems.filter((item) => String(item.id || item._id) !== itemId);
+        }
+        return [...prevItems, normalizedProduct];
+      });
+
       try {
         const res = await wishlistService.toggleWishlist(itemId);
         if (res && res.success) {
-          await refreshWishlist();
+          setWishlistItems(normalizeWishlistProducts(res.wishlist?.products || []));
           return res.isAdded;
         }
+        // Unexpected response shape: fall back to authoritative refetch
+        await refreshWishlist();
+        return !wasInWishlist;
       } catch (err) {
         console.error('Failed to toggle server wishlist:', err);
+        await refreshWishlist();
+        return wasInWishlist;
       }
     }
 

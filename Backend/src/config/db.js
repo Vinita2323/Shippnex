@@ -29,8 +29,12 @@ const connectDB = async () => {
     isConnected = true;
     console.log(`✅ MongoDB Connected: ${conn.connection.host} [DB: ${conn.connection.name}] (Pool: 5-50)`);
 
-    // Trigger index sync only when explicitly requested (avoids blocking Atlas connection pool on every nodemon reload)
-    if (!indexesSynced && process.env.SYNC_INDEXES_ON_STARTUP === 'true') {
+    // Always sync indexes in production so a fresh deploy never silently runs
+    // without them (createIndexes() is non-blocking/non-destructive and only
+    // builds what's missing). In local dev this stays opt-in via the env flag
+    // to avoid re-syncing on every nodemon reload.
+    const shouldSyncIndexes = process.env.NODE_ENV === 'production' || process.env.SYNC_INDEXES_ON_STARTUP === 'true';
+    if (!indexesSynced && shouldSyncIndexes) {
       indexesSynced = true;
       import('../scripts/syncIndexes.js')
         .then((m) => m.syncAllIndexes())

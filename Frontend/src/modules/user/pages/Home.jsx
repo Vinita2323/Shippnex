@@ -41,6 +41,10 @@ import readyCookImg from '../../../assets/user/categories/readyfoot-removebg-pre
 import homeCareImg from '../../../assets/user/categories/homecare-removebg-preview.png';
 import personalCareImg from '../../../assets/user/categories/personalcare-removebg-preview.png';
 import { getImageUrl, getCategoryFallbackImage, handleImageError } from '../../../utils/imageUtils';
+import { getCachedData, setCachedData, isCacheStale } from '../../../utils/dataCache';
+
+const HOME_CACHE_KEY = 'home_data';
+const HOME_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
 const allProducts = [
   { id: 'p1', name: 'Basmati Rice', price: 75, originalPrice: 95, discount: '21% OFF', image: grainsImg, unit: '1kg' },
@@ -102,13 +106,14 @@ const Home = () => {
   const locationContext = useLocationContext();
   const [toastMessage, setToastMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [banners, setBanners] = useState([]);
+  const cachedHome = getCachedData(HOME_CACHE_KEY);
+  const [banners, setBanners] = useState(cachedHome?.banners || []);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [bannerVisible, setBannerVisible] = useState(true);
-  const [categories, setCategories] = useState([]);
-  const [sellers, setSellers] = useState(fallbackSellersList);
-  const [flashDeals, setFlashDeals] = useState([]);
-  const [bestsellerProducts, setBestsellerProducts] = useState([]);
+  const [categories, setCategories] = useState(cachedHome?.categories || []);
+  const [sellers, setSellers] = useState(cachedHome?.sellers || fallbackSellersList);
+  const [flashDeals, setFlashDeals] = useState(cachedHome?.flashDeals || []);
+  const [bestsellerProducts, setBestsellerProducts] = useState(cachedHome?.bestsellerProducts || []);
 
   useEffect(() => {
     let isMounted = true;
@@ -145,21 +150,32 @@ const Home = () => {
 
         if (!isMounted) return;
 
+        let latestBanners = cachedHome?.banners || [];
+        let latestCategories = cachedHome?.categories || [];
+        let latestSellers = cachedHome?.sellers || fallbackSellersList;
+
         // Process Banners
         if (bannersRes.status === 'fulfilled' && bannersRes.value?.success && Array.isArray(bannersRes.value.banners)) {
           const active = bannersRes.value.banners.filter(b => b.status === 'Active');
-          if (active.length > 0) setBanners(active);
+          if (active.length > 0) {
+            latestBanners = active;
+            setBanners(active);
+          }
         }
 
         // Process Categories
         if (categoriesRes.status === 'fulfilled' && categoriesRes.value?.success && Array.isArray(categoriesRes.value.categories)) {
           const active = categoriesRes.value.categories.filter(c => c.status === 'Active');
           const roots = active.filter(c => !c.parent);
-          if (roots.length > 0) setCategories(roots);
+          if (roots.length > 0) {
+            latestCategories = roots;
+            setCategories(roots);
+          }
         }
 
         // Process Sellers
         if (sellersRes.status === 'fulfilled' && sellersRes.value?.success && Array.isArray(sellersRes.value.sellers) && sellersRes.value.sellers.length > 0) {
+          latestSellers = sellersRes.value.sellers;
           setSellers(sellersRes.value.sellers);
         }
 
@@ -192,12 +208,25 @@ const Home = () => {
         });
         setBestsellerProducts(combinedBest);
 
+        setCachedData(HOME_CACHE_KEY, {
+          banners: latestBanners,
+          categories: latestCategories,
+          sellers: latestSellers,
+          flashDeals: combinedFlash,
+          bestsellerProducts: combinedBest,
+        });
+
       } catch (err) {
         console.error('[Home] Failed to load home screen data:', err);
       }
     };
 
-    loadAllHomeData();
+    // Serve the cached data instantly (already hydrated into state above) and
+    // only hit the network again once it goes stale, so navigating back to
+    // Home doesn't re-show empty sections/skeletons on every visit.
+    if (isCacheStale(HOME_CACHE_KEY, HOME_CACHE_TTL)) {
+      loadAllHomeData();
+    }
 
     return () => {
       isMounted = false;
