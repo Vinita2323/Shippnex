@@ -31,6 +31,15 @@ export const sendOtp = async (req, res, next) => {
     if (!user) {
       user = await User.create({ phone: cleanPhone, otp, otpExpiry });
     } else {
+      if (user.isBlocked || user.status === 'blocked' || user.status === 'suspended') {
+        return res.status(403).json({
+          success: false,
+          message: user.blockReason
+            ? `Your account has been suspended by Admin. Reason: ${user.blockReason}`
+            : 'Your account has been suspended by Administrator. Please contact customer support.',
+          isBlocked: true,
+        });
+      }
       user.otp = otp;
       user.otpExpiry = otpExpiry;
       if (user.phone !== cleanPhone) {
@@ -91,6 +100,16 @@ export const verifyOtp = async (req, res, next) => {
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (user.isBlocked || user.status === 'blocked' || user.status === 'suspended') {
+      return res.status(403).json({
+        success: false,
+        message: user.blockReason
+          ? `Your account has been suspended by Admin. Reason: ${user.blockReason}`
+          : 'Your account has been suspended by Administrator. Please contact customer support.',
+        isBlocked: true,
+      });
     }
 
     // Allow hardcoded OTP '123456' for testing or matching OTP

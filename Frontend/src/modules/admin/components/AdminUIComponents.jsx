@@ -68,6 +68,7 @@ export const StatusBadge = ({ status }) => {
       case 'On Delivery':
         return 'bg-sky-50 text-sky-700 border-sky-200';
       case 'Suspended':
+      case 'Blocked':
       case 'Cancelled':
       case 'Out of Stock':
       case 'Flagged':

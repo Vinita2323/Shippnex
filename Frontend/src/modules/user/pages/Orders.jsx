@@ -285,7 +285,9 @@ const Orders = () => {
           ) : filteredOrders.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredOrders.map((order, index) => {
-              const firstItemImg = order.items?.[0]?.image || order.items?.[0]?.product?.mainImage || order.items?.[0]?.product?.image;
+              const rawImg = order.items?.[0]?.image;
+              const prodImg = order.items?.[0]?.product?.mainImage || order.items?.[0]?.product?.image;
+              const firstItemImg = (rawImg && !rawImg.includes('photo-1586201375761-83865001e31c') ? rawImg : null) || prodImg || rawImg;
               const firstItemName = order.items?.[0]?.name || order.items?.[0]?.product?.name || order.id || 'Order';
               return (
               <div key={index} className="bg-white rounded-[16px] md:rounded-2xl p-4 md:p-5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between gap-3 hover:shadow-md transition-shadow">

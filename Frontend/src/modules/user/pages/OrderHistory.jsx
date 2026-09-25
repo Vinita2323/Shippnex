@@ -9,7 +9,7 @@ import { orderService, getCachedUserOrders } from '../../../services/authService
 import productReviewService from '../../../services/productReviewService';
 import ProductRatingModal from '../../../components/ProductRatingModal';
 import { useCart } from '../context/CartContext';
-import { getImageUrl, grainsImg } from '../../../utils/imageUtils';
+import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
 
 const formatRawOrdersList = (rawList = []) => {
   return rawList.map(o => {
@@ -556,7 +556,9 @@ const OrderHistory = () => {
                 {/* Compact Items List */}
                 <div className="space-y-1">
                   {displayedItems.map((item, iIdx) => {
-                    const itemImg = item.image || item.product?.mainImage || item.product?.image;
+                    const rawImg = item.image;
+                    const prodImg = item.product?.mainImage || item.product?.image;
+                    const itemImg = (rawImg && !rawImg.includes('photo-1586201375761-83865001e31c') ? rawImg : null) || prodImg || rawImg;
                     const itemName = item.name || item.product?.name || 'Item';
                     const itemPrice = item.price || item.product?.price || 0;
                     const itemQty = item.quantity || 1;
@@ -566,15 +568,12 @@ const OrderHistory = () => {
                     return (
                       <div key={iIdx} className="p-1 rounded-lg bg-slate-50/70 border border-slate-100 flex items-center justify-between gap-1.5">
                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                          <div className="w-7 h-7 rounded-md bg-white border border-slate-200/70 flex items-center justify-center shrink-0 overflow-hidden">
+                          <div className="w-7 h-7 rounded-md bg-[#f0f3f6] border border-slate-200/70 flex items-center justify-center shrink-0 overflow-hidden">
                             <img 
-                              src={getImageUrl(itemImg, grainsImg)} 
+                              src={getImageUrl(itemImg, itemName)} 
                               alt={itemName} 
                               className="w-full h-full object-cover" 
-                              onError={(e) => {
-                                e.currentTarget.onerror = null;
-                                e.currentTarget.src = grainsImg;
-                              }}
+                              onError={(e) => handleImageError(e, itemName)}
                             />
                           </div>
                           <div className="min-w-0 flex-1">

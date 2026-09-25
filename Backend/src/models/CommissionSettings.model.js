@@ -22,6 +22,18 @@ const commissionAuditHistorySchema = new mongoose.Schema(
       type: String,
       default: 'Percentage',
     },
+    deliveryCharge: {
+      type: Number,
+      default: 40,
+    },
+    freeDeliveryMinOrder: {
+      type: Number,
+      default: 500,
+    },
+    isFreeDeliveryEnabled: {
+      type: Boolean,
+      default: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -36,7 +48,7 @@ const commissionAuditHistorySchema = new mongoose.Schema(
     },
     reason: {
       type: String,
-      default: 'Commission configuration updated',
+      default: 'Commission & Delivery configuration updated',
       trim: true,
     },
   },
@@ -69,6 +81,22 @@ const commissionSettingsSchema = new mongoose.Schema(
       enum: ['Percentage'],
       default: 'Percentage',
     },
+    deliveryCharge: {
+      type: Number,
+      required: true,
+      min: [0, 'Delivery charge cannot be negative'],
+      default: 40,
+    },
+    freeDeliveryMinOrder: {
+      type: Number,
+      required: true,
+      min: [0, 'Free delivery minimum order cannot be negative'],
+      default: 500,
+    },
+    isFreeDeliveryEnabled: {
+      type: Boolean,
+      default: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -95,6 +123,9 @@ commissionSettingsSchema.statics.getOrCreateActiveSettings = async function () {
       captainCommission: 5,
       sellerCommissionType: 'Percentage',
       captainCommissionType: 'Percentage',
+      deliveryCharge: 40,
+      freeDeliveryMinOrder: 500,
+      isFreeDeliveryEnabled: true,
       isActive: true,
       updatedBy: 'System Initializer',
       history: [
@@ -103,13 +134,34 @@ commissionSettingsSchema.statics.getOrCreateActiveSettings = async function () {
           captainCommission: 5,
           sellerCommissionType: 'Percentage',
           captainCommissionType: 'Percentage',
+          deliveryCharge: 40,
+          freeDeliveryMinOrder: 500,
+          isFreeDeliveryEnabled: true,
           isActive: true,
           changedBy: 'System Initializer',
           changedAt: new Date(),
-          reason: 'Initial system default commission configuration (Seller: 10%, Captain: 5%)',
+          reason: 'Initial system default configuration (Seller: 10%, Captain: 5%, Delivery: ₹40, Free above: ₹500)',
         },
       ],
     });
+  } else {
+    // If existing document lacks delivery settings, initialize defaults
+    let needSave = false;
+    if (settings.deliveryCharge === undefined) {
+      settings.deliveryCharge = 40;
+      needSave = true;
+    }
+    if (settings.freeDeliveryMinOrder === undefined) {
+      settings.freeDeliveryMinOrder = 500;
+      needSave = true;
+    }
+    if (settings.isFreeDeliveryEnabled === undefined) {
+      settings.isFreeDeliveryEnabled = true;
+      needSave = true;
+    }
+    if (needSave) {
+      await settings.save();
+    }
   }
   return settings;
 };

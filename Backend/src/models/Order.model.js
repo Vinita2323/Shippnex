@@ -97,6 +97,23 @@ const orderSchema = new mongoose.Schema(
     rejectionReason: { type: String, default: '' },
     acceptedAt: { type: Date },
     rejectedAt: { type: Date },
+    // Razorpay gateway state (written by order verification and the Razorpay webhook)
+    razorpay: {
+      orderId: { type: String, default: null },
+      paymentId: { type: String, default: null },
+      paymentStatus: {
+        type: String,
+        enum: [null, 'authorized', 'captured', 'failed'],
+        default: null,
+      },
+      method: { type: String, default: null },
+      amount: { type: Number, default: null }, // paise, as reported by Razorpay
+      currency: { type: String, default: null },
+      capturedAt: { type: Date, default: null },
+      failedAt: { type: Date, default: null },
+      failureCode: { type: String, default: null },
+      failureReason: { type: String, default: null },
+    },
     itemsTotal: { type: Number, required: true },
     shippingFee: { type: Number, required: true, default: 0 },
     discount: { type: Number, required: true, default: 0 },
@@ -141,6 +158,7 @@ orderSchema.index({ orderStatus: 1, createdAt: -1 });
 orderSchema.index({ paymentStatus: 1, createdAt: -1 });
 orderSchema.index({ sellerStatus: 1, createdAt: -1 });
 orderSchema.index({ createdAt: -1 });
+orderSchema.index({ 'razorpay.orderId': 1 }, { partialFilterExpression: { 'razorpay.orderId': { $type: 'string' } } });
 
 const Order = mongoose.model('Order', orderSchema);
 export default Order;

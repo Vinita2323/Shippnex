@@ -4,6 +4,7 @@ import {
   RefreshCw, FileText, FileSpreadsheet, User, Phone, MapPin, CreditCard, Calendar, Box, Package, ArrowRight, Volume2, Truck
 } from 'lucide-react';
 import { orderService } from '../../../services/authService';
+import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
 
 const Orders = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -627,9 +628,10 @@ const Orders = () => {
                     <div key={idx} className="p-2.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors">
                       <div className="flex items-center gap-2.5">
                         <img 
-                          src={item.image || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&auto=format&fit=crop&q=80'} 
+                          src={getImageUrl(item.image, item.name)} 
                           alt={item.name} 
                           className="w-11 h-11 rounded-lg object-cover border border-slate-200 bg-slate-100 shrink-0"
+                          onError={(e) => handleImageError(e, item.name)}
                         />
                         <div className="space-y-0.5">
                           <h4 className="text-xs font-bold text-slate-900 m-0 leading-tight">{item.name}</h4>
@@ -906,9 +908,10 @@ const Orders = () => {
                     <div key={idx} className="p-3.5 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
                       <div className="flex items-center gap-3.5">
                         <img 
-                          src={item.image || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&auto=format&fit=crop&q=80'} 
+                          src={getImageUrl(item.image, item.name)} 
                           alt={item.name} 
                           className="w-14 h-14 rounded-xl object-cover border border-slate-200 bg-slate-100 shrink-0"
+                          onError={(e) => handleImageError(e, item.name)}
                         />
                         <div className="space-y-0.5">
                           <h4 className="text-sm font-bold text-slate-900 m-0 leading-snug">{item.name}</h4>

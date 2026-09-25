@@ -202,7 +202,7 @@ export const createProduct = async (req, res) => {
       stock: parsedStock,
       minStockLimit: minStockLimit ? Number(minStockLimit) : 10,
       sku: sku || (firstActiveVariant?.sku) || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
-      mainImage: processedMainImage || (firstActiveVariant?.image) || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80',
+      mainImage: processedMainImage || (firstActiveVariant?.image) || '',
       homeSections: Array.isArray(homeSections) && homeSections.length > 0 ? homeSections : ['flash_sale', 'bestseller'],
       galleryImages: processedGalleryImages,
       status: status || 'Published',

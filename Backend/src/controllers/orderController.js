@@ -17,12 +17,12 @@ import {
   sendNotificationToCaptain 
 } from '../utils/pushNotificationHelper.js';
 
-// Helper: Clean base64 image strings to prevent database and payload bloat
+// Helper: Clean base64 image strings or invalid dummy links
 const cleanImage = (img) => {
-  if (typeof img === 'string' && img.startsWith('data:image/') && img.length > 500) {
-    return 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
-  }
-  return img || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
+  if (!img || typeof img !== 'string') return '';
+  const trimmed = img.trim();
+  if (trimmed.includes('photo-1586201375761-83865001e31c')) return '';
+  return trimmed;
 };
 
 // High-speed In-memory Cache for Seller Notifications
@@ -306,32 +306,39 @@ export const placeOrder = async (req, res, next) => {
         price: unitPrice,
         originalPrice: originalUnitPrice,
         quantity: qty,
-        image: cleanImage(product.mainImage || product.image || item.image),
+        image: cleanImage(product.mainImage || product.image || item.image || (product.variants?.[0]?.image) || '') || product.mainImage || product.image || item.image || '',
         seller: product.seller || item.seller || 'ShippNex Official Store',
       });
     }
 
-    // Server-side calculation of totals
-    const shippingFee = itemsTotal >= 500 || itemsTotal === 0 ? 0 : 40;
+    // Fetch dynamic commission & delivery settings
+    let globalSellerCommRate = 10;
+    let globalCaptainCommRate = 5;
+    let deliveryChargeRate = 40;
+    let freeDeliveryMinOrderRate = 500;
+    let isFreeDeliveryActive = true;
+    try {
+      const commSettings = await CommissionSettings.getOrCreateActiveSettings();
+      if (commSettings) {
+        globalSellerCommRate = Number(commSettings.sellerCommission !== undefined ? commSettings.sellerCommission : 10);
+        globalCaptainCommRate = Number(commSettings.captainCommission !== undefined ? commSettings.captainCommission : 5);
+        deliveryChargeRate = Number(commSettings.deliveryCharge !== undefined ? commSettings.deliveryCharge : 40);
+        freeDeliveryMinOrderRate = Number(commSettings.freeDeliveryMinOrder !== undefined ? commSettings.freeDeliveryMinOrder : 500);
+        isFreeDeliveryActive = commSettings.isFreeDeliveryEnabled !== undefined ? Boolean(commSettings.isFreeDeliveryEnabled) : true;
+      }
+    } catch (e) {
+      console.warn('[OrderController] Error reading CommissionSettings, using fallback rates:', e.message);
+    }
+
+    // Server-side calculation of totals using dynamic delivery rules
+    const isFreeShipping = itemsTotal === 0 || (isFreeDeliveryActive && itemsTotal >= freeDeliveryMinOrderRate);
+    const shippingFee = isFreeShipping ? 0 : deliveryChargeRate;
     const discount = Math.max(0, totalOriginalPrice - itemsTotal);
     const gst = 0; // GST included in prices
     const grandTotal = itemsTotal + shippingFee;
 
     // Generate Order ID
     const orderId = `ORD-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    // Fetch dynamic commission settings
-    let globalSellerCommRate = 10;
-    let globalCaptainCommRate = 5;
-    try {
-      const commSettings = await CommissionSettings.getOrCreateActiveSettings();
-      if (commSettings) {
-        globalSellerCommRate = Number(commSettings.sellerCommission !== undefined ? commSettings.sellerCommission : 10);
-        globalCaptainCommRate = Number(commSettings.captainCommission !== undefined ? commSettings.captainCommission : 5);
-      }
-    } catch (e) {
-      console.warn('[OrderController] Error reading CommissionSettings, using fallback rates:', e.message);
-    }
 
     const sellerCommissionAmount = Number(((itemsTotal * globalSellerCommRate) / 100).toFixed(2));
     const sellerEarning = Number((itemsTotal - sellerCommissionAmount).toFixed(2));
@@ -620,13 +627,30 @@ export const getUserOrders = async (req, res, next) => {
 
     const orders = await Order.find({ user: userId })
       .select('orderId items shippingAddress deliverySlot paymentMethod paymentStatus orderStatus returnStatus returnReason returnedAt refundStatus refundedAt sellerStatus rejectionReason itemsTotal shippingFee discount gst grandTotal createdAt updatedAt')
+      .populate({ path: 'items.product', select: 'name mainImage image category' })
       .sort({ createdAt: -1 })
       .lean()
       .exec();
 
+    const sanitizedOrders = (orders || []).map(order => {
+      if (Array.isArray(order.items)) {
+        order.items = order.items.map(it => {
+          let resolvedImage = it.image;
+          if (!resolvedImage || (typeof resolvedImage === 'string' && resolvedImage.includes('photo-1586201375761-83865001e31c'))) {
+            resolvedImage = it.product?.mainImage || it.product?.image || '';
+          }
+          return {
+            ...it,
+            image: resolvedImage || it.image || '',
+          };
+        });
+      }
+      return order;
+    });
+
     const responsePayload = {
       success: true,
-      orders: orders || [],
+      orders: sanitizedOrders,
     };
 
     userOrdersCache.set(userId, { data: responsePayload, timestamp: now });
@@ -649,7 +673,7 @@ export const getOrderById = async (req, res, next) => {
       ],
     })
       .populate('captainId', 'name phone vehicleType liveLocation')
-      .populate('items.product', 'name mainImage price salePrice');
+      .populate('items.product', 'name mainImage image price salePrice');
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
@@ -662,9 +686,23 @@ export const getOrderById = async (req, res, next) => {
       await Order.findByIdAndUpdate(order._id, { deliveryOtp: generatedOtp });
     }
 
+    const orderObj = order.toObject ? order.toObject() : order;
+    if (Array.isArray(orderObj.items)) {
+      orderObj.items = orderObj.items.map(it => {
+        let resolvedImage = it.image;
+        if (!resolvedImage || (typeof resolvedImage === 'string' && resolvedImage.includes('photo-1586201375761-83865001e31c'))) {
+          resolvedImage = it.product?.mainImage || it.product?.image || '';
+        }
+        return {
+          ...it,
+          image: resolvedImage || it.image || '',
+        };
+      });
+    }
+
     res.status(200).json({
       success: true,
-      order,
+      order: orderObj,
     });
   } catch (error) {
     next(error);
@@ -737,8 +775,8 @@ export const getSellerNotifications = async (req, res, next) => {
     const notifications = rawNotifications.map(n => {
       if (Array.isArray(n.items)) {
         n.items = n.items.map(it => {
-          if (typeof it.image === 'string' && it.image.startsWith('data:image/') && it.image.length > 500) {
-            it.image = 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
+          if (typeof it.image === 'string' && it.image.includes('photo-1586201375761-83865001e31c')) {
+            it.image = it.product?.mainImage || it.product?.image || '';
           }
           return it;
         });
@@ -1253,6 +1291,23 @@ export const createRazorpayOrder = async (req, res, next) => {
 
     const razorpayOrder = await razorpay.orders.create(options);
 
+    // Link the Razorpay order to the local order so the webhook can find it. Best-effort:
+    // the webhook falls back to the receipt, so a failure here must not break checkout.
+    try {
+      await Order.updateOne(
+        {
+          user: req.user.id,
+          $or: [
+            { orderId: String(orderId) },
+            ...(/^[a-f0-9]{24}$/i.test(String(orderId)) ? [{ _id: orderId }] : []),
+          ],
+        },
+        { $set: { 'razorpay.orderId': razorpayOrder.id } }
+      );
+    } catch (linkError) {
+      console.warn('[Razorpay Create Order] Could not link Razorpay order to local order:', linkError.message);
+    }
+
     res.status(200).json({
       success: true,
       orderId: razorpayOrder.id,
@@ -1290,6 +1345,11 @@ export const verifyRazorpayPayment = async (req, res, next) => {
     if (order) {
       order.paymentStatus = 'Paid';
       order.paymentMethod = 'ONLINE';
+      // Record the verified payment so a late `payment.failed` webhook for an earlier
+      // attempt cannot overwrite it.
+      order.razorpay.orderId = razorpay_order_id;
+      order.razorpay.paymentId = razorpay_payment_id;
+      order.razorpay.paymentStatus = 'captured';
       await order.save();
     }
 

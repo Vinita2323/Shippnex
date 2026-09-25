@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import User from '../models/User.model.js';
 
 export const protect = (...requiredRoles) => {
   return async (req, res, next) => {
@@ -27,6 +28,20 @@ export const protect = (...requiredRoles) => {
                 message: `Forbidden: Access restricted to ${roleStr}`,
               });
             }
+          }
+        }
+
+        // Active account enforcement: check if customer account is blocked
+        if (decoded.role === 'user' && decoded.id) {
+          const userDoc = await User.findById(decoded.id).select('isBlocked status blockReason').lean();
+          if (userDoc && (userDoc.isBlocked || userDoc.status === 'blocked' || userDoc.status === 'suspended')) {
+            return res.status(403).json({
+              success: false,
+              message: userDoc.blockReason
+                ? `Account suspended: ${userDoc.blockReason}`
+                : 'Your account has been suspended by Admin. Please contact customer support.',
+              isBlocked: true,
+            });
           }
         }
 

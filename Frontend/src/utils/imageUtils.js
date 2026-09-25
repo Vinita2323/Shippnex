@@ -140,9 +140,12 @@ export const getImageUrl = (url, nameOrFallback = '') => {
     trimmed === 'null' || 
     trimmed === '/uploads/categories/default.png' || 
     trimmed === '/uploads/products/default.png' ||
-    trimmed === '/uploads/default.png'
+    trimmed === '/uploads/default.png' ||
+    trimmed.includes('photo-1586201375761-83865001e31c')
   ) {
-    return isLikelyUrl(nameOrFallback) ? nameOrFallback : getInitialSvgDataUrl(nameOrFallback || 'Item');
+    return isLikelyUrl(nameOrFallback) && !nameOrFallback.includes('photo-1586201375761-83865001e31c')
+      ? nameOrFallback 
+      : getInitialSvgDataUrl(nameOrFallback || 'Item');
   }
 
   // Base64 or Blob URLs or SVG Data URIs

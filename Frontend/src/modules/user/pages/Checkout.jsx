@@ -7,6 +7,7 @@ import {
 import { useCart } from '../context/CartContext';
 import { useLocationContext } from '../../../context/LocationContext';
 import { addressService, orderService } from '../../../services/authService';
+import commissionService from '../../../services/commissionService';
 
 const availableSlots = [
   { id: 's1', date: 'Today', time: 'Express (Within 30 Mins)', badge: 'Fastest' },
@@ -451,10 +452,31 @@ const Checkout = () => {
     }
   };
 
+  const [deliverySettings, setDeliverySettings] = useState({
+    deliveryCharge: 40,
+    freeDeliveryMinOrder: 500,
+    isFreeDeliveryEnabled: true,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    commissionService.getCurrentRates().then((res) => {
+      if (isMounted && res && res.success) {
+        setDeliverySettings({
+          deliveryCharge: Number(res.deliveryCharge !== undefined ? res.deliveryCharge : 40),
+          freeDeliveryMinOrder: Number(res.freeDeliveryMinOrder !== undefined ? res.freeDeliveryMinOrder : 500),
+          isFreeDeliveryEnabled: res.isFreeDeliveryEnabled !== undefined ? Boolean(res.isFreeDeliveryEnabled) : true,
+        });
+      }
+    }).catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
+
   // Calculation summaries
   const itemCount = cartCount || cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
   const safeTotal = cartTotal || 0;
-  const deliveryCharge = safeTotal >= 500 || safeTotal === 0 ? 0 : 40;
+  const isFreeDelivery = safeTotal === 0 || (deliverySettings.isFreeDeliveryEnabled && safeTotal >= deliverySettings.freeDeliveryMinOrder);
+  const deliveryCharge = isFreeDelivery ? 0 : deliverySettings.deliveryCharge;
   const savings = originalTotal > safeTotal ? originalTotal - safeTotal : 0;
   const finalGrandTotal = safeTotal + deliveryCharge;
 

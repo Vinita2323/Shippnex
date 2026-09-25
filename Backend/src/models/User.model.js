@@ -38,6 +38,31 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isBlocked: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    status: {
+      type: String,
+      enum: ['active', 'blocked', 'suspended', 'pending'],
+      default: 'active',
+      index: true,
+    },
+    blockReason: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    blockedAt: {
+      type: Date,
+      default: null,
+    },
+    blockedBy: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     addresses: [
       {
         fullName: String,

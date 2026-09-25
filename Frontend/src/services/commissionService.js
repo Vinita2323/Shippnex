@@ -1,22 +1,59 @@
 import API from './api';
 
+let deliverySettingsCache = {
+  data: {
+    deliveryCharge: 40,
+    freeDeliveryMinOrder: 500,
+    isFreeDeliveryEnabled: true,
+  },
+  timestamp: 0,
+};
+
 export const commissionService = {
-  // Get active commission settings (Admin)
+  // Get active commission & delivery settings (Admin)
   getAdminCommissionSettings: async () => {
     const response = await API.get('/admin/commission-settings');
     return response.data;
   },
 
-  // Update commission settings (Admin)
+  // Update commission & delivery settings (Admin)
   updateAdminCommissionSettings: async (payload) => {
     const response = await API.put('/admin/commission-settings', payload);
+    if (response.data?.settings) {
+      deliverySettingsCache = {
+        data: {
+          deliveryCharge: response.data.settings.deliveryCharge ?? 40,
+          freeDeliveryMinOrder: response.data.settings.freeDeliveryMinOrder ?? 500,
+          isFreeDeliveryEnabled: response.data.settings.isFreeDeliveryEnabled ?? true,
+        },
+        timestamp: Date.now(),
+      };
+    }
     return response.data;
   },
 
-  // Get current rates (Public / Seller / Captain)
-  getCurrentRates: async () => {
-    const response = await API.get('/commission-settings/current');
-    return response.data;
+  // Get current rates (Public / User / Seller / Captain)
+  getCurrentRates: async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && deliverySettingsCache.timestamp && (now - deliverySettingsCache.timestamp < 60000)) {
+      return { success: true, ...deliverySettingsCache.data };
+    }
+    try {
+      const response = await API.get('/commission-settings/current');
+      if (response.data) {
+        deliverySettingsCache = {
+          data: {
+            deliveryCharge: response.data.deliveryCharge ?? 40,
+            freeDeliveryMinOrder: response.data.freeDeliveryMinOrder ?? 500,
+            isFreeDeliveryEnabled: response.data.isFreeDeliveryEnabled ?? true,
+          },
+          timestamp: now,
+        };
+      }
+      return response.data;
+    } catch (err) {
+      return { success: true, ...deliverySettingsCache.data };
+    }
   },
 
   // Get commission transaction reports with multi-filters (Admin)

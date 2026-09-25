@@ -10,6 +10,7 @@ import { authService, orderService, getCachedUserOrders } from '../../../service
 import RatingBreakdownModal from '../../../components/RatingBreakdownModal';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
 
 const formatRawOrders = (rawList = []) => {
   return rawList.map(o => ({
@@ -365,16 +366,13 @@ const Profile = () => {
                       className="p-3 rounded-[14px] bg-[#f8fafc] border border-slate-100 hover:border-orange-200 transition-all cursor-pointer flex items-center justify-between group"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-[42px] h-[42px] rounded-[10px] bg-white border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
-                          {firstItem?.image || firstItem?.product?.mainImage ? (
-                            <img 
-                              src={firstItem?.image || firstItem?.product?.mainImage} 
-                              alt="Product" 
-                              className="w-full h-full object-cover" 
-                            />
-                          ) : (
-                            <Package size={20} className="text-[#ea580c]" />
-                          )}
+                        <div className="w-[42px] h-[42px] rounded-[10px] bg-[#f0f3f6] border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                          <img 
+                            src={getImageUrl((firstItem?.image && !firstItem.image.includes('photo-1586201375761-83865001e31c') ? firstItem.image : null) || firstItem?.product?.mainImage || firstItem?.product?.image, itemTitle)} 
+                            alt={itemTitle} 
+                            className="w-full h-full object-cover" 
+                            onError={(e) => handleImageError(e, itemTitle)}
+                          />
                         </div>
                         <div className="flex flex-col min-w-0">
                           <span className="text-[13px] font-bold text-slate-900 truncate tracking-tight">{order.id}</span>
@@ -904,16 +902,13 @@ const Profile = () => {
                         className="p-4 rounded-xl bg-[#f8fafc] hover:bg-orange-50/40 border border-slate-100 hover:border-orange-200 transition-all cursor-pointer flex items-center justify-between group"
                       >
                         <div className="flex items-center gap-4 min-w-0">
-                          <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
-                            {firstItem?.image || firstItem?.product?.mainImage ? (
-                              <img 
-                                src={firstItem?.image || firstItem?.product?.mainImage} 
-                                alt="Product" 
-                                className="w-full h-full object-cover" 
-                              />
-                            ) : (
-                              <Package size={22} className="text-[#ea580c]" />
-                            )}
+                          <div className="w-12 h-12 rounded-xl bg-[#f0f3f6] border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                            <img 
+                              src={getImageUrl((firstItem?.image && !firstItem.image.includes('photo-1586201375761-83865001e31c') ? firstItem.image : null) || firstItem?.product?.mainImage || firstItem?.product?.image, itemTitle)} 
+                              alt={itemTitle} 
+                              className="w-full h-full object-cover" 
+                              onError={(e) => handleImageError(e, itemTitle)}
+                            />
                           </div>
                           <div className="flex flex-col min-w-0">
                             <div className="flex items-center gap-2">

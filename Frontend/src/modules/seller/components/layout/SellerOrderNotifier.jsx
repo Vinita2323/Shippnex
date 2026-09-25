@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { orderService } from '../../../../services/authService';
+import { getImageUrl, handleImageError } from '../../../../utils/imageUtils';
 
 const SellerOrderNotifier = () => {
   const navigate = useNavigate();
@@ -308,9 +309,10 @@ const SellerOrderNotifier = () => {
                     <div key={idx} className="p-2.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors">
                       <div className="flex items-center gap-2.5">
                         <img 
-                          src={item.image || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&auto=format&fit=crop&q=80'} 
+                          src={getImageUrl(item.image, item.name)} 
                           alt={item.name} 
                           className="w-10 h-10 rounded-lg object-cover border border-slate-200 bg-slate-100 shrink-0"
+                          onError={(e) => handleImageError(e, item.name)}
                         />
                         <div className="space-y-0.5">
                           <h4 className="text-xs font-bold text-slate-900 m-0 leading-tight">{item.name}</h4>

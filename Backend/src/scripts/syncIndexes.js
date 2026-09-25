@@ -39,6 +39,7 @@ import SellerRegistrationPayment from '../models/SellerRegistrationPayment.model
 import CaptainRegistrationPayment from '../models/CaptainRegistrationPayment.model.js';
 import SellerRegistrationFeeConfig from '../models/SellerRegistrationFeeConfig.model.js';
 import CaptainRegistrationFeeConfig from '../models/CaptainRegistrationFeeConfig.model.js';
+import RazorpayWebhookEvent from '../models/RazorpayWebhookEvent.model.js';
 import Cart from '../models/Cart.model.js';
 import Wishlist from '../models/Wishlist.model.js';
 import Faq from '../models/Faq.model.js';
@@ -85,6 +86,7 @@ const models = [
   { name: 'CaptainRegistrationPayment', model: CaptainRegistrationPayment },
   { name: 'SellerRegistrationFeeConfig', model: SellerRegistrationFeeConfig },
   { name: 'CaptainRegistrationFeeConfig', model: CaptainRegistrationFeeConfig },
+  { name: 'RazorpayWebhookEvent', model: RazorpayWebhookEvent },
   { name: 'Cart', model: Cart },
   { name: 'Wishlist', model: Wishlist },
   { name: 'Faq', model: Faq },

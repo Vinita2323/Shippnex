@@ -39,6 +39,7 @@ import captainRegistrationFeeRoutes from './routes/captainRegistrationFeeRoutes.
 import commissionRoutes from './routes/commissionRoutes.js';
 import referralRoutes from './routes/referralRoutes.js';
 import returnRoutes from './routes/returnRoutes.js';
+import razorpayWebhookRoutes from './routes/razorpayWebhookRoutes.js';
 import compression from 'compression';
 import performanceLogger from './middleware/performanceMiddleware.js';
 
@@ -81,6 +82,10 @@ app.use((req, res, next) => {
   );
   next();
 });
+
+// Razorpay webhook needs the raw request body for signature verification, so it is
+// mounted before the global JSON parser (which would consume and re-serialize it).
+app.use('/api/payments/razorpay', razorpayWebhookRoutes);
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));

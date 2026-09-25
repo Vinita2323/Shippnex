@@ -20,65 +20,93 @@ export const getCommissionSettings = async (req, res, next) => {
   }
 };
 
-// @desc    Update Dynamic Commission Settings (Admin)
+// @desc    Update Dynamic Commission & Delivery Settings (Admin)
 // @route   PUT /api/admin/commission-settings
 // @access  Private (Admin / Super Admin)
 export const updateCommissionSettings = async (req, res, next) => {
   try {
-    const { sellerCommission, captainCommission, isActive = true, reason } = req.body;
-
-    // Strict Validation: Numeric, Non-negative, <= 100%
-    if (sellerCommission === undefined || sellerCommission === null || isNaN(Number(sellerCommission))) {
-      return res.status(400).json({
-        success: false,
-        message: 'Valid numeric seller commission percentage is required.',
-      });
-    }
-
-    if (captainCommission === undefined || captainCommission === null || isNaN(Number(captainCommission))) {
-      return res.status(400).json({
-        success: false,
-        message: 'Valid numeric captain commission percentage is required.',
-      });
-    }
-
-    const sellerRate = Number(sellerCommission);
-    const captainRate = Number(captainCommission);
-
-    if (sellerRate < 0 || sellerRate > 100) {
-      return res.status(400).json({
-        success: false,
-        message: 'Seller commission must be between 0% and 100%.',
-      });
-    }
-
-    if (captainRate < 0 || captainRate > 100) {
-      return res.status(400).json({
-        success: false,
-        message: 'Captain commission must be between 0% and 100%.',
-      });
-    }
+    const { 
+      sellerCommission, 
+      captainCommission, 
+      deliveryCharge, 
+      freeDeliveryMinOrder, 
+      isFreeDeliveryEnabled, 
+      isActive = true, 
+      reason 
+    } = req.body;
 
     let settings = await CommissionSettings.getOrCreateActiveSettings();
-
     const adminIdentifier = req.user?.email || req.user?.name || req.user?.phone || 'Admin';
+
+    let sellerRate = settings.sellerCommission;
+    let captainRate = settings.captainCommission;
+
+    if (sellerCommission !== undefined && sellerCommission !== null && !isNaN(Number(sellerCommission))) {
+      sellerRate = Number(sellerCommission);
+      if (sellerRate < 0 || sellerRate > 100) {
+        return res.status(400).json({
+          success: false,
+          message: 'Seller commission must be between 0% and 100%.',
+        });
+      }
+      settings.sellerCommission = sellerRate;
+    }
+
+    if (captainCommission !== undefined && captainCommission !== null && !isNaN(Number(captainCommission))) {
+      captainRate = Number(captainCommission);
+      if (captainRate < 0 || captainRate > 100) {
+        return res.status(400).json({
+          success: false,
+          message: 'Captain commission must be between 0% and 100%.',
+        });
+      }
+      settings.captainCommission = captainRate;
+    }
+
+    if (deliveryCharge !== undefined && deliveryCharge !== null && !isNaN(Number(deliveryCharge))) {
+      const charge = Number(deliveryCharge);
+      if (charge < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Delivery charge cannot be negative.',
+        });
+      }
+      settings.deliveryCharge = charge;
+    }
+
+    if (freeDeliveryMinOrder !== undefined && freeDeliveryMinOrder !== null && !isNaN(Number(freeDeliveryMinOrder))) {
+      const minOrder = Number(freeDeliveryMinOrder);
+      if (minOrder < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Free delivery minimum order amount cannot be negative.',
+        });
+      }
+      settings.freeDeliveryMinOrder = minOrder;
+    }
+
+    if (isFreeDeliveryEnabled !== undefined) {
+      settings.isFreeDeliveryEnabled = Boolean(isFreeDeliveryEnabled);
+    }
+
+    settings.isActive = Boolean(isActive);
+    settings.updatedBy = adminIdentifier;
 
     // Record audit history entry
     const historyEntry = {
-      sellerCommission: sellerRate,
-      captainCommission: captainRate,
+      sellerCommission: settings.sellerCommission,
+      captainCommission: settings.captainCommission,
       sellerCommissionType: 'Percentage',
       captainCommissionType: 'Percentage',
-      isActive: Boolean(isActive),
+      deliveryCharge: settings.deliveryCharge,
+      freeDeliveryMinOrder: settings.freeDeliveryMinOrder,
+      isFreeDeliveryEnabled: settings.isFreeDeliveryEnabled,
+      isActive: settings.isActive,
       changedBy: adminIdentifier,
       changedAt: new Date(),
-      reason: reason ? String(reason).trim() : `Admin updated rates: Seller ${sellerRate}%, Captain ${captainRate}%`,
+      reason: reason ? String(reason).trim() : `Admin updated settings: Seller ${settings.sellerCommission}%, Captain ${settings.captainCommission}%, Delivery: ₹${settings.deliveryCharge}, Free Above: ₹${settings.freeDeliveryMinOrder}`,
     };
 
-    settings.sellerCommission = sellerRate;
-    settings.captainCommission = captainRate;
-    settings.isActive = Boolean(isActive);
-    settings.updatedBy = adminIdentifier;
     settings.history.unshift(historyEntry);
 
     // Keep history manageable to max 50 entries
@@ -88,11 +116,11 @@ export const updateCommissionSettings = async (req, res, next) => {
 
     await settings.save();
 
-    console.log(`[CommissionSettings] Updated by ${adminIdentifier}: Seller ${sellerRate}%, Captain ${captainRate}%`);
+    console.log(`[CommissionSettings] Updated by ${adminIdentifier}: Seller ${settings.sellerCommission}%, Captain ${settings.captainCommission}%, Delivery ₹${settings.deliveryCharge}, Free Delivery above ₹${settings.freeDeliveryMinOrder}`);
 
     res.status(200).json({
       success: true,
-      message: 'Commission settings updated successfully.',
+      message: 'Platform commission and delivery settings updated successfully.',
       settings,
     });
   } catch (error) {
@@ -100,7 +128,7 @@ export const updateCommissionSettings = async (req, res, next) => {
   }
 };
 
-// @desc    Get Current Public / App Commission Rates (Read-only for Seller & Captain)
+// @desc    Get Current Public / App Commission & Delivery Rates (Read-only for Users, Sellers & Captains)
 // @route   GET /api/commission-settings/current
 // @access  Public / Authenticated
 export const getCurrentCommissionRates = async (req, res, next) => {
@@ -112,6 +140,9 @@ export const getCurrentCommissionRates = async (req, res, next) => {
       captainCommission: settings.captainCommission,
       sellerCommissionType: settings.sellerCommissionType || 'Percentage',
       captainCommissionType: settings.captainCommissionType || 'Percentage',
+      deliveryCharge: settings.deliveryCharge !== undefined ? settings.deliveryCharge : 40,
+      freeDeliveryMinOrder: settings.freeDeliveryMinOrder !== undefined ? settings.freeDeliveryMinOrder : 500,
+      isFreeDeliveryEnabled: settings.isFreeDeliveryEnabled !== undefined ? settings.isFreeDeliveryEnabled : true,
       isActive: settings.isActive,
       updatedAt: settings.updatedAt,
     });

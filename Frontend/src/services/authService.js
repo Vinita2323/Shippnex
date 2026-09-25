@@ -1129,6 +1129,11 @@ export const adminService = {
     }
     return response.data;
   },
+  toggleUserBlock: async (id, isBlocked, reason = '') => {
+    clearAdminClientCache('users');
+    const response = await API.put(`/admin/users/${id}/block`, { isBlocked, reason });
+    return response.data;
+  },
   getSellers: async (forceRefresh = false) => {
     const now = Date.now();
     if (!forceRefresh && adminClientCache.sellers.data && (now - adminClientCache.sellers.timestamp < 30000)) {

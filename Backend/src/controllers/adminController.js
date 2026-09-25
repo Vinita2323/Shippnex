@@ -269,6 +269,67 @@ export const getAllUsers = async (req, res, next) => {
   }
 };
 
+// Toggle user block status (Block / Unblock Customer)
+export const toggleUserBlock = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { isBlocked, reason = '', status } = req.body;
+    const adminIdentifier = req.user?.email || req.user?.name || 'Admin';
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Determine target blocked state
+    let targetBlocked;
+    if (isBlocked !== undefined) {
+      targetBlocked = Boolean(isBlocked);
+    } else if (status) {
+      targetBlocked = (status.toLowerCase() === 'blocked' || status.toLowerCase() === 'suspended');
+    } else {
+      targetBlocked = !user.isBlocked;
+    }
+
+    user.isBlocked = targetBlocked;
+    user.status = targetBlocked ? 'blocked' : 'active';
+    if (targetBlocked) {
+      user.blockReason = reason ? String(reason).trim() : 'Blocked by Administrator';
+      user.blockedAt = new Date();
+      user.blockedBy = adminIdentifier;
+    } else {
+      user.blockReason = '';
+      user.blockedAt = null;
+      user.blockedBy = '';
+    }
+
+    await user.save();
+
+    console.log(`[Admin] User ${user.phone} (${user._id}) ${targetBlocked ? 'BLOCKED' : 'UNBLOCKED'} by ${adminIdentifier}. Reason: ${user.blockReason || 'None'}`);
+
+    res.status(200).json({
+      success: true,
+      message: targetBlocked
+        ? `Customer ${user.name || user.phone} has been blocked successfully.`
+        : `Customer ${user.name || user.phone} has been unblocked successfully.`,
+      user: {
+        _id: user._id,
+        id: user._id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        isBlocked: user.isBlocked,
+        status: user.status,
+        blockReason: user.blockReason,
+        blockedAt: user.blockedAt,
+        blockedBy: user.blockedBy,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Fast In-Memory Cache for Admin Listings
 let sellersCache = { data: null, timestamp: 0 };
 let captainsCache = { data: null, timestamp: 0 };

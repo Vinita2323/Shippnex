@@ -3,6 +3,7 @@ import { protect } from '../middleware/authMiddleware.js';
 import {
   getDashboardStats,
   getAllUsers,
+  toggleUserBlock,
   getAllSellers,
   toggleSellerStatus,
   updateSellerCommission,
@@ -33,6 +34,8 @@ router.get('/dashboard/stats', getDashboardStats);
 // User Management
 router.get('/users', getAllUsers);
 router.get('/users/:userId/orders', getUserOrdersForAdmin);
+router.put('/users/:id/block', protect('admin', 'super_admin'), toggleUserBlock);
+router.put('/users/:id/status', protect('admin', 'super_admin'), toggleUserBlock);
 
 // Seller Management
 router.get('/sellers', getAllSellers);

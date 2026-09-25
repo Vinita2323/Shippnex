@@ -1,28 +1,44 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trash2, Minus, Plus, Tag, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Trash2, Minus, Plus, Tag, ShoppingCart, Sparkles } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import grainsImg from '../../../assets/user/categories/grains-removebg-preview.png';
-
-const getImageUrl = (url, fallback = grainsImg) => {
-  if (!url) return fallback;
-  if (url.startsWith('http') || url.startsWith('data:')) return url;
-  if (url.startsWith('/uploads')) {
-    const baseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : `http://${window.location.hostname}:5000`;
-    return `${baseUrl}${url}`;
-  }
-  return url;
-};
+import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
+import commissionService from '../../../services/commissionService';
 
 const Cart = () => {
   const navigate = useNavigate();
   const { cartItems, removeFromCart, updateQuantity, cartTotal, originalTotal } = useCart();
+
+  const [deliverySettings, setDeliverySettings] = useState({
+    deliveryCharge: 40,
+    freeDeliveryMinOrder: 500,
+    isFreeDeliveryEnabled: true,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    commissionService.getCurrentRates().then((res) => {
+      if (isMounted && res && res.success) {
+        setDeliverySettings({
+          deliveryCharge: Number(res.deliveryCharge !== undefined ? res.deliveryCharge : 40),
+          freeDeliveryMinOrder: Number(res.freeDeliveryMinOrder !== undefined ? res.freeDeliveryMinOrder : 500),
+          isFreeDeliveryEnabled: res.isFreeDeliveryEnabled !== undefined ? Boolean(res.isFreeDeliveryEnabled) : true,
+        });
+      }
+    }).catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
   
   const safeCartTotal = Number(cartTotal || 0);
   const safeOriginalTotal = Number(originalTotal || 0);
-  const deliveryCharge = safeCartTotal > 500 || safeCartTotal === 0 ? 0 : 40;
+  
+  const isFreeDelivery = safeCartTotal === 0 || (deliverySettings.isFreeDeliveryEnabled && safeCartTotal >= deliverySettings.freeDeliveryMinOrder);
+  const deliveryCharge = isFreeDelivery ? 0 : deliverySettings.deliveryCharge;
   const youSaved = Math.max(0, safeOriginalTotal - safeCartTotal);
   const grandTotal = safeCartTotal + deliveryCharge;
+  const amountNeededForFreeDelivery = deliverySettings.isFreeDeliveryEnabled && safeCartTotal > 0 && safeCartTotal < deliverySettings.freeDeliveryMinOrder
+    ? deliverySettings.freeDeliveryMinOrder - safeCartTotal
+    : 0;
 
   return (
     <div className="w-full max-w-[480px] md:max-w-7xl mx-auto h-[100dvh] md:h-auto md:min-h-screen bg-slate-50 font-sans text-slate-800 relative shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col overflow-hidden md:overflow-visible md:px-6 md:py-8">
@@ -77,13 +93,10 @@ const Cart = () => {
                     <div key={itemId} className="bg-white border border-slate-100 rounded-2xl p-4 md:p-5 flex gap-4 shadow-xs hover:shadow-md transition-shadow">
                       <div className="w-[70px] h-[80px] md:w-[90px] md:h-[100px] flex justify-center items-center overflow-hidden rounded-xl bg-slate-50 shrink-0">
                         <img 
-                          src={itemImg} 
+                          src={getImageUrl(item.image || item.mainImage, item.name)} 
                           alt={item.name} 
                           className="max-w-full max-h-full object-contain mix-blend-multiply" 
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = grainsImg;
-                          }}
+                          onError={(e) => handleImageError(e, item.name)}
                         />
                       </div>
                       <div className="flex-1 flex flex-col min-w-0">
@@ -138,7 +151,9 @@ const Cart = () => {
                   <div className="flex items-center gap-1.5">
                     {deliveryCharge === 0 ? (
                       <>
-                        <span className="text-[11px] text-slate-400 line-through">₹40.00</span>
+                        {deliverySettings.deliveryCharge > 0 && (
+                          <span className="text-[11px] text-slate-400 line-through">₹{deliverySettings.deliveryCharge.toFixed(2)}</span>
+                        )}
                         <span className="text-xs font-bold text-emerald-600">FREE</span>
                       </>
                     ) : (
@@ -146,6 +161,13 @@ const Cart = () => {
                     )}
                   </div>
                 </div>
+
+                {amountNeededForFreeDelivery > 0 && (
+                  <div className="bg-orange-50 border border-orange-200/70 rounded-xl p-2.5 text-[11px] text-orange-800 flex items-center gap-1.5 font-bold">
+                    <Sparkles size={14} className="text-[#ff5500] shrink-0" />
+                    <span>Add ₹{amountNeededForFreeDelivery.toFixed(2)} more to get <strong>FREE Delivery</strong>!</span>
+                  </div>
+                )}
                 
                 {youSaved > 0 && (
                   <div className="flex justify-between items-center text-xs">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAdmin } from '../context/useAdmin';
-import { StatusBadge, Drawer } from '../components/AdminUIComponents';
+import { StatusBadge, Drawer, Modal } from '../components/AdminUIComponents';
 import { categoryService, bannerService, productService, walletService, captainService, fcmService, adminService } from '../../../services/authService';
 import { faqService } from '../../../services/faqService';
 import { supportService } from '../../../services/supportService';
@@ -107,21 +107,28 @@ export const UserManagement = () => {
       const res = await adminService.getUsers(true);
       if (res && res.success) {
         if (Array.isArray(res.users)) {
-          const mappedUsers = res.users.map((u) => ({
-            id: u._id,
-            _id: u._id,
-            name: u.name || 'Customer',
-            email: u.email || 'N/A',
-            phone: u.phone || 'N/A',
-            avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'User')}&background=FF5500&color=fff`,
-            ordersCount: Number(u.ordersCount || 0),
-            returnsCount: Number(u.returnsCount || 0),
-            totalSpent: Number(u.totalSpent || 0),
-            walletBalance: `₹${Number(u.walletBalance || 0).toFixed(2)}`,
-            joinedDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A',
-            status: u.isVerified !== false ? 'Active' : 'Pending',
-            raw: u,
-          }));
+          const mappedUsers = res.users.map((u) => {
+            const isUserBlocked = Boolean(u.isBlocked || u.status === 'blocked' || u.status === 'suspended');
+            return {
+              id: u._id,
+              _id: u._id,
+              name: u.name || 'Customer',
+              email: u.email || 'N/A',
+              phone: u.phone || 'N/A',
+              avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'User')}&background=FF5500&color=fff`,
+              ordersCount: Number(u.ordersCount || 0),
+              returnsCount: Number(u.returnsCount || 0),
+              totalSpent: Number(u.totalSpent || 0),
+              walletBalance: `₹${Number(u.walletBalance || 0).toFixed(2)}`,
+              joinedDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A',
+              isBlocked: isUserBlocked,
+              status: isUserBlocked ? 'Blocked' : (u.isVerified !== false ? 'Active' : 'Pending'),
+              blockReason: u.blockReason || '',
+              blockedAt: u.blockedAt || null,
+              blockedBy: u.blockedBy || '',
+              raw: u,
+            };
+          });
           setUsers(mappedUsers);
         } else {
           setUsers([]);
@@ -147,6 +154,71 @@ export const UserManagement = () => {
   useEffect(() => {
     fetchUsersData();
   }, []);
+
+  // Block / Unblock Modal State & Handler
+  const [blockingUser, setBlockingUser] = useState(null);
+  const [blockReasonInput, setBlockReasonInput] = useState('');
+  const [submittingBlock, setSubmittingBlock] = useState(false);
+
+  const openBlockModal = (user) => {
+    setBlockingUser(user);
+    setBlockReasonInput(user.blockReason || '');
+  };
+
+  const handleConfirmToggleBlock = async () => {
+    if (!blockingUser) return;
+    const isTargetBlocked = !blockingUser.isBlocked;
+
+    try {
+      setSubmittingBlock(true);
+      const res = await adminService.toggleUserBlock(
+        blockingUser.id || blockingUser._id,
+        isTargetBlocked,
+        isTargetBlocked ? (blockReasonInput.trim() || 'Blocked by Administrator') : ''
+      );
+
+      if (res && res.success) {
+        showToast(res.message || (isTargetBlocked ? 'User blocked successfully' : 'User unblocked successfully'));
+
+        // Update local users array
+        setUsers((prev) =>
+          prev.map((u) => {
+            if (String(u.id) === String(blockingUser.id)) {
+              return {
+                ...u,
+                isBlocked: isTargetBlocked,
+                status: isTargetBlocked ? 'Blocked' : 'Active',
+                blockReason: isTargetBlocked ? (blockReasonInput.trim() || 'Blocked by Administrator') : '',
+                blockedAt: isTargetBlocked ? new Date() : null,
+              };
+            }
+            return u;
+          })
+        );
+
+        // Update selected user in drawer if open
+        if (selectedUser && String(selectedUser.id) === String(blockingUser.id)) {
+          setSelectedUser((prev) => ({
+            ...prev,
+            isBlocked: isTargetBlocked,
+            status: isTargetBlocked ? 'Blocked' : 'Active',
+            blockReason: isTargetBlocked ? (blockReasonInput.trim() || 'Blocked by Administrator') : '',
+            blockedAt: isTargetBlocked ? new Date() : null,
+          }));
+        }
+
+        setBlockingUser(null);
+        setBlockReasonInput('');
+      } else {
+        showToast(res?.message || 'Failed to update user block status', true);
+      }
+    } catch (err) {
+      console.error('Error updating user block status:', err);
+      showToast(err.response?.data?.message || 'Error updating user block status', true);
+    } finally {
+      setSubmittingBlock(false);
+    }
+  };
 
   // Fetch individual user's orders when opening drawer
   const handleOpenUserDrawer = async (user) => {
@@ -522,19 +594,48 @@ export const UserManagement = () => {
 
                       {/* Status */}
                       <td className="py-3.5 px-4 align-middle">
-                        <StatusBadge status={u.status} />
+                        <div className="flex flex-col gap-0.5">
+                          <StatusBadge status={u.status} />
+                          {u.isBlocked && u.blockReason && (
+                            <span className="text-[10px] text-rose-600 font-semibold truncate max-w-[130px]" title={u.blockReason}>
+                              {u.blockReason}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Actions */}
                       <td className="py-3.5 px-4 align-middle text-center">
-                        <button
-                          onClick={() => handleOpenUserDrawer(u)}
-                          className="px-2.5 py-1.5 bg-orange-50 hover:bg-[#ff5500] text-[#ff5500] hover:text-white rounded-lg transition-colors border border-orange-200 hover:border-[#ff5500] cursor-pointer text-[11px] font-bold inline-flex items-center gap-1"
-                          title="View Complete Profile & Order History"
-                        >
-                          <Eye size={12} />
-                          <span>View Orders</span>
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenUserDrawer(u)}
+                            className="px-2.5 py-1.5 bg-orange-50 hover:bg-[#ff5500] text-[#ff5500] hover:text-white rounded-lg transition-colors border border-orange-200 hover:border-[#ff5500] cursor-pointer text-[11px] font-bold inline-flex items-center gap-1"
+                            title="View Complete Profile & Order History"
+                          >
+                            <Eye size={12} />
+                            <span>Orders</span>
+                          </button>
+
+                          {u.isBlocked ? (
+                            <button
+                              onClick={() => openBlockModal(u)}
+                              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white rounded-lg transition-colors border border-emerald-200 hover:border-emerald-600 cursor-pointer text-[11px] font-bold inline-flex items-center gap-1"
+                              title="Unblock Customer Account"
+                            >
+                              <ShieldCheck size={12} />
+                              <span>Unblock</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => openBlockModal(u)}
+                              className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white rounded-lg transition-colors border border-rose-200 hover:border-rose-600 cursor-pointer text-[11px] font-bold inline-flex items-center gap-1"
+                              title="Block Customer Account"
+                            >
+                              <ShieldAlert size={12} />
+                              <span>Block</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -762,6 +863,55 @@ export const UserManagement = () => {
               </p>
             </div>
 
+            {/* Account Security & Block Control */}
+            <div className={`p-4 rounded-xl border ${selectedUser.isBlocked ? 'bg-rose-50/70 border-rose-200' : 'bg-slate-50 border-slate-200'} space-y-3`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {selectedUser.isBlocked ? (
+                    <ShieldAlert size={18} className="text-rose-600" />
+                  ) : (
+                    <ShieldCheck size={18} className="text-emerald-600" />
+                  )}
+                  <div>
+                    <h4 className="font-bold text-slate-900 m-0 text-xs">Account Status & Access</h4>
+                    <span className="text-[11px] text-slate-500">
+                      {selectedUser.isBlocked ? 'Customer is currently BLOCKED' : 'Customer has active ordering access'}
+                    </span>
+                  </div>
+                </div>
+                <StatusBadge status={selectedUser.status} />
+              </div>
+
+              {selectedUser.isBlocked && (
+                <div className="bg-white p-2.5 rounded-lg border border-rose-200 text-xs text-rose-800 space-y-1">
+                  <p className="m-0 font-bold">Reason: <span className="font-normal">{selectedUser.blockReason || 'Blocked by Administrator'}</span></p>
+                  {selectedUser.blockedAt && (
+                    <p className="m-0 text-[10px] text-slate-400">Blocked on: {new Date(selectedUser.blockedAt).toLocaleString('en-IN')}</p>
+                  )}
+                </div>
+              )}
+
+              <div>
+                {selectedUser.isBlocked ? (
+                  <button
+                    onClick={() => openBlockModal(selectedUser)}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs border-none cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-xs"
+                  >
+                    <ShieldCheck size={14} />
+                    <span>Unblock Customer Account</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => openBlockModal(selectedUser)}
+                    className="w-full py-2.5 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white rounded-xl font-bold text-xs border border-rose-200 hover:border-rose-600 cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-xs"
+                  >
+                    <ShieldAlert size={14} />
+                    <span>Block / Suspend Customer Account</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Live Order History for This User */}
             <div>
               <h4 className="font-black text-slate-900 m-0 mb-2 flex items-center justify-between text-xs">
@@ -818,6 +968,134 @@ export const UserManagement = () => {
           </div>
         )}
       </Drawer>
+
+      {/* ── BLOCK / UNBLOCK CONFIRMATION MODAL ── */}
+      <Modal
+        isOpen={Boolean(blockingUser)}
+        onClose={() => {
+          if (!submittingBlock) setBlockingUser(null);
+        }}
+        title={blockingUser?.isBlocked ? 'Unblock Customer Account' : 'Block Customer Account'}
+      >
+        {blockingUser && (
+          <div className="space-y-4 text-xs font-sans">
+            <div className={`p-3.5 rounded-xl border flex items-start gap-3 ${
+              blockingUser.isBlocked ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'
+            }`}>
+              {blockingUser.isBlocked ? (
+                <ShieldCheck size={22} className="text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <ShieldAlert size={22} className="text-rose-600 shrink-0 mt-0.5" />
+              )}
+              <div>
+                <p className="font-black text-sm m-0">
+                  {blockingUser.isBlocked
+                    ? `Are you sure you want to unblock ${blockingUser.name}?`
+                    : `Are you sure you want to block ${blockingUser.name}?`}
+                </p>
+                <p className="text-[11px] mt-1 m-0 opacity-90 leading-relaxed">
+                  {blockingUser.isBlocked
+                    ? 'Unblocking will immediately restore the customer\'s ability to log in, verify OTPs, place orders, and access their wallet.'
+                    : 'Blocking will immediately revoke login access, OTP verification, cart checkout, and placing new orders.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Customer Summary Chip */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-medium">Customer:</span>
+                <span className="font-bold text-slate-800">{blockingUser.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-medium">Phone Number:</span>
+                <span className="font-mono font-bold text-slate-800">{blockingUser.phone}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-medium">Orders Placed:</span>
+                <span className="font-bold text-blue-600">{blockingUser.ordersCount} Orders</span>
+              </div>
+            </div>
+
+            {/* Reason Field (for blocking) */}
+            {!blockingUser.isBlocked ? (
+              <div className="space-y-2">
+                <label className="font-bold text-slate-700 block uppercase text-[10px] tracking-wider">
+                  Reason for Blocking <span className="text-rose-500">*</span>
+                </label>
+
+                {/* Quick select reason tags */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Fraudulent / Suspicious Activity',
+                    'Multiple Order Refusals / Abuse',
+                    'Fake Address / Unreachable',
+                    'Payment Default / Chargeback',
+                    'Customer Requested Account Suspension'
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setBlockReasonInput(preset)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all cursor-pointer ${
+                        blockReasonInput === preset
+                          ? 'bg-rose-100 border-rose-300 text-rose-800 font-bold shadow-2xs'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  rows={3}
+                  value={blockReasonInput}
+                  onChange={(e) => setBlockReasonInput(e.target.value)}
+                  placeholder="Enter or select why this customer is being blocked..."
+                  className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500/20"
+                />
+              </div>
+            ) : (
+              blockingUser.blockReason && (
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Previous Block Reason:</span>
+                  <p className="m-0 text-xs italic font-medium">"{blockingUser.blockReason}"</p>
+                </div>
+              )
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setBlockingUser(null)}
+                disabled={submittingBlock}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border-none cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmToggleBlock}
+                disabled={submittingBlock || (!blockingUser.isBlocked && !blockReasonInput.trim())}
+                className={`px-5 py-2 text-white font-bold text-xs rounded-xl border-none cursor-pointer transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50 ${
+                  blockingUser.isBlocked ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
+                }`}
+              >
+                {submittingBlock && <Loader2 size={13} className="animate-spin" />}
+                <span>
+                  {submittingBlock
+                    ? 'Processing...'
+                    : blockingUser.isBlocked
+                    ? 'Confirm Unblock'
+                    : 'Confirm Block'}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* ── RETURN ORDER ACTION MODAL ── */}
       {selectedReturnOrder && (
