@@ -10,6 +10,7 @@ import Captain from '../models/Captain.model.js';
 import CaptainNotification from '../models/CaptainNotification.model.js';
 import PlatformLedger from '../models/PlatformLedger.model.js';
 import CommissionSettings from '../models/CommissionSettings.model.js';
+import DeliveryPricing from '../models/DeliveryPricing.model.js';
 import RefundRequest from '../models/RefundRequest.model.js';
 import { 
   sendNotificationToUser, 
@@ -311,28 +312,43 @@ export const placeOrder = async (req, res, next) => {
       });
     }
 
-    // Fetch dynamic commission & delivery settings
+    // Fetch dynamic commission & centralized delivery pricing settings
     let globalSellerCommRate = 10;
     let globalCaptainCommRate = 5;
     let deliveryChargeRate = 40;
     let freeDeliveryMinOrderRate = 500;
     let isFreeDeliveryActive = true;
+    let peakSurgeFee = 0;
     try {
-      const commSettings = await CommissionSettings.getOrCreateActiveSettings();
+      const [commSettings, deliveryPricing] = await Promise.all([
+        CommissionSettings.getOrCreateActiveSettings(),
+        DeliveryPricing.getActiveConfig(),
+      ]);
+
       if (commSettings) {
         globalSellerCommRate = Number(commSettings.sellerCommission !== undefined ? commSettings.sellerCommission : 10);
         globalCaptainCommRate = Number(commSettings.captainCommission !== undefined ? commSettings.captainCommission : 5);
+      }
+
+      if (deliveryPricing && deliveryPricing.isActive) {
+        deliveryChargeRate = Number(deliveryPricing.baseDeliveryFee ?? 40);
+        freeDeliveryMinOrderRate = Number(deliveryPricing.freeDeliveryThreshold ?? 500);
+        isFreeDeliveryActive = Boolean(deliveryPricing.isFreeDeliveryEnabled ?? true);
+        if (deliveryPricing.peakSurge?.enabled) {
+          peakSurgeFee = Number(deliveryPricing.peakSurge.surgeAmount || 0);
+        }
+      } else if (commSettings) {
         deliveryChargeRate = Number(commSettings.deliveryCharge !== undefined ? commSettings.deliveryCharge : 40);
         freeDeliveryMinOrderRate = Number(commSettings.freeDeliveryMinOrder !== undefined ? commSettings.freeDeliveryMinOrder : 500);
         isFreeDeliveryActive = commSettings.isFreeDeliveryEnabled !== undefined ? Boolean(commSettings.isFreeDeliveryEnabled) : true;
       }
     } catch (e) {
-      console.warn('[OrderController] Error reading CommissionSettings, using fallback rates:', e.message);
+      console.warn('[OrderController] Error reading DeliveryPricing/CommissionSettings, using fallback rates:', e.message);
     }
 
     // Server-side calculation of totals using dynamic delivery rules
     const isFreeShipping = itemsTotal === 0 || (isFreeDeliveryActive && itemsTotal >= freeDeliveryMinOrderRate);
-    const shippingFee = isFreeShipping ? 0 : deliveryChargeRate;
+    const shippingFee = isFreeShipping ? 0 : (deliveryChargeRate + peakSurgeFee);
     const discount = Math.max(0, totalOriginalPrice - itemsTotal);
     const gst = 0; // GST included in prices
     const grandTotal = itemsTotal + shippingFee;
@@ -1270,8 +1286,8 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_TRZdg2aAOYv4KK',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'Zu7lopLZWWZtA4T0R5Z2ORhU',
+  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_live_TgHKKogdCDai1c',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'ZTPJsec3dADm8tvH6hM3XTrL',
 });
 
 export const createRazorpayOrder = async (req, res, next) => {
@@ -1313,6 +1329,7 @@ export const createRazorpayOrder = async (req, res, next) => {
       orderId: razorpayOrder.id,
       amount: razorpayOrder.amount,
       currency: razorpayOrder.currency,
+      keyId: process.env.RAZORPAY_KEY_ID || 'rzp_live_TgHKKogdCDai1c',
     });
   } catch (error) {
     console.error('[Razorpay Create Order Error]', error);
@@ -1329,7 +1346,7 @@ export const verifyRazorpayPayment = async (req, res, next) => {
     }
 
     // Verify signature
-    const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'Zu7lopLZWWZtA4T0R5Z2ORhU');
+    const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'ZTPJsec3dADm8tvH6hM3XTrL');
     hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
     const generated_signature = hmac.digest('hex');
 

@@ -7,6 +7,7 @@ import Rating from '../models/Rating.model.js';
 import CaptainNotification from '../models/CaptainNotification.model.js';
 import CaptainTransaction from '../models/CaptainTransaction.model.js';
 import CommissionSettings from '../models/CommissionSettings.model.js';
+import TransportPricing from '../models/TransportPricing.model.js';
 import { razorpayInstance } from '../config/razorpay.js';
 import { haversineDistance, estimateDuration } from '../utils/haversine.js';
 import { calculateFare } from '../utils/fareCalculator.js';
@@ -260,8 +261,9 @@ export const getFareEstimate = async (req, res, next) => {
       estimatedDurationMin = estimateDuration(distanceKm);
     }
 
-    // ── Calculate fare ────────────────────────────────────────────────
-    const fareBreakdown = calculateFare(vehicle, distanceKm);
+    // ── Calculate fare dynamically via Centralized Transport Pricing ─
+    const transportPricing = await TransportPricing.getActiveConfig();
+    const fareBreakdown = calculateFare(vehicle, distanceKm, { transportPricing });
 
     res.status(200).json({
       success: true,
@@ -376,7 +378,8 @@ export const createTransportPaymentOrder = async (req, res, next) => {
       estimatedDurationMin = estimateDuration(distanceKm);
     }
 
-    const fareBreakdown = calculateFare(vehicle, distanceKm);
+    const transportPricing = await TransportPricing.getActiveConfig();
+    const fareBreakdown = calculateFare(vehicle, distanceKm, { transportPricing });
     const amountInPaise = Math.round(fareBreakdown.totalFare * 100);
 
     if (amountInPaise <= 0) {
@@ -403,7 +406,7 @@ export const createTransportPaymentOrder = async (req, res, next) => {
       amount: fareBreakdown.totalFare,
       amountPaise: amountInPaise,
       currency: 'INR',
-      keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_TRZdg2aAOYv4KK',
+      keyId: process.env.RAZORPAY_KEY_ID || 'rzp_live_TgHKKogdCDai1c',
       distanceKm,
       estimatedDurationMin,
       fareBreakdown,
@@ -532,7 +535,11 @@ export const verifyTransportPayment = async (req, res, next) => {
       estimatedDurationMin = estimateDuration(distanceKm);
     }
 
-    const fareBreakdown = calculateFare(vehicle, distanceKm);
+    const transportPricing = await TransportPricing.getActiveConfig();
+    const fareBreakdown = calculateFare(vehicle, distanceKm, { 
+      stopsCount: (stops || []).length, 
+      transportPricing 
+    });
 
     const vehicleSnapshot = {
       name: vehicle.name,
@@ -778,8 +785,12 @@ export const createBooking = async (req, res, next) => {
       estimatedDurationMin = estimateDuration(distanceKm);
     }
 
-    // ── Recalculate fare (server-side, never trust frontend) ──────────
-    const fareBreakdown = calculateFare(vehicle, distanceKm);
+    // ── Recalculate fare (server-side, dynamic centralized pricing) ──
+    const transportPricing = await TransportPricing.getActiveConfig();
+    const fareBreakdown = calculateFare(vehicle, distanceKm, { 
+      stopsCount: (stops || []).length, 
+      transportPricing 
+    });
 
     // ── Build vehicle snapshot (freeze pricing at booking time) ───────
     const vehicleSnapshot = {

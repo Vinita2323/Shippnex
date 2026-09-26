@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { productService, authService, categoryService } from '../../../services/authService';
-import { getImageUrl, handleImageError, getInitialSvgDataUrl } from '../../../utils/imageUtils';
+import { getImageUrl, handleImageError, getInitialSvgDataUrl, compressAndResizeImage, uploadFileViaApi } from '../../../utils/imageUtils';
 
 const Products = () => {
   const navigate = useNavigate();
@@ -224,18 +224,27 @@ const Products = () => {
     }));
   };
 
-  const handleImageFileChange = (e) => {
+  const handleImageFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
+      const compressed = await compressAndResizeImage(file, 1000, 1000, 0.75);
+      if (compressed) {
         setEditFormData(prev => ({
           ...prev,
-          image: event.target.result
+          image: compressed.dataUrl
         }));
-        showToast(`Image "${file.name}" loaded!`);
-      };
-      reader.readAsDataURL(file);
+        showToast(`Image "${file.name}" compressed and loaded!`);
+        
+        // Background direct upload if available
+        uploadFileViaApi(compressed.file || file, 'products').then(uploadedUrl => {
+          if (uploadedUrl) {
+            setEditFormData(prev => ({
+              ...prev,
+              image: uploadedUrl
+            }));
+          }
+        }).catch(() => {});
+      }
     }
   };
 

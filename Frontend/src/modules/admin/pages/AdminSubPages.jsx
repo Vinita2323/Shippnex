@@ -5,7 +5,7 @@ import { categoryService, bannerService, productService, walletService, captainS
 import { faqService } from '../../../services/faqService';
 import { supportService } from '../../../services/supportService';
 import { mockUsers, mockSellers, mockCaptains, mockCategories, mockProducts, mockOrders, mockDeliveries, mockPayments, mockCoupons, mockNotifications, mockRoles, mockFaqs } from '../mock/adminMockData';
-import { getImageUrl, handleImageError, getInitialSvgDataUrl } from '../../../utils/imageUtils';
+import { getImageUrl, handleImageError, getInitialSvgDataUrl, compressAndResizeImage, uploadFileViaApi } from '../../../utils/imageUtils';
 import { 
   Search, 
   Download, 
@@ -11048,17 +11048,17 @@ export const AddProductPage = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleMultipleFileUpload = (e) => {
+  const handleMultipleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
     
     // We only take up to 3 images max
     const maxFiles = files.slice(0, 3);
     
-    maxFiles.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const resultUrl = event.target.result;
+    for (const file of maxFiles) {
+      const compressed = await compressAndResizeImage(file, 1000, 1000, 0.75);
+      if (compressed) {
+        const resultUrl = compressed.dataUrl;
         setFormData(prev => {
           const newGallery = [...(prev.galleryImages || [])];
           if (newGallery.length < 3) {
@@ -11066,11 +11066,20 @@ export const AddProductPage = () => {
           }
           return { ...prev, galleryImages: newGallery };
         });
-      };
-      reader.readAsDataURL(file);
-    });
+
+        // Background direct upload if available
+        uploadFileViaApi(compressed.file || file, 'products').then(uploadedUrl => {
+          if (uploadedUrl) {
+            setFormData(prev => ({
+              ...prev,
+              galleryImages: prev.galleryImages.map(img => img === resultUrl ? uploadedUrl : img)
+            }));
+          }
+        }).catch(() => {});
+      }
+    }
     
-    showToast(`${maxFiles.length} gallery images uploaded!`);
+    showToast(`${maxFiles.length} gallery images compressed & loaded!`);
   };
 
   const removeGalleryImage = (indexToRemove) => {
@@ -11080,20 +11089,28 @@ export const AddProductPage = () => {
     }));
   };
 
-  const handleDeviceFileUpload = (e, field) => {
+  const handleDeviceFileUpload = async (e, field) => {
     const file = e.target.files && e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const resultUrl = event.target.result;
+      const compressed = await compressAndResizeImage(file, 1000, 1000, 0.75);
+      if (compressed) {
+        const resultUrl = compressed.dataUrl;
         setFormData(prev => ({
           ...prev,
           [field]: resultUrl,
           [`${field}File`]: file.name
         }));
-        showToast(`Image "${file.name}" selected from device!`);
-      };
-      reader.readAsDataURL(file);
+        showToast(`Image "${file.name}" compressed & selected!`);
+
+        uploadFileViaApi(compressed.file || file, 'products').then(uploadedUrl => {
+          if (uploadedUrl) {
+            setFormData(prev => ({
+              ...prev,
+              [field]: uploadedUrl
+            }));
+          }
+        }).catch(() => {});
+      }
     }
   };
 

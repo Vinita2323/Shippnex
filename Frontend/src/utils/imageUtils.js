@@ -212,3 +212,105 @@ export const handleImageError = (e, name) => {
   e.currentTarget.onerror = null;
   e.currentTarget.src = getInitialSvgDataUrl(name || 'Item');
 };
+
+/**
+ * Client-Side Image Resizer & Compressor
+ * Compresses heavy mobile camera/gallery photos (e.g. 5-15MB) down to ~50-120KB
+ * preventing Nginx 413 (Request Entity Too Large) errors.
+ *
+ * @param {File|Blob} file - Original image file
+ * @param {number} maxWidth - Max pixel width (default: 1000)
+ * @param {number} maxHeight - Max pixel height (default: 1000)
+ * @param {number} quality - Compression quality 0.1 to 1.0 (default: 0.75)
+ * @returns {Promise<{ dataUrl: string, file: File }>}
+ */
+export const compressAndResizeImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) => {
+  return new Promise((resolve) => {
+    if (!file || !(file instanceof Blob || file instanceof File)) {
+      resolve(null);
+      return;
+    }
+
+    if (file.type === 'image/svg+xml' || (file.size && file.size < 40 * 1024)) {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve({ dataUrl: e.target.result, file });
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const dataUrl = canvas.toDataURL(mimeType, quality);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const compressedFile = new File(
+              [blob],
+              file.name ? file.name.replace(/\.[^/.]+$/, '') + (mimeType === 'image/png' ? '.png' : '.jpg') : 'upload.jpg',
+              {
+                type: mimeType,
+                lastModified: Date.now(),
+              }
+            );
+            resolve({ dataUrl, file: compressedFile });
+          } else {
+            resolve({ dataUrl, file });
+          }
+        }, mimeType, quality);
+      };
+      img.onerror = () => {
+        resolve({ dataUrl: e.target.result, file });
+      };
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+};
+
+export const uploadFileViaApi = async (fileOrBlob, folder = 'products') => {
+  if (!fileOrBlob) return null;
+  try {
+    const formData = new FormData();
+    formData.append('image', fileOrBlob);
+    const res = await fetch(`/api/upload?folder=${encodeURIComponent(folder)}`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('seller_token') || localStorage.getItem('admin_token') || ''}`,
+      }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data?.url || data?.data?.url || data?.secure_url || null;
+    }
+  } catch (err) {
+    console.warn('API direct upload failed, fallback to local/compressed url', err);
+  }
+  return null;
+};

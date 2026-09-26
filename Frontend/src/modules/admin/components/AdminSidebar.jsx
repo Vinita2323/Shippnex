@@ -103,6 +103,7 @@ export const AdminSidebar = () => {
     delivery_boy: false,
     orders: false,
     transport: false,
+    pricing_charges: false,
   });
   const searchInputRef = useRef(null);
 
@@ -268,6 +269,20 @@ export const AdminSidebar = () => {
       title: 'COMMISSION MANAGEMENT',
       items: [
         { id: 'commission_management', label: 'Commission Management', icon: Percent },
+      ]
+    },
+    {
+      title: 'PRICING & CHARGES',
+      items: [
+        {
+          id: 'pricing_charges',
+          label: 'Pricing & Charges',
+          icon: DollarSign,
+          submenu: [
+            { id: 'pricing_transport', label: 'Transport Charges' },
+            { id: 'pricing_delivery', label: 'Delivery Charges' },
+          ]
+        },
       ]
     },
     {

@@ -39,6 +39,7 @@ import captainRegistrationFeeRoutes from './routes/captainRegistrationFeeRoutes.
 import commissionRoutes from './routes/commissionRoutes.js';
 import referralRoutes from './routes/referralRoutes.js';
 import returnRoutes from './routes/returnRoutes.js';
+import pricingRoutes from './routes/pricingRoutes.js';
 import razorpayWebhookRoutes from './routes/razorpayWebhookRoutes.js';
 import compression from 'compression';
 import performanceLogger from './middleware/performanceMiddleware.js';
@@ -148,6 +149,7 @@ const registerRoutes = (prefix = '') => {
   app.use(`${prefix}/seller-registration-fee`, sellerRegistrationFeeRoutes);
   app.use(`${prefix}/captain-registration-fee`, captainRegistrationFeeRoutes);
   app.use(`${prefix}/referral`, referralRoutes);
+  app.use(`${prefix}/pricing`, pricingRoutes);
   app.use(`${prefix}`, commissionRoutes);
 };
 

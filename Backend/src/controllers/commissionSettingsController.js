@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
 import CommissionSettings from '../models/CommissionSettings.model.js';
+import DeliveryPricing from '../models/DeliveryPricing.model.js';
 import Order from '../models/Order.model.js';
 import TransportBooking from '../models/TransportBooking.model.js';
 import Seller from '../models/Seller.model.js';
@@ -133,18 +133,34 @@ export const updateCommissionSettings = async (req, res, next) => {
 // @access  Public / Authenticated
 export const getCurrentCommissionRates = async (req, res, next) => {
   try {
-    const settings = await CommissionSettings.getOrCreateActiveSettings();
+    const [settings, deliveryPricing] = await Promise.all([
+      CommissionSettings.getOrCreateActiveSettings(),
+      DeliveryPricing.getActiveConfig(),
+    ]);
+
+    const deliveryCharge = deliveryPricing?.isActive && deliveryPricing?.baseDeliveryFee !== undefined
+      ? deliveryPricing.baseDeliveryFee
+      : (settings.deliveryCharge !== undefined ? settings.deliveryCharge : 40);
+
+    const freeDeliveryMinOrder = deliveryPricing?.isActive && deliveryPricing?.freeDeliveryThreshold !== undefined
+      ? deliveryPricing.freeDeliveryThreshold
+      : (settings.freeDeliveryMinOrder !== undefined ? settings.freeDeliveryMinOrder : 500);
+
+    const isFreeDeliveryEnabled = deliveryPricing?.isActive && deliveryPricing?.isFreeDeliveryEnabled !== undefined
+      ? deliveryPricing.isFreeDeliveryEnabled
+      : (settings.isFreeDeliveryEnabled !== undefined ? settings.isFreeDeliveryEnabled : true);
+
     res.status(200).json({
       success: true,
       sellerCommission: settings.sellerCommission,
       captainCommission: settings.captainCommission,
       sellerCommissionType: settings.sellerCommissionType || 'Percentage',
       captainCommissionType: settings.captainCommissionType || 'Percentage',
-      deliveryCharge: settings.deliveryCharge !== undefined ? settings.deliveryCharge : 40,
-      freeDeliveryMinOrder: settings.freeDeliveryMinOrder !== undefined ? settings.freeDeliveryMinOrder : 500,
-      isFreeDeliveryEnabled: settings.isFreeDeliveryEnabled !== undefined ? settings.isFreeDeliveryEnabled : true,
+      deliveryCharge,
+      freeDeliveryMinOrder,
+      isFreeDeliveryEnabled,
       isActive: settings.isActive,
-      updatedAt: settings.updatedAt,
+      updatedAt: deliveryPricing?.updatedAt || settings.updatedAt,
     });
   } catch (error) {
     next(error);

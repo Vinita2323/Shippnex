@@ -3,7 +3,8 @@ import {
   FileText, Upload, Tag, DollarSign, Boxes, CheckCircle, Package, Plus, ArrowLeft, ShieldCheck, RotateCcw, AlertCircle, Sparkles
 } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { categoryService, productService, authService } from '../../../services/authService';
+import { categoryService, productService, authService, bannerService } from '../../../services/authService';
+import { compressAndResizeImage } from '../../../utils/imageUtils';
 import ProductVariantBuilder from '../components/ProductVariantBuilder';
 
 const AddProduct = () => {
@@ -247,26 +248,46 @@ const AddProduct = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleMultipleFileUpload = (e) => {
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handleMultipleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
     const maxFiles = files.slice(0, 3);
     
-    maxFiles.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const resultUrl = event.target.result;
-        setFormData(prev => {
-          const newGallery = [...(prev.galleryImages || [])];
-          if (newGallery.length < 3) {
-            newGallery.push(resultUrl);
+    setUploadingImage(true);
+    showToast(`Optimizing & uploading ${maxFiles.length} gallery image(s)...`);
+
+    for (const file of maxFiles) {
+      try {
+        const compressed = await compressAndResizeImage(file, 1000, 1000, 0.75);
+        if (compressed) {
+          let finalUrl = compressed.dataUrl;
+          try {
+            const formDataUpload = new FormData();
+            formDataUpload.append('image', compressed.file || file);
+            const uploadRes = await bannerService.uploadImage(formDataUpload, 'products');
+            if (uploadRes?.imageUrl || uploadRes?.filePath) {
+              finalUrl = uploadRes.imageUrl || uploadRes.filePath;
+            }
+          } catch (uploadErr) {
+            console.warn('Direct upload fallback to compressed image:', uploadErr.message);
           }
-          return { ...prev, galleryImages: newGallery };
-        });
-      };
-      reader.readAsDataURL(file);
-    });
-    showToast(`${maxFiles.length} gallery images uploaded!`);
+
+          setFormData(prev => {
+            const newGallery = [...(prev.galleryImages || [])];
+            if (newGallery.length < 3) {
+              newGallery.push(finalUrl);
+            }
+            return { ...prev, galleryImages: newGallery };
+          });
+        }
+      } catch (err) {
+        console.error('Error processing gallery image:', err);
+      }
+    }
+    setUploadingImage(false);
+    showToast(`${maxFiles.length} gallery image(s) processed!`);
   };
 
   const removeGalleryImage = (indexToRemove) => {
@@ -276,20 +297,39 @@ const AddProduct = () => {
     }));
   };
 
-  const handleDeviceFileUpload = (e, field) => {
+  const handleDeviceFileUpload = async (e, field) => {
     const file = e.target.files && e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const resultUrl = event.target.result;
-        setFormData(prev => ({
-          ...prev,
-          [field]: resultUrl,
-          [`${field}File`]: file.name
-        }));
-        showToast(`Image "${file.name}" selected from device!`);
-      };
-      reader.readAsDataURL(file);
+      try {
+        setUploadingImage(true);
+        showToast(`Optimizing & uploading "${file.name}"...`);
+        const compressed = await compressAndResizeImage(file, 1000, 1000, 0.75);
+        if (compressed) {
+          let finalUrl = compressed.dataUrl;
+          try {
+            const formDataUpload = new FormData();
+            formDataUpload.append('image', compressed.file || file);
+            const uploadRes = await bannerService.uploadImage(formDataUpload, 'products');
+            if (uploadRes?.imageUrl || uploadRes?.filePath) {
+              finalUrl = uploadRes.imageUrl || uploadRes.filePath;
+            }
+          } catch (uploadErr) {
+            console.warn('Direct upload fallback to compressed image:', uploadErr.message);
+          }
+
+          setFormData(prev => ({
+            ...prev,
+            [field]: finalUrl,
+            [`${field}File`]: file.name
+          }));
+          showToast(`Image "${file.name}" uploaded successfully!`);
+        }
+      } catch (err) {
+        console.error('Error uploading image:', err);
+        showToast('Error optimizing image.');
+      } finally {
+        setUploadingImage(false);
+      }
     }
   };
 
@@ -322,9 +362,10 @@ const AddProduct = () => {
 
     setIsSubmitting(true);
     try {
-      const cleanMainImage = (typeof formData.mainImage === 'string' && formData.mainImage.length > 1500000)
-        ? 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80'
-        : formData.mainImage;
+      let cleanMainImage = formData.mainImage;
+      if (typeof cleanMainImage === 'string' && cleanMainImage.startsWith('data:image/') && cleanMainImage.length > 500000) {
+        cleanMainImage = 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=80';
+      }
 
       const finalSalePrice = Number(formData.salePrice || 0);
       const finalMrp = Number(formData.mrp || formData.salePrice || 0);

@@ -92,7 +92,7 @@ const SellerMembership = () => {
       }
 
       const isRenewal = membership && ['active', 'expired'].includes(membership.membershipStatus);
-      const razorpayKey = orderRes.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TRZdg2aAOYv4KK';
+      const razorpayKey = orderRes.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_TgHKKogdCDai1c';
 
       // 2. Configure Razorpay Checkout options
       const options = {

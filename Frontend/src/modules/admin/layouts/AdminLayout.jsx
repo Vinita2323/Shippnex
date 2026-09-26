@@ -56,6 +56,7 @@ const ReferralSettings = lazy(() => import('../pages/ReferralManagement').then(m
 const ReferralList = lazy(() => import('../pages/ReferralManagement').then(m => ({ default: m.ReferralList })));
 const ReturnManagement = lazy(() => import('../pages/ReturnManagement').then(m => ({ default: m.ReturnManagement || m.default })));
 const TransportManagement = lazy(() => import('../pages/TransportManagement').then(m => ({ default: m.TransportManagement || m.default })));
+const PricingChargesManagement = lazy(() => import('../pages/PricingChargesManagement').then(m => ({ default: m.PricingChargesManagement || m.default })));
 
 const FinancialAuthorityTransferred = () => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm max-w-2xl mx-auto mt-12">
@@ -96,6 +97,21 @@ export const AdminLayout = () => {
       case 'commissions':
       case 'commission':
         return <CommissionManagement />;
+      case 'pricing_charges':
+      case 'pricing-charges':
+      case 'pricing':
+      case 'charges':
+        return <PricingChargesManagement initialTab="transport" />;
+      case 'pricing_transport':
+      case 'pricing-transport':
+      case 'transport_pricing':
+      case 'transport_charges':
+        return <PricingChargesManagement initialTab="transport" />;
+      case 'pricing_delivery':
+      case 'pricing-delivery':
+      case 'delivery_pricing':
+      case 'delivery_charges':
+        return <PricingChargesManagement initialTab="delivery" />;
       case 'captain-registration-fee':
       case 'captain_registration_fee':
       case 'captain_fee':
