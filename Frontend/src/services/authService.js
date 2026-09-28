@@ -858,19 +858,48 @@ export const captainService = {
     return response.data;
   },
 
+  // COD Cash Collection & Settlements
+  confirmCodCollection: async (orderId, notes = '') => {
+    clearCaptainDashboardClientCache();
+    const response = await API.post(`/captain/jobs/${orderId}/confirm-cod`, { notes });
+    return response.data;
+  },
+  getCodCollections: async () => {
+    const response = await API.get('/captain/cod-collections');
+    return response.data;
+  },
+  requestCashSettlement: async (payload) => {
+    clearCaptainDashboardClientCache();
+    const response = await API.post('/captain/cash-settlements', payload);
+    return response.data;
+  },
+  getCashSettlements: async () => {
+    const response = await API.get('/captain/cash-settlements');
+    return response.data;
+  },
+
   // Service Areas
   getServiceAreas: async () => {
     const response = await API.get('/captain/service-areas');
     return response.data;
   },
 
-  // Admin: Available Captains for assignment
+  // Admin: Available Captains for assignment & Settlements
   getAvailableCaptains: async () => {
     const response = await API.get('/admin/captains/available');
     return response.data;
   },
   assignCaptainToOrder: async (orderId, captainId, captainEarnings = 0) => {
     const response = await API.put(`/admin/orders/${orderId}/assign-captain`, { captainId, captainEarnings });
+    return response.data;
+  },
+  getAdminCaptainCashSettlements: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const response = await API.get(`/admin/captain-cash-settlements${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  processAdminCaptainCashSettlement: async (id, action, adminRemarks = '') => {
+    const response = await API.put(`/admin/captain-cash-settlements/${id}`, { action, adminRemarks });
     return response.data;
   },
 };

@@ -322,6 +322,14 @@ const ActiveDelivery = () => {
       return;
     }
     setOtpError('');
+    const isCodOrder = activeItem?.paymentMethod === 'COD' || activeItem?.paymentMethod === 'CASH' || activeItem?.paymentStatus === 'Pending';
+    if (isCodOrder && activeItem?.orderId) {
+      try {
+        await captainService.confirmCodCollection(activeItem.orderId || activeItem._id);
+      } catch (codErr) {
+        console.warn('COD collection confirmation note:', codErr.message);
+      }
+    }
     await handleUpdateOrderStatus('Delivered', finalProof);
   };
 

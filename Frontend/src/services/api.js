@@ -62,9 +62,15 @@ API.interceptors.request.use(
     }
 
     // Endpoint-specific token resolution
-    if (requestUrl.includes('/super-admin') || currentPath.startsWith('/super-admin')) {
+    // Browser path takes priority over request URL so /admin panel always uses admin token
+    // (even when it calls /super-admin/* endpoints that are now dual-role accessible)
+    if (currentPath.startsWith('/super-admin')) {
       token = localStorage.getItem('shippnex_super_admin_token');
-    } else if (requestUrl.includes('/admin') || currentPath.startsWith('/admin')) {
+    } else if (currentPath.startsWith('/admin')) {
+      token = localStorage.getItem('shippnex_admin_token');
+    } else if (requestUrl.includes('/super-admin')) {
+      token = localStorage.getItem('shippnex_super_admin_token');
+    } else if (requestUrl.includes('/admin')) {
       token = localStorage.getItem('shippnex_admin_token') || localStorage.getItem('shippnex_super_admin_token');
     } else if (requestUrl.includes('/captain') || currentPath.startsWith('/captain') || currentPath.startsWith('/delivery')) {
       token = localStorage.getItem('shippnex_captain_token');

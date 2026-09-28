@@ -9,6 +9,9 @@ import TransportBooking from '../models/TransportBooking.model.js';
 import CaptainNotification from '../models/CaptainNotification.model.js';
 import Referral from '../models/Referral.model.js';
 import ReferralSettings from '../models/ReferralSettings.model.js';
+import CaptainCashSettlement from '../models/CaptainCashSettlement.model.js';
+import CodCashCollection from '../models/CodCashCollection.model.js';
+import PlatformLedger from '../models/PlatformLedger.model.js';
 import { processReferralReward } from './referralController.js';
 import { invalidateUserOrdersCache } from './orderController.js';
 import { invalidateProductsCache } from './productController.js';
@@ -999,4 +1002,187 @@ export const updateCaptainDetails = async (req, res, next) => {
     next(error);
   }
 };
+
+// ==========================================
+// CAPTAIN COD CASH SETTLEMENTS (Admin)
+// ==========================================
+export const getCaptainCashSettlements = async (req, res, next) => {
+  try {
+    const { status } = req.query;
+
+    const query = {};
+    if (status && status !== 'ALL') {
+      query.status = status;
+    }
+
+    const settlements = await CaptainCashSettlement.find(query)
+      .populate('captainId', 'name phone email city vehicleType outstandingCash cashCollected totalCodCollected')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Summary calculations across all settlements and captains
+    const [captainsSummary, pendingAgg, approvedAgg] = await Promise.all([
+      Captain.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalOutstanding: { $sum: '$outstandingCash' },
+            totalCod: { $sum: '$totalCodCollected' },
+            totalCash: { $sum: '$cashCollected' },
+          },
+        },
+      ]).catch(() => []),
+      CaptainCashSettlement.aggregate([
+        { $match: { status: 'PENDING' } },
+        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+      ]).catch(() => []),
+      CaptainCashSettlement.aggregate([
+        { $match: { status: 'APPROVED' } },
+        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+      ]).catch(() => []),
+    ]);
+
+    const summary = {
+      totalOutstanding: Number((captainsSummary[0]?.totalOutstanding || 0).toFixed(2)),
+      totalCodCollected: Number((captainsSummary[0]?.totalCod || captainsSummary[0]?.totalCash || 0).toFixed(2)),
+      pendingSettlementAmount: Number((pendingAgg[0]?.total || 0).toFixed(2)),
+      pendingSettlementCount: pendingAgg[0]?.count || 0,
+      approvedSettlementAmount: Number((approvedAgg[0]?.total || 0).toFixed(2)),
+      approvedSettlementCount: approvedAgg[0]?.count || 0,
+    };
+
+    res.json({
+      success: true,
+      settlements,
+      summary,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const processCaptainCashSettlement = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { action, adminRemarks = '' } = req.body;
+
+    if (!['APPROVE', 'REJECT'].includes(action)) {
+      return res.status(400).json({ success: false, message: 'Invalid action. Must be APPROVE or REJECT.' });
+    }
+
+    const isMongoId = mongoose.Types.ObjectId.isValid(id);
+    const query = isMongoId ? { $or: [{ _id: id }, { settlementId: id }] } : { settlementId: id };
+
+    const settlement = await CaptainCashSettlement.findOne(query);
+    if (!settlement) {
+      return res.status(404).json({ success: false, message: 'Settlement request not found' });
+    }
+
+    if (settlement.status !== 'PENDING') {
+      return res.status(400).json({ success: false, message: `This settlement request is already ${settlement.status}.` });
+    }
+
+    const captain = await Captain.findById(settlement.captainId);
+    if (!captain) {
+      return res.status(404).json({ success: false, message: 'Captain associated with this settlement was not found' });
+    }
+
+    const now = new Date();
+    settlement.processedAt = now;
+    settlement.processedBy = req.user?.id || req.user?._id || null;
+    settlement.adminRemarks = adminRemarks || (action === 'APPROVE' ? 'Approved by Administrator' : 'Rejected by Administrator');
+
+    if (action === 'APPROVE') {
+      const settleAmount = Number(settlement.amount);
+      const currentOutstanding = Number(captain.outstandingCash || 0);
+
+      // Deduct from captain's outstanding cash
+      const newOutstanding = Math.max(0, Number((currentOutstanding - settleAmount).toFixed(2)));
+      captain.outstandingCash = newOutstanding;
+      await captain.save();
+
+      settlement.status = 'APPROVED';
+      settlement.outstandingBefore = currentOutstanding;
+      settlement.outstandingAfter = newOutstanding;
+      await settlement.save();
+
+      // Record in Platform Central Ledger
+      try {
+        await PlatformLedger.create({
+          transactionId: `TXN-LED-SET-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`,
+          category: 'CAPTAIN_CASH_SETTLEMENT',
+          type: 'CREDIT',
+          amount: settleAmount,
+          source: 'CAPTAIN',
+          destination: 'PLATFORM_TREASURY',
+          entityType: 'CAPTAIN',
+          entityId: String(captain._id),
+          entityName: captain.name || 'Captain',
+          referenceModel: 'CaptainCashSettlement',
+          referenceId: settlement.settlementId,
+          referenceObjId: settlement._id,
+          status: 'SUCCESS',
+          balanceBefore: currentOutstanding,
+          balanceAfter: newOutstanding,
+          description: `COD Cash Settlement #${settlement.settlementId} verified and settled (Amount: ₹${settleAmount})`,
+          metadata: { settlementId: settlement.settlementId, amount: settleAmount, paymentMode: settlement.paymentMode },
+        });
+      } catch (ledErr) {
+        console.warn('[PlatformLedger] Failed to log settlement:', ledErr.message);
+      }
+
+      // Notify captain
+      try {
+        await CaptainNotification.create({
+          captainId: captain._id,
+          type: 'PAYMENT',
+          title: 'Cash Settlement Approved',
+          message: `Your COD cash settlement of ₹${settleAmount.toFixed(2)} (#${settlement.settlementId}) has been verified and approved. Remaining outstanding: ₹${newOutstanding.toFixed(2)}.`,
+          amount: settleAmount,
+          icon: 'verified',
+        });
+      } catch (notifErr) {
+        console.warn('[CaptainNotification] Settlement notice failed:', notifErr.message);
+      }
+
+      return res.json({
+        success: true,
+        message: `Settlement #${settlement.settlementId} approved. ₹${settleAmount.toFixed(2)} deducted from captain's outstanding cash balance.`,
+        settlement,
+        captain: {
+          _id: captain._id,
+          outstandingCash: captain.outstandingCash,
+        },
+      });
+    } else {
+      // REJECT
+      settlement.status = 'REJECTED';
+      await settlement.save();
+
+      // Notify captain
+      try {
+        await CaptainNotification.create({
+          captainId: captain._id,
+          type: 'PAYMENT',
+          title: 'Cash Settlement Rejected',
+          message: `Your COD cash settlement request of ₹${settlement.amount.toFixed(2)} (#${settlement.settlementId}) was rejected. Reason: ${adminRemarks || 'Verification unsuccessful'}.`,
+          amount: settlement.amount,
+          icon: 'cancel',
+        });
+      } catch (notifErr) {
+        console.warn('[CaptainNotification] Settlement reject notice failed:', notifErr.message);
+      }
+
+      return res.json({
+        success: true,
+        message: `Settlement #${settlement.settlementId} has been rejected.`,
+        settlement,
+      });
+    }
+  } catch (error) {
+    console.error('[processCaptainCashSettlement ERROR]', error);
+    next(error);
+  }
+};
+
 

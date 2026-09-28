@@ -19,6 +19,8 @@ import {
   updateAdminOrderStatus,
   getUserOrdersForAdmin,
   updateReturnOrderStatus,
+  getCaptainCashSettlements,
+  processCaptainCashSettlement,
 } from '../controllers/adminController.js';
 import { getAdminProfile, updateAdminProfile } from '../controllers/adminAuthController.js';
 
@@ -43,8 +45,8 @@ router.get('/sellers', getAllSellers);
 router.put('/sellers/:id/status', toggleSellerStatus);
 router.put('/sellers/:id/details', updateSellerDetails);
 router.delete('/sellers/:id', deleteSeller);
-// Commission updates are strictly revoked from Admin and restricted to Super Admin
-router.put('/sellers/:id/commission', protect('super_admin'), updateSellerCommission);
+// Seller Commission Updates
+router.put('/sellers/:id/commission', protect('admin', 'super_admin'), updateSellerCommission);
 
 // Captain Management
 router.get('/captains', getAllCaptains);
@@ -58,6 +60,10 @@ router.get('/orders', getAdminOrders);
 router.put('/orders/:orderId/status', updateAdminOrderStatus);
 router.put('/orders/:orderId/assign-captain', assignCaptainToOrder);
 router.put('/orders/:orderId/return-status', updateReturnOrderStatus);
+
+// Captain COD Cash Settlements (Admin)
+router.get('/captain-cash-settlements', protect('admin', 'super_admin'), getCaptainCashSettlements);
+router.put('/captain-cash-settlements/:id', protect('admin', 'super_admin'), processCaptainCashSettlement);
 
 export default router;
 

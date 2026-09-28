@@ -11,6 +11,8 @@ import SellerNotification from '../models/SellerNotification.model.js';
 import WalletTransaction from '../models/WalletTransaction.model.js';
 import WithdrawalRequest from '../models/WithdrawalRequest.model.js';
 import CaptainTransaction from '../models/CaptainTransaction.model.js';
+import CodCashCollection from '../models/CodCashCollection.model.js';
+import CaptainCashSettlement from '../models/CaptainCashSettlement.model.js';
 
 // Helper: Log financial audit entry
 const logAudit = async ({
@@ -117,6 +119,8 @@ export const getFinancialDashboardStats = async (req, res, next) => {
             _id: null,
             totalWalletLiabilities: { $sum: '$walletBalance' },
             totalCashCollected: { $sum: '$cashCollected' },
+            totalOutstandingCash: { $sum: '$outstandingCash' },
+            totalCodCollected: { $sum: '$totalCodCollected' },
           },
         },
       ]).catch(() => []),
@@ -263,6 +267,17 @@ export const getFinancialDashboardStats = async (req, res, next) => {
     const totalRefundsAmount = Number((completedRefunds?.totalAmount || 0).toFixed(2));
     const totalRefundsCount = completedRefunds?.count || 0;
 
+    // Captain COD Cash & Settlement metrics
+    const outstandingCaptainCash = Number((captainsAgg[0]?.totalOutstandingCash || 0).toFixed(2));
+    const totalCodCollected = Number((captainsAgg[0]?.totalCodCollected || captainsAgg[0]?.totalCashCollected || 0).toFixed(2));
+
+    const pendingCaptainCashSettlements = await CaptainCashSettlement.aggregate([
+      { $match: { status: 'PENDING' } },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' }, count: { $sum: 1 } } },
+    ]).catch(() => []);
+    const pendingCashSettlementsAmount = Number((pendingCaptainCashSettlements[0]?.totalAmount || 0).toFixed(2));
+    const pendingCashSettlementsCount = pendingCaptainCashSettlements[0]?.count || 0;
+
     // Format Monthly Charts
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const monthlyChartData = [];
@@ -304,6 +319,10 @@ export const getFinancialDashboardStats = async (req, res, next) => {
         captainOutstandingLiability,
         totalRefundsAmount,
         totalRefundsCount,
+        outstandingCaptainCash,
+        totalCodCollected,
+        pendingCashSettlementsAmount,
+        pendingCashSettlementsCount,
       },
       monthlyChartData,
       recentLedger,

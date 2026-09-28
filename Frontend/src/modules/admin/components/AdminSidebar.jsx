@@ -105,6 +105,7 @@ export const AdminSidebar = () => {
     orders: false,
     transport: false,
     pricing_charges: false,
+    payout_requests: false,
   });
   const searchInputRef = useRef(null);
 
@@ -185,7 +186,6 @@ export const AdminSidebar = () => {
         { id: 'captains', label: 'Delivery Captains', icon: Truck },
         { id: 'sellers', label: 'Sellers', icon: Store },
         { id: 'staff', label: 'Staff Roles', icon: ShieldAlert },
-        { id: 'location', label: 'Live Location Map', icon: MapPin }
       ]
     },
     {
@@ -289,6 +289,23 @@ export const AdminSidebar = () => {
             { id: 'pricing_delivery', label: 'Delivery Charges' },
           ]
         },
+      ]
+    },
+    {
+      title: 'PAYOUT REQUEST',
+      items: [
+        { id: 'financial_dashboard', label: 'Financial Dashboard', icon: TrendingUp },
+        {
+          id: 'payout_requests',
+          label: 'Payout Requests',
+          icon: Banknote,
+          submenu: [
+            { id: 'payout_seller', label: 'Seller Payout' },
+            { id: 'payout_captain', label: 'Captain Payout' },
+            { id: 'payout_captain_settlement', label: 'Captain Cash Settlement' },
+            { id: 'payout_refund_return', label: 'Refund & Return' },
+          ]
+        }
       ]
     },
     {

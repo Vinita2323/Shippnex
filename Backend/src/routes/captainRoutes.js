@@ -22,6 +22,10 @@ import {
   markAllNotificationsRead,
   getServiceAreas,
   deleteAccount,
+  confirmCodCollection,
+  getCodCollectionHistory,
+  requestCashSettlement,
+  getCaptainOwnCashSettlements,
 } from '../controllers/captainController.js';
 import {
   getTransportRequests,
@@ -56,6 +60,12 @@ router.get('/jobs', captainAuth, getJobs);
 router.put('/jobs/:orderId/accept', captainAuth, acceptJob);
 router.put('/jobs/:orderId/reject', captainAuth, rejectJob);
 router.put('/jobs/:orderId/status', captainAuth, updateDeliveryStatus);
+
+// COD Cash Collection & Settlement
+router.post('/jobs/:orderId/confirm-cod', captainAuth, confirmCodCollection);
+router.get('/cod-collections', captainAuth, getCodCollectionHistory);
+router.post('/cash-settlements', captainAuth, requestCashSettlement);
+router.get('/cash-settlements', captainAuth, getCaptainOwnCashSettlements);
 
 // Transport Requests & Rides (Goods Transport)
 router.get('/transport/requests', captainAuth, getTransportRequests);

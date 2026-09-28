@@ -1868,15 +1868,19 @@ export const SellerManagement = () => {
 
                   <div>
                     <label className="text-slate-500 font-medium block mb-1">Commission (%)</label>
-                    <div className="flex items-center gap-2">
+                    <div className="relative">
                       <input
-                        type="text"
-                        readOnly
-                        value={editFormData.commission ? `${editFormData.commission}%` : 'Standard (10%)'}
-                        className="flex-1 bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-600 outline-none cursor-not-allowed font-medium"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={editFormData.commission !== undefined && editFormData.commission !== null ? editFormData.commission : ''}
+                        onChange={(e) => setEditFormData({ ...editFormData, commission: e.target.value })}
+                        placeholder="10"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500] font-bold"
                       />
-                      <span className="text-[10px] text-amber-700 bg-amber-50 px-2.5 py-2 rounded-xl font-bold border border-amber-200 whitespace-nowrap">
-                        Super Admin Managed
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
+                        %
                       </span>
                     </div>
                   </div>

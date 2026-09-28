@@ -118,6 +118,14 @@ const captainSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    outstandingCash: {
+      type: Number,
+      default: 0,
+    },
+    totalCodCollected: {
+      type: Number,
+      default: 0,
+    },
 
     role: {
       type: String,

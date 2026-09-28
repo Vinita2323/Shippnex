@@ -11,6 +11,8 @@ import TransportBooking from '../models/TransportBooking.model.js';
 import Rating from '../models/Rating.model.js';
 import PayoutRequest from '../models/PayoutRequest.model.js';
 import PlatformLedger from '../models/PlatformLedger.model.js';
+import CodCashCollection from '../models/CodCashCollection.model.js';
+import CaptainCashSettlement from '../models/CaptainCashSettlement.model.js';
 import { getVehicleMatchPattern } from './transportBookingController.js';
 
 // In-memory fast cache for Captain Dashboard stats
@@ -397,6 +399,9 @@ export const getDashboardStats = async (req, res, next) => {
         captainName: captain.name,
         isOnline: Boolean(captain.isOnline),
         walletBalance: captain.walletBalance || 0,
+        cashCollected: captain.cashCollected || 0,
+        outstandingCash: captain.outstandingCash || 0,
+        totalCodCollected: captain.totalCodCollected || 0,
         todayEarnings,
         totalBookings,
         deliveredToday,
@@ -671,6 +676,34 @@ export const updateDeliveryStatus = async (req, res, next) => {
         );
       } catch (err) {
         console.warn('[updateDeliveryStatus] Notification update error:', err.message);
+      }
+
+      // If order is COD and not yet recorded, register COD cash collection safely
+      if (order.paymentMethod === 'COD' || order.paymentStatus === 'Pending') {
+        const existingCod = await CodCashCollection.findOne({ order: order._id });
+        if (!existingCod) {
+          const codAmount = Number(order.grandTotal || 0);
+          const collectionId = `COD-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+          await CodCashCollection.create({
+            collectionId,
+            order: order._id,
+            orderId: order.orderId,
+            captainId,
+            amount: codAmount,
+            paymentMethod: 'COD',
+            status: 'COLLECTED',
+            notes: 'Cash collected on order delivery',
+          }).catch(err => console.warn('[CodCashCollection] Auto-create notice:', err.message));
+
+          await Captain.findByIdAndUpdate(captainId, {
+            $inc: {
+              outstandingCash: codAmount,
+              totalCodCollected: codAmount,
+              cashCollected: codAmount,
+            },
+          });
+          updates.paymentStatus = 'Paid';
+        }
       }
 
       // Credit captain wallet
@@ -961,7 +994,7 @@ export const getActiveDelivery = async (req, res, next) => {
 export const getWallet = async (req, res, next) => {
   try {
     const captainId = req.user.id;
-    const captain = await Captain.findById(captainId).select('walletBalance bankDetails name');
+    const captain = await Captain.findById(captainId).select('walletBalance bankDetails name cashCollected outstandingCash totalCodCollected');
     if (!captain) return res.status(404).json({ success: false, message: 'Captain not found' });
 
     // Weekly breakdown — last 7 days earnings
@@ -1010,6 +1043,9 @@ export const getWallet = async (req, res, next) => {
         fromDeliveries: Number(fromDeliveries.toFixed(2)),
         fromTransport: Number(fromTransport.toFixed(2)),
         bankDetails: captain.bankDetails,
+        cashCollected: Number(captain.cashCollected || 0),
+        outstandingCash: Number(captain.outstandingCash || 0),
+        totalCodCollected: Number(captain.totalCodCollected || 0),
         nextPayoutDate: nextPayoutDate.toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric' }),
       },
     });
@@ -1279,4 +1315,193 @@ export const deleteAccount = async (req, res, next) => {
     next(error);
   }
 };
+
+// ──────────────────────────────────────────────
+// POST /api/captain/jobs/:orderId/confirm-cod
+// Captain confirms cash collected for a COD order
+// ──────────────────────────────────────────────
+export const confirmCodCollection = async (req, res, next) => {
+  try {
+    const { orderId } = req.params;
+    const captainId = req.user.id;
+    const { notes } = req.body || {};
+
+    const query = buildOrderQuery(orderId, { captainId });
+    const order = await Order.findOne(query);
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found or not assigned to you' });
+    }
+
+    // Check if COD collection already recorded for this order
+    let existingRecord = await CodCashCollection.findOne({ order: order._id });
+    if (existingRecord) {
+      return res.json({
+        success: true,
+        message: 'Cash collection already recorded for this order',
+        codRecord: existingRecord,
+      });
+    }
+
+    const codAmount = Number(order.grandTotal || 0);
+    const collectionId = `COD-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+
+    const codRecord = await CodCashCollection.create({
+      collectionId,
+      order: order._id,
+      orderId: order.orderId,
+      captainId,
+      amount: codAmount,
+      paymentMethod: order.paymentMethod || 'COD',
+      status: 'COLLECTED',
+      notes: notes || 'Cash collected from customer upon delivery',
+    });
+
+    // Increment captain's outstanding cash & total COD collected
+    const updatedCaptain = await Captain.findByIdAndUpdate(
+      captainId,
+      {
+        $inc: {
+          outstandingCash: codAmount,
+          totalCodCollected: codAmount,
+          cashCollected: codAmount,
+        },
+      },
+      { new: true }
+    );
+
+    // Update order payment status to Paid
+    order.paymentStatus = 'Paid';
+    await order.save();
+
+    invalidateCaptainDashboardCache(captainId);
+
+    res.json({
+      success: true,
+      message: `₹${codAmount.toFixed(2)} cash collection confirmed and added to your Cash Collection balance.`,
+      codRecord,
+      outstandingCash: updatedCaptain?.outstandingCash || 0,
+      totalCodCollected: updatedCaptain?.totalCodCollected || 0,
+    });
+  } catch (error) {
+    console.error('[confirmCodCollection ERROR]', error);
+    next(error);
+  }
+};
+
+// ──────────────────────────────────────────────
+// GET /api/captain/cod-collections
+// List captain's COD cash collections history
+// ──────────────────────────────────────────────
+export const getCodCollectionHistory = async (req, res, next) => {
+  try {
+    const captainId = req.user.id;
+    const collections = await CodCashCollection.find({ captainId })
+      .populate('order', 'orderId grandTotal items shippingAddress createdAt')
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    const captain = await Captain.findById(captainId).select('outstandingCash totalCodCollected cashCollected name');
+
+    // Aggregate today's collection
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const todayCollections = collections.filter(c => new Date(c.createdAt) >= todayStart);
+    const todayCollected = todayCollections.reduce((sum, c) => sum + (c.amount || 0), 0);
+
+    // Get pending settlements sum
+    const pendingSettlements = await CaptainCashSettlement.find({ captainId, status: 'PENDING' });
+    const pendingSettlementAmount = pendingSettlements.reduce((sum, s) => sum + (s.amount || 0), 0);
+
+    res.json({
+      success: true,
+      collections,
+      summary: {
+        outstandingCash: Number(captain?.outstandingCash || 0),
+        totalCodCollected: Number(captain?.totalCodCollected || 0),
+        todayCollected,
+        pendingSettlementAmount,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ──────────────────────────────────────────────
+// POST /api/captain/cash-settlements
+// Captain requests to settle collected cash
+// ──────────────────────────────────────────────
+export const requestCashSettlement = async (req, res, next) => {
+  try {
+    const captainId = req.user.id;
+    const { amount, paymentMode = 'BANK_TRANSFER', transactionReference = '', proofDocument = '', remarks = '' } = req.body;
+
+    if (!amount || isNaN(amount) || Number(amount) <= 0) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid settlement amount.' });
+    }
+
+    const settleAmount = Number(amount);
+    const captain = await Captain.findById(captainId);
+
+    if (!captain) {
+      return res.status(404).json({ success: false, message: 'Captain not found' });
+    }
+
+    const outstanding = Number(captain.outstandingCash || 0);
+    if (settleAmount > outstanding) {
+      return res.status(400).json({
+        success: false,
+        message: `Settlement amount (₹${settleAmount}) cannot exceed your outstanding COD cash balance of ₹${outstanding.toFixed(2)}.`,
+      });
+    }
+
+    const settlementId = `SET-CAP-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
+
+    const settlement = await CaptainCashSettlement.create({
+      settlementId,
+      captainId,
+      captainName: captain.name || 'Captain Partner',
+      captainPhone: captain.phone || '',
+      amount: settleAmount,
+      paymentMode,
+      transactionReference,
+      proofDocument,
+      status: 'PENDING',
+      remarks,
+      outstandingBefore: outstanding,
+      outstandingAfter: Math.max(0, outstanding - settleAmount),
+    });
+
+    invalidateCaptainDashboardCache(captainId);
+
+    res.json({
+      success: true,
+      message: `Cash settlement request of ₹${settleAmount.toFixed(2)} submitted successfully. Awaiting Admin verification.`,
+      settlement,
+    });
+  } catch (error) {
+    console.error('[requestCashSettlement ERROR]', error);
+    next(error);
+  }
+};
+
+// ──────────────────────────────────────────────
+// GET /api/captain/cash-settlements
+// Captain views their own cash settlement requests
+// ──────────────────────────────────────────────
+export const getCaptainOwnCashSettlements = async (req, res, next) => {
+  try {
+    const captainId = req.user.id;
+    const settlements = await CaptainCashSettlement.find({ captainId })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    res.json({ success: true, settlements });
+  } catch (error) {
+    next(error);
+  }
+};
+
 

@@ -58,21 +58,12 @@ const ReturnManagement = lazy(() => import('../pages/ReturnManagement').then(m =
 const TransportManagement = lazy(() => import('../pages/TransportManagement').then(m => ({ default: m.TransportManagement || m.default })));
 const PricingChargesManagement = lazy(() => import('../pages/PricingChargesManagement').then(m => ({ default: m.PricingChargesManagement || m.default })));
 const VehicleDetailsManagement = lazy(() => import('../pages/VehicleDetailsManagement').then(m => ({ default: m.VehicleDetailsManagement || m.default })));
-
-const FinancialAuthorityTransferred = () => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm max-w-2xl mx-auto mt-12">
-    <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center text-2xl font-bold mb-4">
-      🔒
-    </div>
-    <h3 className="text-xl font-bold text-slate-800 mb-2">Financial Authority Restricted</h3>
-    <p className="text-sm text-slate-600 max-w-md mb-6 leading-relaxed">
-      In accordance with platform governance, all financial operations including wallets, settlements, payouts, and ledger adjustments have been moved to the Super Admin Panel.
-    </p>
-    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
-      Commission Management is active and accessible via the dedicated Commission Management section.
-    </div>
-  </div>
-);
+// Payout Request module
+const AdminSellerPayout = lazy(() => import('../pages/AdminPayoutManagement').then(m => ({ default: m.AdminSellerPayout })));
+const AdminCaptainPayout = lazy(() => import('../pages/AdminPayoutManagement').then(m => ({ default: m.AdminCaptainPayout })));
+const AdminRefundReturn = lazy(() => import('../pages/AdminPayoutManagement').then(m => ({ default: m.AdminRefundReturn })));
+const AdminFinancialDashboard = lazy(() => import('../pages/AdminFinancialDashboard').then(m => ({ default: m.AdminFinancialDashboard })));
+const AdminCashSettlements = lazy(() => import('../pages/AdminCashSettlements').then(m => ({ default: m.AdminCashSettlements || m.default })));
 
 export const AdminLayout = () => {
   const { activeTab, setActiveTab } = useAdmin();
@@ -196,12 +187,13 @@ export const AdminLayout = () => {
         return <VehicleDetailsManagement />;
       case 'deliveries':
         return <DeliveryManagement />;
-      case 'fund_transfer':
       case 'wallet':
-      case 'withdrawals':
+      case 'fund_transfer':
       case 'seller_transaction':
-      case 'cash_collection':
-        return <FinancialAuthorityTransferred />;
+        return <AdminFinancialDashboard onNavigate={(tab) => setActiveTab(tab)} />;
+      case 'withdrawals':
+      case 'payouts':
+        return <AdminSellerPayout />;
       case 'coupons':
         return <CouponManagement />;
       case 'promo_dashboard':
@@ -249,6 +241,28 @@ export const AdminLayout = () => {
         return <CaptainMembershipPlans />;
       case 'captain_memberships':
         return <CaptainMembershipSubscriptions />;
+      // ── Payout Request Module ──
+      case 'financial_dashboard':
+      case 'financial-dashboard':
+        return <AdminFinancialDashboard onNavigate={(tab) => setActiveTab(tab)} />;
+      case 'payout_seller':
+      case 'payout-seller':
+        return <AdminSellerPayout />;
+      case 'payout_captain':
+      case 'payout-captain':
+        return <AdminCaptainPayout />;
+      case 'payout_captain_settlement':
+      case 'payout-captain-settlement':
+      case 'captain_settlements':
+      case 'captain_settlement':
+      case 'cash_settlement':
+      case 'cash_settlements':
+      case 'cash_collection':
+        return <AdminCashSettlements />;
+      case 'payout_refund_return':
+      case 'payout-refund-return':
+      case 'payout_refund':
+        return <AdminRefundReturn />;
       default:
         return <AdminDashboard onNavigate={(tab) => setActiveTab(tab)} />;
     }

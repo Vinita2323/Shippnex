@@ -209,6 +209,28 @@ const CaptainWallet = () => {
               </div>
             )}
 
+            {/* COD Cash Collection Banner */}
+            <div
+              onClick={() => navigate('/captain/cash-collection')}
+              className="bg-amber-50 hover:bg-amber-100/80 border border-amber-300 p-4 rounded-2xl flex items-center justify-between cursor-pointer transition-all shadow-xs"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-200/80 text-amber-900 flex items-center justify-center font-bold text-lg">
+                  ₹
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-amber-950 flex items-center gap-1.5">
+                    COD Cash Collection & Settlement
+                    <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-bold">Manage</span>
+                  </h4>
+                  <p className="text-[11px] text-amber-800">
+                    Collected Cash in Hand: <strong className="font-mono">₹{Number(walletData?.outstandingCash || 0).toFixed(2)}</strong>
+                  </p>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-amber-800">chevron_right</span>
+            </div>
+
             {/* Transaction History */}
             <div className="glass-panel p-5 rounded-2xl space-y-4">
               <div className="flex justify-between items-center relative">
