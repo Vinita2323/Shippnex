@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Product from '../models/Product.model.js';
+import Seller from '../models/Seller.model.js';
 import { uploadToCloudinary } from '../config/cloudinary.js';
 import dotenv from 'dotenv';
 
@@ -7,6 +8,7 @@ dotenv.config();
 
 import fs from 'fs';
 import path from 'path';
+import { getEligibleSellersForLocation, isValidCoordinate } from '../utils/sellerLocationHelper.js';
 
 // High-speed In-memory Cache for Products listing
 const productsCache = new Map();
@@ -236,31 +238,106 @@ export const createProduct = async (req, res) => {
 
 // @desc    Get all products
 // @route   GET /api/products
-// @access  Public
 export const getProducts = async (req, res) => {
   try {
     const now = Date.now();
-    const cacheKey = req.originalUrl || JSON.stringify(req.query);
+    const { category, subCategory, section, search, sellerId, seller, lat, lng, latitude, longitude, admin, all } = req.query;
+
+    const userLat = lat !== undefined ? lat : latitude;
+    const userLng = lng !== undefined ? lng : longitude;
+    const isAdminOrInternal = admin === 'true' || all === 'true' || req.headers['x-admin-request'] === 'true' || req.user?.role === 'admin';
+
+    const cacheKey = `${req.originalUrl}_${userLat || 'none'}_${userLng || 'none'}_${isAdminOrInternal ? 'adm' : 'cust'}`;
     const cached = productsCache.get(cacheKey);
-    if (cached && (now - cached.timestamp < 15000)) {
+    if (cached && (now - cached.timestamp < 10000)) {
       return res.status(200).json(cached.data);
     }
 
-    const { category, subCategory, section, search, sellerId, seller } = req.query;
     let query = {};
 
-    if (sellerId) {
-      if (mongoose.Types.ObjectId.isValid(sellerId)) {
-        query.$or = [
-          { sellerId: sellerId },
-          { seller: sellerId },
-          ...(seller ? [{ seller: seller }] : [])
-        ];
-      } else {
-        query.seller = sellerId;
+    if (sellerId || seller) {
+      if (!isAdminOrInternal && !req.headers['x-seller-request']) {
+        const sQuery = sellerId && mongoose.Types.ObjectId.isValid(sellerId)
+          ? { _id: sellerId }
+          : { businessName: seller || sellerId };
+        const sellerDoc = await Seller.findOne(sQuery).select('isOnline').lean();
+        if (sellerDoc && sellerDoc.isOnline === false) {
+          const emptyResponse = {
+            success: true,
+            count: 0,
+            total: 0,
+            page: 1,
+            limit: 50,
+            products: [],
+            message: 'This store is currently offline and not taking orders.',
+          };
+          productsCache.set(cacheKey, { data: emptyResponse, timestamp: now });
+          return res.status(200).json(emptyResponse);
+        }
       }
-    } else if (seller) {
-      query.seller = seller;
+
+      if (sellerId) {
+        if (mongoose.Types.ObjectId.isValid(sellerId)) {
+          query.$or = [
+            { sellerId: sellerId },
+            { seller: sellerId },
+            ...(seller ? [{ seller: seller }] : [])
+          ];
+        } else {
+          query.seller = sellerId;
+        }
+      } else if (seller) {
+        query.seller = seller;
+      }
+    } else if (isAdminOrInternal) {
+      // Admin product management: allowed to query all products
+    } else if (isValidCoordinate(userLat, userLng)) {
+      // Customer Storefront: Find sellers covering this user's location based on each seller's serviceRadius
+      const { eligibleSellerIds, eligibleSellerNames } = await getEligibleSellersForLocation(userLat, userLng);
+
+      if (!eligibleSellerIds || eligibleSellerIds.length === 0) {
+        const page = Math.max(1, Number(req.query.page) || 1);
+        const limit = req.query.limit !== undefined 
+          ? (Number(req.query.limit) === 0 ? 0 : Math.min(100, Math.max(1, Number(req.query.limit))))
+          : 50;
+
+        const emptyResponse = {
+          success: true,
+          count: 0,
+          total: 0,
+          page,
+          limit: limit || 0,
+          products: [],
+          message: 'No products available for your selected location.'
+        };
+        productsCache.set(cacheKey, { data: emptyResponse, timestamp: now });
+        return res.status(200).json(emptyResponse);
+      }
+
+      query.$or = [
+        { sellerId: { $in: eligibleSellerIds } },
+        { seller: { $in: eligibleSellerNames } },
+        { seller: { $in: eligibleSellerIds.map(id => id.toString()) } }
+      ];
+    } else {
+      // Customer Storefront without valid location coordinates:
+      // DO NOT return arbitrary global products. Prompt user to select delivery location.
+      const page = Math.max(1, Number(req.query.page) || 1);
+      const limit = req.query.limit !== undefined 
+        ? (Number(req.query.limit) === 0 ? 0 : Math.min(100, Math.max(1, Number(req.query.limit))))
+        : 50;
+
+      const noLocationResponse = {
+        success: true,
+        count: 0,
+        total: 0,
+        page,
+        limit: limit || 0,
+        products: [],
+        message: 'Please select your delivery location to view available products.'
+      };
+      productsCache.set(cacheKey, { data: noLocationResponse, timestamp: now });
+      return res.status(200).json(noLocationResponse);
     }
 
     if (category && category.trim() && category.trim().toLowerCase() !== 'all') {

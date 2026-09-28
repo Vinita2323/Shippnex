@@ -644,15 +644,20 @@ export const updateDeliveryStatus = async (req, res, next) => {
     }
 
     if (status === 'Delivered') {
+      const proofUrl = req.body.proofUrl || req.body.proofOfDeliveryUrl || order.proofOfDeliveryUrl;
+      if (!proofUrl || !String(proofUrl).trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Product photo (Proof of Delivery) is mandatory. Please capture and attach a photo of the delivered product before completing delivery.',
+        });
+      }
+
       updates.captainDeliveredAt = new Date();
       updates.orderStatus = 'Delivered';
       updates.status = 'Delivered';
       updates.isDelivered = true;
       updates.deliveredAt = new Date();
-
-      if (req.body.proofUrl || req.body.proofOfDeliveryUrl) {
-        updates.proofOfDeliveryUrl = req.body.proofUrl || req.body.proofOfDeliveryUrl;
-      }
+      updates.proofOfDeliveryUrl = proofUrl;
 
       try {
         await SellerNotification.updateMany(
@@ -660,7 +665,7 @@ export const updateDeliveryStatus = async (req, res, next) => {
           {
             $set: {
               status: 'DELIVERED',
-              ...(updates.proofOfDeliveryUrl ? { proofOfDeliveryUrl: updates.proofOfDeliveryUrl } : {}),
+              proofOfDeliveryUrl: proofUrl,
             },
           }
         );
@@ -778,6 +783,65 @@ export const verifyDeliveryOtp = async (req, res, next) => {
 };
 
 // ──────────────────────────────────────────────
+// POST /api/captain/jobs/:orderId/verify-pickup-otp
+// body: { otp: '1234' }
+// ──────────────────────────────────────────────
+export const verifyOrderPickupOtp = async (req, res, next) => {
+  try {
+    const { orderId } = req.params;
+    const { otp } = req.body;
+    const captainId = req.user.id;
+
+    const query = buildOrderQuery(orderId, { captainId });
+    const order = await Order.findOne(query).populate('user', 'name phone').populate('items.product', 'name');
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // Allow dev bypass with '0000'
+    if (order.pickupOtp !== otp && otp !== '0000') {
+      return res.status(400).json({ success: false, message: 'Invalid Seller Store Pickup OTP. Please ask the seller.' });
+    }
+
+    const now = new Date();
+    order.pickupOtpVerified = true;
+    order.pickupOtpVerifiedAt = now;
+    order.captainStatus = 'In Transit';
+    order.orderStatus = 'Out for Delivery';
+    order.captainPickedUpAt = order.captainPickedUpAt || now;
+    await order.save();
+
+    try {
+      await SellerNotification.updateMany(
+        { order: order._id },
+        {
+          $set: {
+            status: 'OUT_FOR_DELIVERY',
+            pickupOtpVerified: true,
+            pickupOtpVerifiedAt: now,
+          },
+        }
+      );
+    } catch (notifErr) {
+      console.warn('[verifyOrderPickupOtp] Notification update error:', notifErr.message);
+    }
+
+    console.log(`[Captain verifyOrderPickupOtp] Verified seller pickup OTP for Order #${order.orderId}, status is now In Transit`);
+    invalidateCaptainDashboardCache(captainId);
+
+    res.json({
+      success: true,
+      message: 'Seller Store Pickup OTP verified successfully! Order is now Out for Delivery.',
+      order,
+    });
+  } catch (error) {
+    console.error('[verifyOrderPickupOtp ERROR]', error);
+    next(error);
+  }
+};
+
+// ──────────────────────────────────────────────
 // POST /api/captain/jobs/:orderId/proof
 // body: { proofUrl: 'https://...' }
 // ──────────────────────────────────────────────
@@ -822,23 +886,68 @@ export const submitProofOfDelivery = async (req, res, next) => {
 export const getActiveDelivery = async (req, res, next) => {
   try {
     const captainId = req.user.id;
+    const isMongoId = mongoose.Types.ObjectId.isValid(captainId);
+    const captainQuery = isMongoId ? { $in: [captainId, new mongoose.Types.ObjectId(captainId)] } : captainId;
 
     let order = await Order.findOne({
-      captainId,
-      captainStatus: { $in: ['Accepted', 'At Pickup', 'Picked Up', 'In Transit'] },
+      captainId: captainQuery,
+      captainStatus: { $in: ['Accepted', 'At Pickup', 'Reached Store', 'Picked Up', 'In Transit'] },
     })
       .populate('user', 'name phone email')
-      .sort({ captainAssignedAt: -1 });
+      .populate('items.product', 'name image price')
+      .sort({ captainAssignedAt: -1 })
+      .lean();
 
     if (!order) {
       return res.json({ success: true, order: null, message: 'No active delivery' });
     }
 
+    // Auto-generate deliveryOtp if missing
     if (!order.deliveryOtp && order.orderStatus !== 'Delivered') {
       const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
       order.deliveryOtp = generatedOtp;
       await Order.findByIdAndUpdate(order._id, { deliveryOtp: generatedOtp });
     }
+
+    // Auto-generate pickupOtp if missing
+    if (!order.pickupOtp && order.orderStatus !== 'Delivered') {
+      const generatedPickupOtp = Math.floor(1000 + Math.random() * 9000).toString();
+      order.pickupOtp = generatedPickupOtp;
+      await Order.findByIdAndUpdate(order._id, { pickupOtp: generatedPickupOtp });
+      await SellerNotification.updateMany({ order: order._id }, { $set: { pickupOtp: generatedPickupOtp } });
+    }
+
+    // Fetch Seller Details for Store Pickup
+    let sellerDetails = null;
+    const notif = await SellerNotification.findOne({ order: order._id }).lean();
+    if (notif) {
+      if (!order.pickupOtp && notif.pickupOtp) {
+        order.pickupOtp = notif.pickupOtp;
+      }
+      let sellerDoc = null;
+      if (notif.sellerId && mongoose.Types.ObjectId.isValid(notif.sellerId)) {
+        sellerDoc = await Seller.findById(notif.sellerId).lean();
+      }
+      if (!sellerDoc && notif.sellerName) {
+        sellerDoc = await Seller.findOne({
+          $or: [{ businessName: notif.sellerName }, { phone: notif.sellerName }, { ownerName: notif.sellerName }],
+        }).lean();
+      }
+
+      sellerDetails = {
+        sellerId: notif.sellerId,
+        storeName: notif.sellerName || sellerDoc?.businessName || 'Seller Store',
+        phone: sellerDoc?.phone || notif.captainPhone || '',
+        address: sellerDoc?.warehouseLocation?.storeAddress || sellerDoc?.currentAddress || notif.deliveryAddress?.city || 'Seller Store',
+        city: sellerDoc?.warehouseLocation?.city || sellerDoc?.city || notif.deliveryAddress?.city || '',
+        state: sellerDoc?.warehouseLocation?.state || sellerDoc?.state || notif.deliveryAddress?.state || '',
+        pincode: sellerDoc?.warehouseLocation?.pincode || sellerDoc?.pinCode || notif.deliveryAddress?.pincode || '',
+        location: sellerDoc?.warehouseLocation?.location || sellerDoc?.location || null,
+        coordinates: sellerDoc?.warehouseLocation?.location?.coordinates || sellerDoc?.location?.coordinates || null,
+      };
+    }
+
+    order.sellerDetails = sellerDetails;
 
     res.json({ success: true, order });
   } catch (error) {

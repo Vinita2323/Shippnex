@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Minus, Check, ShoppingCart, Heart, Zap, Trash2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useLocationContext } from '../../../context/LocationContext';
 import { productService } from '../../../services/authService';
 import { getImageUrl, getCategoryFallbackImage, handleImageError } from '../../../utils/imageUtils';
 
@@ -25,8 +26,12 @@ const FlashSale = () => {
   const navigate = useNavigate();
   const { addToCart, updateQuantity, getItemQuantity, isInCart, removeFromCart, cartCount } = useCart();
   const { wishlistItems, addToWishlist, removeFromWishlist } = useWishlist();
+  const locationContext = useLocationContext();
   const [toastMessage, setToastMessage] = useState('');
-  const [productsList, setProductsList] = useState(defaultFlashSaleProducts);
+  const [productsList, setProductsList] = useState([]);
+
+  const userLat = locationContext?.currentLocation?.lat || locationContext?.currentLocation?.latitude;
+  const userLng = locationContext?.currentLocation?.lng || locationContext?.currentLocation?.longitude;
 
   const [timeLeft, setTimeLeft] = useState({ hours: 2, minutes: 45, seconds: 30 });
 
@@ -43,19 +48,23 @@ const FlashSale = () => {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchFlashProducts = async () => {
       let apiItems = [];
       try {
-        const res = await productService.getProducts({ section: 'flash_sale' });
+        const params = { section: 'flash_sale' };
+        if (userLat != null && userLng != null) {
+          params.lat = userLat;
+          params.lng = userLng;
+        }
+        const res = await productService.getProducts(params);
         if (res && res.products && Array.isArray(res.products)) {
           apiItems = res.products;
         }
       } catch (err) {
         console.warn('Backend flash sale fetch fallback:', err.message);
       }
-
-      const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
-      const localFlashItems = localSaved.filter(p => Array.isArray(p.homeSections) && p.homeSections.includes('flash_sale'));
+      if (!isMounted) return;
 
       const formatItem = (p) => {
         const salePrice = Number(p.salePrice || p.price || 0);
@@ -76,30 +85,22 @@ const FlashSale = () => {
         };
       };
 
-      const combined = [];
-      // 1. Add API items first (MongoDB source of truth)
-      apiItems.forEach(p => {
-        combined.push(formatItem(p));
-      });
-
-      // 2. Add local custom items if homeSections includes 'flash_sale'
-      localFlashItems.forEach(p => {
-        const formatted = formatItem(p);
-        if (!combined.some(c => c.id === formatted.id || c.name === formatted.name)) {
-          combined.push(formatted);
-        }
-      });
-
-      // 3. Fallback to default mock items if combined list is empty
-      if (combined.length === 0) {
-        defaultFlashSaleProducts.forEach(p => combined.push(p));
-      }
-
+      const combined = apiItems.map(p => formatItem(p));
       setProductsList(combined);
     };
 
     fetchFlashProducts();
-  }, []);
+
+    const handleLocChange = () => {
+      fetchFlashProducts();
+    };
+    window.addEventListener('shippnex_location_changed', handleLocChange);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('shippnex_location_changed', handleLocChange);
+    };
+  }, [userLat, userLng]);
 
   const handleAddToCart = async (product) => {
     const res = await addToCart(product, 1, { navigate, returnUrl: window.location.pathname });

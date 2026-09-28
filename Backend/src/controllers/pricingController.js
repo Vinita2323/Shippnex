@@ -15,6 +15,12 @@ const syncCommissionDeliverySettings = async (deliveryConfig, updatedBy = 'Admin
       commSettings.deliveryCharge = Number(deliveryConfig.baseDeliveryFee ?? 40);
       commSettings.freeDeliveryMinOrder = Number(deliveryConfig.freeDeliveryThreshold ?? 500);
       commSettings.isFreeDeliveryEnabled = Boolean(deliveryConfig.isFreeDeliveryEnabled ?? true);
+      if (deliveryConfig.codCharge !== undefined) {
+        commSettings.codCharge = Number(deliveryConfig.codCharge);
+      }
+      if (deliveryConfig.isCodChargeEnabled !== undefined) {
+        commSettings.isCodChargeEnabled = Boolean(deliveryConfig.isCodChargeEnabled);
+      }
       commSettings.updatedBy = updatedBy;
       await commSettings.save();
     }
@@ -28,11 +34,12 @@ const syncCommissionDeliverySettings = async (deliveryConfig, updatedBy = 'Admin
 // ==============================================================================
 export const getAllPricingConfigs = async (req, res, next) => {
   try {
-    const [activeTransport, allTransport, activeDelivery, allDelivery] = await Promise.all([
+    const [activeTransport, allTransport, activeDelivery, allDelivery, allVehicles] = await Promise.all([
       TransportPricing.getActiveConfig(),
       TransportPricing.find().sort({ isActive: -1, updatedAt: -1 }).lean(),
       DeliveryPricing.getActiveConfig(),
       DeliveryPricing.find().sort({ isActive: -1, updatedAt: -1 }).lean(),
+      VehicleType.find().sort({ sortOrder: 1, createdAt: 1 }).lean(),
     ]);
 
     res.status(200).json({
@@ -47,6 +54,7 @@ export const getAllPricingConfigs = async (req, res, next) => {
         list: allDelivery,
         totalCount: allDelivery.length,
       },
+      vehicles: allVehicles,
     });
   } catch (error) {
     next(error);
@@ -494,6 +502,8 @@ export const updateDeliveryPricing = async (req, res, next) => {
       minimumDeliveryFee,
       freeDeliveryThreshold,
       isFreeDeliveryEnabled,
+      codCharge,
+      isCodChargeEnabled,
       extraDistanceCharge,
       thresholdDistanceKm,
       peakSurge,
@@ -523,6 +533,14 @@ export const updateDeliveryPricing = async (req, res, next) => {
     if (freeDeliveryThreshold !== undefined) {
       if (Number(freeDeliveryThreshold) < 0) return res.status(400).json({ success: false, message: 'Free delivery threshold cannot be negative.' });
       config.freeDeliveryThreshold = Number(freeDeliveryThreshold);
+    }
+    if (codCharge !== undefined && codCharge !== null && !isNaN(Number(codCharge))) {
+      const codVal = Number(codCharge);
+      if (codVal < 0) return res.status(400).json({ success: false, message: 'COD charge cannot be negative.' });
+      config.codCharge = codVal;
+    }
+    if (isCodChargeEnabled !== undefined) {
+      config.isCodChargeEnabled = Boolean(isCodChargeEnabled);
     }
     if (extraDistanceCharge !== undefined) {
       if (Number(extraDistanceCharge) < 0) return res.status(400).json({ success: false, message: 'Extra distance charge cannot be negative.' });
@@ -570,6 +588,8 @@ export const updateDeliveryPricing = async (req, res, next) => {
       minimumDeliveryFee: config.minimumDeliveryFee,
       freeDeliveryThreshold: config.freeDeliveryThreshold,
       isFreeDeliveryEnabled: config.isFreeDeliveryEnabled,
+      codCharge: config.codCharge,
+      isCodChargeEnabled: config.isCodChargeEnabled,
       extraDistanceCharge: config.extraDistanceCharge,
       thresholdDistanceKm: config.thresholdDistanceKm,
       peakSurge: config.peakSurge,

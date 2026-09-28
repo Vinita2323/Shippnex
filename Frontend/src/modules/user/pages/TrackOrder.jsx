@@ -206,7 +206,10 @@ const TrackOrder = () => {
   const items = order?.items && order.items.length > 0 ? order.items : [
     { name: 'Basmati Rice Premium 5kg', price: 540, quantity: 1, image: grainsImg }
   ];
-  const grandTotal = order?.total || order?.grandTotal || items.reduce((acc, i) => acc + (i.price || 0) * (i.quantity || 1), 0);
+  const itemsTotal = order?.itemsTotal !== undefined ? Number(order.itemsTotal) : items.reduce((acc, i) => acc + (Number(i.price || 0)) * (Number(i.quantity || 1)), 0);
+  const shippingFee = order?.shippingFee !== undefined ? Number(order.shippingFee) : 0;
+  const codCharge = order?.codCharge !== undefined ? Number(order.codCharge) : 0;
+  const grandTotal = order?.grandTotal !== undefined ? Number(order.grandTotal) : (order?.total !== undefined ? Number(order.total) : (itemsTotal + shippingFee + codCharge));
   const shippingAddress = order?.shippingAddress || {
     fullName: localStorage.getItem('shippnex_user_name') || 'Customer',
     addressLine1: 'Sector 45, Near Film City',
@@ -702,12 +705,22 @@ const TrackOrder = () => {
                 </div>
                 <div className="flex justify-between items-center text-[12px] md:text-sm">
                   <span className="font-semibold text-slate-500">Items Total</span>
-                  <span className="font-bold text-slate-900">₹{grandTotal.toFixed(2)}</span>
+                  <span className="font-bold text-slate-900">₹{itemsTotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-[12px] md:text-sm">
                   <span className="font-semibold text-slate-500">Delivery Charge</span>
-                  <span className="font-bold text-emerald-600">FREE</span>
+                  {shippingFee === 0 ? (
+                    <span className="font-bold text-emerald-600">FREE</span>
+                  ) : (
+                    <span className="font-bold text-slate-900">₹{shippingFee.toFixed(2)}</span>
+                  )}
                 </div>
+                {codCharge > 0 && (
+                  <div className="flex justify-between items-center text-[12px] md:text-sm">
+                    <span className="font-semibold text-slate-500">COD Handling Fee</span>
+                    <span className="font-bold text-orange-900">+ ₹{codCharge.toFixed(2)}</span>
+                  </div>
+                )}
 
                 <div className="flex justify-between items-center pt-3 mt-1 border-t border-dashed border-slate-200">
                   <span className="text-[14px] md:text-base font-extrabold text-slate-900">Grand Total</span>

@@ -509,6 +509,13 @@ const Orders = () => {
                   <td className="px-5 py-4">
                     <div className="flex flex-col gap-1 items-start">
                       <NotificationStatusBadge status={n.status} />
+                      {n.pickupOtp && (
+                        <div className="flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded-md shadow-2xs">
+                          <span>🔑 Pickup OTP:</span>
+                          <span className="font-mono font-black text-[#ff7526]">{n.pickupOtp}</span>
+                          {n.pickupOtpVerified && <span className="text-emerald-700">✓</span>}
+                        </div>
+                      )}
                       {n.proofOfDeliveryUrl && (
                         <button
                           type="button"
@@ -649,6 +656,58 @@ const Orders = () => {
                 </div>
               </div>
 
+              {/* Store Pickup OTP Badge for Handover */}
+              {selectedNotification.pickupOtp && (
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-3 rounded-xl border border-amber-300 flex items-center justify-between gap-2 shadow-2xs">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 block flex items-center gap-1">
+                      🔐 STORE PICKUP OTP (FOR DELIVERY BOY)
+                    </span>
+                    <p className="text-[11px] text-slate-600 m-0">
+                      Share this 4-digit code when delivery captain arrives at your store
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="font-mono text-xl font-black tracking-wider text-[#ff7526] bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-inner">
+                      {selectedNotification.pickupOtp}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Proof of Delivery Photo (Uploaded by Captain) */}
+              {selectedNotification.proofOfDeliveryUrl && (
+                <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-300 flex items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      onClick={() => setViewingProofUrl(selectedNotification.proofOfDeliveryUrl)}
+                      className="w-12 h-12 rounded-lg overflow-hidden border border-emerald-400 cursor-pointer shrink-0 bg-white shadow-2xs hover:opacity-90"
+                    >
+                      <img
+                        src={selectedNotification.proofOfDeliveryUrl}
+                        alt="Proof"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900 block flex items-center gap-1">
+                        📸 DELIVERY PHOTO PROOF
+                      </span>
+                      <p className="text-[11px] text-emerald-800 m-0 truncate">
+                        Captured at customer doorstep
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setViewingProofUrl(selectedNotification.proofOfDeliveryUrl)}
+                    className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] rounded-lg border-none cursor-pointer shrink-0 shadow-2xs"
+                  >
+                    View Photo
+                  </button>
+                </div>
+              )}
+
               {/* Payment Details & Total Seller Amount */}
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -782,6 +841,43 @@ const Orders = () => {
                     <p className="text-[11px] m-0 mt-0.5 text-green-800 font-medium">
                       Order has been successfully delivered to the customer.
                     </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Store Pickup OTP Handover Card */}
+              {selectedNotification.pickupOtp && (
+                <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 p-4 rounded-2xl border-2 border-amber-300 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-[#ff7526] text-white flex items-center justify-center font-black text-xl shadow-xs shrink-0">
+                      🔑
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black uppercase text-amber-950 tracking-wider">
+                          STORE PICKUP OTP
+                        </span>
+                        {selectedNotification.pickupOtpVerified ? (
+                          <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                            ✓ Verified & Picked Up by Captain
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-extrabold bg-amber-200/90 text-amber-950 border border-amber-400 px-2.5 py-0.5 rounded-full animate-pulse">
+                            Share with Delivery Boy
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-amber-900/80 m-0 mt-0.5 font-medium">
+                        Delivery captain must ask and verify this 4-digit OTP when picking up package from your store.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0 w-full sm:w-auto flex sm:flex-col justify-between sm:justify-end items-center sm:items-end">
+                    <span className="text-[10px] text-amber-800 font-bold uppercase block">OTP CODE</span>
+                    <span className="font-mono text-2xl font-black tracking-widest text-[#ff7526] bg-white px-3.5 py-1 rounded-xl border border-amber-300 shadow-inner inline-block sm:mt-0.5">
+                      {selectedNotification.pickupOtp}
+                    </span>
                   </div>
                 </div>
               )}

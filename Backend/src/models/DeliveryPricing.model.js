@@ -7,6 +7,8 @@ const deliveryPricingAuditSchema = new mongoose.Schema(
     minimumDeliveryFee: { type: Number, required: true },
     freeDeliveryThreshold: { type: Number, required: true },
     isFreeDeliveryEnabled: { type: Boolean, default: true },
+    codCharge: { type: Number, default: 9 },
+    isCodChargeEnabled: { type: Boolean, default: true },
     extraDistanceCharge: { type: Number, required: true },
     thresholdDistanceKm: { type: Number, required: true },
     peakSurge: {
@@ -61,6 +63,15 @@ const deliveryPricingSchema = new mongoose.Schema(
       default: 500,
     },
     isFreeDeliveryEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    codCharge: {
+      type: Number,
+      min: [0, 'COD charge cannot be negative'],
+      default: 9,
+    },
+    isCodChargeEnabled: {
       type: Boolean,
       default: true,
     },
@@ -133,6 +144,8 @@ deliveryPricingSchema.statics.getActiveConfig = async function () {
       minimumDeliveryFee: 40,
       freeDeliveryThreshold: 500,
       isFreeDeliveryEnabled: true,
+      codCharge: 9,
+      isCodChargeEnabled: true,
       extraDistanceCharge: 10,
       thresholdDistanceKm: 5,
       peakSurge: {
@@ -150,6 +163,8 @@ deliveryPricingSchema.statics.getActiveConfig = async function () {
           minimumDeliveryFee: 40,
           freeDeliveryThreshold: 500,
           isFreeDeliveryEnabled: true,
+          codCharge: 9,
+          isCodChargeEnabled: true,
           extraDistanceCharge: 10,
           thresholdDistanceKm: 5,
           peakSurge: {
@@ -165,6 +180,19 @@ deliveryPricingSchema.statics.getActiveConfig = async function () {
         },
       ],
     });
+  } else {
+    let needSave = false;
+    if (active.codCharge === undefined) {
+      active.codCharge = 9;
+      needSave = true;
+    }
+    if (active.isCodChargeEnabled === undefined) {
+      active.isCodChargeEnabled = true;
+      needSave = true;
+    }
+    if (needSave) {
+      await active.save();
+    }
   }
   return active;
 };

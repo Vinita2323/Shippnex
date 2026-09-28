@@ -95,6 +95,18 @@ const sellerNotificationSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    pickupOtp: {
+      type: String,
+      default: null,
+    },
+    pickupOtpVerified: {
+      type: Boolean,
+      default: false,
+    },
+    pickupOtpVerifiedAt: {
+      type: Date,
+      default: null,
+    },
     captainId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Captain',

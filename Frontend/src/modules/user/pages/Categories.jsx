@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Heart, Star, Filter, Plus, Trash2, ShoppingBag, Layers, X, RefreshCw } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
+import { useLocationContext } from '../../../context/LocationContext';
 import { categoryService, productService } from '../../../services/authService';
 import { 
   getImageUrl, 
@@ -54,6 +55,10 @@ const Categories = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { toggleWishlist, isInWishlist } = useWishlist();
   const { addToCart, getItemQuantity, isInCart, removeFromCart } = useCart();
+  const locationContext = useLocationContext();
+
+  const userLat = locationContext?.currentLocation?.lat || locationContext?.currentLocation?.latitude;
+  const userLng = locationContext?.currentLocation?.lng || locationContext?.currentLocation?.longitude;
 
   const [toastMessage, setToastMessage] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -176,6 +181,10 @@ const Categories = () => {
         if (activeSubCategory) {
           params.subCategory = activeSubCategory;
         }
+        if (userLat != null && userLng != null) {
+          params.lat = userLat;
+          params.lng = userLng;
+        }
 
         const res = await productService.getProducts(params);
         if (!isMounted) return;
@@ -197,8 +206,17 @@ const Categories = () => {
     };
 
     fetchCategoryProducts();
-    return () => { isMounted = false; };
-  }, [activeCategory, activeSubCategory]);
+
+    const handleLocChange = () => {
+      fetchCategoryProducts();
+    };
+    window.addEventListener('shippnex_location_changed', handleLocChange);
+
+    return () => { 
+      isMounted = false; 
+      window.removeEventListener('shippnex_location_changed', handleLocChange);
+    };
+  }, [activeCategory, activeSubCategory, userLat, userLng]);
 
   const handleWishlistClick = (e, product) => {
     e.stopPropagation();
@@ -489,7 +507,9 @@ const Categories = () => {
               <p className="text-xs text-slate-500 max-w-sm m-0 mb-5 leading-relaxed font-medium">
                 {debouncedSearchTerm 
                   ? `We couldn't find any products matching "${debouncedSearchTerm}". Try a different keyword.` 
-                  : 'Items in this category are being updated. You can browse all available products across all categories below.'}
+                  : (userLat && userLng 
+                      ? 'No verified sellers in your delivery area are currently offering products in this selection. Try changing your delivery location or browsing all items.' 
+                      : 'Items in this category are being updated. You can browse all available products across all categories below.')}
               </p>
               
               <div className="flex flex-wrap items-center justify-center gap-3">

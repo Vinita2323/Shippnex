@@ -17,7 +17,7 @@ const Cart = () => {
 
   useEffect(() => {
     let isMounted = true;
-    commissionService.getCurrentRates().then((res) => {
+    commissionService.getCurrentRates(true).then((res) => {
       if (isMounted && res && res.success) {
         setDeliverySettings({
           deliveryCharge: Number(res.deliveryCharge !== undefined ? res.deliveryCharge : 40),
@@ -85,7 +85,7 @@ const Cart = () => {
             <div className="md:col-span-7 lg:col-span-8 space-y-4">
               <div className="flex flex-col gap-3">
                 {cartItems.map((item) => {
-                  const itemId = item.id || item._id;
+                  const itemId = item.productId || item.id || item._id;
                   const itemPrice = Number(item.price ?? item.salePrice ?? 0);
                   const itemImg = getImageUrl(item.image || item.mainImage);
 

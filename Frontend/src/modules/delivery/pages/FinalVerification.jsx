@@ -167,6 +167,10 @@ const FinalVerification = () => {
       setOtpError('Please verify the customer Drop OTP first.');
       return;
     }
+    if (!proofUrl) {
+      alert('Product photo (Proof of Delivery) is mandatory. Please capture and attach a photo of the delivered product before completing.');
+      return;
+    }
     setCompleting(true);
     try {
       if (isTransport) {
@@ -177,7 +181,7 @@ const FinalVerification = () => {
         if (proofUrl) {
           await captainService.submitProofOfDelivery(orderId, proofUrl);
         }
-        await captainService.updateDeliveryStatus(orderId, 'Delivered', { proofOfDeliveryUrl: proofUrl || '' });
+        await captainService.updateDeliveryStatus(orderId, 'Delivered', { proofOfDeliveryUrl: proofUrl, proofUrl });
       }
       setShowSuccessModal(true);
     } catch (err) {
@@ -360,12 +364,23 @@ const FinalVerification = () => {
           </div>
         )}
 
-        {/* Proof of Delivery (Optional) */}
+        {/* Proof of Delivery Photo (Mandatory) */}
         <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
-          <h4 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-slate-700">photo_camera</span>
-            Proof of Delivery Photo (Optional)
-          </h4>
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-slate-700">photo_camera</span>
+              Product Delivery Photo <span className="text-red-500 font-bold">* Mandatory</span>
+            </h4>
+            {capturedPhoto && (
+              <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                ✓ Attached
+              </span>
+            )}
+          </div>
+          <p className="text-[11.5px] text-slate-500 leading-snug">
+            Please capture a clear photo of the delivered product/parcel at the customer doorstep. This photo will be shown to the seller as proof of safe delivery.
+          </p>
+
           <input
             type="file"
             ref={fileInputRef}
@@ -374,31 +389,54 @@ const FinalVerification = () => {
             onChange={handlePhotoCapture}
             className="hidden"
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full py-3 px-4 bg-slate-50 border-2 border-dashed border-slate-200 hover:bg-slate-100 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors"
-          >
-            {proofUploading ? (
-              <span className="material-symbols-outlined animate-spin text-base text-[#15803d]">sync</span>
-            ) : (
-              <>
-                <span className="material-symbols-outlined text-base text-[#15803d]">
-                  {capturedPhoto ? 'check_circle' : 'add_a_photo'}
-                </span>
-                <span className="text-xs font-bold text-slate-700">
-                  {capturedPhoto ? 'Photo Proof Attached ✓' : 'Capture / Upload Photo'}
-                </span>
-              </>
-            )}
-          </button>
+
+          {capturedPhoto ? (
+            <div className="space-y-2">
+              <div className="relative w-full h-44 rounded-xl overflow-hidden border-2 border-emerald-500 bg-slate-100 shadow-xs">
+                <img src={capturedPhoto} alt="Product Proof" className="w-full h-full object-cover" />
+                <div className="absolute top-2 right-2 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
+                  Photo Captured ✓
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm">photo_camera</span>
+                Retake Product Photo
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full py-4 px-4 bg-emerald-50/60 border-2 border-dashed border-emerald-300 hover:bg-emerald-100/60 rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors"
+            >
+              {proofUploading ? (
+                <span className="material-symbols-outlined animate-spin text-2xl text-[#15803d]">sync</span>
+              ) : (
+                <>
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-[#15803d] flex items-center justify-center">
+                    <span className="material-symbols-outlined text-2xl">add_a_photo</span>
+                  </div>
+                  <span className="text-xs font-bold text-emerald-900">
+                    Click to Capture Product Photo *
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Required for seller proof verification
+                  </span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Complete Action Button */}
         <div className="pt-2">
           <button
             onClick={handleCompleteDelivery}
-            disabled={completing || (isTransport && !otpVerified)}
+            disabled={completing || (isTransport && !otpVerified) || (!isTransport && !proofUrl)}
             className="w-full py-3.5 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
           >
             {completing ? (

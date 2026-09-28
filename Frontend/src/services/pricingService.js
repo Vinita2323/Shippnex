@@ -12,6 +12,30 @@ export const pricingService = {
     return response.data;
   },
 
+  // ── Admin: Vehicle Fleet Pricing (Per-Vehicle Rates) ────────────────────────
+  getAllVehicles: async () => {
+    const response = await API.get('/pricing/admin/vehicles');
+    return response.data;
+  },
+
+  updateVehiclePricing: async (id, payload) => {
+    const response = await API.put(`/pricing/admin/vehicles/${id}`, payload);
+    pricingCache.timestamp = 0;
+    return response.data;
+  },
+
+  createVehicleType: async (payload) => {
+    const response = await API.post('/pricing/admin/vehicles', payload);
+    pricingCache.timestamp = 0;
+    return response.data;
+  },
+
+  deleteVehicleType: async (id) => {
+    const response = await API.delete(`/pricing/admin/vehicles/${id}`);
+    pricingCache.timestamp = 0;
+    return response.data;
+  },
+
   // ── Admin: Transport Pricing ────────────────────────────────────────────────
   getTransportPricing: async () => {
     const response = await API.get('/pricing/admin/transport');

@@ -48,7 +48,8 @@ import {
   Crown,
   Percent,
   Gift,
-  Navigation
+  Navigation,
+  Car
 } from 'lucide-react';
 
 export const AdminSidebar = () => {
@@ -222,6 +223,11 @@ export const AdminSidebar = () => {
             { id: 'transport_completed', label: 'Delivered Trips', icon: CheckCircle },
             { id: 'transport_cancelled', label: 'Cancelled Trips', icon: XCircle },
           ]
+        },
+        {
+          id: 'vehicle_details',
+          label: 'Vehicle Details',
+          icon: Car
         },
       ]
     },

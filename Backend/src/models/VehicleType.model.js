@@ -32,10 +32,37 @@ const vehicleTypeSchema = new mongoose.Schema(
       min: 1,
       // Max cargo weight the vehicle can carry (kg)
     },
+    dimensions: {
+      type: String,
+      default: '',
+      trim: true,
+      // Cargo compartment dimensions e.g. "40 x 40 x 40 cm" or "5.5 x 4.2 x 4.0 ft"
+    },
+    suitableFor: {
+      type: String,
+      default: '',
+      trim: true,
+      // e.g. "Small packages, Food items, Documents"
+    },
+    vehicleCategory: {
+      type: String,
+      enum: ['2_wheeler', '3_wheeler', '4_wheeler', 'heavy_truck', 'other'],
+      default: '3_wheeler',
+    },
+    imageUrl: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    speedKmH: {
+      type: Number,
+      default: 30,
+      min: 1,
+    },
     icon: {
       type: String,
       default: 'truck',
-      // Frontend icon identifier: "bike", "truck", etc.
+      // Frontend icon identifier: "bike", "auto", "truck", "van", "pickup", "car"
     },
 
     // ── Pricing (all in INR) ──────────────────────────────────────────

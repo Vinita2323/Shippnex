@@ -163,20 +163,47 @@ const LocationSelectionPage = () => {
     navigate(-1);
   };
 
-  const handleSelectSavedAddress = (addr) => {
+  const handleSelectSavedAddress = async (addr) => {
     const savedName = localStorage.getItem('shippnex_user_name');
     const cleanFullName = (!addr.fullName || addr.fullName === 'User' || addr.fullName === 'Customer')
       ? (savedName && savedName !== 'User' && savedName !== 'Customer' ? savedName : 'Customer')
       : addr.fullName;
 
+    const coords = addr.location?.coordinates;
+    let resolvedLat = (coords && Array.isArray(coords) && coords.length >= 2 && coords[1] !== 0) 
+      ? coords[1] 
+      : (addr.lat || addr.latitude || null);
+    let resolvedLng = (coords && Array.isArray(coords) && coords.length >= 2 && coords[0] !== 0) 
+      ? coords[0] 
+      : (addr.lng || addr.longitude || null);
+
+    if (resolvedLat == null || resolvedLng == null) {
+      try {
+        const fullAddrStr = `${addr.addressLine1 || addr.address || ''}, ${addr.city || 'Indore'}, ${addr.state || 'Madhya Pradesh'} ${addr.pincode || addr.zip || ''}`.trim();
+        const geoRes = await MapService.geocodeAddress(fullAddrStr).catch(async () => {
+          return await MapService.geocodeAddress(`${addr.city || 'Indore'}, ${addr.state || 'Madhya Pradesh'}`).catch(() => null);
+        });
+        if (geoRes && (geoRes.latitude || geoRes.lat)) {
+          resolvedLat = geoRes.latitude || geoRes.lat;
+          resolvedLng = geoRes.longitude || geoRes.lng;
+        }
+      } catch (e) {}
+    }
+
     const locObj = {
       addressType: addr.addressType || addr.type || 'HOME',
       addressLine1: addr.addressLine1 || addr.address,
-      city: addr.city || 'Noida',
-      state: addr.state || 'Uttar Pradesh',
-      pincode: addr.pincode || addr.zip || '201301',
+      city: addr.city || 'Indore',
+      state: addr.state || 'Madhya Pradesh',
+      pincode: addr.pincode || addr.zip || '452001',
       fullName: cleanFullName,
       phone: addr.phone || localStorage.getItem('shippnex_user_phone') || '',
+      ...(resolvedLat != null && resolvedLng != null ? {
+        lat: Number(resolvedLat),
+        lng: Number(resolvedLng),
+        latitude: Number(resolvedLat),
+        longitude: Number(resolvedLng),
+      } : {})
     };
     setLocation(locObj);
     localStorage.setItem('shippnex_selected_checkout_address', JSON.stringify({ ...addr, fullName: cleanFullName }));
@@ -192,9 +219,25 @@ const LocationSelectionPage = () => {
 
     const cleanLine1 = manualForm.addressLine1.trim();
     const cleanLandmark = manualForm.landmark.trim();
-    const cleanCity = manualForm.city.trim() || 'Noida';
-    const cleanState = manualForm.state.trim() || 'Uttar Pradesh';
-    const cleanPincode = manualForm.pincode.trim() || '201301';
+    const cleanCity = manualForm.city.trim() || 'Indore';
+    const cleanState = manualForm.state.trim() || 'Madhya Pradesh';
+    const cleanPincode = manualForm.pincode.trim() || '452001';
+
+    let resolvedCoords = null;
+    try {
+      const fullAddrStr = `${cleanLine1}, ${cleanLandmark ? cleanLandmark + ', ' : ''}${cleanCity}, ${cleanState} ${cleanPincode}`.trim();
+      const geoRes = await MapService.geocodeAddress(fullAddrStr).catch(async () => {
+        return await MapService.geocodeAddress(`${cleanCity}, ${cleanState} ${cleanPincode}`).catch(() => null);
+      });
+      if (geoRes && (geoRes.latitude || geoRes.lat)) {
+        resolvedCoords = {
+          lat: Number(geoRes.latitude || geoRes.lat),
+          lng: Number(geoRes.longitude || geoRes.lng),
+          latitude: Number(geoRes.latitude || geoRes.lat),
+          longitude: Number(geoRes.longitude || geoRes.lng),
+        };
+      }
+    } catch (e) {}
 
     const locObj = {
       addressType: manualForm.addressType,
@@ -205,6 +248,7 @@ const LocationSelectionPage = () => {
       pincode: cleanPincode,
       area: `${cleanLine1}, ${cleanCity}`,
       formattedAddress: `${cleanLine1}, ${cleanLandmark ? cleanLandmark + ', ' : ''}${cleanCity}, ${cleanState} ${cleanPincode}`,
+      ...(resolvedCoords || {})
     };
 
     setLocation(locObj);
@@ -221,6 +265,12 @@ const LocationSelectionPage = () => {
         state: cleanState,
         pincode: cleanPincode,
         country: 'India',
+        ...(resolvedCoords ? {
+          location: {
+            type: 'Point',
+            coordinates: [resolvedCoords.lng, resolvedCoords.lat]
+          }
+        } : {})
       });
     } catch (err) {}
 

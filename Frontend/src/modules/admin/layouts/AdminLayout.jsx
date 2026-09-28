@@ -57,6 +57,7 @@ const ReferralList = lazy(() => import('../pages/ReferralManagement').then(m => 
 const ReturnManagement = lazy(() => import('../pages/ReturnManagement').then(m => ({ default: m.ReturnManagement || m.default })));
 const TransportManagement = lazy(() => import('../pages/TransportManagement').then(m => ({ default: m.TransportManagement || m.default })));
 const PricingChargesManagement = lazy(() => import('../pages/PricingChargesManagement').then(m => ({ default: m.PricingChargesManagement || m.default })));
+const VehicleDetailsManagement = lazy(() => import('../pages/VehicleDetailsManagement').then(m => ({ default: m.VehicleDetailsManagement || m.default })));
 
 const FinancialAuthorityTransferred = () => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm max-w-2xl mx-auto mt-12">
@@ -187,6 +188,12 @@ export const AdminLayout = () => {
         return <TransportManagement initialTab="RIDE_COMPLETED" />;
       case 'transport_cancelled':
         return <TransportManagement initialTab="CANCELLED" />;
+      case 'vehicle_details':
+      case 'vehicle-details':
+      case 'vehicles':
+      case 'vehicle_management':
+      case 'manage_vehicles':
+        return <VehicleDetailsManagement />;
       case 'deliveries':
         return <DeliveryManagement />;
       case 'fund_transfer':

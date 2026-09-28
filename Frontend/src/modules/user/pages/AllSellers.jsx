@@ -14,119 +14,56 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { sellerService } from '../../../services/authService';
+import { useLocationContext } from '../../../context/LocationContext';
 import { useDebounce } from '../../../hooks/useDebounce';
-
-const fallbackSellersList = [
-  {
-    _id: 'seller_fashion_hub',
-    businessName: 'Fashion Hub',
-    ownerName: 'Sunita Sharma',
-    businessType: 'Retail & Grocery',
-    tagline: 'Fresh staples, premium cooking oils & daily packaged food',
-    storeLogo: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=160&auto=format&fit=crop&q=80',
-    banner: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=800&auto=format&fit=crop&q=80',
-    categories: ['Groceries', 'Oil & Ghee', 'Staples'],
-    rating: 4.9,
-    reviewsCount: 184,
-    deliveryTime: '15-25 min',
-    distance: '1.2 km',
-    warehouseLocation: {
-      storeAddress: 'Shop 12, Market Square',
-      area: 'Central Market',
-      city: 'Mumbai',
-    },
-    isVerified: true
-  },
-  {
-    _id: 'seller_clothing_hub',
-    businessName: 'Clothing Hub',
-    ownerName: 'Rajesh Kumar',
-    businessType: 'Farm Fresh & Essentials',
-    tagline: 'Direct-from-farm fresh fruits, crisp greens & veggies',
-    storeLogo: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=160&auto=format&fit=crop&q=80',
-    banner: 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=800&auto=format&fit=crop&q=80',
-    categories: ['Fresh Produce', 'Fruits', 'Vegetables'],
-    rating: 4.8,
-    reviewsCount: 142,
-    deliveryTime: '20-30 min',
-    distance: '2.1 km',
-    warehouseLocation: {
-      storeAddress: '45 Green Park Road',
-      area: 'Green Park',
-      city: 'Delhi',
-    },
-    isVerified: true
-  },
-  {
-    _id: 'seller_granic_farms',
-    businessName: 'GRANIC FARMS',
-    ownerName: 'Anand Patel',
-    businessType: 'Organic Dry Fruits',
-    tagline: '100% natural roasted dry fruits, raw nuts & superfoods',
-    storeLogo: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=160&auto=format&fit=crop&q=80',
-    banner: 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=800&auto=format&fit=crop&q=80',
-    categories: ['Dry Fruits', 'Organic', 'Superfoods'],
-    rating: 5.0,
-    reviewsCount: 215,
-    deliveryTime: '15-20 min',
-    distance: '0.8 km',
-    warehouseLocation: {
-      storeAddress: '88 Heritage Avenue',
-      area: 'Indiranagar',
-      city: 'Bengaluru',
-    },
-    isVerified: true
-  },
-  {
-    _id: 'seller_apex_wholesale',
-    businessName: 'Apex Wholesale Grocery',
-    ownerName: 'Robert Vance',
-    businessType: 'Superstore',
-    tagline: 'Bulk groceries, family packs & staples at wholesale prices',
-    storeLogo: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=160&auto=format&fit=crop&q=80',
-    banner: 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=800&auto=format&fit=crop&q=80',
-    categories: ['Grains & Flours', 'Household', 'Spices'],
-    rating: 4.7,
-    reviewsCount: 96,
-    deliveryTime: '25-35 min',
-    distance: '3.4 km',
-    warehouseLocation: {
-      storeAddress: 'Warehouse 4B, Industrial Sector',
-      area: 'Sector 18',
-      city: 'Noida',
-    },
-    isVerified: true
-  }
-];
 
 const AllSellers = () => {
   const navigate = useNavigate();
+  const locationContext = useLocationContext();
   const [sellers, setSellers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState('');
   const debouncedSearchQuery = useDebounce(searchInput, 300);
   const [selectedCategory, setSelectedCategory] = useState('All');
 
+  const userLat = locationContext?.currentLocation?.lat || locationContext?.currentLocation?.latitude;
+  const userLng = locationContext?.currentLocation?.lng || locationContext?.currentLocation?.longitude;
+
   useEffect(() => {
+    let isMounted = true;
+
     const fetchSellers = async () => {
       try {
         setLoading(true);
-        const res = await sellerService.getPublicSellers();
-        if (res.success && Array.isArray(res.sellers) && res.sellers.length > 0) {
+        const params = (userLat != null && userLng != null) ? { lat: userLat, lng: userLng } : {};
+        const res = await sellerService.getPublicSellers(params);
+        if (!isMounted) return;
+
+        if (res.success && Array.isArray(res.sellers)) {
           setSellers(res.sellers);
         } else {
-          setSellers(fallbackSellersList);
+          setSellers([]);
         }
       } catch (err) {
-        console.warn('Fallback to local sellers:', err);
-        setSellers(fallbackSellersList);
+        console.warn('Error fetching sellers:', err);
+        if (isMounted) setSellers([]);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchSellers();
-  }, []);
+
+    const handleLocChange = () => {
+      fetchSellers();
+    };
+    window.addEventListener('shippnex_location_changed', handleLocChange);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('shippnex_location_changed', handleLocChange);
+    };
+  }, [userLat, userLng]);
 
   const categories = ['All', 'Groceries', 'Fresh Produce', 'Organic', 'Dry Fruits', 'Superstore'];
 
@@ -323,10 +260,20 @@ const AllSellers = () => {
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 mt-4">
+          <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 mt-4 flex flex-col items-center justify-center">
             <Store size={48} className="text-slate-300 mx-auto mb-3" />
-            <h4 className="text-base font-bold text-slate-700 m-0">No sellers found</h4>
-            <p className="text-sm text-slate-400 m-0 mt-1">Try adjusting your search or category filter</p>
+            <h4 className="text-base font-bold text-slate-800 m-0">No sellers available in your area</h4>
+            <p className="text-sm text-slate-400 m-0 mt-1 max-w-sm">
+              {userLat && userLng 
+                ? 'No verified sellers within their service radius currently service this delivery location.' 
+                : 'Try adjusting your search or category filter.'}
+            </p>
+            <button 
+              onClick={() => navigate('/select-location')}
+              className="mt-4 px-4 py-2 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-bold border-none cursor-pointer transition-all shadow-xs"
+            >
+              Change Delivery Location
+            </button>
           </div>
         )}
       </div>

@@ -135,11 +135,13 @@ export const autoAssignCaptainToOrder = async (notification) => {
       if (eligibleCaptains && eligibleCaptains.length > 0) {
         const nearestCaptain = eligibleCaptains[0];
         const otp = genDeliveryOtp();
+        const pickupOtp = parentOrder.pickupOtp || notification.pickupOtp || genDeliveryOtp();
 
         await Order.findByIdAndUpdate(parentOrder._id, {
           captainId: nearestCaptain._id,
           captainStatus: 'Assigned',
           deliveryOtp: otp,
+          pickupOtp,
           captainCommissionRate: captainCommRate,
           captainCommissionAmount: Math.round(((notification.totalAmount || parentOrder.grandTotal || 0) * (captainCommRate / 100)) * 100) / 100,
           captainEarnings,
@@ -151,6 +153,7 @@ export const autoAssignCaptainToOrder = async (notification) => {
         notification.captainId = nearestCaptain._id;
         notification.captainName = nearestCaptain.name || 'Delivery Captain';
         notification.captainPhone = nearestCaptain.phone || '';
+        notification.pickupOtp = pickupOtp;
         await notification.save();
 
         // Broadcast notifications to all eligible online captains
@@ -319,6 +322,8 @@ export const placeOrder = async (req, res, next) => {
     let freeDeliveryMinOrderRate = 500;
     let isFreeDeliveryActive = true;
     let peakSurgeFee = 0;
+    let codChargeRate = 9;
+    let isCodChargeActive = true;
     try {
       const [commSettings, deliveryPricing] = await Promise.all([
         CommissionSettings.getOrCreateActiveSettings(),
@@ -334,6 +339,8 @@ export const placeOrder = async (req, res, next) => {
         deliveryChargeRate = Number(deliveryPricing.baseDeliveryFee ?? 40);
         freeDeliveryMinOrderRate = Number(deliveryPricing.freeDeliveryThreshold ?? 500);
         isFreeDeliveryActive = Boolean(deliveryPricing.isFreeDeliveryEnabled ?? true);
+        codChargeRate = Number(deliveryPricing.codCharge ?? commSettings?.codCharge ?? 9);
+        isCodChargeActive = Boolean(deliveryPricing.isCodChargeEnabled ?? commSettings?.isCodChargeEnabled ?? true);
         if (deliveryPricing.peakSurge?.enabled) {
           peakSurgeFee = Number(deliveryPricing.peakSurge.surgeAmount || 0);
         }
@@ -341,17 +348,21 @@ export const placeOrder = async (req, res, next) => {
         deliveryChargeRate = Number(commSettings.deliveryCharge !== undefined ? commSettings.deliveryCharge : 40);
         freeDeliveryMinOrderRate = Number(commSettings.freeDeliveryMinOrder !== undefined ? commSettings.freeDeliveryMinOrder : 500);
         isFreeDeliveryActive = commSettings.isFreeDeliveryEnabled !== undefined ? Boolean(commSettings.isFreeDeliveryEnabled) : true;
+        codChargeRate = Number(commSettings.codCharge !== undefined ? commSettings.codCharge : 9);
+        isCodChargeActive = commSettings.isCodChargeEnabled !== undefined ? Boolean(commSettings.isCodChargeEnabled) : true;
       }
     } catch (e) {
       console.warn('[OrderController] Error reading DeliveryPricing/CommissionSettings, using fallback rates:', e.message);
     }
 
-    // Server-side calculation of totals using dynamic delivery rules
+    // Server-side calculation of totals using dynamic delivery rules & COD extra charges
     const isFreeShipping = itemsTotal === 0 || (isFreeDeliveryActive && itemsTotal >= freeDeliveryMinOrderRate);
     const shippingFee = isFreeShipping ? 0 : (deliveryChargeRate + peakSurgeFee);
+    const isCodPayment = String(paymentMethod).toUpperCase() === 'COD';
+    const codCharge = (isCodPayment && isCodChargeActive) ? Number(codChargeRate || 0) : 0;
     const discount = Math.max(0, totalOriginalPrice - itemsTotal);
     const gst = 0; // GST included in prices
-    const grandTotal = itemsTotal + shippingFee;
+    const grandTotal = Number((itemsTotal + shippingFee + codCharge).toFixed(2));
 
     // Generate Order ID
     const orderId = `ORD-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -361,6 +372,8 @@ export const placeOrder = async (req, res, next) => {
 
     const captainCommissionAmount = Number(((grandTotal * globalCaptainCommRate) / 100).toFixed(2));
     const captainEarnings = Math.max(15, Math.round(captainCommissionAmount * 100) / 100);
+    const orderPickupOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    const orderDeliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
     // Create order document in MongoDB with frozen rate snapshots
     const order = await Order.create({
@@ -376,6 +389,7 @@ export const placeOrder = async (req, res, next) => {
       sellerStatus: 'Pending',
       itemsTotal,
       shippingFee,
+      codCharge,
       discount,
       gst,
       grandTotal,
@@ -386,9 +400,11 @@ export const placeOrder = async (req, res, next) => {
       captainCommissionAmount,
       captainEarnings,
       captainEarning: captainEarnings,
+      pickupOtp: orderPickupOtp,
+      deliveryOtp: orderDeliveryOtp,
     });
 
-    console.log(`[OrderController] Successfully created Order in MongoDB: OrderID=${order.orderId}, UserID=${userId}, GrandTotal=₹${grandTotal}, SellerComm=${globalSellerCommRate}%, CaptainComm=${globalCaptainCommRate}%`);
+    console.log(`[OrderController] Successfully created Order in MongoDB: OrderID=${order.orderId}, UserID=${userId}, ItemsTotal=₹${itemsTotal}, Shipping=₹${shippingFee}, COD=₹${codCharge}, GrandTotal=₹${grandTotal}`);
 
     // Parallel stock reduction for all ordered items
     const stockUpdates = orderItems.map((orderItem) =>
@@ -438,6 +454,7 @@ export const placeOrder = async (req, res, next) => {
         sellerName: actualSellerName,
         order: order._id,
         orderId: order.orderId,
+        pickupOtp: orderPickupOtp,
         items: groupItems.map(it => ({ ...it, image: cleanImage(it.image) })),
         customerDetails: {
           name: shippingAddress.fullName || userDoc?.name || 'Customer',
@@ -775,7 +792,7 @@ export const getSellerNotifications = async (req, res, next) => {
     };
 
     let dbQuery = SellerNotification.find(query)
-      .select('sellerId sellerName order orderId items.name items.price items.originalPrice items.quantity items.image items.product customerDetails deliveryAddress deliverySlot paymentMethod paymentStatus totalAmount status rejectionReason commissionRate commissionAmount netSellerAmount settlementStatus proofOfDeliveryUrl captainId captainName captainPhone viewedAt acceptedAt rejectedAt settledAt createdAt updatedAt')
+      .select('sellerId sellerName order orderId items.name items.price items.originalPrice items.quantity items.image items.product customerDetails deliveryAddress deliverySlot paymentMethod paymentStatus totalAmount status rejectionReason commissionRate commissionAmount netSellerAmount settlementStatus proofOfDeliveryUrl pickupOtp pickupOtpVerified pickupOtpVerifiedAt captainId captainName captainPhone viewedAt acceptedAt rejectedAt settledAt createdAt updatedAt')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -789,6 +806,9 @@ export const getSellerNotifications = async (req, res, next) => {
     ]);
 
     const notifications = rawNotifications.map(n => {
+      if (!n.pickupOtp) {
+        n.pickupOtp = (n.orderId ? String(n.orderId).replace(/\D/g, '').slice(-4) : '1234') || '1234';
+      }
       if (Array.isArray(n.items)) {
         n.items = n.items.map(it => {
           if (typeof it.image === 'string' && it.image.includes('photo-1586201375761-83865001e31c')) {
@@ -873,6 +893,9 @@ export const acceptSellerOrder = async (req, res, next) => {
     if (!notification.acceptedAt) {
       notification.acceptedAt = now;
     }
+    if (!notification.pickupOtp) {
+      notification.pickupOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    }
     await notification.save();
     invalidateSellerNotifCache();
 
@@ -882,6 +905,7 @@ export const acceptSellerOrder = async (req, res, next) => {
         orderStatus: 'Accepted',
         sellerStatus: 'Accepted',
         acceptedAt: now,
+        ...(notification.pickupOtp ? { pickupOtp: notification.pickupOtp } : {}),
       });
     }
 

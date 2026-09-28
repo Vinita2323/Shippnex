@@ -11,6 +11,7 @@ import Referral from '../models/Referral.model.js';
 import ReferralSettings from '../models/ReferralSettings.model.js';
 import { processReferralReward } from './referralController.js';
 import { invalidateUserOrdersCache } from './orderController.js';
+import { invalidateProductsCache } from './productController.js';
 
 // ==========================================
 // ADMIN DASHBOARD LIVE AGGREGATIONS
@@ -498,6 +499,54 @@ export const updateSellerCommission = async (req, res, next) => {
       success: true,
       message: `Commission percentage updated to ${commRate}% for ${seller.businessName || 'Seller'}`,
       seller,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Delete Seller
+export const deleteSeller = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    let seller = null;
+
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      seller = await Seller.findByIdAndDelete(id);
+    } else {
+      seller = await Seller.findOneAndDelete({
+        $or: [
+          { businessName: id },
+          { phone: id }
+        ]
+      });
+    }
+
+    if (!seller) {
+      return res.status(404).json({ success: false, message: 'Seller not found' });
+    }
+
+    invalidateSellersCache();
+    invalidateProductsCache();
+
+    // Clean up associated products for this seller
+    try {
+      await Product.deleteMany({
+        $or: [
+          { sellerId: seller._id },
+          { seller: seller._id.toString() },
+          { seller: seller.businessName }
+        ]
+      });
+    } catch (cleanErr) {
+      console.warn('[Admin] Note: Error cleaning up products for deleted seller:', cleanErr.message);
+    }
+
+    console.log(`[Admin] Deleted Seller "${seller.businessName || seller.ownerName}" (${seller._id}) and associated products.`);
+
+    res.status(200).json({
+      success: true,
+      message: `Seller "${seller.businessName || seller.ownerName || 'Store'}" deleted successfully`,
     });
   } catch (error) {
     next(error);

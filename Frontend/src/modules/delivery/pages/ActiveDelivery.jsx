@@ -5,7 +5,7 @@ import DeliveryMap from '../components/DeliveryMap';
 import { captainService, returnService } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
 import RatingModal from '../../../components/RatingModal';
-import { geocodeAddress, getCurrentLocation } from '../../../utils/geocodeUtils';
+import { geocodeAddress, getCurrentLocation, calculateDistanceKm } from '../../../utils/geocodeUtils';
 
 const TRANSPORT_STEP_MAP = {
   SEARCHING_CAPTAIN: 1,
@@ -65,7 +65,9 @@ const ActiveDelivery = () => {
   const [newMessage, setNewMessage] = useState('');
   const [statusUpdating, setStatusUpdating] = useState(false);
 
-  // OTP Verification Modals (Used for Transport & Return Delivery)
+  // OTP & Verification Modals (Used for Product Delivery, Transport & Return Delivery)
+  const [showProductDeliveryModal, setShowProductDeliveryModal] = useState(false);
+  const [showSellerPickupOtpModal, setShowSellerPickupOtpModal] = useState(false);
   const [showPickupOtpModal, setShowPickupOtpModal] = useState(false);
   const [showDropOtpModal, setShowDropOtpModal] = useState(false);
   const [showReturnOtpModal, setShowReturnOtpModal] = useState(false);
@@ -210,6 +212,17 @@ const ActiveDelivery = () => {
             : 'Customer Pickup Address';
         } else if (isTransport) {
           pickupAddr = activeItem.pickupLocation?.address || '';
+        } else {
+          // Standard product delivery pickup: seller store
+          if (activeItem.sellerDetails?.coordinates && Array.isArray(activeItem.sellerDetails.coordinates) && activeItem.sellerDetails.coordinates.length === 2) {
+            const [lng, lat] = activeItem.sellerDetails.coordinates;
+            if (lat && lng && !pickupCoords) {
+              setPickupCoords({ lat, lng });
+            }
+          }
+          pickupAddr = activeItem.sellerDetails?.address
+            ? `${activeItem.sellerDetails.address}, ${activeItem.sellerDetails.city || ''} ${activeItem.sellerDetails.pincode || ''}`
+            : (activeItem.sellerDetails?.storeName || activeItem.items?.[0]?.seller || 'Seller Store');
         }
 
         // Derive drop address from activeItem
@@ -219,7 +232,12 @@ const ActiveDelivery = () => {
         } else if (isTransport) {
           dropAddr = activeItem.dropLocation?.address || '';
         } else {
-          dropAddr = `${activeItem.shippingAddress?.addressLine1 || ''}, ${activeItem.shippingAddress?.city || ''}`;
+          const ship = activeItem.shippingAddress || {};
+          dropAddr = [ship.addressLine1, ship.addressLine2, ship.city, ship.state, ship.pincode].filter(Boolean).join(', ');
+          if (ship.coordinates && Array.isArray(ship.coordinates) && ship.coordinates.length === 2 && !dropCoords) {
+            const [lng, lat] = ship.coordinates;
+            if (lat && lng) setDropCoords({ lat, lng });
+          }
         }
 
         // Get pickup coordinates
@@ -261,27 +279,77 @@ const ActiveDelivery = () => {
     loadLocations();
   }, [activeItem, isReturn, isTransport, pickupCoords, dropCoords, captainCoords]);
 
-  // ── Status Updates for Standard Order (No OTP Required) ──
-  const handleUpdateOrderStatus = async (newStatus) => {
+  // ── Status Updates for Standard Order ──
+  const handleUpdateOrderStatus = async (newStatus, explicitProofUrl = null) => {
     if (!activeItem) return;
+
+    const finalProof = explicitProofUrl || proofUrl || capturedPhoto;
+    if (newStatus === 'Delivered' && (!finalProof || !String(finalProof).trim())) {
+      setShowProductDeliveryModal(true);
+      return;
+    }
+
     setStatusUpdating(true);
     try {
-      await captainService.updateDeliveryStatus(activeItem.orderId || activeItem._id, newStatus, { proofUrl });
+      await captainService.updateDeliveryStatus(activeItem.orderId || activeItem._id, newStatus, {
+        proofUrl: finalProof,
+        proofOfDeliveryUrl: finalProof,
+      });
       setCurrentStep(ORDER_STEP_MAP[newStatus] || 1);
       setActiveItem((prev) => ({
         ...prev,
         captainStatus: newStatus,
         orderStatus: newStatus === 'Delivered' ? 'Delivered' : prev?.orderStatus,
+        proofOfDeliveryUrl: finalProof || prev?.proofOfDeliveryUrl,
       }));
 
       if (newStatus === 'Delivered') {
+        setShowProductDeliveryModal(false);
         setShowSuccessModal(true);
       }
     } catch (err) {
       console.error('Status update error:', err);
-      alert(err?.response?.data?.message || 'Failed to update status.');
+      alert(err?.response?.data?.message || err?.message || 'Failed to update status.');
     } finally {
       setStatusUpdating(false);
+    }
+  };
+
+  const handleConfirmProductDelivery = async () => {
+    const finalProof = proofUrl || capturedPhoto;
+    if (!finalProof || !String(finalProof).trim()) {
+      setOtpError('Product delivery photo is mandatory. Please capture a photo of the product.');
+      return;
+    }
+    setOtpError('');
+    await handleUpdateOrderStatus('Delivered', finalProof);
+  };
+
+  // ── Verify Seller Store Pickup OTP ──
+  const handleVerifySellerPickupOtp = async () => {
+    const otpStr = otpDigits.join('');
+    if (otpStr.length < 4) {
+      setOtpError('Please enter the 4-digit Seller Store Pickup OTP.');
+      return;
+    }
+    setVerifyingOtp(true);
+    setOtpError('');
+    try {
+      const orderId = activeItem.orderId || activeItem._id;
+      await captainService.verifyOrderPickupOtp(orderId, otpStr);
+      setActiveItem((prev) => ({
+        ...prev,
+        captainStatus: 'In Transit',
+        orderStatus: 'Out for Delivery',
+        pickupOtpVerified: true,
+      }));
+      setCurrentStep(3); // In Transit / Out for Delivery
+      setShowSellerPickupOtpModal(false);
+      setOtpDigits(['', '', '', '']);
+    } catch (err) {
+      setOtpError(err?.response?.data?.message || err?.message || 'Invalid Seller Store Pickup OTP. Please ask the seller.');
+    } finally {
+      setVerifyingOtp(false);
     }
   };
 
@@ -554,6 +622,8 @@ const ActiveDelivery = () => {
     ? (activeItem.customer?.phone || activeItem.user?.phone || activeItem.pickupAddress?.phone || '')
     : null;
 
+  const sellerStoreName = activeItem.sellerDetails?.storeName || activeItem.items?.[0]?.seller || 'Seller Warehouse';
+
   const pickupAddress = isReturn
     ? (typeof activeItem.pickupAddress === 'string'
         ? activeItem.pickupAddress
@@ -562,7 +632,9 @@ const ActiveDelivery = () => {
         : 'Customer Pickup Address')
     : isTransport
     ? activeItem.pickupLocation?.address
-    : 'Seller Warehouse';
+    : (activeItem.sellerDetails?.address
+        ? `${activeItem.sellerDetails.address}, ${activeItem.sellerDetails.city || ''} ${activeItem.sellerDetails.pincode || ''}`
+        : `${sellerStoreName} (Store Pickup)`);
 
   const dropAddress = isReturn
     ? (activeItem.seller?.storeAddress || activeItem.seller?.address || `${activeItem.seller?.storeName || 'Seller'} Store / Warehouse`)
@@ -579,6 +651,10 @@ const ActiveDelivery = () => {
     : isTransport
     ? activeItem.status
     : activeItem.captainStatus;
+
+  // Real-time live distance calculations from Captain GPS to Pickup & Drop locations
+  const distanceToSellerKm = calculateDistanceKm(captainCoords, pickupCoords);
+  const distanceToCustomerKm = calculateDistanceKm(captainCoords, dropCoords);
 
   return (
     <div className="bg-surface font-body-md text-on-surface min-h-screen pb-24">
@@ -653,56 +729,100 @@ const ActiveDelivery = () => {
           </button>
         </div>
 
-        {/* Delivery Navigation Map */}
-        {(pickupCoords || dropCoords || captainCoords) && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2 px-1">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#047857] text-base">map</span>
-                <h3 className="font-label-sm text-[10px] font-black text-[#047857] uppercase tracking-wider">
-                  LIVE DIRECTIONS
-                </h3>
+        {/* Live Distance & Route ETA Banner */}
+        {((!isReturn && !isTransport && currentStep <= 2 && distanceToSellerKm !== null) ||
+          (!isReturn && !isTransport && currentStep >= 3 && distanceToCustomerKm !== null) ||
+          (isTransport && distanceToSellerKm !== null) ||
+          (isReturn && distanceToSellerKm !== null)) && (
+          <div className="bg-gradient-to-r from-[#002625] via-[#053d25] to-[#0a3d16] text-white p-3.5 rounded-2xl flex items-center justify-between shadow-md border border-[#97fc43]/30">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-[#97fc43]/20 flex items-center justify-center text-[#97fc43] shrink-0">
+                <span className="material-symbols-outlined text-xl animate-pulse">
+                  {currentStep <= 2 ? 'near_me' : 'sports_motorsports'}
+                </span>
               </div>
-              <button
-                onClick={async () => {
-                  try {
-                    const coords = await getCurrentLocation();
-                    setCaptainCoords(coords);
-                  } catch (err) {
-                    console.error('Error updating location:', err);
-                  }
-                }}
-                className="p-1.5 bg-[#047857] hover:bg-[#035d45] text-white rounded-lg transition-colors"
-                title="Refresh your location"
-              >
-                <span className="material-symbols-outlined text-[16px]">refresh</span>
-              </button>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#97fc43] block">
+                  {currentStep <= 2 ? 'DISTANCE TO SELLER / STORE' : 'DISTANCE TO CUSTOMER DROP'}
+                </span>
+                <p className="text-xs font-bold text-white m-0 flex items-center gap-1.5 mt-0.5">
+                  <span className="text-base md:text-lg font-black text-white">
+                    {currentStep <= 2 ? `${distanceToSellerKm} KM` : `${distanceToCustomerKm} KM`}
+                  </span>
+                  <span className="text-white/70 font-medium text-[11px]">• from your location</span>
+                </p>
+              </div>
             </div>
-            <DeliveryMap
-              pickupLocation={pickupCoords}
-              dropLocation={dropCoords}
-              captainLocation={captainCoords}
-            />
+
+            <div className="text-right shrink-0 bg-white/10 px-3 py-1.5 rounded-xl border border-white/10">
+              <span className="text-[9px] text-white/70 font-bold uppercase block">ESTIMATED TIME</span>
+              <span className="text-xs md:text-sm font-black text-[#97fc43]">
+                ~{Math.max(2, Math.round(((currentStep <= 2 ? distanceToSellerKm : distanceToCustomerKm) / 25) * 60))} MINS
+              </span>
+            </div>
           </div>
         )}
 
-        {loadingCoords && (
-          <div className="glass-panel p-3.5 rounded-2xl border border-white/60 shadow-xs text-center">
-            <p className="text-xs text-slate-600">Loading map location...</p>
+        {/* Delivery Navigation Map */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2 px-1">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#047857] text-base">map</span>
+              <h3 className="font-label-sm text-[10px] font-black text-[#047857] uppercase tracking-wider">
+                LIVE DIRECTIONS & ROUTE MAP
+              </h3>
+            </div>
+            <button
+              onClick={async () => {
+                try {
+                  const coords = await getCurrentLocation();
+                  setCaptainCoords(coords);
+                } catch (err) {
+                  console.error('Error updating location:', err);
+                }
+              }}
+              className="p-1.5 bg-[#047857] hover:bg-[#035d45] text-white rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-[11px] font-bold px-2.5 shadow-xs active:scale-95"
+              title="Refresh your GPS location"
+            >
+              <span className="material-symbols-outlined text-[15px]">refresh</span>
+              <span>Refresh GPS</span>
+            </button>
           </div>
-        )}
+          <DeliveryMap
+            pickupLocation={pickupCoords}
+            dropLocation={dropCoords}
+            captainLocation={captainCoords}
+            pickupAddress={pickupAddress}
+            dropAddress={dropAddress}
+            sellerStoreName={sellerStoreName}
+            recipientName={recipientName}
+            currentStep={currentStep}
+            isReturn={isReturn}
+            isTransport={isTransport}
+          />
+        </div>
 
         {/* Route Details */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="glass-panel p-3.5 rounded-2xl border border-white/60 shadow-xs space-y-1">
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className="material-symbols-outlined text-[#047857] text-base">
-                {isReturn ? 'person_pin_circle' : 'warehouse'}
-              </span>
-              <span className="font-label-sm text-[10px] font-black text-[#047857] uppercase tracking-wider">
-                {isReturn ? 'CUSTOMER PICKUP ADDRESS' : 'PICKUP LOCATION'}
-              </span>
+            <div className="flex items-center justify-between gap-1.5 mb-1">
+              <div className="flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[#047857] text-base">
+                  {isReturn ? 'person_pin_circle' : 'storefront'}
+                </span>
+                <span className="font-label-sm text-[10px] font-black text-[#047857] uppercase tracking-wider">
+                  {isReturn ? 'CUSTOMER PICKUP ADDRESS' : isTransport ? 'PICKUP LOCATION' : 'SELLER STORE PICKUP'}
+                </span>
+              </div>
+              {distanceToSellerKm !== null && (
+                <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                  📍 {distanceToSellerKm} km away
+                </span>
+              )}
             </div>
+            {!isReturn && !isTransport && sellerStoreName && (
+              <p className="font-bold text-xs text-slate-800">{sellerStoreName}</p>
+            )}
             {isReturn && customerName && (
               <p className="font-bold text-xs text-slate-800">{customerName} {customerPhone ? `(${customerPhone})` : ''}</p>
             )}
@@ -710,11 +830,18 @@ const ActiveDelivery = () => {
           </div>
 
           <div className="glass-panel p-3.5 rounded-2xl border border-white/60 shadow-xs space-y-1">
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className="material-symbols-outlined text-[#ff5500] text-base">store</span>
-              <span className="font-label-sm text-[10px] font-black text-[#ff5500] uppercase tracking-wider">
-                {isReturn ? 'SELLER RETURN DESTINATION' : 'DROP-OFF DESTINATION'}
-              </span>
+            <div className="flex items-center justify-between gap-1.5 mb-1">
+              <div className="flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[#ff5500] text-base">store</span>
+                <span className="font-label-sm text-[10px] font-black text-[#ff5500] uppercase tracking-wider">
+                  {isReturn ? 'SELLER RETURN DESTINATION' : 'DROP-OFF DESTINATION'}
+                </span>
+              </div>
+              {distanceToCustomerKm !== null && (
+                <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                  🏁 {distanceToCustomerKm} km away
+                </span>
+              )}
             </div>
             <p className="font-extrabold text-sm text-on-surface leading-snug">{recipientName}</p>
             <p className="text-on-surface-variant text-xs truncate">{dropAddress}</p>
@@ -844,7 +971,7 @@ const ActiveDelivery = () => {
             <div className="space-y-3.5 relative before:absolute before:left-[9px] before:top-1.5 before:bottom-1.5 before:w-[2px] before:bg-outline-variant/40">
               {[
                 { step: 1, label: 'Order Accepted', sub: 'Proceed to store / seller' },
-                { step: 2, label: 'Reached Store', sub: 'Collecting packages from seller (No OTP needed)' },
+                { step: 2, label: 'Reached Store', sub: 'Verify 4-digit Seller Pickup OTP to collect package' },
                 { step: 3, label: 'Out for Delivery', sub: 'En route to customer drop location' },
                 { step: 4, label: 'Delivered', sub: 'Package handed over & payout credited' },
               ].map(({ step, label, sub }) => (
@@ -1020,7 +1147,7 @@ const ActiveDelivery = () => {
               </button>
             )}
 
-            {/* ── Standard Product Delivery Actions (NO OTP REQUIRED) ── */}
+            {/* ── Standard Product Delivery Actions (OTP Required at Seller Store Pickup) ── */}
             {!isTransport && !isReturn && activeItem.captainStatus === 'Accepted' && (
               <button
                 onClick={() => handleUpdateOrderStatus('At Pickup')}
@@ -1036,18 +1163,17 @@ const ActiveDelivery = () => {
               </button>
             )}
 
-            {!isTransport && !isReturn && activeItem.captainStatus === 'At Pickup' && (
+            {!isTransport && !isReturn && (activeItem.captainStatus === 'At Pickup' || activeItem.captainStatus === 'Reached Store') && (
               <button
-                onClick={() => handleUpdateOrderStatus('In Transit')}
-                disabled={statusUpdating}
-                className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-bold text-xs shadow-md cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
+                onClick={() => {
+                  setOtpDigits(['', '', '', '']);
+                  setOtpError('');
+                  setShowSellerPickupOtpModal(true);
+                }}
+                className="w-full py-3.5 bg-[#366b00] hover:bg-[#2d5800] text-white rounded-2xl font-bold text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 animate-pulse"
               >
-                {statusUpdating ? (
-                  <span className="material-symbols-outlined animate-spin text-base">sync</span>
-                ) : (
-                  <span className="material-symbols-outlined text-base">local_shipping</span>
-                )}
-                Pick Up Package & Start Delivery
+                <span className="material-symbols-outlined text-base">verified_user</span>
+                Enter Seller Pickup OTP & Collect Package
               </button>
             )}
 
@@ -1055,33 +1181,100 @@ const ActiveDelivery = () => {
               (activeItem.captainStatus === 'In Transit' || activeItem.captainStatus === 'Picked Up') && (
                 <div className="space-y-2">
                   <button
-                    onClick={() => handleUpdateOrderStatus('Delivered')}
+                    onClick={() => {
+                      setOtpError('');
+                      setShowProductDeliveryModal(true);
+                    }}
                     disabled={statusUpdating}
                     className="w-full py-3.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-2xl font-bold text-xs shadow-lg cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
                   >
                     {statusUpdating ? (
                       <span className="material-symbols-outlined animate-spin text-base">sync</span>
                     ) : (
-                      <span className="material-symbols-outlined text-base">task_alt</span>
+                      <span className="material-symbols-outlined text-base">photo_camera</span>
                     )}
-                    Complete Delivery & Mark Delivered
+                    Take Product Photo & Complete Delivery
                   </button>
                 </div>
               )}
           </div>
         </div>
 
+        {/* Payment & Cash Collection Notice (Crucial for COD vs Prepaid) */}
+        {!isReturn && (
+          <div
+            className={`p-4 rounded-2xl border shadow-xs transition-all ${
+              (activeItem.paymentMethod === 'COD' || activeItem.paymentMethod === 'CASH' || activeItem.paymentStatus === 'Pending')
+                ? 'bg-amber-50/90 border-amber-300 text-amber-950'
+                : 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    (activeItem.paymentMethod === 'COD' || activeItem.paymentMethod === 'CASH' || activeItem.paymentStatus === 'Pending')
+                      ? 'bg-amber-500 text-white shadow-xs'
+                      : 'bg-emerald-600 text-white shadow-xs'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-xl">
+                    {(activeItem.paymentMethod === 'COD' || activeItem.paymentMethod === 'CASH' || activeItem.paymentStatus === 'Pending')
+                      ? 'payments'
+                      : 'check_circle'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider block opacity-75">
+                    CUSTOMER PAYMENT STATUS
+                  </span>
+                  <p className="font-extrabold text-sm md:text-base leading-tight">
+                    {(activeItem.paymentMethod === 'COD' || activeItem.paymentMethod === 'CASH' || activeItem.paymentStatus === 'Pending')
+                      ? 'Cash on Delivery (COD)'
+                      : `Prepaid (${activeItem.paymentMethod || 'Online Paid'})`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="text-right shrink-0">
+                {(activeItem.paymentMethod === 'COD' || activeItem.paymentMethod === 'CASH' || activeItem.paymentStatus === 'Pending') ? (
+                  <div>
+                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-800 block">
+                      COLLECT FROM CUSTOMER
+                    </span>
+                    <span className="text-lg md:text-xl font-black text-amber-900 font-mono">
+                      ₹{Number(activeItem.grandTotal || activeItem.totalAmount || activeItem.price || 0).toFixed(2)}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold inline-flex items-center gap-1">
+                    <span className="material-symbols-outlined text-xs">verified</span>
+                    Do Not Collect Cash
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {(activeItem.paymentMethod === 'COD' || activeItem.paymentMethod === 'CASH' || activeItem.paymentStatus === 'Pending') && (
+              <p className="text-[11px] text-amber-800 font-semibold mt-2 pt-2 border-t border-amber-200/80 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm shrink-0">info</span>
+                Please collect exact cash amount of ₹{Number(activeItem.grandTotal || activeItem.totalAmount || activeItem.price || 0).toFixed(2)} before handing over the parcel.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Payout Card */}
         <div className="glass-panel p-4 rounded-2xl border border-white/60 flex justify-between items-center">
           <div>
-            <p className="text-xs font-black text-on-surface-variant uppercase tracking-wider">Your Payout</p>
+            <p className="text-xs font-black text-on-surface-variant uppercase tracking-wider">Your Captain Earnings</p>
             <p className="text-2xl font-extrabold text-[#15803d] mt-1">₹{payout.toFixed(2)}</p>
           </div>
           <div className="text-right text-xs text-on-surface-variant">
             <p className="font-bold text-primary">
               {isReturn ? 'Return Delivery Fee' : isTransport ? 'Transport Fare' : 'Delivery Fee'}
             </p>
-            <p>{activeItem.paymentMethod || 'Prepaid'}</p>
+            <p className="font-semibold text-slate-700">{activeItem.paymentMethod || 'Prepaid'}</p>
           </div>
         </div>
       </main>
@@ -1350,6 +1543,228 @@ const ActiveDelivery = () => {
                 {failingInspection ? 'Submitting…' : 'Confirm Rejection'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: PRODUCT DELIVERY CONFIRMATION & MANDATORY PHOTO PROOF ── */}
+      {showProductDeliveryModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white p-5 sm:p-6 rounded-3xl max-w-md w-full shadow-2xl space-y-4 border border-slate-100 my-auto animate-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 text-[#15803d] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-lg">photo_camera</span>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm md:text-base text-slate-900 leading-tight">
+                    Confirm Product Delivery
+                  </h3>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">
+                    Order #{tripId}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowProductDeliveryModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer border-none"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            {/* Recipient & Drop Info */}
+            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">RECIPIENT</span>
+                <span className="font-extrabold text-slate-900">{recipientName}</span>
+              </div>
+              <p className="text-[11.5px] text-slate-600 truncate m-0">
+                {dropAddress}
+              </p>
+            </div>
+
+            {/* COD Payment Alert */}
+            {(activeItem.paymentMethod === 'COD' || activeItem.paymentMethod === 'CASH' || activeItem.paymentStatus === 'Pending') ? (
+              <div className="bg-amber-50 border border-amber-300 p-3 rounded-2xl flex items-center justify-between gap-2 text-amber-950">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-amber-600 text-xl">payments</span>
+                  <div>
+                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-800 block">
+                      CASH ON DELIVERY (COD)
+                    </span>
+                    <span className="text-xs font-bold text-amber-950">
+                      Collect Cash from Customer
+                    </span>
+                  </div>
+                </div>
+                <span className="text-base font-black text-amber-900 font-mono">
+                  ₹{Number(activeItem.grandTotal || activeItem.totalAmount || activeItem.price || 0).toFixed(2)}
+                </span>
+              </div>
+            ) : (
+              <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-2xl flex items-center gap-2 text-emerald-900 text-xs font-bold">
+                <span className="material-symbols-outlined text-emerald-600 text-lg">verified</span>
+                <span>Prepaid Order — Do not collect any cash.</span>
+              </div>
+            )}
+
+            {/* MANDATORY PHOTO CAPTURE FOR SELLER */}
+            <div className="bg-emerald-50/60 p-4 rounded-2xl border-2 border-emerald-300 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-wider text-emerald-950 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[#15803d] text-base">photo_camera</span>
+                  Product Handover Photo <span className="text-red-600 font-black">* Required</span>
+                </span>
+                {capturedPhoto && (
+                  <span className="text-[10px] font-extrabold bg-emerald-200/90 text-emerald-900 px-2 py-0.5 rounded-md border border-emerald-400">
+                    ✓ Attached
+                  </span>
+                )}
+              </div>
+
+              <p className="text-[11.5px] text-slate-600 leading-snug m-0">
+                Please take a clear photo of the parcel/package being handed over to the customer. <strong className="text-slate-800">This photo will be visible to the seller</strong> in their dashboard.
+              </p>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhotoCapture}
+                className="hidden"
+              />
+
+              {capturedPhoto ? (
+                <div className="space-y-2">
+                  <div className="relative w-full h-40 rounded-xl overflow-hidden border-2 border-emerald-500 bg-slate-100 shadow-xs">
+                    <img src={capturedPhoto} alt="Delivered Product" className="w-full h-full object-cover" />
+                    <div className="absolute top-2 right-2 bg-emerald-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs flex items-center gap-1">
+                      <span>✓ Photo Verified</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full py-2 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 cursor-pointer flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-sm">photo_camera</span>
+                    Retake Product Photo
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-4 px-4 bg-white border-2 border-dashed border-emerald-400 hover:bg-emerald-50/80 rounded-2xl flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xs group"
+                >
+                  {proofUploading ? (
+                    <span className="material-symbols-outlined animate-spin text-2xl text-[#15803d]">sync</span>
+                  ) : (
+                    <>
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 group-hover:scale-105 text-[#15803d] flex items-center justify-center transition-transform">
+                        <span className="material-symbols-outlined text-2xl">add_a_photo</span>
+                      </div>
+                      <span className="text-xs font-bold text-emerald-950">
+                        Tap to Capture Product Photo *
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Mandatory proof for seller order verification
+                      </span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {otpError && (
+              <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl text-center font-bold">
+                {otpError}
+              </div>
+            )}
+
+            {/* Modal Bottom Actions */}
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowProductDeliveryModal(false)}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmProductDelivery}
+                disabled={statusUpdating || !capturedPhoto}
+                className="flex-2 py-3 bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-xs rounded-2xl shadow-md cursor-pointer transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {statusUpdating ? (
+                  <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+                ) : (
+                  <span className="material-symbols-outlined text-base">task_alt</span>
+                )}
+                {statusUpdating ? 'Finalizing…' : capturedPhoto ? 'Confirm Delivery & Mark Delivered' : 'Capture Photo to Enable'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL 0: SELLER STORE PICKUP OTP VERIFICATION (Standard Product Delivery) ── */}
+      {showSellerPickupOtpModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-100">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="font-bold text-base text-slate-900 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[#366b00]">store</span>
+                Seller Store Pickup OTP
+              </h3>
+              <button
+                onClick={() => setShowSellerPickupOtpModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Ask the seller at the store for the 4-digit <span className="font-bold text-slate-800">Store Pickup OTP</span> shown on their seller screen before picking up packages.
+            </p>
+
+            {/* OTP Inputs */}
+            <div className="flex justify-between gap-2 max-w-xs mx-auto py-2">
+              {otpDigits.map((digit, idx) => (
+                <input
+                  key={idx}
+                  id={`modal-otp-input-${idx}`}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                  placeholder="•"
+                  className="w-12 h-14 text-center text-2xl font-bold rounded-2xl border border-slate-300 bg-slate-50 focus:border-[#366b00] focus:ring-2 focus:ring-[#97fc43]/30 outline-none"
+                />
+              ))}
+            </div>
+
+            {otpError && <p className="text-center text-xs text-red-500 font-semibold">{otpError}</p>}
+
+            <button
+              onClick={handleVerifySellerPickupOtp}
+              disabled={verifyingOtp || otpDigits.join('').length < 4}
+              className="w-full py-3.5 bg-[#366b00] hover:bg-[#2d5800] text-white font-bold text-xs rounded-2xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {verifyingOtp ? (
+                <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+              ) : (
+                <span className="material-symbols-outlined text-base">check_circle</span>
+              )}
+              {verifyingOtp ? 'Verifying OTP…' : 'Verify Pickup OTP & Start Delivery'}
+            </button>
           </div>
         </div>
       )}

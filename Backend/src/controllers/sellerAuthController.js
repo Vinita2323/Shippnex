@@ -7,6 +7,8 @@ import SellerMembershipPlan from '../models/SellerMembershipPlan.model.js';
 import { sendOtpSMS, normalizePhoneNumber } from '../services/smsIndiaHubService.js';
 import crypto from 'crypto';
 import { applyReferralCodeAtRegistration } from './referralController.js';
+import { invalidateProductsCache } from './productController.js';
+import { invalidatePublicSellersCache } from '../routes/sellerRoutes.js';
 
 // Send / Resend OTP
 export const sendOtp = async (req, res, next) => {
@@ -264,13 +266,17 @@ export const registerSeller = async (req, res, next) => {
       email,
       businessType: businessType || 'Retail',
       storeLogo: processedLogo || storeLogo,
-      serviceRadius: serviceRadius ? Number(serviceRadius) : 5,
+      serviceRadius: serviceRadius ? Math.max(0.1, Math.min(200, Number(serviceRadius) || 5)) : 5,
       gstNumber,
       panNumber,
       fssaiLicense,
       gstPhoto: processedGstPhoto,
       bankPassbookPhoto: processedPassbookPhoto,
       categories: Array.isArray(categories) && categories.length > 0 ? categories : [],
+      location: {
+        type: 'Point',
+        coordinates: (lng != null && lat != null && !isNaN(lng) && !isNaN(lat)) ? [parseFloat(lng), parseFloat(lat)] : [0, 0]
+      },
       warehouseLocation: {
         storeAddress: completeAddress,
         city,
@@ -278,7 +284,7 @@ export const registerSeller = async (req, res, next) => {
         pincode,
         location: {
           type: 'Point',
-          coordinates: (lng != null && lat != null) ? [parseFloat(lng), parseFloat(lat)] : [0, 0]
+          coordinates: (lng != null && lat != null && !isNaN(lng) && !isNaN(lat)) ? [parseFloat(lng), parseFloat(lat)] : [0, 0]
         }
       },
       otp,
@@ -602,12 +608,15 @@ export const updateSellerProfile = async (req, res, next) => {
       city,
       state,
       pincode,
+      isOnline,
     } = req.body;
 
     const seller = await Seller.findById(req.user.id);
     if (!seller) {
       return res.status(404).json({ success: false, message: 'Seller profile not found' });
     }
+
+    if (isOnline !== undefined) seller.isOnline = Boolean(isOnline);
 
     if (businessName !== undefined) seller.businessName = businessName;
     if (ownerName !== undefined) seller.ownerName = ownerName;
@@ -650,7 +659,9 @@ export const updateSellerProfile = async (req, res, next) => {
       seller.bankPassbookPhoto = bankPassbookPhoto;
     }
 
-    if (serviceRadius !== undefined) seller.serviceRadius = Number(serviceRadius);
+    if (serviceRadius !== undefined) {
+      seller.serviceRadius = Math.max(0.1, Math.min(200, Number(serviceRadius) || 5));
+    }
     if (tagline !== undefined) seller.tagline = tagline;
     if (gstNumber !== undefined) seller.gstNumber = gstNumber;
     if (panNumber !== undefined) seller.panNumber = panNumber;
@@ -680,10 +691,15 @@ export const updateSellerProfile = async (req, res, next) => {
       finalLat !== undefined ||
       finalLng !== undefined
     ) {
-      const currentCoords = seller.warehouseLocation?.location?.coordinates || [0, 0];
-      const newCoords = (finalLat != null && finalLng != null)
+      const currentCoords = seller.warehouseLocation?.location?.coordinates || seller.location?.coordinates || [0, 0];
+      const newCoords = (finalLat != null && finalLng != null && !isNaN(finalLat) && !isNaN(finalLng))
         ? [parseFloat(finalLng), parseFloat(finalLat)]
         : currentCoords;
+
+      seller.location = {
+        type: 'Point',
+        coordinates: newCoords,
+      };
 
       seller.warehouseLocation = {
         ...seller.warehouseLocation,
@@ -701,9 +717,39 @@ export const updateSellerProfile = async (req, res, next) => {
 
     await seller.save();
 
+    invalidateProductsCache();
+    invalidatePublicSellersCache();
+
     res.status(200).json({
       success: true,
       message: 'Seller profile updated successfully',
+      seller,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Toggle Seller Online / Offline Status
+export const toggleOnlineStatus = async (req, res, next) => {
+  try {
+    const seller = await Seller.findById(req.user.id);
+    if (!seller) {
+      return res.status(404).json({ success: false, message: 'Seller profile not found' });
+    }
+
+    const { isOnline } = req.body;
+    seller.isOnline = isOnline !== undefined ? Boolean(isOnline) : !seller.isOnline;
+
+    await seller.save();
+
+    invalidateProductsCache();
+    invalidatePublicSellersCache();
+
+    res.status(200).json({
+      success: true,
+      message: `Store is now ${seller.isOnline ? 'ONLINE' : 'OFFLINE'}`,
+      isOnline: seller.isOnline,
       seller,
     });
   } catch (error) {

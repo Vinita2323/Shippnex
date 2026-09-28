@@ -41,24 +41,45 @@ export const CartProvider = ({ children }) => {
   // Format backend cart items for frontend consumption. Entries whose product
   // was deleted after being added populate() to a null product server-side;
   // drop those instead of rendering a blank row for a product that no longer exists.
+  // Format backend cart items for frontend consumption and deduplicate by product ID/name
   const formatCartItems = (backendItems = []) => {
-    return backendItems
-      .filter((item) => item.product)
-      .map((item) => {
+    const itemMap = new Map();
+
+    backendItems
+      .filter((item) => item && item.product)
+      .forEach((item) => {
         const prod = item.product || {};
+        const prodId = String(prod._id || prod.id || prod.productId || '');
+        if (!prodId) return;
+
         const price = Number(prod.salePrice ?? prod.price ?? 0);
         const originalPrice = Number(prod.mrp ?? prod.originalPrice ?? price);
-        return {
-          ...prod,
-          id: prod._id || prod.id,
-          productId: prod._id || prod.id,
-          name: prod.name,
-          image: prod.mainImage || prod.image || (prod.variants?.[0]?.image) || '',
-          price,
-          originalPrice,
-          quantity: item.quantity,
-        };
+        const name = prod.name || '';
+        const image = prod.mainImage || prod.image || (prod.variants?.[0]?.image) || '';
+        const qty = Math.max(1, Number(item.quantity || 1));
+
+        // Use unique identifier or name key to avoid duplicate cards
+        const key = prodId;
+
+        if (itemMap.has(key)) {
+          const existing = itemMap.get(key);
+          existing.quantity = (existing.quantity || 0) + qty;
+        } else {
+          itemMap.set(key, {
+            ...prod,
+            id: prodId,
+            _id: prodId,
+            productId: prodId,
+            name,
+            image,
+            price,
+            originalPrice,
+            quantity: qty,
+          });
+        }
       });
+
+    return Array.from(itemMap.values());
   };
 
   const fetchCart = useCallback(async () => {
@@ -100,28 +121,58 @@ export const CartProvider = ({ children }) => {
     fetchCart();
   }, [fetchCart]);
 
-  // Merge authoritative server cart into local state without discarding
-  // optimistic edits that are still mid-flight for other products.
-  const reconcileServerCart = useCallback((serverItems) => {
+  // Merge authoritative server cart into local state without creating duplicate entries
+  const reconcileServerCart = useCallback((serverItems, syncedProductId = null) => {
     const formatted = formatCartItems(serverItems);
+
+    if (syncedProductId) {
+      pendingSyncIds.current.delete(String(syncedProductId));
+    }
+
     setCartItems((prev) => {
-      const merged = [...formatted];
+      // Build a map of authoritative server items
+      const map = new Map();
+      formatted.forEach((item) => {
+        const idKey = String(item.productId || item.id || item._id);
+        map.set(idKey, item);
+      });
+
+      // Check if there are other pending local items that haven't synced yet
       prev.forEach((localItem) => {
-        const pid = String(localItem.productId || localItem.id);
+        const pid = String(localItem.productId || localItem.id || localItem._id);
         if (pendingSyncIds.current.has(pid)) {
-          const idx = merged.findIndex((m) => String(m.productId) === pid);
-          if (idx > -1) merged[idx] = localItem;
-          else merged.push(localItem);
+          // Look for matching item by ID or Name
+          let exists = false;
+          for (const [k, v] of map.entries()) {
+            if (
+              k === pid ||
+              String(v.id) === pid ||
+              String(v.productId) === pid ||
+              String(v._id) === pid ||
+              (v.name && localItem.name && v.name.trim().toLowerCase() === localItem.name.trim().toLowerCase())
+            ) {
+              exists = true;
+              break;
+            }
+          }
+          if (!exists) {
+            map.set(pid, localItem);
+          }
         }
       });
-      return merged;
+
+      return Array.from(map.values());
     });
+
     localStorage.setItem('shippnex_local_cart', JSON.stringify(formatted));
   }, []);
 
   const runSync = useCallback(async (productId) => {
     const key = String(productId);
-    const item = cartItemsRef.current.find((i) => String(i.productId || i.id) === key);
+    const item = cartItemsRef.current.find((i) => {
+      const iId = String(i.productId || i.id || i._id || '');
+      return iId === key;
+    });
 
     try {
       let res;
@@ -130,23 +181,20 @@ export const CartProvider = ({ children }) => {
       } else {
         res = await cartService.updateCartItem(productId, undefined, item.quantity, item);
       }
+      pendingSyncIds.current.delete(key);
       if (res && res.success && res.cart) {
-        reconcileServerCart(res.cart.items || []);
+        reconcileServerCart(res.cart.items || [], key);
       }
       return res;
     } catch (err) {
       console.error('Cart sync failed for product', productId, err);
-      // Roll back to authoritative server state (e.g. stock ran out mid-edit)
+      pendingSyncIds.current.delete(key);
       fetchCart();
       throw err;
-    } finally {
-      pendingSyncIds.current.delete(key);
     }
   }, [reconcileServerCart, fetchCart]);
 
   // immediate:true (buy-now / remove) lets the caller see real success/failure.
-  // Debounced background syncs swallow the error here since runSync already
-  // rolled the optimistic state back to the server's authoritative version.
   const scheduleSync = useCallback((productId, { immediate = false } = {}) => {
     const key = String(productId);
     pendingSyncIds.current.add(key);
@@ -171,7 +219,8 @@ export const CartProvider = ({ children }) => {
   const addToCart = async (product, quantity = 1, options = {}) => {
     if (!product) return { success: false };
 
-    const productId = product.id || product._id;
+    const productId = String(product.id || product._id || product.productId || '');
+    if (!productId) return { success: false };
 
     // Wait for auth initialization before checking authentication
     if (isAuthInitializing) {
@@ -193,23 +242,29 @@ export const CartProvider = ({ children }) => {
       return { requiresAuth: true };
     }
 
-    // Update local cart instantly so the UI reflects the change on click,
-    // instead of waiting on the network round trip.
+    // Update local cart instantly so the UI reflects the change on click
     const price = Number(product.salePrice ?? product.price ?? 0);
     const originalPrice = Number(product.mrp ?? product.originalPrice ?? price);
 
     setCartItems((prev) => {
-      const idx = prev.findIndex((i) => String(i.productId || i.id) === String(productId));
+      const idx = prev.findIndex((i) => {
+        const iId = String(i.productId || i.id || i._id || '');
+        const nameMatch = i.name && product.name && i.name.trim().toLowerCase() === product.name.trim().toLowerCase();
+        return iId === productId || nameMatch;
+      });
+
       if (idx > -1) {
         const next = [...prev];
         next[idx] = { ...next[idx], quantity: (next[idx].quantity || 0) + Number(quantity) };
         return next;
       }
+
       return [
         ...prev,
         {
           ...product,
           id: productId,
+          _id: productId,
           productId,
           name: product.name,
           image: product.mainImage || product.image || (product.variants?.[0]?.image) || '',
@@ -221,8 +276,6 @@ export const CartProvider = ({ children }) => {
     });
 
     if (options.isBuyNow) {
-      // Buy-now heads straight to checkout, so confirm the write actually landed
-      // (and surface the real error instead of assuming success).
       try {
         const res = await scheduleSync(productId, { immediate: true });
         if (res && res.success) return { success: true };
@@ -238,10 +291,15 @@ export const CartProvider = ({ children }) => {
 
   const updateQuantity = async (productId, delta, exactQty) => {
     if (!authContextIsAuthenticated) return;
+    const key = String(productId);
 
     setCartItems((prev) => {
-      const idx = prev.findIndex((i) => String(i.productId || i.id) === String(productId));
+      const idx = prev.findIndex((i) => {
+        const iId = String(i.productId || i.id || i._id || '');
+        return iId === key;
+      });
       if (idx === -1) return prev;
+
       const current = prev[idx];
       const newQty = exactQty !== undefined ? Number(exactQty) : (current.quantity || 0) + Number(delta);
       if (newQty <= 0) {
@@ -263,12 +321,19 @@ export const CartProvider = ({ children }) => {
       clearTimeout(syncTimers.current[key]);
       delete syncTimers.current[key];
     }
+    pendingSyncIds.current.delete(key);
 
-    setCartItems((prev) => prev.filter((i) => String(i.productId || i.id) !== key));
+    setCartItems((prev) =>
+      prev.filter((i) => {
+        const iId = String(i.productId || i.id || i._id || '');
+        return iId !== key;
+      })
+    );
+
     try {
       await scheduleSync(productId, { immediate: true });
     } catch {
-      // runSync already rolled the optimistic removal back via fetchCart().
+      fetchCart();
     }
   };
 

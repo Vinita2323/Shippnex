@@ -21,7 +21,16 @@ const sellerSchema = new mongoose.Schema(
     email: { type: String, trim: true, lowercase: true },
     businessType: { type: String, trim: true },
     storeLogo: { type: String },
-    serviceRadius: { type: Number, default: 5 },
+    location: {
+      type: { type: String, enum: ['Point'], default: 'Point' },
+      coordinates: { type: [Number], default: [0, 0] },
+    },
+    serviceRadius: { 
+      type: Number, 
+      default: 5,
+      min: [0.1, 'Service radius must be at least 0.1 KM'],
+      max: [200, 'Service radius cannot exceed 200 KM']
+    },
     gstNumber: { type: String, trim: true },
     panNumber: { type: String, trim: true },
     fssaiLicense: { type: String, trim: true },
@@ -79,6 +88,11 @@ const sellerSchema = new mongoose.Schema(
       type: String,
       enum: ['pending', 'approved', 'rejected', 'under_review', 'pending_otp', 'suspended'],
       default: 'pending',
+    },
+    isOnline: {
+      type: Boolean,
+      default: true,
+      index: true,
     },
     membershipStatus: {
       type: String,
@@ -140,16 +154,31 @@ const sellerSchema = new mongoose.Schema(
   }
 );
 
+sellerSchema.index({ location: '2dsphere' }, { sparse: true });
 sellerSchema.index({ 'warehouseLocation.location': '2dsphere' }, { sparse: true });
 sellerSchema.index({ accountStatus: 1, createdAt: -1 });
 sellerSchema.index({ status: 1, createdAt: -1 });
 sellerSchema.index({ registrationFeeStatus: 1, createdAt: -1 });
 sellerSchema.index({ businessName: 1 });
+sellerSchema.index({ serviceRadius: 1 });
 sellerSchema.index({ createdAt: -1 });
 sellerSchema.index({ referralCode: 1 }, { sparse: true });
 
-// Hash password before saving
+// Sync coordinates between location and warehouseLocation.location & hash password
 sellerSchema.pre('save', async function () {
+  // Sync coordinates between root location and warehouseLocation.location
+  const rootCoords = this.location?.coordinates;
+  const whCoords = this.warehouseLocation?.location?.coordinates;
+
+  if (whCoords && Array.isArray(whCoords) && (whCoords[0] !== 0 || whCoords[1] !== 0)) {
+    if (!this.location) this.location = { type: 'Point', coordinates: [0, 0] };
+    this.location.coordinates = whCoords;
+  } else if (rootCoords && Array.isArray(rootCoords) && (rootCoords[0] !== 0 || rootCoords[1] !== 0)) {
+    if (!this.warehouseLocation) this.warehouseLocation = {};
+    if (!this.warehouseLocation.location) this.warehouseLocation.location = { type: 'Point', coordinates: [0, 0] };
+    this.warehouseLocation.location.coordinates = rootCoords;
+  }
+
   if (!this.isModified('password') || !this.password) return;
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);

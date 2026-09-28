@@ -61,8 +61,29 @@ const Dashboard = () => {
       fetchDashboardData(true);
     }, 20000);
 
-    return () => clearInterval(timer);
+    const handleStatusEvent = (e) => {
+      if (e.detail?.isOnline !== undefined) {
+        setSeller(prev => prev ? ({ ...prev, isOnline: e.detail.isOnline }) : prev);
+      }
+    };
+    window.addEventListener('seller_status_changed', handleStatusEvent);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('seller_status_changed', handleStatusEvent);
+    };
   }, []);
+
+  const handleQuickGoOnline = async () => {
+    try {
+      const res = await authService.updateSellerOnlineStatus(true);
+      if (res && res.success) {
+        setSeller(prev => ({ ...prev, isOnline: true }));
+      }
+    } catch (err) {
+      console.error('Failed to go online:', err);
+    }
+  };
 
   const sellerName = seller?.ownerName || seller?.businessName || seller?.name || 'Seller';
   const storeName = seller?.businessName ? seller.businessName : 'your store';
@@ -304,6 +325,29 @@ const Dashboard = () => {
         {/* Decorative background glow circle */}
         <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
       </div>
+
+      {/* Offline Notice Banner */}
+      {seller && seller.isOnline === false && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+              <AlertCircle size={22} />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-amber-900 m-0">Your Store is Currently Offline</h4>
+              <p className="text-xs text-amber-700 m-0 mt-0.5">
+                Customers cannot view your store or buy your products while you are offline. Switch to Online when you are ready to accept orders.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleQuickGoOnline}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs border-none cursor-pointer whitespace-nowrap transition-colors"
+          >
+            Switch to Online Now
+          </button>
+        </div>
+      )}
 
       {/* Time Range Filter Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">

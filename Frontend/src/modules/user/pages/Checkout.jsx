@@ -456,16 +456,20 @@ const Checkout = () => {
     deliveryCharge: 40,
     freeDeliveryMinOrder: 500,
     isFreeDeliveryEnabled: true,
+    codCharge: 9,
+    isCodChargeEnabled: true,
   });
 
   useEffect(() => {
     let isMounted = true;
-    commissionService.getCurrentRates().then((res) => {
+    commissionService.getCurrentRates(true).then((res) => {
       if (isMounted && res && res.success) {
         setDeliverySettings({
           deliveryCharge: Number(res.deliveryCharge !== undefined ? res.deliveryCharge : 40),
           freeDeliveryMinOrder: Number(res.freeDeliveryMinOrder !== undefined ? res.freeDeliveryMinOrder : 500),
           isFreeDeliveryEnabled: res.isFreeDeliveryEnabled !== undefined ? Boolean(res.isFreeDeliveryEnabled) : true,
+          codCharge: Number(res.codCharge !== undefined ? res.codCharge : 9),
+          isCodChargeEnabled: res.isCodChargeEnabled !== undefined ? Boolean(res.isCodChargeEnabled) : true,
         });
       }
     }).catch(() => {});
@@ -477,8 +481,10 @@ const Checkout = () => {
   const safeTotal = cartTotal || 0;
   const isFreeDelivery = safeTotal === 0 || (deliverySettings.isFreeDeliveryEnabled && safeTotal >= deliverySettings.freeDeliveryMinOrder);
   const deliveryCharge = isFreeDelivery ? 0 : deliverySettings.deliveryCharge;
+  const isCod = selectedPayment === 'COD';
+  const codCharge = (isCod && deliverySettings.isCodChargeEnabled) ? Number(deliverySettings.codCharge ?? 9) : 0;
   const savings = originalTotal > safeTotal ? originalTotal - safeTotal : 0;
-  const finalGrandTotal = safeTotal + deliveryCharge;
+  const finalGrandTotal = safeTotal + deliveryCharge + codCharge;
 
   return (
     <div className="w-full max-w-[480px] md:max-w-7xl mx-auto h-[100dvh] md:h-auto md:min-h-screen bg-slate-50 font-sans text-slate-800 relative shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col overflow-hidden md:overflow-visible md:px-6 md:py-8">
@@ -596,6 +602,9 @@ const Checkout = () => {
             {paymentMethods.map((pm) => {
               const IconComp = pm.icon;
               const isSelected = selectedPayment === pm.id;
+              const isCodOption = pm.id === 'COD';
+              const codExtra = (isCodOption && deliverySettings.isCodChargeEnabled && deliverySettings.codCharge > 0) ? deliverySettings.codCharge : 0;
+              
               return (
                 <div
                   key={pm.id}
@@ -611,8 +620,17 @@ const Checkout = () => {
                       <IconComp size={16} />
                     </div>
                     <div>
-                      <h4 className="text-[13px] font-bold text-slate-900 m-0">{pm.name}</h4>
-                      <p className="text-[11px] text-slate-500 m-0">{pm.description}</p>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-[13px] font-bold text-slate-900 m-0">{pm.name}</h4>
+                        {codExtra > 0 && (
+                          <span className="bg-orange-100 text-[#ea580c] border border-orange-200/80 text-[10px] font-extrabold px-1.5 py-0.2 rounded-md">
+                            +₹{codExtra} COD Fee
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 m-0">
+                        {codExtra > 0 ? `Pay cash upon delivery (+₹${codExtra} handling fee)` : pm.description}
+                      </p>
                     </div>
                   </div>
                   <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? 'border-[#ff5500] bg-[#ff5500] text-white' : 'border-slate-300'}`}>
@@ -658,6 +676,12 @@ const Checkout = () => {
                 <span className="text-[12px] font-bold text-slate-900">₹{deliveryCharge.toFixed(2)}</span>
               )}
             </div>
+            {isCod && deliverySettings.isCodChargeEnabled && codCharge > 0 && (
+              <div className="flex justify-between items-center bg-orange-50/70 px-2.5 py-1.5 rounded-lg border border-orange-100">
+                <span className="text-[12px] font-medium text-orange-800">COD Handling Fee</span>
+                <span className="text-[12px] font-bold text-orange-900">+ ₹{codCharge.toFixed(2)}</span>
+              </div>
+            )}
             {savings > 0 && (
               <div className="flex justify-between items-center">
                 <span className="text-[12px] font-medium text-slate-500">Total Savings</span>

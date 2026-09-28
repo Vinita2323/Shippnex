@@ -5,6 +5,8 @@ let deliverySettingsCache = {
     deliveryCharge: 40,
     freeDeliveryMinOrder: 500,
     isFreeDeliveryEnabled: true,
+    codCharge: 9,
+    isCodChargeEnabled: true,
   },
   timestamp: 0,
 };
@@ -25,6 +27,8 @@ export const commissionService = {
           deliveryCharge: response.data.settings.deliveryCharge ?? 40,
           freeDeliveryMinOrder: response.data.settings.freeDeliveryMinOrder ?? 500,
           isFreeDeliveryEnabled: response.data.settings.isFreeDeliveryEnabled ?? true,
+          codCharge: response.data.settings.codCharge ?? 9,
+          isCodChargeEnabled: response.data.settings.isCodChargeEnabled ?? true,
         },
         timestamp: Date.now(),
       };
@@ -35,7 +39,7 @@ export const commissionService = {
   // Get current rates (Public / User / Seller / Captain)
   getCurrentRates: async (forceRefresh = false) => {
     const now = Date.now();
-    if (!forceRefresh && deliverySettingsCache.timestamp && (now - deliverySettingsCache.timestamp < 60000)) {
+    if (!forceRefresh && deliverySettingsCache.timestamp && (now - deliverySettingsCache.timestamp < 2000)) {
       return { success: true, ...deliverySettingsCache.data };
     }
     try {
@@ -46,6 +50,8 @@ export const commissionService = {
             deliveryCharge: response.data.deliveryCharge ?? 40,
             freeDeliveryMinOrder: response.data.freeDeliveryMinOrder ?? 500,
             isFreeDeliveryEnabled: response.data.isFreeDeliveryEnabled ?? true,
+            codCharge: response.data.codCharge ?? 9,
+            isCodChargeEnabled: response.data.isCodChargeEnabled ?? true,
           },
           timestamp: now,
         };

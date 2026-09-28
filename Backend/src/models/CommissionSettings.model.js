@@ -34,6 +34,14 @@ const commissionAuditHistorySchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    codCharge: {
+      type: Number,
+      default: 9,
+    },
+    isCodChargeEnabled: {
+      type: Boolean,
+      default: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -97,6 +105,16 @@ const commissionSettingsSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    codCharge: {
+      type: Number,
+      required: true,
+      min: [0, 'COD charge cannot be negative'],
+      default: 9,
+    },
+    isCodChargeEnabled: {
+      type: Boolean,
+      default: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -126,6 +144,8 @@ commissionSettingsSchema.statics.getOrCreateActiveSettings = async function () {
       deliveryCharge: 40,
       freeDeliveryMinOrder: 500,
       isFreeDeliveryEnabled: true,
+      codCharge: 9,
+      isCodChargeEnabled: true,
       isActive: true,
       updatedBy: 'System Initializer',
       history: [
@@ -137,15 +157,17 @@ commissionSettingsSchema.statics.getOrCreateActiveSettings = async function () {
           deliveryCharge: 40,
           freeDeliveryMinOrder: 500,
           isFreeDeliveryEnabled: true,
+          codCharge: 9,
+          isCodChargeEnabled: true,
           isActive: true,
           changedBy: 'System Initializer',
           changedAt: new Date(),
-          reason: 'Initial system default configuration (Seller: 10%, Captain: 5%, Delivery: ₹40, Free above: ₹500)',
+          reason: 'Initial system default configuration (Seller: 10%, Captain: 5%, Delivery: ₹40, Free above: ₹500, COD: ₹9)',
         },
       ],
     });
   } else {
-    // If existing document lacks delivery settings, initialize defaults
+    // If existing document lacks delivery/COD settings, initialize defaults
     let needSave = false;
     if (settings.deliveryCharge === undefined) {
       settings.deliveryCharge = 40;
@@ -157,6 +179,14 @@ commissionSettingsSchema.statics.getOrCreateActiveSettings = async function () {
     }
     if (settings.isFreeDeliveryEnabled === undefined) {
       settings.isFreeDeliveryEnabled = true;
+      needSave = true;
+    }
+    if (settings.codCharge === undefined) {
+      settings.codCharge = 9;
+      needSave = true;
+    }
+    if (settings.isCodChargeEnabled === undefined) {
+      settings.isCodChargeEnabled = true;
       needSave = true;
     }
     if (needSave) {

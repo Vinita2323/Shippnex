@@ -476,7 +476,7 @@ export const approveEditRequest = async (req, res, next) => {
       if (updatedData.email !== undefined) seller.email = updatedData.email;
       if (updatedData.businessType !== undefined) seller.businessType = updatedData.businessType;
       if (updatedData.storeLogo !== undefined) seller.storeLogo = updatedData.storeLogo;
-      if (updatedData.serviceRadius !== undefined) seller.serviceRadius = Number(updatedData.serviceRadius);
+      if (updatedData.serviceRadius !== undefined) seller.serviceRadius = Math.max(0.1, Math.min(200, Number(updatedData.serviceRadius) || 5));
       if (updatedData.tagline !== undefined) seller.tagline = updatedData.tagline;
       if (updatedData.gstNumber !== undefined) seller.gstNumber = updatedData.gstNumber;
       if (updatedData.panNumber !== undefined) seller.panNumber = updatedData.panNumber;
@@ -495,6 +495,16 @@ export const approveEditRequest = async (req, res, next) => {
       const pincode = updatedData.pincode || seller.warehouseLocation?.pincode;
       const area = updatedData.area || seller.warehouseLocation?.area;
 
+      const newCoords = [
+        updatedData.lng != null && !isNaN(updatedData.lng) ? Number(updatedData.lng) : seller.warehouseLocation?.location?.coordinates?.[0] || seller.location?.coordinates?.[0] || 0,
+        updatedData.lat != null && !isNaN(updatedData.lat) ? Number(updatedData.lat) : seller.warehouseLocation?.location?.coordinates?.[1] || seller.location?.coordinates?.[1] || 0,
+      ];
+
+      seller.location = {
+        type: 'Point',
+        coordinates: newCoords,
+      };
+
       seller.warehouseLocation = {
         storeAddress,
         city,
@@ -503,10 +513,7 @@ export const approveEditRequest = async (req, res, next) => {
         area,
         location: {
           type: 'Point',
-          coordinates: [
-            updatedData.lng != null ? Number(updatedData.lng) : seller.warehouseLocation?.location?.coordinates?.[0] || 0,
-            updatedData.lat != null ? Number(updatedData.lat) : seller.warehouseLocation?.location?.coordinates?.[1] || 0,
-          ],
+          coordinates: newCoords,
         },
       };
 

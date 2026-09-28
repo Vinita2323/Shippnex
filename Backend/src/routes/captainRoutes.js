@@ -11,6 +11,7 @@ import {
   rejectJob,
   updateDeliveryStatus,
   verifyDeliveryOtp,
+  verifyOrderPickupOtp,
   submitProofOfDelivery,
   getActiveDelivery,
   getWallet,
@@ -69,6 +70,7 @@ router.post('/transport/active/:bookingId/proof', captainAuth, submitTransportPr
 // Delivery Actions
 router.get('/active-delivery', captainAuth, getActiveDelivery);
 router.post('/jobs/:orderId/verify-otp', captainAuth, verifyDeliveryOtp);
+router.post('/jobs/:orderId/verify-pickup-otp', captainAuth, verifyOrderPickupOtp);
 router.post('/jobs/:orderId/proof', captainAuth, submitProofOfDelivery);
 
 // Wallet

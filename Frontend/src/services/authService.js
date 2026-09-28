@@ -143,6 +143,17 @@ export const authService = {
     return response.data;
   },
 
+  updateSellerOnlineStatus: async (isOnline) => {
+    const response = await API.put('/auth/seller/status', { isOnline });
+    if (response.data.seller) {
+      localStorage.setItem('shippnex_seller_data', JSON.stringify(response.data.seller));
+    }
+    try {
+      window.dispatchEvent(new CustomEvent('seller_status_changed', { detail: { isOnline: response.data.isOnline } }));
+    } catch (e) {}
+    return response.data;
+  },
+
 
   // Captain Auth
   registerCaptain: async (formData) => {
@@ -805,6 +816,11 @@ export const captainService = {
     const response = await API.get('/captain/active-delivery');
     return response.data;
   },
+  verifyOrderPickupOtp: async (orderId, otp) => {
+    clearCaptainDashboardClientCache();
+    const response = await API.post(`/captain/jobs/${orderId}/verify-pickup-otp`, { otp });
+    return response.data;
+  },
   verifyDeliveryOtp: async (orderId, otp) => {
     const response = await API.post(`/captain/jobs/${orderId}/verify-otp`, { otp });
     return response.data;
@@ -1098,14 +1114,18 @@ export const sellerService = {
       return { success: false, sellers: [] };
     }
   },
-  getSellerStore: async (id) => {
+  getSellerStore: async (id, params = {}) => {
     try {
-      const response = await API.get(`/sellers/${id}`);
+      const response = await API.get(`/sellers/${id}`, { params });
       return response.data;
     } catch (err) {
       console.warn('Failed to fetch seller store from API:', err.message);
       return { success: false, seller: null, products: [] };
     }
+  },
+  deleteSeller: async (id) => {
+    const response = await API.delete(`/admin/sellers/${id}`);
+    return response.data;
   }
 };
 
@@ -1158,6 +1178,11 @@ export const adminService = {
   updateSellerDetails: async (id, details) => {
     clearAdminClientCache('sellers');
     const response = await API.put(`/admin/sellers/${id}/details`, details);
+    return response.data;
+  },
+  deleteSeller: async (id) => {
+    clearAdminClientCache('sellers');
+    const response = await API.delete(`/admin/sellers/${id}`);
     return response.data;
   },
   getCaptains: async (forceRefresh = false) => {
@@ -1366,6 +1391,37 @@ export const adminTransportService = {
   },
   cancelBooking: async (bookingId, reason = '') => {
     const res = await API.put(`/transport/bookings/admin/${bookingId}/cancel`, { reason });
+    return res.data;
+  },
+};
+
+export const vehicleService = {
+  getAllVehiclesAdmin: async () => {
+    const res = await API.get('/transport/vehicles/admin/all');
+    return res.data;
+  },
+  getActiveVehicles: async () => {
+    const res = await API.get('/transport/vehicles');
+    return res.data;
+  },
+  getVehicleById: async (id) => {
+    const res = await API.get(`/transport/vehicles/${id}`);
+    return res.data;
+  },
+  createVehicle: async (payload) => {
+    const res = await API.post('/transport/vehicles', payload);
+    return res.data;
+  },
+  updateVehicle: async (id, payload) => {
+    const res = await API.put(`/transport/vehicles/${id}`, payload);
+    return res.data;
+  },
+  deleteVehicle: async (id) => {
+    const res = await API.delete(`/transport/vehicles/${id}`);
+    return res.data;
+  },
+  toggleStatus: async (id, isActive) => {
+    const res = await API.put(`/transport/vehicles/${id}`, { isActive });
     return res.data;
   },
 };

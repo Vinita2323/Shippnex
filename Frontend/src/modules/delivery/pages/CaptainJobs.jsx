@@ -211,6 +211,9 @@ const CaptainJobs = () => {
     pickupLocation: order.pickupLocation,
     dropLocation: order.dropLocation,
     isTransport: order.isTransport || order.orderId?.startsWith('TRB') || order.bookingId?.startsWith('TRB'),
+    paymentMethod: order.paymentMethod || (order.isTransport ? 'Prepaid' : 'COD'),
+    paymentStatus: order.paymentStatus || 'Pending',
+    grandTotal: order.grandTotal || order.totalAmount || 0,
   });
 
   const filteredJobs = jobs.filter((o) => {
@@ -502,6 +505,19 @@ const CaptainJobs = () => {
                         ) : (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 shrink-0 flex items-center gap-1">
                             <span>📦</span> Delivery
+                          </span>
+                        )}
+                        {job.paymentMethod && (
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0 border ${
+                              job.paymentMethod === 'COD' || job.paymentMethod === 'CASH'
+                                ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                            }`}
+                          >
+                            {job.paymentMethod === 'COD' || job.paymentMethod === 'CASH'
+                              ? `COD (Collect ₹${Number(job.grandTotal || 0).toFixed(0)})`
+                              : 'PREPAID'}
                           </span>
                         )}
                         <span className="text-xs font-medium text-slate-700 truncate">

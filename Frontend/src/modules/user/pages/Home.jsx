@@ -46,59 +46,6 @@ import { getCachedData, setCachedData, isCacheStale } from '../../../utils/dataC
 const HOME_CACHE_KEY = 'home_data';
 const HOME_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
-const allProducts = [
-  { id: 'p1', name: 'Basmati Rice', price: 75, originalPrice: 95, discount: '21% OFF', image: grainsImg, unit: '1kg' },
-  { id: 'p2', name: 'Sunflower Oil', price: 110, originalPrice: 140, discount: '21% OFF', image: oilGheeImg, unit: '1L' },
-  { id: 'p3', name: 'Toor Dal', price: 120, originalPrice: 150, discount: '20% OFF', image: masalaImg, unit: '1kg' },
-  { id: 'p4', name: 'Whole Wheat Atta', price: 250, originalPrice: 280, image: grainsImg, unit: '5kg' },
-  { id: 'p5', name: 'Iodized Salt', price: 24, originalPrice: 28, image: masalaImg, unit: '1kg' },
-  { id: 'p6', name: 'Refined Sugar', price: 45, originalPrice: 55, image: sugarImg, unit: '1kg' },
-  { id: 'p7', name: 'Premium Tea', price: 145, originalPrice: 160, image: groceryImg, unit: '500g' },
-];
-
-const fallbackSellersList = [
-  {
-    _id: 'seller_fashion_hub',
-    businessName: 'Fashion Hub',
-    businessType: 'Retail & Grocery',
-    tagline: 'Fresh staples & cooking oils',
-    storeLogo: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=160&auto=format&fit=crop&q=80',
-    banner: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=600&auto=format&fit=crop&q=80',
-    rating: 4.9,
-    deliveryTime: '15-25 min'
-  },
-  {
-    _id: 'seller_clothing_hub',
-    businessName: 'Clothing Hub',
-    businessType: 'Fruits & Produce',
-    tagline: 'Farm fresh fruits & vegetables',
-    storeLogo: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=160&auto=format&fit=crop&q=80',
-    banner: 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=600&auto=format&fit=crop&q=80',
-    rating: 4.8,
-    deliveryTime: '20-30 min'
-  },
-  {
-    _id: 'seller_granic_farms',
-    businessName: 'GRANIC FARMS',
-    businessType: 'Dry Fruits & Organics',
-    tagline: 'Roasted nuts & superfoods',
-    storeLogo: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=160&auto=format&fit=crop&q=80',
-    banner: 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=600&auto=format&fit=crop&q=80',
-    rating: 5.0,
-    deliveryTime: '15-20 min'
-  },
-  {
-    _id: 'seller_apex_wholesale',
-    businessName: 'Apex Wholesale Grocery',
-    businessType: 'Superstore',
-    tagline: 'Bulk groceries & household',
-    storeLogo: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=160&auto=format&fit=crop&q=80',
-    banner: 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=600&auto=format&fit=crop&q=80',
-    rating: 4.7,
-    deliveryTime: '25-35 min'
-  }
-];
-
 const Home = () => {
   const navigate = useNavigate();
   const { addToCart, updateQuantity, getItemQuantity, isInCart, cartCount, removeFromCart } = useCart();
@@ -106,12 +53,20 @@ const Home = () => {
   const locationContext = useLocationContext();
   const [toastMessage, setToastMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const cachedHome = getCachedData(HOME_CACHE_KEY);
+
+  const userLat = locationContext?.currentLocation?.lat || locationContext?.currentLocation?.latitude;
+  const userLng = locationContext?.currentLocation?.lng || locationContext?.currentLocation?.longitude;
+
+  const homeCacheKey = (userLat != null && userLng != null) 
+    ? `home_data_${Number(userLat).toFixed(3)}_${Number(userLng).toFixed(3)}`
+    : 'home_data_default';
+
+  const cachedHome = getCachedData(homeCacheKey);
   const [banners, setBanners] = useState(cachedHome?.banners || []);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [bannerVisible, setBannerVisible] = useState(true);
   const [categories, setCategories] = useState(cachedHome?.categories || []);
-  const [sellers, setSellers] = useState(cachedHome?.sellers || fallbackSellersList);
+  const [sellers, setSellers] = useState(cachedHome?.sellers || []);
   const [flashDeals, setFlashDeals] = useState(cachedHome?.flashDeals || []);
   const [bestsellerProducts, setBestsellerProducts] = useState(cachedHome?.bestsellerProducts || []);
 
@@ -129,7 +84,7 @@ const Home = () => {
       return {
         id: p.id || p.sku || p._id || `p_${Math.random()}`,
         name: p.name,
-        seller: p.seller || 'Fashion Hub',
+        seller: p.seller || 'Verified Seller',
         price: salePrice,
         originalPrice: mrp,
         discount: discountStr || '',
@@ -140,19 +95,21 @@ const Home = () => {
 
     const loadAllHomeData = async () => {
       try {
+        const locationParams = (userLat != null && userLng != null) ? { lat: userLat, lng: userLng } : {};
+
         const [bannersRes, categoriesRes, sellersRes, flashRes, bestRes] = await Promise.allSettled([
           bannerService.getBanners(),
           categoryService.getCategories(),
-          sellerService.getPublicSellers(),
-          productService.getProducts({ section: 'flash_sale' }),
-          productService.getProducts({ section: 'bestseller' })
+          sellerService.getPublicSellers(locationParams),
+          productService.getProducts({ section: 'flash_sale', ...locationParams }),
+          productService.getProducts({ section: 'bestseller', ...locationParams })
         ]);
 
         if (!isMounted) return;
 
         let latestBanners = cachedHome?.banners || [];
         let latestCategories = cachedHome?.categories || [];
-        let latestSellers = cachedHome?.sellers || fallbackSellersList;
+        let latestSellers = [];
 
         // Process Banners
         if (bannersRes.status === 'fulfilled' && bannersRes.value?.success && Array.isArray(bannersRes.value.banners)) {
@@ -174,24 +131,20 @@ const Home = () => {
         }
 
         // Process Sellers
-        if (sellersRes.status === 'fulfilled' && sellersRes.value?.success && Array.isArray(sellersRes.value.sellers) && sellersRes.value.sellers.length > 0) {
+        if (sellersRes.status === 'fulfilled' && sellersRes.value?.success && Array.isArray(sellersRes.value.sellers)) {
           latestSellers = sellersRes.value.sellers;
           setSellers(sellersRes.value.sellers);
+        } else {
+          latestSellers = [];
+          setSellers([]);
         }
 
         // Process Flash Deals
-        const localSaved = JSON.parse(localStorage.getItem('shippnex_custom_products') || '[]');
         let flashApi = [];
         if (flashRes.status === 'fulfilled' && flashRes.value?.products && Array.isArray(flashRes.value.products)) {
           flashApi = flashRes.value.products;
         }
-        const localFlash = localSaved.filter(p => Array.isArray(p.homeSections) && p.homeSections.includes('flash_sale'));
-        const combinedFlash = [];
-        flashApi.forEach(p => combinedFlash.push(formatItem(p)));
-        localFlash.forEach(p => {
-          const item = formatItem(p);
-          if (!combinedFlash.some(c => c.id === item.id || c.name === item.name)) combinedFlash.push(item);
-        });
+        const combinedFlash = flashApi.map(p => formatItem(p));
         setFlashDeals(combinedFlash);
 
         // Process Bestsellers
@@ -199,16 +152,10 @@ const Home = () => {
         if (bestRes.status === 'fulfilled' && bestRes.value?.products && Array.isArray(bestRes.value.products)) {
           bestApi = bestRes.value.products;
         }
-        const localBest = localSaved.filter(p => Array.isArray(p.homeSections) && p.homeSections.includes('bestseller'));
-        const combinedBest = [];
-        bestApi.forEach(p => combinedBest.push(formatItem(p)));
-        localBest.forEach(p => {
-          const item = formatItem(p);
-          if (!combinedBest.some(c => c.id === item.id || c.name === item.name)) combinedBest.push(item);
-        });
+        const combinedBest = bestApi.map(p => formatItem(p));
         setBestsellerProducts(combinedBest);
 
-        setCachedData(HOME_CACHE_KEY, {
+        setCachedData(homeCacheKey, {
           banners: latestBanners,
           categories: latestCategories,
           sellers: latestSellers,
@@ -221,17 +168,18 @@ const Home = () => {
       }
     };
 
-    // Serve the cached data instantly (already hydrated into state above) and
-    // only hit the network again once it goes stale, so navigating back to
-    // Home doesn't re-show empty sections/skeletons on every visit.
-    if (isCacheStale(HOME_CACHE_KEY, HOME_CACHE_TTL)) {
+    loadAllHomeData();
+
+    const handleLocChange = () => {
       loadAllHomeData();
-    }
+    };
+    window.addEventListener('shippnex_location_changed', handleLocChange);
 
     return () => {
       isMounted = false;
+      window.removeEventListener('shippnex_location_changed', handleLocChange);
     };
-  }, []);
+  }, [userLat, userLng]);
 
   // Auto-scroll banners every 3.5 seconds with fade transition
   useEffect(() => {
@@ -404,7 +352,7 @@ const Home = () => {
                       <div className="flex flex-col p-3 pt-2">
                       <h4 className="text-[13px] font-bold m-0 mb-1 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{product.name}</h4>
                       <p className="text-[11px] text-slate-400 m-0 mb-0.5">{product.unit}</p>
-                      <p className="text-[10px] font-medium text-slate-500 m-0 mb-2 truncate">by:- <span className="font-bold text-slate-700">{product.seller || 'Fashion Hub'}</span></p>
+                      <p className="text-[10px] font-medium text-slate-500 m-0 mb-2 truncate">by:- <span className="font-bold text-slate-700">{product.seller || 'Verified Seller'}</span></p>
                       <div className="flex justify-between items-end mt-1">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-[14px] font-extrabold text-slate-900">₹{product.price.toFixed(2)}</span>
@@ -557,59 +505,66 @@ const Home = () => {
         </div>
 
         <div className="flex overflow-x-auto md:grid md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5 pb-4 hide-scrollbar [&::-webkit-scrollbar]:hidden mb-4">
-          {flashDeals.map((prod) => (
-            <div key={prod.id} className="min-w-[155px] max-w-[155px] md:min-w-0 md:max-w-none bg-white border border-slate-100 rounded-xl md:rounded-2xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow flex flex-col justify-between">
-              <div className="h-[125px] w-full overflow-hidden bg-slate-50 relative cursor-pointer" onClick={() => navigate(`/product/${prod.id}`)}>
-                <img 
-                  src={getImageUrl(prod.image, prod.name)} 
-                  alt={prod.name} 
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full h-full object-cover" 
-                  onError={(e) => handleImageError(e, prod.name)}
-                />
-              </div>
-              <div className="flex flex-col p-2.5 flex-1 justify-between gap-2">
-                <div>
-                  <h4 className="text-[13px] font-bold m-0 mb-0.5 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{prod.name}</h4>
-                  <p className="text-[11px] text-slate-400 m-0">{prod.unit}</p>
-                  <p className="text-[10px] font-medium text-slate-500 m-0 mt-0.5 truncate">by:- <span className="font-bold text-slate-700">{prod.seller || 'Fashion Hub'}</span></p>
+          {flashDeals.length > 0 ? (
+            flashDeals.map((prod) => (
+              <div key={prod.id} className="min-w-[155px] max-w-[155px] md:min-w-0 md:max-w-none bg-white border border-slate-100 rounded-xl md:rounded-2xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow flex flex-col justify-between">
+                <div className="h-[125px] w-full overflow-hidden bg-slate-50 relative cursor-pointer" onClick={() => navigate(`/product/${prod.id}`)}>
+                  <img 
+                    src={getImageUrl(prod.image, prod.name)} 
+                    alt={prod.name} 
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover" 
+                    onError={(e) => handleImageError(e, prod.name)}
+                  />
                 </div>
-                
-                <div className="flex items-baseline justify-between gap-1">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-[14px] font-extrabold text-slate-900">₹{prod.price.toFixed(2)}</span>
-                    {prod.originalPrice > prod.price && (
-                      <span className="text-[10px] text-slate-400 line-through">₹{prod.originalPrice.toFixed(2)}</span>
+                <div className="flex flex-col p-2.5 flex-1 justify-between gap-2">
+                  <div>
+                    <h4 className="text-[13px] font-bold m-0 mb-0.5 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{prod.name}</h4>
+                    <p className="text-[11px] text-slate-400 m-0">{prod.unit}</p>
+                    <p className="text-[10px] font-medium text-slate-500 m-0 mt-0.5 truncate">by:- <span className="font-bold text-slate-700">{prod.seller || 'Fashion Hub'}</span></p>
+                  </div>
+                  
+                  <div className="flex items-baseline justify-between gap-1">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-[14px] font-extrabold text-slate-900">₹{prod.price.toFixed(2)}</span>
+                      {prod.originalPrice > prod.price && (
+                        <span className="text-[10px] text-slate-400 line-through">₹{prod.originalPrice.toFixed(2)}</span>
+                      )}
+                    </div>
+                    {prod.discount && (
+                      <span className="text-[9.5px] font-extrabold text-[#ff5500] whitespace-nowrap shrink-0">{prod.discount}</span>
                     )}
                   </div>
-                  {prod.discount && (
-                    <span className="text-[9.5px] font-extrabold text-[#ff5500] whitespace-nowrap shrink-0">{prod.discount}</span>
-                  )}
-                </div>
 
-                <div>
-                  {!isInCart(prod.id || prod._id) ? (
-                    <button 
-                      onClick={() => handleAddToCart(prod)} 
-                      className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
-                      aria-label="Add to cart"
-                    >
-                      <Plus size={14} strokeWidth={3} /> ADD
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={() => removeFromCart(prod.id || prod._id)}
-                      className="w-full py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
-                      aria-label="Remove from cart"
-                    >
-                      <Trash2 size={13} strokeWidth={2.5} /> REMOVE
-                    </button>
-                  )}
+                  <div>
+                    {!isInCart(prod.id || prod._id) ? (
+                      <button 
+                        onClick={() => handleAddToCart(prod)} 
+                        className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
+                        aria-label="Add to cart"
+                      >
+                        <Plus size={14} strokeWidth={3} /> ADD
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => removeFromCart(prod.id || prod._id)}
+                        className="w-full py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
+                        aria-label="Remove from cart"
+                      >
+                        <Trash2 size={13} strokeWidth={2.5} /> REMOVE
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className="col-span-full w-full py-6 px-4 bg-white rounded-2xl border border-dashed border-slate-200 text-center flex flex-col items-center justify-center gap-1.5">
+              <ShoppingBag size={22} className="text-slate-300" />
+              <p className="text-xs font-semibold text-slate-600 m-0">No flash deals available in your area</p>
             </div>
-          ))}
+          )}
         </div>
 
         {/* Best Sellers (List of All Sellers / Top Stores) */}
@@ -624,62 +579,78 @@ const Home = () => {
         </div>
 
         <div className="flex overflow-x-auto md:grid md:grid-cols-3 lg:grid-cols-4 gap-3.5 md:gap-5 pb-4 hide-scrollbar [&::-webkit-scrollbar]:hidden mb-4">
-          {sellers.map((seller) => (
-            <div 
-              key={seller._id || seller.businessName}
-              onClick={() => navigate(`/store/${encodeURIComponent(seller._id || seller.businessName)}`)}
-              className="min-w-[190px] max-w-[190px] md:min-w-0 md:max-w-none bg-white border border-slate-100/90 rounded-2xl overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col justify-between cursor-pointer group hover:shadow-md transition-all shrink-0 md:shrink hover:-translate-y-0.5"
-            >
-              {/* Store Mini Banner & Logo */}
-              <div className="h-20 w-full bg-slate-100 relative overflow-hidden">
-                <img 
-                  src={seller.banner || 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=600&auto=format&fit=crop&q=80'} 
-                  alt={seller.businessName} 
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
-                
-                {/* Rating Badge */}
-                <div className="absolute top-1.5 right-1.5 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 border border-white/20">
-                  <Star size={10} className="text-amber-400 fill-amber-400" />
-                  {seller.rating || 4.9}
-                </div>
-
-                {/* Store Avatar */}
-                <div className="absolute -bottom-2 left-2.5 w-10 h-10 rounded-xl bg-white p-0.5 shadow-md border border-white overflow-hidden">
+          {sellers.length > 0 ? (
+            sellers.map((seller) => (
+              <div 
+                key={seller._id || seller.businessName}
+                onClick={() => navigate(`/store/${encodeURIComponent(seller._id || seller.businessName)}`)}
+                className="min-w-[190px] max-w-[190px] md:min-w-0 md:max-w-none bg-white border border-slate-100/90 rounded-2xl overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col justify-between cursor-pointer group hover:shadow-md transition-all shrink-0 md:shrink hover:-translate-y-0.5"
+              >
+                {/* Store Mini Banner & Logo */}
+                <div className="h-20 w-full bg-slate-100 relative overflow-hidden">
                   <img 
-                    src={seller.storeLogo || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=160&auto=format&fit=crop&q=80'} 
+                    src={seller.banner || 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=600&auto=format&fit=crop&q=80'} 
                     alt={seller.businessName} 
                     loading="lazy"
                     decoding="async"
-                    className="w-full h-full object-cover rounded-lg"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
+                  
+                  {/* Rating Badge */}
+                  <div className="absolute top-1.5 right-1.5 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 border border-white/20">
+                    <Star size={10} className="text-amber-400 fill-amber-400" />
+                    {seller.rating || 4.9}
+                  </div>
+
+                  {/* Store Avatar */}
+                  <div className="absolute -bottom-2 left-2.5 w-10 h-10 rounded-xl bg-white p-0.5 shadow-md border border-white overflow-hidden">
+                    <img 
+                      src={seller.storeLogo || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=160&auto=format&fit=crop&q=80'} 
+                      alt={seller.businessName} 
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                {/* Store Details */}
+                <div className="p-3 pt-3.5 flex flex-col justify-between flex-1 gap-2">
+                  <div>
+                    <h4 className="text-[13px] font-bold m-0 text-slate-800 truncate flex items-center gap-1">
+                      {seller.businessName}
+                      {seller.isVerified && (
+                        <CheckCircle size={13} className="text-emerald-500 fill-emerald-100 shrink-0" />
+                      )}
+                    </h4>
+                    <p className="text-[10.5px] text-slate-500 m-0 mt-0.5 truncate">{seller.tagline || seller.businessType || 'Verified Merchant'}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-50 text-[10px] text-slate-400">
+                    <span className="font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                      ⚡ {seller.deliveryTime || '15-25 min'}
+                    </span>
+                    <span className="font-bold text-[#ea580c] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                      Visit <ChevronRight size={12} />
+                    </span>
+                  </div>
                 </div>
               </div>
-
-              {/* Store Details */}
-              <div className="p-3 pt-3.5 flex flex-col justify-between flex-1 gap-2">
-                <div>
-                  <h4 className="text-[13px] font-bold m-0 text-slate-800 truncate flex items-center gap-1">
-                    {seller.businessName}
-                    <CheckCircle size={13} className="text-emerald-500 fill-emerald-100 shrink-0" />
-                  </h4>
-                  <p className="text-[10.5px] text-slate-500 m-0 mt-0.5 truncate">{seller.tagline || seller.businessType || 'Verified Merchant'}</p>
-                </div>
-
-                <div className="flex items-center justify-between pt-1 border-t border-slate-50 text-[10px] text-slate-400">
-                  <span className="font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                    ⚡ {seller.deliveryTime || '15-25 min'}
-                  </span>
-                  <span className="font-bold text-[#ea580c] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                    Visit <ChevronRight size={12} />
-                  </span>
-                </div>
-              </div>
+            ))
+          ) : (
+            <div className="col-span-full w-full py-8 px-4 bg-white rounded-2xl border border-dashed border-slate-200 text-center flex flex-col items-center justify-center gap-2">
+              <Store size={26} className="text-slate-300" />
+              <p className="text-sm font-semibold text-slate-700 m-0">No sellers available in your area</p>
+              <p className="text-xs text-slate-400 m-0">Try selecting a different delivery location to discover stores nearby.</p>
+              <button 
+                onClick={() => navigate('/select-location')}
+                className="mt-1 text-xs font-bold text-[#ea580c] hover:underline bg-transparent border-none cursor-pointer"
+              >
+                Change Location
+              </button>
             </div>
-          ))}
+          )}
         </div>
         
         {/* Best Selling Products */}
@@ -691,59 +662,66 @@ const Home = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-5 pb-4">
-          {bestsellerProducts.map((prod) => (
-            <div key={prod.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between">
-              <div className="h-[125px] w-full overflow-hidden bg-slate-50 relative cursor-pointer" onClick={() => navigate(`/product/${prod.id}`)}>
-                <img 
-                  src={getImageUrl(prod.image, prod.name)} 
-                  alt={prod.name} 
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full h-full object-cover" 
-                  onError={(e) => handleImageError(e, prod.name)}
-                />
-              </div>
-              <div className="flex flex-col p-2.5 flex-1 justify-between gap-2">
-                <div>
-                  <h4 className="text-[13px] font-bold m-0 mb-0.5 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{prod.name}</h4>
-                  <p className="text-[11px] text-slate-400 m-0">{prod.unit}</p>
-                  <p className="text-[10px] font-medium text-slate-500 m-0 mt-0.5 truncate">by:- <span className="font-bold text-slate-700">{prod.seller || 'Fashion Hub'}</span></p>
+          {bestsellerProducts.length > 0 ? (
+            bestsellerProducts.map((prod) => (
+              <div key={prod.id} className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+                <div className="h-[125px] w-full overflow-hidden bg-slate-50 relative cursor-pointer" onClick={() => navigate(`/product/${prod.id}`)}>
+                  <img 
+                    src={getImageUrl(prod.image, prod.name)} 
+                    alt={prod.name} 
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover" 
+                    onError={(e) => handleImageError(e, prod.name)}
+                  />
                 </div>
-                
-                <div className="flex items-baseline justify-between gap-1">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-[14px] font-extrabold text-slate-900">₹{prod.price.toFixed(2)}</span>
-                    {prod.originalPrice > prod.price && (
-                      <span className="text-[10px] text-slate-400 line-through">₹{prod.originalPrice.toFixed(2)}</span>
+                <div className="flex flex-col p-2.5 flex-1 justify-between gap-2">
+                  <div>
+                    <h4 className="text-[13px] font-bold m-0 mb-0.5 text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">{prod.name}</h4>
+                    <p className="text-[11px] text-slate-400 m-0">{prod.unit}</p>
+                    <p className="text-[10px] font-medium text-slate-500 m-0 mt-0.5 truncate">by:- <span className="font-bold text-slate-700">{prod.seller || 'Fashion Hub'}</span></p>
+                  </div>
+                  
+                  <div className="flex items-baseline justify-between gap-1">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-[14px] font-extrabold text-slate-900">₹{prod.price.toFixed(2)}</span>
+                      {prod.originalPrice > prod.price && (
+                        <span className="text-[10px] text-slate-400 line-through">₹{prod.originalPrice.toFixed(2)}</span>
+                      )}
+                    </div>
+                    {prod.discount && (
+                      <span className="text-[9.5px] font-extrabold text-[#ff5500] whitespace-nowrap shrink-0">{prod.discount}</span>
                     )}
                   </div>
-                  {prod.discount && (
-                    <span className="text-[9.5px] font-extrabold text-[#ff5500] whitespace-nowrap shrink-0">{prod.discount}</span>
-                  )}
-                </div>
 
-                <div>
-                  {!isInCart(prod.id || prod._id) ? (
-                    <button 
-                      onClick={() => handleAddToCart(prod)} 
-                      className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
-                      aria-label="Add to cart"
-                    >
-                      <Plus size={14} strokeWidth={3} /> ADD
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={() => removeFromCart(prod.id || prod._id)}
-                      className="w-full py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
-                      aria-label="Remove from cart"
-                    >
-                      <Trash2 size={13} strokeWidth={2.5} /> REMOVE
-                    </button>
-                  )}
+                  <div>
+                    {!isInCart(prod.id || prod._id) ? (
+                      <button 
+                        onClick={() => handleAddToCart(prod)} 
+                        className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
+                        aria-label="Add to cart"
+                      >
+                        <Plus size={14} strokeWidth={3} /> ADD
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => removeFromCart(prod.id || prod._id)}
+                        className="w-full py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[12px] flex items-center justify-center gap-1 border-none cursor-pointer shadow-2xs active:scale-98 transition-all"
+                        aria-label="Remove from cart"
+                      >
+                        <Trash2 size={13} strokeWidth={2.5} /> REMOVE
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className="col-span-full w-full py-8 px-4 bg-white rounded-2xl border border-dashed border-slate-200 text-center flex flex-col items-center justify-center gap-1.5">
+              <ShoppingBag size={24} className="text-slate-300" />
+              <p className="text-xs font-semibold text-slate-600 m-0">No products available for your selected location</p>
             </div>
-          ))}
+          )}
         </div>
         
         <div className="h-[80px] md:hidden"></div> {/* Spacing for bottom nav (Mobile only) */}

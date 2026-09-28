@@ -6,6 +6,7 @@ import {
   toggleUserBlock,
   getAllSellers,
   toggleSellerStatus,
+  deleteSeller,
   updateSellerCommission,
   updateSellerDetails,
   getAllCaptains,
@@ -41,6 +42,7 @@ router.put('/users/:id/status', protect('admin', 'super_admin'), toggleUserBlock
 router.get('/sellers', getAllSellers);
 router.put('/sellers/:id/status', toggleSellerStatus);
 router.put('/sellers/:id/details', updateSellerDetails);
+router.delete('/sellers/:id', deleteSeller);
 // Commission updates are strictly revoked from Admin and restricted to Super Admin
 router.put('/sellers/:id/commission', protect('super_admin'), updateSellerCommission);
 

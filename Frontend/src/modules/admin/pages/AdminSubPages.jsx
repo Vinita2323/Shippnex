@@ -1297,9 +1297,23 @@ export const SellerManagement = () => {
   };
 
   // Delete Action
-  const handleDeleteSeller = (id) => {
-    if (window.confirm('Are you sure you want to remove this seller record?')) {
-      setSellers(prev => prev.filter(s => s.id !== id));
+  const handleDeleteSeller = async (id) => {
+    const seller = sellers.find(s => s.id === id || s._id === id);
+    const sellerName = seller?.storeName || seller?.name || 'this seller';
+    if (!window.confirm(`Are you sure you want to permanently delete "${sellerName}"? This will also remove the store and its associated products.`)) {
+      return;
+    }
+
+    try {
+      const res = await adminService.deleteSeller(id);
+      if (res && res.success) {
+        setSellers(prev => prev.filter(s => s.id !== id && s._id !== id));
+      } else {
+        alert(res?.message || 'Failed to delete seller.');
+      }
+    } catch (err) {
+      console.error('Error deleting seller:', err);
+      alert(err.response?.data?.message || err.message || 'Error deleting seller.');
     }
   };
 

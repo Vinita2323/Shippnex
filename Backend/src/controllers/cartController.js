@@ -39,15 +39,37 @@ const findOrCreateProduct = async (productId, productData = {}) => {
   return created;
 };
 
-// Drop cart entries whose referenced product was deleted after being added
-// (populate() resolves those to null), so a stale reference doesn't keep
-// rendering as a blank/undefined row every time the cart is fetched.
-const pruneDanglingCartItems = async (user) => {
+// Drop cart entries whose referenced product was deleted and consolidate any duplicates
+const deduplicateAndPruneCart = async (user) => {
   if (!Array.isArray(user.cart) || user.cart.length === 0) return;
-  const hasDangling = user.cart.some((item) => !item.product);
-  if (!hasDangling) return;
-  user.cart = user.cart.filter((item) => item.product);
-  await user.save();
+
+  // 1. Filter out null/dangling product references
+  const validItems = user.cart.filter((item) => item && item.product);
+
+  // 2. Consolidate duplicates by product ObjectId
+  const map = new Map();
+  for (const item of validItems) {
+    const prodIdStr = typeof item.product === 'object' && item.product._id
+      ? item.product._id.toString()
+      : item.product.toString();
+
+    if (map.has(prodIdStr)) {
+      map.get(prodIdStr).quantity += Number(item.quantity || 1);
+    } else {
+      map.set(prodIdStr, {
+        product: item.product,
+        quantity: Math.max(1, Number(item.quantity || 1)),
+        _id: item._id,
+      });
+    }
+  }
+
+  const consolidated = Array.from(map.values());
+  const needsSave = user.cart.length !== consolidated.length;
+  user.cart = consolidated;
+  if (needsSave) {
+    await user.save();
+  }
 };
 
 // Get user cart directly from User document
@@ -60,7 +82,7 @@ export const getCart = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    await pruneDanglingCartItems(user);
+    await deduplicateAndPruneCart(user);
 
     res.status(200).json({
       success: true,
@@ -99,8 +121,9 @@ export const addToCart = async (req, res, next) => {
 
     if (!user.cart) user.cart = [];
 
+    const targetDbId = product._id.toString();
     const existingIndex = user.cart.findIndex(
-      (item) => item.product && item.product.toString() === product._id.toString()
+      (item) => item.product && item.product.toString() === targetDbId
     );
 
     if (existingIndex > -1) {
@@ -111,7 +134,7 @@ export const addToCart = async (req, res, next) => {
 
     await user.save();
     await user.populate('cart.product');
-    await pruneDanglingCartItems(user);
+    await deduplicateAndPruneCart(user);
 
     res.status(200).json({
       success: true,
@@ -184,7 +207,7 @@ export const updateCartItem = async (req, res, next) => {
 
     await user.save();
     await user.populate('cart.product');
-    await pruneDanglingCartItems(user);
+    await deduplicateAndPruneCart(user);
 
     res.status(200).json({
       success: true,
@@ -214,11 +237,11 @@ export const removeFromCart = async (req, res, next) => {
 
     if (user.cart) {
       user.cart = user.cart.filter(
-        (item) => item.product && item.product.toString() !== targetDbId
+        (item) => item.product && item.product.toString() !== targetDbId && item.product.toString() !== String(productId)
       );
       await user.save();
       await user.populate('cart.product');
-      await pruneDanglingCartItems(user);
+      await deduplicateAndPruneCart(user);
     }
 
     res.status(200).json({

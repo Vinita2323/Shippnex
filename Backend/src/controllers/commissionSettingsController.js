@@ -31,6 +31,8 @@ export const updateCommissionSettings = async (req, res, next) => {
       deliveryCharge, 
       freeDeliveryMinOrder, 
       isFreeDeliveryEnabled, 
+      codCharge,
+      isCodChargeEnabled,
       isActive = true, 
       reason 
     } = req.body;
@@ -89,6 +91,21 @@ export const updateCommissionSettings = async (req, res, next) => {
       settings.isFreeDeliveryEnabled = Boolean(isFreeDeliveryEnabled);
     }
 
+    if (codCharge !== undefined && codCharge !== null && !isNaN(Number(codCharge))) {
+      const codVal = Number(codCharge);
+      if (codVal < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cash on Delivery (COD) charge cannot be negative.',
+        });
+      }
+      settings.codCharge = codVal;
+    }
+
+    if (isCodChargeEnabled !== undefined) {
+      settings.isCodChargeEnabled = Boolean(isCodChargeEnabled);
+    }
+
     settings.isActive = Boolean(isActive);
     settings.updatedBy = adminIdentifier;
 
@@ -101,10 +118,12 @@ export const updateCommissionSettings = async (req, res, next) => {
       deliveryCharge: settings.deliveryCharge,
       freeDeliveryMinOrder: settings.freeDeliveryMinOrder,
       isFreeDeliveryEnabled: settings.isFreeDeliveryEnabled,
+      codCharge: settings.codCharge,
+      isCodChargeEnabled: settings.isCodChargeEnabled,
       isActive: settings.isActive,
       changedBy: adminIdentifier,
       changedAt: new Date(),
-      reason: reason ? String(reason).trim() : `Admin updated settings: Seller ${settings.sellerCommission}%, Captain ${settings.captainCommission}%, Delivery: ₹${settings.deliveryCharge}, Free Above: ₹${settings.freeDeliveryMinOrder}`,
+      reason: reason ? String(reason).trim() : `Admin updated settings: Seller ${settings.sellerCommission}%, Captain ${settings.captainCommission}%, Delivery: ₹${settings.deliveryCharge}, Free Above: ₹${settings.freeDeliveryMinOrder}, COD: ₹${settings.codCharge} (${settings.isCodChargeEnabled ? 'Enabled' : 'Disabled'})`,
     };
 
     settings.history.unshift(historyEntry);
@@ -116,7 +135,26 @@ export const updateCommissionSettings = async (req, res, next) => {
 
     await settings.save();
 
-    console.log(`[CommissionSettings] Updated by ${adminIdentifier}: Seller ${settings.sellerCommission}%, Captain ${settings.captainCommission}%, Delivery ₹${settings.deliveryCharge}, Free Delivery above ₹${settings.freeDeliveryMinOrder}`);
+    // Sync delivery and COD settings to active DeliveryPricing configuration
+    try {
+      await DeliveryPricing.updateMany(
+        { isActive: true },
+        {
+          $set: {
+            baseDeliveryFee: settings.deliveryCharge,
+            freeDeliveryThreshold: settings.freeDeliveryMinOrder,
+            isFreeDeliveryEnabled: settings.isFreeDeliveryEnabled,
+            codCharge: settings.codCharge,
+            isCodChargeEnabled: settings.isCodChargeEnabled,
+            updatedBy: adminIdentifier,
+          },
+        }
+      );
+    } catch (syncErr) {
+      console.warn('[CommissionSettings] Error syncing to DeliveryPricing:', syncErr.message);
+    }
+
+    console.log(`[CommissionSettings] Updated by ${adminIdentifier}: Seller ${settings.sellerCommission}%, Captain ${settings.captainCommission}%, Delivery ₹${settings.deliveryCharge}, Free Delivery above ₹${settings.freeDeliveryMinOrder}, COD ₹${settings.codCharge}`);
 
     res.status(200).json({
       success: true,
@@ -138,17 +176,25 @@ export const getCurrentCommissionRates = async (req, res, next) => {
       DeliveryPricing.getActiveConfig(),
     ]);
 
-    const deliveryCharge = deliveryPricing?.isActive && deliveryPricing?.baseDeliveryFee !== undefined
-      ? deliveryPricing.baseDeliveryFee
-      : (settings.deliveryCharge !== undefined ? settings.deliveryCharge : 40);
+    const deliveryCharge = settings.deliveryCharge !== undefined
+      ? settings.deliveryCharge
+      : (deliveryPricing?.isActive && deliveryPricing?.baseDeliveryFee !== undefined ? deliveryPricing.baseDeliveryFee : 40);
 
-    const freeDeliveryMinOrder = deliveryPricing?.isActive && deliveryPricing?.freeDeliveryThreshold !== undefined
-      ? deliveryPricing.freeDeliveryThreshold
-      : (settings.freeDeliveryMinOrder !== undefined ? settings.freeDeliveryMinOrder : 500);
+    const freeDeliveryMinOrder = settings.freeDeliveryMinOrder !== undefined
+      ? settings.freeDeliveryMinOrder
+      : (deliveryPricing?.isActive && deliveryPricing?.freeDeliveryThreshold !== undefined ? deliveryPricing.freeDeliveryThreshold : 500);
 
-    const isFreeDeliveryEnabled = deliveryPricing?.isActive && deliveryPricing?.isFreeDeliveryEnabled !== undefined
-      ? deliveryPricing.isFreeDeliveryEnabled
-      : (settings.isFreeDeliveryEnabled !== undefined ? settings.isFreeDeliveryEnabled : true);
+    const isFreeDeliveryEnabled = settings.isFreeDeliveryEnabled !== undefined
+      ? settings.isFreeDeliveryEnabled
+      : (deliveryPricing?.isActive && deliveryPricing?.isFreeDeliveryEnabled !== undefined ? deliveryPricing.isFreeDeliveryEnabled : true);
+
+    const codCharge = settings.codCharge !== undefined
+      ? settings.codCharge
+      : (deliveryPricing?.isActive && deliveryPricing?.codCharge !== undefined ? deliveryPricing.codCharge : 9);
+
+    const isCodChargeEnabled = settings.isCodChargeEnabled !== undefined
+      ? settings.isCodChargeEnabled
+      : (deliveryPricing?.isActive && deliveryPricing?.isCodChargeEnabled !== undefined ? deliveryPricing.isCodChargeEnabled : true);
 
     res.status(200).json({
       success: true,
@@ -159,8 +205,10 @@ export const getCurrentCommissionRates = async (req, res, next) => {
       deliveryCharge,
       freeDeliveryMinOrder,
       isFreeDeliveryEnabled,
+      codCharge,
+      isCodChargeEnabled,
       isActive: settings.isActive,
-      updatedAt: deliveryPricing?.updatedAt || settings.updatedAt,
+      updatedAt: settings.updatedAt || deliveryPricing?.updatedAt,
     });
   } catch (error) {
     next(error);
