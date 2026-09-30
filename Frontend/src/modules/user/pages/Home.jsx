@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useLocationContext } from '../../../context/LocationContext';
-import { bannerService, categoryService, productService, sellerService } from '../../../services/authService';
+import { isDeliverableLocation, clearStoredUserLocation } from '../../../utils/userLocation';
+import { addressService, bannerService, categoryService, productService, sellerService } from '../../../services/authService';
 import { 
   Bell, 
   ShoppingCart, 
@@ -51,6 +52,11 @@ const Home = () => {
   const { addToCart, updateQuantity, getItemQuantity, isInCart, cartCount, removeFromCart } = useCart();
   const { wishlistCount } = useWishlist();
   const locationContext = useLocationContext();
+  const deliveryLocation = isDeliverableLocation(locationContext?.currentLocation)
+    ? locationContext.currentLocation
+    : null;
+  const deliveryLabel = deliveryLocation?.addressLine1 || deliveryLocation?.address || deliveryLocation?.area || deliveryLocation?.city || 'Select Location';
+  const deliveryType = (deliveryLocation?.addressType || deliveryLocation?.type || '').toUpperCase();
   const [toastMessage, setToastMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -69,6 +75,22 @@ const Home = () => {
   const [sellers, setSellers] = useState(cachedHome?.sellers || []);
   const [flashDeals, setFlashDeals] = useState(cachedHome?.flashDeals || []);
   const [bestsellerProducts, setBestsellerProducts] = useState(cachedHome?.bestsellerProducts || []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!localStorage.getItem('shippnex_user_token')) return undefined;
+    (async () => {
+      try {
+        const res = await addressService.getAddresses();
+        if (cancelled || !res?.success || !Array.isArray(res.addresses)) return;
+        localStorage.setItem('shippnex_saved_addresses', JSON.stringify(res.addresses));
+        if (res.addresses.length === 0) clearStoredUserLocation();
+      } catch (e) {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -266,7 +288,7 @@ const Home = () => {
                    Deliver to
                </div>
                <div className="text-[13px] font-bold leading-tight truncate max-w-[140px]">
-                   {locationContext?.currentLocation?.addressLine1 || locationContext?.currentLocation?.area || locationContext?.currentLocation?.city || "Select Location"}
+                   {deliveryLabel}
                </div>
             </div>
           </div>
@@ -303,12 +325,16 @@ const Home = () => {
             <div className="flex items-center gap-2 overflow-hidden">
               <MapPin size={16} className="shrink-0 text-white" />
               <div className="text-[12px] flex items-center gap-1.5 truncate">
-                <span className="font-extrabold uppercase tracking-wider shrink-0">
-                  {(locationContext?.currentLocation?.addressType || locationContext?.currentLocation?.type || 'HOME').toUpperCase()}
-                </span> 
-                <span className="text-white/60 font-light mx-0.5 shrink-0">|</span>
+                {deliveryLocation && deliveryType ? (
+                  <>
+                    <span className="font-extrabold uppercase tracking-wider shrink-0">
+                      {deliveryType}
+                    </span>
+                    <span className="text-white/60 font-light mx-0.5 shrink-0">|</span>
+                  </>
+                ) : null}
                 <span className="font-medium text-[12px] truncate">
-                  {locationContext?.currentLocation?.addressLine1 || locationContext?.currentLocation?.address || locationContext?.currentLocation?.area || locationContext?.currentLocation?.city || 'Select Location'}
+                  {deliveryLabel}
                 </span>
               </div>
             </div>

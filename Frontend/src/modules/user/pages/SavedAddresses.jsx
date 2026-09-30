@@ -2,25 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, Plus, Edit2, Trash2, X, Check } from 'lucide-react';
 import { addressService } from '../../../services/authService';
-
-const initialDefaultAddresses = (userName, userPhone) => [
-  {
-    id: 'addr_1',
-    _id: 'addr_1',
-    type: 'Home',
-    addressType: 'Home',
-    name: userName || 'Sarah Jenkins',
-    fullName: userName || 'Sarah Jenkins',
-    address: '123, Palm Grove Apartment, Sector 45',
-    addressLine1: '123, Palm Grove Apartment, Sector 45',
-    city: 'Noida',
-    state: 'Uttar Pradesh',
-    zip: '201301',
-    pincode: '201301',
-    phone: userPhone || '+91 98765 43210',
-    isDefault: true
-  }
-];
+import { clearStoredUserLocation } from '../../../utils/userLocation';
 
 const SavedAddresses = () => {
   const navigate = useNavigate();
@@ -51,13 +33,14 @@ const SavedAddresses = () => {
     try {
       setLoading(true);
       const res = await addressService.getAddresses();
-      if (res && res.success && res.addresses) {
-        if (res.addresses.length > 0) {
-          const formatted = formatAddresses(res.addresses);
-          setAddresses(formatted);
-          localStorage.setItem('shippnex_saved_addresses', JSON.stringify(formatted));
-          return;
+      if (res && res.success && Array.isArray(res.addresses)) {
+        const formatted = formatAddresses(res.addresses);
+        setAddresses(formatted);
+        localStorage.setItem('shippnex_saved_addresses', JSON.stringify(formatted));
+        if (formatted.length === 0) {
+          localStorage.removeItem('shippnex_selected_checkout_address');
         }
+        return;
       }
     } catch (err) {
       console.error('Failed to fetch backend addresses:', err);
@@ -65,12 +48,12 @@ const SavedAddresses = () => {
       setLoading(false);
     }
 
-    // Fallback to local storage
+    // Fallback to local storage only when the server request fails
     const saved = localStorage.getItem('shippnex_saved_addresses');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setAddresses(formatAddresses(parsed));
           return;
         }
@@ -78,9 +61,7 @@ const SavedAddresses = () => {
         console.error('Failed to parse saved addresses:', err);
       }
     }
-    const defaults = initialDefaultAddresses(userName, userPhone);
-    setAddresses(defaults);
-    localStorage.setItem('shippnex_saved_addresses', JSON.stringify(defaults));
+    setAddresses([]);
   };
 
   useEffect(() => {
@@ -106,6 +87,10 @@ const SavedAddresses = () => {
     }
     setAddresses(updated);
     localStorage.setItem('shippnex_saved_addresses', JSON.stringify(updated));
+    if (updated.length === 0) {
+      localStorage.removeItem('shippnex_selected_checkout_address');
+      clearStoredUserLocation();
+    }
   };
 
   const handleSetDefault = async (id) => {

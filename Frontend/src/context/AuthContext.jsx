@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { clearStoredUserLocation } from '../utils/userLocation';
 
 const AuthContext = createContext();
 
@@ -93,6 +94,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('shippnex_user_name');
       localStorage.removeItem('shippnex_user_email');
       localStorage.removeItem('shippnex_user_phone');
+      clearStoredUserLocation();
     } else if (role === 'seller') {
       localStorage.removeItem('shippnex_seller_token');
       localStorage.removeItem('shippnex_seller_data');

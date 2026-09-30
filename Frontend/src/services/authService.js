@@ -1,5 +1,6 @@
 import API from './api';
 import { registerFCMToken, removeFCMToken } from './pushNotificationService';
+import { clearStoredUserLocation } from '../utils/userLocation';
 
 const saveCaptainAuthSession = (token, captain) => {
   if (token) {
@@ -71,6 +72,9 @@ export const authService = {
       }
       if (response.data.user?.addresses && Array.isArray(response.data.user.addresses)) {
         localStorage.setItem('shippnex_saved_addresses', JSON.stringify(response.data.user.addresses));
+      }
+      if (!Array.isArray(response.data.user?.addresses) || response.data.user.addresses.length === 0) {
+        clearStoredUserLocation();
       }
       // Register FCM Push Token on login (SOP Step 7)
       registerFCMToken(true, 'user').catch(() => {});
@@ -252,6 +256,7 @@ export const authService = {
       localStorage.removeItem('shippnex_saved_addresses');
       localStorage.removeItem('shippnex_selected_checkout_address');
       localStorage.removeItem('shippnex_pending_action');
+      clearStoredUserLocation();
       sessionStorage.removeItem('shippnex_auth_expired_redirect');
     } else if (role === 'seller') {
       localStorage.removeItem('shippnex_seller_token');

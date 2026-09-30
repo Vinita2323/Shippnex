@@ -1,38 +1,83 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { isDeliverableLocation } from '../utils/userLocation';
 
 const LocationContext = createContext();
 
-export const LocationProvider = ({ children }) => {
-  const [currentLocation, setCurrentLocation] = useState(() => {
-    try {
-      const saved = localStorage.getItem('userLocation');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
+function savedAddressCount() {
+  try {
+    const raw = localStorage.getItem('shippnex_saved_addresses');
+    if (raw == null) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.length : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function readStoredLocation() {
+  try {
+    const saved = localStorage.getItem('userLocation');
+    if (!saved) return null;
+    const parsed = JSON.parse(saved);
+    if (!isDeliverableLocation(parsed)) {
+      localStorage.removeItem('userLocation');
       return null;
     }
-  });
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+function initialLocation() {
+  try {
+    if (localStorage.getItem('shippnex_user_token')) {
+      const count = savedAddressCount();
+      if (count === 0) {
+        localStorage.removeItem('userLocation');
+        return null;
+      }
+      if (count == null) return null;
+    }
+  } catch (e) {
+    return null;
+  }
+  return readStoredLocation();
+}
+
+export const LocationProvider = ({ children }) => {
+  const [currentLocation, setCurrentLocation] = useState(initialLocation);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Keep sync with localStorage if updated outside React
-    const saved = localStorage.getItem('userLocation');
-    if (saved && !currentLocation) {
-      try {
-        setCurrentLocation(JSON.parse(saved));
-      } catch (e) {}
-    }
+    const syncFromStorage = (event) => {
+      if (event?.type === 'shippnex_location_changed') {
+        const next = event.detail ?? null;
+        setCurrentLocation(isDeliverableLocation(next) ? next : null);
+        return;
+      }
+      setCurrentLocation(readStoredLocation());
+    };
+
+    window.addEventListener('shippnex_location_changed', syncFromStorage);
+    window.addEventListener('storage', syncFromStorage);
+    return () => {
+      window.removeEventListener('shippnex_location_changed', syncFromStorage);
+      window.removeEventListener('storage', syncFromStorage);
+    };
   }, []);
 
   const setLocation = (locationObj) => {
-    setCurrentLocation(locationObj);
-    if (locationObj) {
-      localStorage.setItem('userLocation', JSON.stringify(locationObj));
+    const next = isDeliverableLocation(locationObj) ? locationObj : null;
+    setCurrentLocation(next);
+    if (next) {
+      localStorage.setItem('userLocation', JSON.stringify(next));
     } else {
       localStorage.removeItem('userLocation');
     }
     try {
-      window.dispatchEvent(new CustomEvent('shippnex_location_changed', { detail: locationObj }));
+      window.dispatchEvent(new CustomEvent('shippnex_location_changed', { detail: next }));
     } catch (e) {}
   };
 

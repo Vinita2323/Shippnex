@@ -85,16 +85,22 @@ const Checkout = () => {
     };
 
     let fetchedAddresses = [];
+    let loadedFromServer = false;
     try {
       const res = await addressService.getAddresses();
-      if (res && res.success && res.addresses && res.addresses.length > 0) {
+      if (res && res.success && Array.isArray(res.addresses)) {
         fetchedAddresses = res.addresses.map(normalizeAddress);
+        loadedFromServer = true;
+        localStorage.setItem('shippnex_saved_addresses', JSON.stringify(fetchedAddresses));
+        if (fetchedAddresses.length === 0) {
+          localStorage.removeItem('shippnex_selected_checkout_address');
+        }
       }
     } catch (err) {
       console.error('Failed to fetch addresses from backend:', err);
     }
 
-    if (fetchedAddresses.length === 0) {
+    if (!loadedFromServer && fetchedAddresses.length === 0) {
       const saved = localStorage.getItem('shippnex_saved_addresses');
       if (saved) {
         try {
@@ -131,6 +137,9 @@ const Checkout = () => {
       const def = fetchedAddresses.find((a) => a.isDefault) || fetchedAddresses[0];
       setSelectedAddress(def);
       localStorage.setItem('shippnex_selected_checkout_address', JSON.stringify(def));
+    } else {
+      setAddresses([]);
+      setSelectedAddress(null);
     }
   };
 

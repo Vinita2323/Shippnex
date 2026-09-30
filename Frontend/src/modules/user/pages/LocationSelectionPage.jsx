@@ -36,8 +36,9 @@ const LocationSelectionPage = () => {
     const fetchAddresses = async () => {
       try {
         const res = await addressService.getAddresses();
-        if (res && res.success && res.addresses && res.addresses.length > 0) {
+        if (res && res.success && Array.isArray(res.addresses)) {
           setSavedAddresses(res.addresses);
+          localStorage.setItem('shippnex_saved_addresses', JSON.stringify(res.addresses));
           return;
         }
       } catch (err) {}

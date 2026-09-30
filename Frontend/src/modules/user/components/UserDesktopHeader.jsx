@@ -20,6 +20,7 @@ import {
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useLocationContext } from '../../../context/LocationContext';
+import { isDeliverableLocation } from '../../../utils/userLocation';
 import LocationSearchModal from '../../../components/LocationSearchModal';
 import { authService } from '../../../services/authService';
 
@@ -132,15 +133,19 @@ const UserDesktopHeader = () => {
     navigate('/login', { replace: true });
   };
 
-  const currentAddress = 
-    locationContext?.currentLocation?.addressLine1 || 
-    locationContext?.currentLocation?.area || 
-    locationContext?.currentLocation?.city || 
+  const deliveryLocation = isDeliverableLocation(locationContext?.currentLocation)
+    ? locationContext.currentLocation
+    : null;
+
+  const currentAddress =
+    deliveryLocation?.addressLine1 ||
+    deliveryLocation?.area ||
+    deliveryLocation?.city ||
     'Select Location';
 
   const addressType = (
-    locationContext?.currentLocation?.addressType || 
-    locationContext?.currentLocation?.type || 
+    deliveryLocation?.addressType ||
+    deliveryLocation?.type ||
     'DELIVER TO'
   ).toUpperCase();
 
