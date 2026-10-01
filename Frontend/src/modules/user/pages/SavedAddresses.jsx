@@ -65,8 +65,8 @@ const SavedAddresses = () => {
   };
 
   useEffect(() => {
-    const name = localStorage.getItem('shippnex_user_name') || 'Sarah Jenkins';
-    const phone = localStorage.getItem('shippnex_user_phone') || '+91 98765 43210';
+    const name = localStorage.getItem('shippnex_user_name') || '';
+    const phone = localStorage.getItem('shippnex_user_phone') || '';
     setUserName(name);
     setUserPhone(phone);
     fetchUserAddresses();
@@ -120,10 +120,10 @@ const SavedAddresses = () => {
       type: addr.addressType || addr.type || 'Home',
       name: addr.fullName || addr.name || userName,
       address: addr.addressLine1 || addr.address || '',
-      city: addr.city || 'Noida',
-      state: addr.state || 'Uttar Pradesh',
-      zip: addr.pincode || addr.zip || '201301',
-      phone: addr.phone || userPhone || '+91 98765 43210',
+      city: addr.city || '',
+      state: addr.state || '',
+      zip: addr.pincode || addr.zip || '',
+      phone: addr.phone || userPhone || '',
     });
     setIsModalOpen(true);
   };
@@ -132,12 +132,12 @@ const SavedAddresses = () => {
     setEditingAddress({
       id: '',
       type: 'Home',
-      name: userName || 'Sarah Jenkins',
+      name: '',
       address: '',
-      city: 'Noida',
-      state: 'Uttar Pradesh',
-      zip: '201301',
-      phone: userPhone || '+91 98765 43210',
+      city: '',
+      state: '',
+      zip: '',
+      phone: '',
       isDefault: addresses.length === 0
     });
     setIsModalOpen(true);

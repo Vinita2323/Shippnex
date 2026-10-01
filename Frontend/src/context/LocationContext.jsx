@@ -1,18 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { isDeliverableLocation } from '../utils/userLocation';
+import { applySavedAddressesAsDeliveryLocation, isDeliverableLocation } from '../utils/userLocation';
 
 const LocationContext = createContext();
-
-function savedAddressCount() {
-  try {
-    const raw = localStorage.getItem('shippnex_saved_addresses');
-    if (raw == null) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.length : null;
-  } catch (e) {
-    return null;
-  }
-}
 
 function readStoredLocation() {
   try {
@@ -32,12 +21,14 @@ function readStoredLocation() {
 function initialLocation() {
   try {
     if (localStorage.getItem('shippnex_user_token')) {
-      const count = savedAddressCount();
-      if (count === 0) {
+      const raw = localStorage.getItem('shippnex_saved_addresses');
+      if (raw == null) return null;
+      const addresses = JSON.parse(raw);
+      if (!Array.isArray(addresses) || addresses.length === 0) {
         localStorage.removeItem('userLocation');
         return null;
       }
-      if (count == null) return null;
+      return applySavedAddressesAsDeliveryLocation(addresses, { notify: false });
     }
   } catch (e) {
     return null;
