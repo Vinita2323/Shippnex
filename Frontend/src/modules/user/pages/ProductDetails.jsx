@@ -8,6 +8,9 @@ import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { productService } from '../../../services/authService';
 import productReviewService from '../../../services/productReviewService';
+import oilGheeImg from '../../../assets/user/categories/OilGhee-removebg-preview.png';
+import masalaImg from '../../../assets/user/categories/masala-removebg-preview.png';
+import sugarImg from '../../../assets/user/categories/Sugar-removebg-preview.png';
 import { getImageUrl, handleImageError, getInitialSvgDataUrl } from '../../../utils/imageUtils';
 
 const ProductDetails = () => {

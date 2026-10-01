@@ -569,7 +569,7 @@ export const getAllCaptains = async (req, res, next) => {
     }
 
     const captains = await Captain.find({})
-      .select('_id name phone email currentAddress city state pinCode vehicleType walletBalance cashCollected status accountStatus membershipStatus isVerified isOnline liveLocation workingArea createdAt updatedAt')
+      .select('_id name phone email alternateMobile dob age fatherName currentAddress permanentAddress emergencyContact city state pinCode vehicleType drivingLicenseNumber aadhaarNumber rcNumber vehicleInsuranceNumber insuranceValidTill panCardNumber bankDetails documents walletBalance cashCollected status accountStatus membershipStatus isVerified isOnline liveLocation workingArea createdAt updatedAt')
       .sort({ _id: -1 })
       .lean()
       .exec();

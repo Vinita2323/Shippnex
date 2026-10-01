@@ -64,6 +64,7 @@ const captainSchema = new mongoose.Schema(
       form21Document: { type: String, default: '' },
       panCard: { type: String, default: '' },
       profilePhoto: { type: String, default: '' },
+      bankPassbook: { type: String, default: '' },
     },
 
     // Bank Details

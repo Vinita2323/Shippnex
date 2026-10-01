@@ -2914,6 +2914,7 @@ export const CaptainManagement = () => {
                   <div><span className="text-slate-400 font-medium block text-[10px]">IFSC Code:</span> <span className="font-mono font-bold text-slate-900">{selectedCaptain.raw?.bankDetails?.ifscCode || 'N/A'}</span></div>
                   <div><span className="text-slate-400 font-medium block text-[10px]">Branch Name:</span> <span className="font-semibold text-slate-800">{selectedCaptain.raw?.bankDetails?.branchName || 'N/A'}</span></div>
                   <div><span className="text-slate-400 font-medium block text-[10px]">UPI ID:</span> <span className="font-semibold text-[#15803d]">{selectedCaptain.raw?.bankDetails?.upiId || 'N/A'}</span></div>
+                  <div><span className="text-slate-400 font-medium block text-[10px]">Aadhaar Card Number:</span> <span className="font-bold font-mono text-slate-900">{selectedCaptain.raw?.aadhaarNumber || 'N/A'}</span></div>
                 </div>
               </div>
 
@@ -3071,6 +3072,43 @@ export const CaptainManagement = () => {
                     ) : (
                       <div className="h-20 bg-slate-100 border border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-400 text-[10px] font-medium">
                         <span>No image uploaded</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bank Passbook */}
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-slate-700 uppercase">Bank Passbook</span>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                          selectedCaptain.raw?.documents?.bankPassbook ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {selectedCaptain.raw?.documents?.bankPassbook ? 'Attached' : 'Pending'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                        {selectedCaptain.raw?.bankDetails?.accountNumber || 'No account number'}
+                      </p>
+                    </div>
+
+                    {selectedCaptain.raw?.documents?.bankPassbook ? (
+                      <div
+                        onClick={() => setPreviewDocImage({ title: 'Bank Passbook', src: selectedCaptain.raw.documents.bankPassbook })}
+                        className="relative group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-black aspect-video flex items-center justify-center"
+                      >
+                        <img
+                          src={selectedCaptain.raw.documents.bankPassbook}
+                          alt="Bank Passbook"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-[10px] gap-1">
+                          <Eye size={14} /> View Full
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-20 bg-slate-100 border border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-400 text-[10px] font-medium">
+                        <span>No passbook uploaded</span>
                       </div>
                     )}
                   </div>

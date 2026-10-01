@@ -157,6 +157,7 @@ const CaptainRegister = () => {
     form21Document: null,
     panCardDocument: null,
     profilePhoto: null,
+    bankPassbook: null,
   });
 
   // Live Selfie & Camera States
@@ -560,6 +561,17 @@ const CaptainRegister = () => {
       return;
     }
 
+    const cleanAadhaar = String(formData.aadhaarNumber || '').replace(/\D/g, '');
+    if (cleanAadhaar.length !== 12) {
+      setErrorMsg('Please enter a valid 12-digit Aadhaar card number.');
+      return;
+    }
+
+    if (!files.bankPassbook) {
+      setErrorMsg('Please upload a photo of your bank passbook.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       // Convert all uploaded documents to base64
@@ -574,7 +586,8 @@ const CaptainRegister = () => {
         fitnessDoc,
         taxDoc,
         form21Doc,
-        panDoc
+        panDoc,
+        passbookDoc
       ] = await Promise.all([
         compressImageFile(files.drivingLicense),
         compressImageFile(files.rcDocument),
@@ -587,10 +600,12 @@ const CaptainRegister = () => {
         compressImageFile(files.roadTaxDocument),
         compressImageFile(files.form21Document),
         compressImageFile(files.panCardDocument),
+        compressImageFile(files.bankPassbook),
       ]);
 
       const payload = {
         ...formData,
+        aadhaarNumber: cleanAadhaar,
         mobileNumber: cleanPhone,
         documents: {
           drivingLicense: dl,
@@ -604,6 +619,7 @@ const CaptainRegister = () => {
           form21Document: form21Doc,
           panCard: panDoc,
           profilePhoto: pPhoto,
+          bankPassbook: passbookDoc,
         },
       };
 
@@ -1096,13 +1112,16 @@ const CaptainRegister = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Aadhaar Number</label>
+                <label className="text-xs font-bold text-slate-700">Aadhaar Card Number <span className="text-red-500">*</span></label>
                 <input
+                  required
                   type="text"
                   name="aadhaarNumber"
                   value={formData.aadhaarNumber}
                   onChange={handleTextChange}
-                  placeholder="Enter aadhaar number"
+                  inputMode="numeric"
+                  maxLength={12}
+                  placeholder="Enter 12-digit Aadhaar card number"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
                 />
               </div>
@@ -1709,6 +1728,22 @@ const CaptainRegister = () => {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Bank Passbook Photo <span className="text-red-500">*</span></label>
+                <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
+                  <span className="material-symbols-outlined text-slate-400">upload</span>
+                  <span className="text-xs font-bold text-slate-600 truncate">
+                    {files.bankPassbook ? files.bankPassbook.name : 'TAP TO UPLOAD BANK PASSBOOK PHOTO'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => handleFileChange(e, 'bankPassbook')}
+                    className="hidden"
+                  />
+                </label>
               </div>
 
               <div className="space-y-1">
