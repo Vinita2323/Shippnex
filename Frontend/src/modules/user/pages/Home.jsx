@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useLocationContext } from '../../../context/LocationContext';
-import { isDeliverableLocation, clearStoredUserLocation } from '../../../utils/userLocation';
+import { applySavedAddressesAsDeliveryLocation, isDeliverableLocation, clearStoredUserLocation } from '../../../utils/userLocation';
 import { addressService, bannerService, categoryService, productService, sellerService } from '../../../services/authService';
 import { 
   Bell, 
@@ -85,6 +85,7 @@ const Home = () => {
         if (cancelled || !res?.success || !Array.isArray(res.addresses)) return;
         localStorage.setItem('shippnex_saved_addresses', JSON.stringify(res.addresses));
         if (res.addresses.length === 0) clearStoredUserLocation();
+        else applySavedAddressesAsDeliveryLocation(res.addresses);
       } catch (e) {}
     })();
     return () => {
