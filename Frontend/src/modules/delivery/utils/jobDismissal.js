@@ -15,17 +15,21 @@ export const getDismissedJobIds = () => {
   }
 };
 
+const offerKey = (jobOrId) => {
+  if (!jobOrId) return '';
+  if (typeof jobOrId === 'string') return jobOrId;
+  const id = String(jobOrId.orderId || jobOrId.bookingId || jobOrId._id || '');
+  const stamp = jobOrId.captainAssignedAt || jobOrId.assignedAt || '';
+  if (!stamp) return id;
+  const when = new Date(stamp);
+  return Number.isNaN(when.getTime()) ? id : `${id}@${when.toISOString()}`;
+};
+
 export const markJobAsDismissed = (jobOrId) => {
   if (!jobOrId) return;
   try {
     const set = getDismissedJobIds();
-    if (typeof jobOrId === 'string') {
-      set.add(jobOrId);
-    } else {
-      if (jobOrId._id) set.add(String(jobOrId._id));
-      if (jobOrId.bookingId) set.add(String(jobOrId.bookingId));
-      if (jobOrId.orderId) set.add(String(jobOrId.orderId));
-    }
+    set.add(offerKey(jobOrId));
     localStorage.setItem(DISMISSED_JOBS_STORAGE_KEY, JSON.stringify([...set]));
   } catch (e) {
     console.error('Error saving dismissed job:', e);
@@ -34,12 +38,5 @@ export const markJobAsDismissed = (jobOrId) => {
 
 export const isJobDismissed = (jobOrId) => {
   if (!jobOrId) return true;
-  const set = getDismissedJobIds();
-  if (typeof jobOrId === 'string') {
-    return set.has(jobOrId);
-  }
-  if (jobOrId._id && set.has(String(jobOrId._id))) return true;
-  if (jobOrId.bookingId && set.has(String(jobOrId.bookingId))) return true;
-  if (jobOrId.orderId && set.has(String(jobOrId.orderId))) return true;
-  return false;
+  return getDismissedJobIds().has(offerKey(jobOrId));
 };

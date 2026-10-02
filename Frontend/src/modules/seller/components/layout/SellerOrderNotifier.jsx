@@ -6,6 +6,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { orderService } from '../../../../services/authService';
 import { getImageUrl, handleImageError } from '../../../../utils/imageUtils';
+import { variantLabel } from '../../../../utils/variantLabel';
 
 const SellerOrderNotifier = () => {
   const navigate = useNavigate();
@@ -316,6 +317,9 @@ const SellerOrderNotifier = () => {
                         />
                         <div className="space-y-0.5">
                           <h4 className="text-xs font-bold text-slate-900 m-0 leading-tight">{item.name}</h4>
+                          {variantLabel(item) && (
+                            <p className="text-[10px] font-semibold text-[#ff7526] m-0">{variantLabel(item)}</p>
+                          )}
                           <p className="text-[10px] text-slate-500 m-0">
                             ₹{item.price} &times; <span className="font-bold text-slate-800">{item.quantity} Qty</span>
                           </p>

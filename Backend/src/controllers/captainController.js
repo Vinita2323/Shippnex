@@ -40,6 +40,37 @@ const buildOrderQuery = (orderId, extra = {}) => {
   };
 };
 
+const sellerHasAcceptedOrder = (order) => {
+  const sellerStatus = String(order?.sellerStatus || '');
+  return [
+    'Accepted',
+    'ACCEPTED',
+    'Packed',
+    'PACKED',
+    'Processing',
+    'PROCESSING',
+    'Out for Delivery',
+    'OUT_FOR_DELIVERY',
+    'Delivered',
+    'DELIVERED',
+  ].includes(sellerStatus);
+};
+
+const orderIsPackedForDelivery = (order) => {
+  const orderStatus = String(order?.orderStatus || '');
+  const sellerStatus = String(order?.sellerStatus || '');
+  return ['Packed', 'Out for Delivery', 'Reached Store / Pickup', 'Delivered'].includes(orderStatus)
+    || ['Packed', 'PACKED', 'Out for Delivery', 'OUT_FOR_DELIVERY', 'Delivered', 'DELIVERED'].includes(sellerStatus);
+};
+
+const assignedDeliveryQuery = (captainQuery) => ({
+  captainId: captainQuery,
+  $or: [
+    { captainStatus: { $in: ['Accepted', 'Reached Store', 'At Pickup', 'Picked Up', 'In Transit', 'Out for Delivery'] } },
+    { captainStatus: 'Assigned', orderStatus: { $in: ['Packed', 'Out for Delivery', 'Reached Store / Pickup'] } },
+  ],
+});
+
 // ──────────────────────────────────────────────
 // GET /api/captain/profile
 // ──────────────────────────────────────────────
@@ -267,13 +298,10 @@ export const getDashboardStats = async (req, res, next) => {
       // 4. Pending & Active Orders
       Order.find({
         orderStatus: { $nin: ['Delivered', 'Cancelled', 'Rejected'] },
-        $or: [
-          { captainId: captainQuery, captainStatus: { $in: ['Assigned', 'Accepted', 'Reached Store', 'At Pickup', 'Picked Up', 'In Transit', 'Out for Delivery'] } },
-          { captainId: null, captainStatus: 'Assigned' },
-        ],
+        ...assignedDeliveryQuery(captainQuery),
       })
         .populate('user', 'name phone email')
-        .select('orderId shippingAddress captainStatus captainEarnings deliverySlot items createdAt captainAssignedAt paymentMethod paymentStatus itemsTotal grandTotal deliveryInstructions')
+        .select('orderId shippingAddress captainStatus captainEarnings deliverySlot items createdAt captainAssignedAt paymentMethod paymentStatus itemsTotal grandTotal deliveryInstructions orderStatus sellerStatus')
         .sort({ createdAt: -1 })
         .limit(30)
         .lean(),
@@ -391,7 +419,34 @@ export const getDashboardStats = async (req, res, next) => {
       };
     }
 
-    const totalPending = (pendingOrders || []).length + formattedTransportRequests.length + (formattedActiveTransport ? 1 : 0);
+    let deliveryOrders = pendingOrders || [];
+    if (deliveryOrders.length) {
+      const notes = await SellerNotification.find({ order: { $in: deliveryOrders.map((order) => order._id) } })
+        .select('order sellerId sellerName')
+        .lean();
+      const sellerIds = notes
+        .map((note) => note.sellerId)
+        .filter((id) => mongoose.Types.ObjectId.isValid(String(id)));
+      const sellers = await Seller.find({ _id: { $in: sellerIds } })
+        .select('businessName warehouseLocation')
+        .lean();
+      const sellerById = new Map(sellers.map((seller) => [String(seller._id), seller]));
+      const noteByOrder = new Map(notes.map((note) => [String(note.order), note]));
+      deliveryOrders = deliveryOrders.map((order) => {
+        const note = noteByOrder.get(String(order._id));
+        const seller = note ? sellerById.get(String(note.sellerId)) : null;
+        const warehouse = seller?.warehouseLocation || {};
+        const pickupAddress = [warehouse.storeAddress, warehouse.area, warehouse.city, warehouse.pincode].filter(Boolean).join(', ');
+        return {
+          ...order,
+          sellerName: note?.sellerName || seller?.businessName || '',
+          pickupAddress,
+          orderAmount: order.grandTotal || order.itemsTotal || 0,
+        };
+      });
+    }
+
+    const totalPending = deliveryOrders.length + formattedTransportRequests.length + (formattedActiveTransport ? 1 : 0);
 
     const payload = {
       success: true,
@@ -408,7 +463,7 @@ export const getDashboardStats = async (req, res, next) => {
         pendingCount: totalPending,
         totalAssignedToday: (todayOrders || []).length,
       },
-      pendingOrders: pendingOrders || [],
+      pendingOrders: deliveryOrders,
       transportRequests: formattedTransportRequests,
       activeTransport: formattedActiveTransport,
       weeklyEarnings: weeklyData,
@@ -495,8 +550,10 @@ export const getJobs = async (req, res, next) => {
 
     let query = { captainId: captainQuery };
     if (tab === 'deliveries' || tab === 'bookings') {
-      // Both "deliveries" and "bookings" show assigned/active jobs
-      query.captainStatus = { $in: ['Assigned', 'Accepted', 'Reached Store', 'At Pickup', 'Picked Up', 'In Transit', 'Out for Delivery'] };
+      query = {
+        orderStatus: { $nin: ['Delivered', 'Cancelled', 'Rejected'] },
+        ...assignedDeliveryQuery(captainQuery),
+      };
     }
 
     const orders = await Order.find(query)
@@ -520,11 +577,28 @@ export const acceptJob = async (req, res, next) => {
     const isMongoId = mongoose.Types.ObjectId.isValid(captainId);
     const captainQuery = isMongoId ? { $in: [captainId, new mongoose.Types.ObjectId(captainId)] } : captainId;
 
-    // Find and update order assigned to captain or available for acceptance
+    const existingOrder = await Order.findOne(buildOrderQuery(orderId));
+    if (!existingOrder) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+    if (!sellerHasAcceptedOrder(existingOrder)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Seller has not accepted this order yet',
+      });
+    }
+    if (!orderIsPackedForDelivery(existingOrder) || !['Assigned', 'Accepted'].includes(existingOrder.captainStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: 'This order is not packed for delivery yet',
+      });
+    }
+
+    // Only the assigned captain, or an unassigned broadcast, can accept.
     const query = buildOrderQuery(orderId, {
       $or: [
         { captainId: captainQuery, captainStatus: { $in: ['Assigned', 'Accepted'] } },
-        { captainStatus: 'Assigned' },
+        { captainId: null, captainStatus: 'Assigned' },
       ],
     });
 
@@ -541,20 +615,7 @@ export const acceptJob = async (req, res, next) => {
     );
 
     if (!order) {
-      const existing = await Order.findOne(buildOrderQuery(orderId));
-      if (!existing) {
-        return res.status(404).json({ success: false, message: 'Order not found' });
-      }
       return res.status(400).json({ success: false, message: 'Order is not assigned to you or cannot be accepted' });
-    }
-
-    try {
-      await SellerNotification.updateMany(
-        { order: order._id },
-        { $set: { status: 'Captain Accepted' } }
-      );
-    } catch (notifErr) {
-      console.warn('[acceptJob] SellerNotification update error:', notifErr.message);
     }
 
     console.log(`[Captain acceptJob] Captain ${captainId} accepted Order #${order.orderId}`);
@@ -619,6 +680,12 @@ export const updateDeliveryStatus = async (req, res, next) => {
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
+    if (!sellerHasAcceptedOrder(order)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Seller has not accepted this order yet',
+      });
+    }
 
     const updates = { captainStatus: status };
 
@@ -649,6 +716,12 @@ export const updateDeliveryStatus = async (req, res, next) => {
     }
 
     if (status === 'Delivered') {
+      if (!order.deliveryOtpVerified) {
+        return res.status(400).json({
+          success: false,
+          message: 'Ask the customer for the delivery OTP before completing this order.',
+        });
+      }
       const proofUrl = req.body.proofUrl || req.body.proofOfDeliveryUrl || order.proofOfDeliveryUrl;
       if (!proofUrl || !String(proofUrl).trim()) {
         return res.status(400).json({
@@ -803,12 +876,17 @@ export const verifyDeliveryOtp = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    // Allow dev bypass with '0000'
     if (order.deliveryOtp !== otp && otp !== '0000') {
-      return res.status(400).json({ success: false, message: 'Invalid OTP. Please ask the recipient.' });
+      return res.status(400).json({ success: false, message: 'Invalid OTP. Please ask the customer.' });
     }
 
-    res.json({ success: true, message: 'OTP verified successfully', order });
+    const verifiedOrder = await Order.findByIdAndUpdate(
+      order._id,
+      { $set: { deliveryOtpVerified: true, deliveryOtpVerifiedAt: new Date() } },
+      { new: true }
+    );
+
+    res.json({ success: true, message: 'Customer delivery OTP verified', order: verifiedOrder || order });
   } catch (error) {
     console.error('[verifyDeliveryOtp ERROR]', error);
     next(error);
@@ -831,6 +909,12 @@ export const verifyOrderPickupOtp = async (req, res, next) => {
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
+    if (!sellerHasAcceptedOrder(order)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Seller has not accepted this order yet',
+      });
+    }
 
     // Allow dev bypass with '0000'
     if (order.pickupOtp !== otp && otp !== '0000') {
@@ -838,12 +922,20 @@ export const verifyOrderPickupOtp = async (req, res, next) => {
     }
 
     const now = new Date();
-    order.pickupOtpVerified = true;
-    order.pickupOtpVerifiedAt = now;
-    order.captainStatus = 'In Transit';
-    order.orderStatus = 'Out for Delivery';
-    order.captainPickedUpAt = order.captainPickedUpAt || now;
-    await order.save();
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: order._id },
+      {
+        $set: {
+          pickupOtpVerified: true,
+          pickupOtpVerifiedAt: now,
+          captainStatus: 'In Transit',
+          orderStatus: 'Out for Delivery',
+          sellerStatus: 'Out for Delivery',
+          captainPickedUpAt: order.captainPickedUpAt || now,
+        },
+      },
+      { new: true }
+    );
 
     try {
       await SellerNotification.updateMany(
@@ -866,7 +958,7 @@ export const verifyOrderPickupOtp = async (req, res, next) => {
     res.json({
       success: true,
       message: 'Seller Store Pickup OTP verified successfully! Order is now Out for Delivery.',
-      order,
+      order: updatedOrder || order,
     });
   } catch (error) {
     console.error('[verifyOrderPickupOtp ERROR]', error);

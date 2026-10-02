@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { selectedVariantSchema } from '../utils/selectedVariants.js';
 
 const orderItemSchema = new mongoose.Schema({
   product: {
@@ -12,6 +13,12 @@ const orderItemSchema = new mongoose.Schema({
   quantity: { type: Number, required: true, min: 1 },
   image: { type: String },
   seller: { type: String, default: 'ShippNex Official Store' },
+  variantSku: { type: String, default: '' },
+  variantId: { type: String, default: '' },
+  sku: { type: String, default: '' },
+  variantTitle: { type: String, default: '' },
+  selectedAttributes: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  selectedVariants: { type: [selectedVariantSchema], default: undefined },
 });
 
 const orderSchema = new mongoose.Schema(
@@ -61,6 +68,7 @@ const orderSchema = new mongoose.Schema(
       enum: [
         'Placed',
         'Accepted',
+        'Packed',
         'Rejected',
         'Processing',
         'Reached Store / Pickup',
@@ -91,7 +99,24 @@ const orderSchema = new mongoose.Schema(
     refundedAt: { type: Date },
     sellerStatus: {
       type: String,
-      enum: ['Pending', 'Accepted', 'Rejected', 'Delivered', 'DELIVERED', 'Processing', 'Cancelled'],
+      enum: [
+        'Pending',
+        'Accepted',
+        'ACCEPTED',
+        'Packed',
+        'PACKED',
+        'Rejected',
+        'REJECTED',
+        'Processing',
+        'PROCESSING',
+        'Out for Delivery',
+        'OUT_FOR_DELIVERY',
+        'Reached Store',
+        'Reached Store / Pickup',
+        'Delivered',
+        'DELIVERED',
+        'Cancelled',
+      ],
       default: 'Pending',
     },
     rejectionReason: { type: String, default: '' },
@@ -144,6 +169,8 @@ const orderSchema = new mongoose.Schema(
     pickupOtpVerified: { type: Boolean, default: false },
     pickupOtpVerifiedAt: { type: Date, default: null },
     deliveryOtp: { type: String, default: null },
+    deliveryOtpVerified: { type: Boolean, default: false },
+    deliveryOtpVerifiedAt: { type: Date, default: null },
     captainEarnings: { type: Number, default: 0 },
     proofOfDeliveryUrl: { type: String, default: null },
     captainAssignedAt: { type: Date, default: null },

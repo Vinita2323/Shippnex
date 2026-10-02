@@ -82,7 +82,7 @@ const RatingModal = ({
     setError('');
 
     try {
-      const rideId = ride.bookingId || ride._id;
+      const rideId = ride.bookingId || ride.orderId || ride._id;
       const res = await ratingService.submitRating({
         rideId,
         rating,

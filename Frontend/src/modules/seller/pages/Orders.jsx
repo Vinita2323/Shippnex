@@ -5,6 +5,37 @@ import {
 } from 'lucide-react';
 import { orderService } from '../../../services/authService';
 import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
+import { selectedVariantRows, orderVariantSummary } from '../../../utils/variantLabel';
+
+const OrderLine = ({ item, compact = false }) => {
+  const rows = selectedVariantRows(item);
+  const sku = String(item.variantSku || item.sku || '').trim();
+  return (
+    <div className="space-y-0.5 min-w-0">
+      <h4 className={`${compact ? 'text-xs leading-tight' : 'text-sm leading-snug'} font-bold text-slate-900 m-0`}>{item.name}</h4>
+      {sku ? (
+        <p className={`${compact ? 'text-[10px]' : 'text-[11px]'} text-slate-500 m-0`}>
+          SKU: <span className="font-semibold text-slate-700">{sku}</span>
+        </p>
+      ) : null}
+      {rows.length > 0 && (
+        <div className="pt-0.5">
+          <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 m-0">Selected Options</p>
+          {rows.map((row) => (
+            <p key={`${row.name}:${row.value}`} className={`${compact ? 'text-[11px]' : 'text-xs'} text-slate-800 m-0`}>
+              <span className="text-slate-500">{row.name}</span>
+              <span className="text-slate-300"> : </span>
+              <span className="font-semibold">{row.value}</span>
+            </p>
+          ))}
+        </div>
+      )}
+      <p className={`${compact ? 'text-[11px]' : 'text-xs'} text-slate-500 m-0`}>
+        Unit Price: <span className="font-semibold text-slate-700">₹{item.price}</span> &times; <span className="font-extrabold text-slate-900">{item.quantity} Qty</span>
+      </p>
+    </div>
+  );
+};
 
 const Orders = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -498,7 +529,12 @@ const Orders = () => {
                     {new Date(n.createdAt).toLocaleDateString()} {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td className="px-5 py-4 font-normal text-sm">
-                    {n.items?.length || 0} Products
+                    <div className="flex flex-col gap-0.5 max-w-[220px]">
+                      <span>{n.items?.length || 0} Products</span>
+                      {orderVariantSummary(n.items) && (
+                        <span className="text-[11px] font-semibold text-[#ff7526] leading-snug">{orderVariantSummary(n.items)}</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-5 py-4 font-extrabold text-[#ff7526]">
                     ₹{Number(n.totalAmount || 0).toFixed(2)}
@@ -640,12 +676,7 @@ const Orders = () => {
                           className="w-11 h-11 rounded-lg object-cover border border-slate-200 bg-slate-100 shrink-0"
                           onError={(e) => handleImageError(e, item.name)}
                         />
-                        <div className="space-y-0.5">
-                          <h4 className="text-xs font-bold text-slate-900 m-0 leading-tight">{item.name}</h4>
-                          <p className="text-[11px] text-slate-500 m-0">
-                            Unit Price: <span className="font-semibold text-slate-700">₹{item.price}</span> &times; <span className="font-extrabold text-slate-900">{item.quantity} Qty</span>
-                          </p>
-                        </div>
+                        <OrderLine item={item} compact />
                       </div>
 
                       <div className="text-right shrink-0">
@@ -891,10 +922,10 @@ const Orders = () => {
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <button
                     type="button"
-                    disabled={actionLoading || selectedNotification.status === 'ACCEPTED'}
+                    disabled={actionLoading || ['ACCEPTED', 'Accepted', 'PACKED', 'Packed', 'PROCESSING', 'Processing', 'OUT_FOR_DELIVERY', 'Out for Delivery', 'DELIVERED', 'Delivered'].includes(selectedNotification.status)}
                     onClick={() => handleUpdateStatus(selectedNotification, 'ACCEPTED')}
                     className={`px-3.5 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all ${
-                      selectedNotification.status === 'ACCEPTED' || selectedNotification.status === 'Accepted'
+                      ['ACCEPTED', 'Accepted', 'PACKED', 'Packed', 'OUT_FOR_DELIVERY', 'Out for Delivery', 'DELIVERED', 'Delivered'].includes(selectedNotification.status)
                         ? 'bg-emerald-600 text-white border-emerald-600'
                         : 'bg-white hover:bg-emerald-50 text-emerald-700 border-emerald-300'
                     }`}
@@ -904,7 +935,20 @@ const Orders = () => {
 
                   <button
                     type="button"
-                    disabled={actionLoading || selectedNotification.status === 'OUT_FOR_DELIVERY'}
+                    disabled={actionLoading || !['ACCEPTED', 'Accepted'].includes(selectedNotification.status)}
+                    onClick={() => handleUpdateStatus(selectedNotification, 'PACKED')}
+                    className={`px-3.5 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all ${
+                      ['PACKED', 'Packed', 'OUT_FOR_DELIVERY', 'Out for Delivery', 'DELIVERED', 'Delivered'].includes(selectedNotification.status)
+                        ? 'bg-violet-600 text-white border-violet-600'
+                        : 'bg-white hover:bg-violet-50 text-violet-700 border-violet-300'
+                    }`}
+                  >
+                    Packed
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={actionLoading || !['PACKED', 'Packed', 'OUT_FOR_DELIVERY', 'Out for Delivery'].includes(selectedNotification.status) || selectedNotification.status === 'OUT_FOR_DELIVERY'}
                     onClick={() => handleUpdateStatus(selectedNotification, 'Out for Delivery')}
                     className={`px-3.5 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all ${
                       selectedNotification.status === 'OUT_FOR_DELIVERY' || selectedNotification.status === 'Out for Delivery'
@@ -917,7 +961,7 @@ const Orders = () => {
 
                   <button
                     type="button"
-                    disabled={actionLoading || selectedNotification.status === 'DELIVERED'}
+                    disabled={actionLoading || !['PACKED', 'Packed', 'OUT_FOR_DELIVERY', 'Out for Delivery', 'DELIVERED', 'Delivered'].includes(selectedNotification.status) || selectedNotification.status === 'DELIVERED'}
                     onClick={() => handleUpdateStatus(selectedNotification, 'Delivered')}
                     className={`px-3.5 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all ${
                       selectedNotification.status === 'DELIVERED' || selectedNotification.status === 'Delivered'
@@ -1009,12 +1053,7 @@ const Orders = () => {
                           className="w-14 h-14 rounded-xl object-cover border border-slate-200 bg-slate-100 shrink-0"
                           onError={(e) => handleImageError(e, item.name)}
                         />
-                        <div className="space-y-0.5">
-                          <h4 className="text-sm font-bold text-slate-900 m-0 leading-snug">{item.name}</h4>
-                          <p className="text-xs text-slate-500 m-0">
-                            Unit Price: <span className="font-semibold text-slate-700">₹{item.price}</span> &times; <span className="font-extrabold text-slate-900">{item.quantity} Qty</span>
-                          </p>
-                        </div>
+                        <OrderLine item={item} />
                       </div>
 
                       <div className="text-right shrink-0">
@@ -1265,6 +1304,9 @@ const NotificationStatusBadge = ({ status }) => {
   } else if (status === 'ACCEPTED' || status === 'Accepted') {
     style = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
     label = 'ACCEPTED';
+  } else if (status === 'PACKED' || status === 'Packed') {
+    style = 'bg-violet-50 text-violet-700 border border-violet-200';
+    label = 'PACKED';
   } else if (status === 'Reached Store' || status === 'At Pickup' || status === 'Reached Store / Pickup') {
     style = 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-extrabold';
     label = 'CAPTAIN AT STORE';

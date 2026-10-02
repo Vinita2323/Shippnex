@@ -423,11 +423,33 @@ export const cartService = {
     return response.data;
   },
   updateCartItem: async (productId, delta, quantity, productData = null) => {
-    const response = await API.put('/cart/update', { productId, delta, quantity, product: productData });
+    const response = await API.put('/cart/update', {
+      productId,
+      delta,
+      quantity,
+      product: productData,
+      variantSku: productData?.variantSku || '',
+      variantId: productData?.variantId || productData?.selectedVariant?._id || '',
+      variantTitle: productData?.variantTitle || productData?.variation || '',
+      selectedAttributes: productData?.selectedAttributes || productData?.selectedVariant?.attributes || undefined,
+      selectedVariants: productData?.selectedVariants,
+      price: productData?.price,
+      originalPrice: productData?.originalPrice,
+      image: productData?.image || '',
+      replaceLine: Boolean(productData?.replaceLine),
+      previousVariantSku: productData?.previousVariantSku || '',
+      previousSelectedAttributes: productData?.previousSelectedAttributes || undefined,
+    });
     return response.data;
   },
-  removeFromCart: async (productId) => {
-    const response = await API.delete(`/cart/remove/${productId}`);
+  removeFromCart: async (productId, variant = null) => {
+    const params = {};
+    if (variant?.variantSku) params.variantSku = variant.variantSku;
+    const attrs = variant?.selectedAttributes;
+    if (attrs && typeof attrs === 'object' && Object.keys(attrs).length) {
+      params.attrs = JSON.stringify(attrs);
+    }
+    const response = await API.delete(`/cart/remove/${productId}`, { params });
     return response.data;
   },
   clearCart: async () => {
@@ -546,7 +568,10 @@ export const orderService = {
     return response.data;
   },
   rejectSellerOrder: async (id, payload) => {
-    const response = await API.put(`/orders/seller/notifications/${id}/reject`, payload);
+    const body = typeof payload === 'string'
+      ? { rejectionReason: payload }
+      : (payload || {});
+    const response = await API.put(`/orders/seller/notifications/${id}/reject`, body);
     return response.data;
   },
   updateSellerOrderStatus: async (id, status, payload = {}) => {

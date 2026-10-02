@@ -1213,6 +1213,15 @@ const CaptainDashboard = () => {
                               </div>
 
                               <div className="bg-slate-50/80 p-2.5 sm:p-3 rounded-lg border border-slate-100 text-xs space-y-1.5">
+                                {order.pickupAddress && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-violet-500 mt-1 shrink-0"></span>
+                                    <div className="flex-1 min-w-0">
+                                      <span className="text-[8px] font-bold text-violet-700 uppercase tracking-wider block">Pickup · {order.sellerName || 'Store'}</span>
+                                      <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">{order.pickupAddress}</p>
+                                    </div>
+                                  </div>
+                                )}
                                 <div className="flex items-start gap-2">
                                   <span className="w-2 h-2 rounded-full bg-purple-500 mt-1 shrink-0"></span>
                                   <div className="flex-1 min-w-0">
@@ -1243,16 +1252,18 @@ const CaptainDashboard = () => {
                                   <span>View Details</span>
                                 </button>
                                 <button
+                                  onClick={() => handleCardRejectOrder(order)}
+                                  disabled={isActing}
+                                  className="flex-1 py-2 bg-white hover:bg-red-50 border border-red-200 text-red-600 font-bold text-xs rounded-lg transition-all cursor-pointer disabled:opacity-60"
+                                >
+                                  Reject
+                                </button>
+                                <button
                                   onClick={() => handleCardAcceptOrder(order)}
                                   disabled={isActing}
                                   className="flex-1 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs rounded-lg shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
                                 >
-                                  {isActing ? (
-                                    <span className="material-symbols-outlined text-sm animate-spin">sync</span>
-                                  ) : (
-                                    <span className="material-symbols-outlined text-base">navigation</span>
-                                  )}
-                                  {isActing ? 'Starting…' : 'Start Ride'}
+                                  {isActing ? 'Accepting…' : 'Accept'}
                                 </button>
                               </div>
                             </div>

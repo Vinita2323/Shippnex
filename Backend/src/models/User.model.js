@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { selectedVariantSchema } from '../utils/selectedVariants.js';
 
 const userSchema = new mongoose.Schema(
   {
@@ -100,6 +101,14 @@ const userSchema = new mongoose.Schema(
           min: 1,
           default: 1,
         },
+        variantSku: { type: String, default: '' },
+        variantId: { type: String, default: '' },
+        variantTitle: { type: String, default: '' },
+        selectedAttributes: { type: mongoose.Schema.Types.Mixed, default: undefined },
+        selectedVariants: { type: [selectedVariantSchema], default: undefined },
+        price: { type: Number },
+        originalPrice: { type: Number },
+        image: { type: String, default: '' },
       },
     ],
     wishlist: [

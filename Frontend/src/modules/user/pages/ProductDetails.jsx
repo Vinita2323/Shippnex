@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useState, useRef } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Heart, Star, ShoppingCart, ChevronRight, ChevronDown, 
   ShieldCheck, Tag, Share2, Plus, Minus, Clock, Check, Trash2
@@ -12,12 +12,48 @@ import oilGheeImg from '../../../assets/user/categories/OilGhee-removebg-preview
 import masalaImg from '../../../assets/user/categories/masala-removebg-preview.png';
 import sugarImg from '../../../assets/user/categories/Sugar-removebg-preview.png';
 import { getImageUrl, handleImageError, getInitialSvgDataUrl } from '../../../utils/imageUtils';
+import { cartLineId } from '../../../utils/variantLabel';
+
+const DESCRIPTION_PREVIEW_LENGTH = 160;
+
+const previewDescription = (text) => {
+  const trimmed = String(text || '').trim();
+  if (trimmed.length <= DESCRIPTION_PREVIEW_LENGTH) return trimmed;
+  const sliced = trimmed.slice(0, DESCRIPTION_PREVIEW_LENGTH);
+  const lastSpace = sliced.lastIndexOf(' ');
+  const cutoff = lastSpace > 80 ? sliced.slice(0, lastSpace) : sliced;
+  return `${cutoff.trim()}...`;
+};
+
+const DescriptionText = ({ text, expanded, onToggle }) => {
+  const fullText = String(text || '').trim();
+  const isLong = fullText.length > DESCRIPTION_PREVIEW_LENGTH;
+
+  return (
+    <div>
+      <p className="text-[12px] text-slate-600 leading-relaxed m-0 font-normal break-words [overflow-wrap:anywhere]">
+        {expanded || !isLong ? fullText : previewDescription(fullText)}
+      </p>
+      {isLong && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="mt-1.5 p-0 border-none bg-transparent text-[#ff5500] text-[12px] font-bold cursor-pointer"
+        >
+          {expanded ? 'Read less' : 'Read more'}
+        </button>
+      )}
+    </div>
+  );
+};
 
 const ProductDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const { toggleWishlist, isInWishlist } = useWishlist();
-  const { addToCart, updateQuantity, getItemQuantity, isInCart, removeFromCart } = useCart();
+  const { addToCart, replaceCartLineVariant, updateQuantity, getItemQuantity, isInCart, removeFromCart, cartItems } = useCart();
+  const location = useLocation();
+  const buyNowLock = useRef(false);
   const [toastMessage, setToastMessage] = useState('');
   const [activeAccordion, setActiveAccordion] = useState(null);
   const [activeImage, setActiveImage] = useState(null);
@@ -33,11 +69,13 @@ const ProductDetails = () => {
   const [reviewsData, setReviewsData] = useState(null);
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [selectedAttributes, setSelectedAttributes] = useState({});
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
   React.useEffect(() => {
     const fetchProductDetails = async () => {
       try {
         setLoading(true);
+        setDescriptionExpanded(false);
         const res = await productService.getProductById(id);
         if (res && res.success && res.product) {
           setProduct(res.product);
@@ -89,15 +127,29 @@ const ProductDetails = () => {
       return null;
     }
 
-    const found = product.variants.find(v => {
-      if (!v.attributes) return false;
-      return Object.entries(selectedAttributes).every(([attrName, attrVal]) => {
-        return v.attributes[attrName] === attrVal;
+    const found = product.variants.find((variant) => {
+      if (!variant?.attributes || variant.active === false) return false;
+      const attrs = variant.attributes;
+      return Object.keys(selectedAttributes).length > 0 && Object.entries(selectedAttributes).every(([attrName, attrVal]) => {
+        const key = Object.keys(attrs).find((name) => String(name).trim().toLowerCase() === attrName.toLowerCase());
+        return key && String(attrs[key]).trim() === String(attrVal).trim();
       });
     });
 
-    return found || product.variants.find(v => v.active !== false) || product.variants[0];
+    return found || null;
   }, [product, selectedAttributes]);
+
+  const lineSelection = matchedVariant
+    ? {
+        variantSku: matchedVariant.sku || '',
+        selectedAttributes: Object.keys(selectedAttributes || {}).length
+          ? selectedAttributes
+          : (matchedVariant.attributes || {}),
+      }
+    : null;
+  const selectedLineId = lineSelection
+    ? cartLineId({ productId: product?.id || product?._id, ...lineSelection })
+    : (product?.id || product?._id);
 
   // Sync active image with product mainImage and non-dummy variant images
   React.useEffect(() => {
@@ -158,8 +210,12 @@ const ProductDetails = () => {
         variation: matchedVariant.title,
         variantTitle: matchedVariant.title,
         variantSku: matchedVariant.sku,
+        variantId: matchedVariant._id || '',
         sku: matchedVariant.sku || product.sku,
         image: matchedVariant.image || product.mainImage || product.image,
+        selectedAttributes: Object.keys(selectedAttributes || {}).length
+          ? selectedAttributes
+          : (matchedVariant.attributes || {}),
         selectedVariant: matchedVariant
       };
     }
@@ -167,6 +223,11 @@ const ProductDetails = () => {
   };
 
   const handleAddToCart = async () => {
+    if (product?.hasVariants && !matchedVariant) {
+      setToastMessage('Please select an available option');
+      setTimeout(() => setToastMessage(''), 2500);
+      return;
+    }
     const itemToAdd = getProductToAdd();
     if (!itemToAdd) return;
     const res = await addToCart(itemToAdd, quantity, { navigate, returnUrl: window.location.pathname });
@@ -177,11 +238,44 @@ const ProductDetails = () => {
   };
 
   const handleBuyNow = async () => {
+    if (buyNowLock.current) return;
+    if (product?.hasVariants && !matchedVariant) {
+      setToastMessage('Please select an available option');
+      setTimeout(() => setToastMessage(''), 2500);
+      return;
+    }
     const itemToAdd = getProductToAdd();
     if (!itemToAdd) return;
-    const res = await addToCart(itemToAdd, quantity, { isBuyNow: true, navigate, returnUrl: window.location.pathname });
-    if (res && res.success) {
-      navigate('/checkout');
+
+    buyNowLock.current = true;
+    try {
+      const productId = String(itemToAdd.productId || itemToAdd.id || itemToAdd._id || '');
+      const selection = {
+        variantSku: itemToAdd.variantSku,
+        selectedAttributes: itemToAdd.selectedAttributes,
+      };
+
+      if (isInCart(productId, selection)) {
+        navigate('/checkout');
+        return;
+      }
+
+      const fromCartLineId = location.state?.cartLineId;
+      const linesForProduct = cartItems.filter((item) => String(item.productId || item.id || item._id) === productId);
+      const sourceLine = fromCartLineId
+        ? linesForProduct.find((item) => cartLineId(item) === fromCartLineId || item.lineId === fromCartLineId)
+        : (linesForProduct.length === 1 ? linesForProduct[0] : null);
+
+      if (sourceLine) {
+        const res = await replaceCartLineVariant(sourceLine.lineId || cartLineId(sourceLine), itemToAdd);
+        if (res?.success) navigate('/checkout');
+        return;
+      }
+
+      const res = await addToCart(itemToAdd, quantity, { isBuyNow: true, navigate, returnUrl: window.location.pathname });
+      if (res && res.success) navigate('/checkout');
+    } finally {
+      buyNowLock.current = false;
     }
   };
 
@@ -441,7 +535,7 @@ const ProductDetails = () => {
                 </button>
               ) : (
                 <>
-                  {product && !isInCart(product.id || product._id) ? (
+                  {product && !isInCart(product.id || product._id, lineSelection) ? (
                     <button 
                       onClick={handleAddToCart}
                       className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold cursor-pointer border-none flex items-center justify-center gap-2 whitespace-nowrap active:scale-98 transition-all shadow-md"
@@ -453,7 +547,7 @@ const ProductDetails = () => {
                     <button 
                       onClick={async () => {
                         if (product) {
-                          await removeFromCart(product.id || product._id);
+                          await removeFromCart(selectedLineId);
                           setToastMessage('Item removed from cart');
                           setTimeout(() => setToastMessage(''), 2000);
                         }
@@ -490,9 +584,11 @@ const ProductDetails = () => {
         <div className="w-full min-w-0 overflow-hidden">
           <h3 className="text-[13px] font-semibold text-slate-800 mb-1.5">Product Description</h3>
           {product.description ? (
-            <p className="text-[12px] text-slate-600 leading-relaxed m-0 font-normal break-words break-all [overflow-wrap:anywhere]">
-              {product.description}
-            </p>
+            <DescriptionText
+              text={product.description}
+              expanded={descriptionExpanded}
+              onToggle={() => setDescriptionExpanded((open) => !open)}
+            />
           ) : (
             <div className="flex flex-col gap-1.5 text-[12px] text-slate-600 font-normal">
               <p className="m-0">🌾 Freshly milled and processed under hygienic standards.</p>
@@ -821,7 +917,7 @@ const ProductDetails = () => {
             </button>
           ) : (
             <>
-              {product && !isInCart(product.id || product._id) ? (
+              {product && !isInCart(product.id || product._id, lineSelection) ? (
                 <button 
                   onClick={handleAddToCart}
                   className="flex-1 h-11 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-[13px] font-bold cursor-pointer border-none flex items-center justify-center gap-1.5 whitespace-nowrap px-2.5 active:scale-98 transition-all shadow-xs"
@@ -833,7 +929,7 @@ const ProductDetails = () => {
                 <button 
                   onClick={async () => {
                     if (product) {
-                      await removeFromCart(product.id || product._id);
+                      await removeFromCart(selectedLineId);
                       setToastMessage('Item removed from cart');
                       setTimeout(() => setToastMessage(''), 2000);
                     }

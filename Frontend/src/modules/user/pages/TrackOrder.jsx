@@ -12,6 +12,7 @@ import productReviewService from '../../../services/productReviewService';
 import ProductRatingModal from '../../../components/ProductRatingModal';
 import LiveDeliveryMap from '../components/LiveDeliveryMap';
 import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
+import { variantLabel } from '../../../utils/variantLabel';
 
 const RETURN_REASONS = [
   'Damaged / Defective product received',
@@ -112,7 +113,29 @@ const TrackOrder = () => {
 
   const orderStatus = order?.orderStatus || order?.status || 'Placed';
   const captainStatus = order?.captainStatus || '';
+  const sellerStatus = order?.sellerStatus || '';
   const deliveryOtp = order?.deliveryOtp || '';
+  const sellerHasAccepted = [
+    'Accepted',
+    'ACCEPTED',
+    'Packed',
+    'PACKED',
+    'Processing',
+    'PROCESSING',
+    'Out for Delivery',
+    'OUT_FOR_DELIVERY',
+    'Delivered',
+    'DELIVERED',
+  ].includes(sellerStatus);
+  const captainHasAccepted = [
+    'Accepted',
+    'At Pickup',
+    'Reached Store',
+    'Picked Up',
+    'In Transit',
+    'Out for Delivery',
+    'Delivered',
+  ].includes(captainStatus);
 
   const isRefundCompleted = orderStatus === 'Refund Completed' || order?.refundStatus === 'Completed' || order?.returnStatus === 'Refunded' || orderReturns.some(r => ['REFUNDED', 'COMPLETED'].includes(r.status));
   const isReturned = orderStatus === 'Returned' || order?.returnStatus === 'Completed';
@@ -222,7 +245,7 @@ const TrackOrder = () => {
   const paymentStatus = order?.paymentStatus || (paymentMethod === 'COD' ? 'Pending' : 'Paid');
 
   // Live captain tracking (map + polyline) — only while the order is out for delivery
-  const isOutForDelivery = !isDelivered && (orderStatus === 'Out for Delivery' || captainStatus === 'In Transit' || captainStatus === 'Picked Up');
+  const isOutForDelivery = sellerHasAccepted && !isDelivered && (orderStatus === 'Out for Delivery' || captainStatus === 'In Transit' || captainStatus === 'Picked Up');
   const captainLiveCoords = order?.captainId?.liveLocation?.coordinates;
   const captainPosition = Array.isArray(captainLiveCoords) && captainLiveCoords.length === 2
     ? { lat: captainLiveCoords[1], lng: captainLiveCoords[0] }
@@ -249,8 +272,9 @@ const TrackOrder = () => {
 
   const getStepIndex = () => {
     if (isDelivered) return 3;
+    if (!sellerHasAccepted) return 0;
     if (orderStatus === 'Out for Delivery' || captainStatus === 'In Transit' || captainStatus === 'Picked Up') return 2;
-    if (orderStatus === 'Accepted' || orderStatus === 'Processing' || orderStatus === 'Reached Store / Pickup' || ['Assigned', 'Accepted', 'At Pickup'].includes(captainStatus)) return 1;
+    if (orderStatus === 'Accepted' || orderStatus === 'Processing' || orderStatus === 'Reached Store / Pickup' || sellerHasAccepted) return 1;
     return 0;
   };
 
@@ -264,8 +288,8 @@ const TrackOrder = () => {
     if (isReturnRequested) return { text: 'Return Requested', color: 'bg-amber-50 text-amber-700 border-amber-200' };
     if (orderStatus === 'Delivered' || captainStatus === 'Delivered') return { text: 'Delivered', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
     if (orderStatus === 'Out for Delivery' || captainStatus === 'In Transit') return { text: 'Out for Delivery', color: 'bg-amber-50 text-amber-700 border-amber-200' };
-    if (captainStatus === 'At Pickup' || orderStatus === 'Reached Store / Pickup') return { text: 'Captain at Store', color: 'bg-blue-50 text-blue-700 border-blue-200' };
-    if (orderStatus === 'Accepted' || captainStatus === 'Accepted' || captainStatus === 'Assigned') return { text: 'Order Accepted', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    if (sellerHasAccepted && (captainStatus === 'At Pickup' || orderStatus === 'Reached Store / Pickup')) return { text: 'Captain at Store', color: 'bg-blue-50 text-blue-700 border-blue-200' };
+    if (sellerHasAccepted && (orderStatus === 'Accepted' || orderStatus === 'Processing' || sellerStatus === 'Accepted' || sellerStatus === 'ACCEPTED')) return { text: 'Order Accepted', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
     if (orderStatus === 'Rejected') return { text: 'Rejected', color: 'bg-red-50 text-red-700 border-red-200' };
     return { text: 'Order Placed', color: 'bg-orange-50 text-[#ea580c] border-orange-200/60' };
   };
@@ -398,6 +422,63 @@ const TrackOrder = () => {
                 </div>
               </div>
             </div>
+
+            {isDelivered && order?.items?.length > 0 && (
+              <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-xs space-y-3">
+                <div className="flex items-center gap-2">
+                  <Star size={18} className="text-[#ea580c] fill-[#ea580c]" />
+                  <h3 className="text-[13px] md:text-sm font-extrabold text-slate-900 m-0">Rate Product</h3>
+                </div>
+                <p className="text-[11px] text-slate-500 m-0">
+                  Order delivered. Rate the product you received.
+                </p>
+                <div className="flex flex-col gap-2">
+                  {order.items.map((item, idx) => {
+                    const prodId = item.product?._id || item.product || item.productId || item.id;
+                    const itemReview = prodId ? (orderReviews[prodId] || orderReviews[String(prodId)]) : null;
+                    const itemName = item.name || item.product?.name || 'Product';
+                    const itemImg = item.image || item.product?.mainImage || grainsImg;
+                    return (
+                      <div key={item._id || idx} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                        <div className="w-11 h-11 rounded-lg bg-white border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
+                          <img
+                            src={getImageUrl(itemImg, itemName)}
+                            alt={itemName}
+                            className="w-[85%] h-[85%] object-contain"
+                            onError={(e) => handleImageError(e, itemName)}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-bold text-slate-900 m-0 truncate">{itemName}</p>
+                          {variantLabel(item) && (
+                            <span className="text-[11px] font-semibold text-[#ea580c]">{variantLabel(item)}</span>
+                          )}
+                        </div>
+                        {itemReview ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRateModal(item, itemReview)}
+                            className="shrink-0 px-3 py-2 text-[11px] font-bold rounded-xl border border-amber-200 bg-amber-50 text-amber-800 cursor-pointer flex items-center gap-1"
+                          >
+                            <Star size={12} className="fill-amber-500 text-amber-500" />
+                            Rated {itemReview.rating}/5
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRateModal(item)}
+                            className="shrink-0 px-3 py-2 text-[11px] font-bold rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 text-[#ea580c] cursor-pointer flex items-center gap-1"
+                          >
+                            <Star size={12} className="fill-[#ea580c] text-[#ea580c]" />
+                            Rate Product
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* RETURN & REFUND SECTION (Visible on Delivered Orders) */}
             {isDelivered && (
@@ -543,8 +624,18 @@ const TrackOrder = () => {
               </div>
             )}
 
+            {isOutForDelivery && deliveryOtp && !order?.deliveryOtpVerified && (
+              <div className="bg-amber-50 rounded-2xl p-4 md:p-5 border border-amber-200 shadow-xs flex items-center justify-between gap-3">
+                <div>
+                  <span className="text-[10px] md:text-xs font-black text-amber-800 uppercase tracking-wider block">Delivery OTP</span>
+                  <p className="text-[12px] text-amber-900 m-0 mt-1">Share this code with the delivery captain at your door. They will take a photo after it is verified.</p>
+                </div>
+                <span className="font-mono text-2xl font-black tracking-widest text-[#ea580c] bg-white px-3 py-2 rounded-xl border border-amber-300 shrink-0">{deliveryOtp}</span>
+              </div>
+            )}
+
             {/* Captain Information (ONLY shown when order is NOT yet delivered) */}
-            {order?.captainId && !isDelivered && (
+            {sellerHasAccepted && captainHasAccepted && order?.captainId && !isDelivered && (
               <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-xs flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 md:gap-4">
                   <div className="w-11 h-11 md:w-14 md:h-14 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
@@ -553,7 +644,7 @@ const TrackOrder = () => {
                   <div>
                     <span className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-wider block">Delivery Captain</span>
                     <p className="text-xs md:text-base font-bold text-slate-900 m-0">{order.captainId.name || 'Assigned Partner'}</p>
-                    <p className="text-[11px] md:text-xs text-emerald-700 font-semibold m-0">{order.captainId.vehicleType || 'Two Wheeler'} • {statusBadge.text}</p>
+                    <p className="text-[11px] md:text-xs text-emerald-700 font-semibold m-0">{order.captainId.vehicleType || 'Two Wheeler'} • {captainStatus === 'In Transit' || captainStatus === 'Picked Up' ? 'On the way' : captainStatus === 'At Pickup' || captainStatus === 'Reached Store' ? 'At the store' : 'Delivery accepted'}</p>
                   </div>
                 </div>
                 {order.captainId.phone && (
@@ -627,6 +718,9 @@ const TrackOrder = () => {
                         </div>
                         <div className="flex-1 flex flex-col gap-0.5">
                           <h4 className="text-[13px] md:text-sm font-bold text-slate-900 m-0 line-clamp-1">{itemName}</h4>
+                          {variantLabel(item) && (
+                            <span className="text-[11px] font-semibold text-[#ea580c]">{variantLabel(item)}</span>
+                          )}
                           <span className="text-[12px] font-semibold text-slate-500">
                             ₹{itemPrice.toFixed(2)} × {qty}
                           </span>
@@ -652,7 +746,7 @@ const TrackOrder = () => {
                                 onClick={() => handleOpenRateModal(item, itemReview)}
                                 className="px-2 py-1 text-[10px] font-bold rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100 text-[#ea580c] cursor-pointer flex items-center gap-1 transition-all"
                               >
-                                <Star size={10} className="fill-[#ea580c] text-[#ea580c]" /> Rate
+                                <Star size={10} className="fill-[#ea580c] text-[#ea580c]" /> Rate Product
                               </button>
                             )}
                           </div>

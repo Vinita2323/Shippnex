@@ -8,6 +8,7 @@ import { useCart } from '../context/CartContext';
 import { useLocationContext } from '../../../context/LocationContext';
 import { addressService, orderService } from '../../../services/authService';
 import commissionService from '../../../services/commissionService';
+import { variantLabel, toSelectedVariants, missingVariantOptions } from '../../../utils/variantLabel';
 
 const availableSlots = [
   { id: 's1', date: 'Today', time: 'Express (Within 30 Mins)', badge: 'Fastest' },
@@ -396,6 +397,14 @@ const Checkout = () => {
       return;
     }
 
+    const missingSelections = cartItems.flatMap((item) => (
+      missingVariantOptions(item).map((option) => `${item.name}: ${option}`)
+    ));
+    if (missingSelections.length) {
+      setErrorMsg(`Please select ${missingSelections.join(', ')} before placing the order.`);
+      return;
+    }
+
     try {
       setPlacingOrder(true);
 
@@ -407,6 +416,11 @@ const Checkout = () => {
           originalPrice: Number(item.originalPrice || item.mrp || item.price || 0),
           quantity: item.quantity,
           image: item.image || item.mainImage || '',
+          variantSku: item.variantSku || '',
+          variantId: item.variantId || '',
+          variantTitle: item.variantTitle || item.variation || '',
+          selectedAttributes: item.selectedAttributes || undefined,
+          selectedVariants: toSelectedVariants(item),
         })),
         shippingAddress: {
           fullName: selectedAddress.fullName || selectedAddress.name || userName,
@@ -663,7 +677,7 @@ const Checkout = () => {
             {cartItems.map((item) => (
               <div key={item.id || item._id} className="flex justify-between items-center py-1">
                 <span className="text-[12px] font-medium text-slate-700 truncate max-w-[200px]">
-                  {item.name} <strong className="text-slate-900">x{item.quantity}</strong>
+                  {item.name}{variantLabel(item) ? ` (${variantLabel(item)})` : ''} <strong className="text-slate-900">x{item.quantity}</strong>
                 </span>
                 <span className="text-[12px] font-bold text-slate-900">
                   ₹{(Number(item.price || 0) * item.quantity).toFixed(2)}

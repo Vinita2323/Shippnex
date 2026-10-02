@@ -12,11 +12,19 @@ import PlatformLedger from '../models/PlatformLedger.model.js';
 import CommissionSettings from '../models/CommissionSettings.model.js';
 import DeliveryPricing from '../models/DeliveryPricing.model.js';
 import RefundRequest from '../models/RefundRequest.model.js';
-import { 
+import {
   sendNotificationToUser, 
   sendNotificationToSeller, 
   sendNotificationToCaptain 
 } from '../utils/pushNotificationHelper.js';
+import { invalidateCaptainDashboardCache } from './captainController.js';
+import {
+  normalizeAttributes,
+  readCustomerAttributes,
+  freezeSelectedAttributes,
+  missingOptionNames,
+  rowsFromAttributes,
+} from '../utils/selectedVariants.js';
 
 // Helper: Clean base64 image strings or invalid dummy links
 const cleanImage = (img) => {
@@ -93,11 +101,70 @@ export const findAllEligibleCaptains = async (deliveryCity = '', deliveryState =
   return Captain.find({ status: { $ne: 'rejected' } }).sort({ updatedAt: -1 }).limit(10);
 };
 
+const notifyCaptainsOfPackedOrder = async (parentOrder, notification, captains, captainEarnings, deliveryCity) => {
+  for (const captain of captains) {
+    const recentOffer = await CaptainNotification.findOne({
+      captainId: captain._id,
+      order: parentOrder._id,
+      type: 'JOB_ASSIGNED',
+      createdAt: { $gte: new Date(Date.now() - 60 * 1000) },
+    }).select('_id');
+    if (!recentOffer) {
+      await CaptainNotification.create({
+        captainId: captain._id,
+        type: 'JOB_ASSIGNED',
+        title: 'New Delivery Assigned!',
+        message: `Order #${notification.orderId} from ${notification.sellerName || 'Seller'} — Drop: ${deliveryCity || 'Customer Address'}. Payout: ₹${captainEarnings.toFixed(2)}. Report to pickup immediately.`,
+        orderId: notification.orderId,
+        order: parentOrder._id,
+        amount: captainEarnings,
+        icon: 'local_shipping',
+      });
+      sendNotificationToCaptain(captain._id, {
+        title: '🛵 New Delivery Assigned!',
+        body: `Order #${notification.orderId} — Pickup from ${notification.sellerName || 'Store'}. Payout: ₹${captainEarnings.toFixed(2)}`,
+        data: {
+          type: 'delivery_assigned',
+          orderId: notification.orderId,
+          link: '/captain/dashboard',
+        },
+      }).catch(() => {});
+    }
+    invalidateCaptainDashboardCache(captain._id);
+  }
+};
+
 // Helper: Auto-assign captain and create notification
 export const autoAssignCaptainToOrder = async (notification) => {
   try {
     const parentOrder = await Order.findById(notification.order);
-    if (parentOrder && (!parentOrder.captainId || parentOrder.captainStatus === 'Rejected')) {
+    if (!parentOrder) return null;
+
+    const deliveryCity = notification.deliveryAddress?.city || parentOrder.shippingAddress?.city || '';
+    let captainCommRate = parentOrder.captainCommissionRate;
+    if (captainCommRate === undefined || captainCommRate === null) {
+      try {
+        const commSettings = await CommissionSettings.getOrCreateActiveSettings();
+        captainCommRate = commSettings?.captainCommission || 5;
+      } catch (e) {
+        captainCommRate = 5;
+      }
+    }
+    const captainEarnings = parentOrder.captainEarnings > 0
+      ? parentOrder.captainEarnings
+      : Math.max(15, Math.round(((notification.totalAmount || parentOrder.grandTotal || 0) * (captainCommRate / 100)) * 100) / 100);
+
+    if (parentOrder.captainId && parentOrder.captainStatus !== 'Rejected') {
+      const assignedCaptain = await Captain.findById(parentOrder.captainId).select('name phone');
+      if (assignedCaptain) {
+        parentOrder.captainAssignedAt = new Date();
+        await parentOrder.save();
+        await notifyCaptainsOfPackedOrder(parentOrder, notification, [assignedCaptain], captainEarnings, deliveryCity);
+        return assignedCaptain;
+      }
+    }
+
+    if (!parentOrder.captainId || parentOrder.captainStatus === 'Rejected') {
       const deliveryCity = notification.deliveryAddress?.city || parentOrder.shippingAddress?.city || '';
       const deliveryState = notification.deliveryAddress?.state || parentOrder.shippingAddress?.state || '';
       const deliveryPincode = notification.deliveryAddress?.pincode || parentOrder.shippingAddress?.pinCode || parentOrder.shippingAddress?.pincode || '';
@@ -137,17 +204,29 @@ export const autoAssignCaptainToOrder = async (notification) => {
         const otp = genDeliveryOtp();
         const pickupOtp = parentOrder.pickupOtp || notification.pickupOtp || genDeliveryOtp();
 
-        await Order.findByIdAndUpdate(parentOrder._id, {
-          captainId: nearestCaptain._id,
-          captainStatus: 'Assigned',
-          deliveryOtp: otp,
-          pickupOtp,
-          captainCommissionRate: captainCommRate,
-          captainCommissionAmount: Math.round(((notification.totalAmount || parentOrder.grandTotal || 0) * (captainCommRate / 100)) * 100) / 100,
-          captainEarnings,
-          captainEarning: captainEarnings,
-          captainAssignedAt: new Date(),
-        });
+        const claimed = await Order.findOneAndUpdate(
+          {
+            _id: parentOrder._id,
+            $or: [
+              { captainId: null },
+              { captainId: { $exists: false } },
+              { captainStatus: 'Rejected' },
+            ],
+          },
+          {
+            captainId: nearestCaptain._id,
+            captainStatus: 'Assigned',
+            deliveryOtp: otp,
+            pickupOtp,
+            captainCommissionRate: captainCommRate,
+            captainCommissionAmount: Math.round(((notification.totalAmount || parentOrder.grandTotal || 0) * (captainCommRate / 100)) * 100) / 100,
+            captainEarnings,
+            captainEarning: captainEarnings,
+            captainAssignedAt: new Date(),
+          },
+          { new: true }
+        );
+        if (!claimed) return null;
 
         // Save assigned captain info on SellerNotification too
         notification.captainId = nearestCaptain._id;
@@ -156,30 +235,13 @@ export const autoAssignCaptainToOrder = async (notification) => {
         notification.pickupOtp = pickupOtp;
         await notification.save();
 
-        // Broadcast notifications to all eligible online captains
-        for (const captain of eligibleCaptains) {
-          await CaptainNotification.create({
-            captainId: captain._id,
-            type: 'JOB_ASSIGNED',
-            title: 'New Delivery Assigned!',
-            message: `Order #${notification.orderId} from ${notification.sellerName || 'Seller'} — Drop: ${deliveryCity || 'Customer Address'}. Payout: ₹${captainEarnings.toFixed(2)}. Report to pickup immediately.`,
-            orderId: notification.orderId,
-            order: parentOrder._id,
-            amount: captainEarnings,
-            icon: 'local_shipping',
-          });
-
-          // Trigger FCM Push Notification to Captain device
-          sendNotificationToCaptain(captain._id, {
-            title: '🛵 New Delivery Assigned!',
-            body: `Order #${notification.orderId} — Pickup from ${notification.sellerName || 'Store'}. Payout: ₹${captainEarnings.toFixed(2)}`,
-            data: {
-              type: 'delivery_assigned',
-              orderId: notification.orderId,
-              link: '/captain/dashboard',
-            },
-          }).catch(() => {});
-        }
+        await notifyCaptainsOfPackedOrder(
+          claimed,
+          notification,
+          eligibleCaptains,
+          captainEarnings,
+          deliveryCity
+        );
 
         console.log(`[CaptainAssign] Dispatched Order #${notification.orderId} to ${eligibleCaptains.length} captains (Primary: "${nearestCaptain.name}" - ${nearestCaptain.phone}). OTP: ${otp}, Payout: ₹${captainEarnings}`);
         return nearestCaptain;
@@ -232,6 +294,45 @@ const findOrCreateProduct = async (productId, productData = {}) => {
   return created;
 };
 
+const pickOrderedVariant = (product, item = {}) => {
+  const nested = item.selectedVariant || {};
+  const selectedAttributes = readCustomerAttributes(item);
+  const variantSku = String(item.variantSku || nested.sku || '').trim();
+  const variantId = String(item.variantId || nested._id || '').trim();
+  const variants = Array.isArray(product?.variants) ? product.variants : [];
+  let matched = null;
+  if (variantSku) {
+    matched = variants.find((variant) => String(variant.sku || '').trim() === variantSku) || null;
+  }
+  if (!matched && variantId) {
+    matched = variants.find((variant) => String(variant._id || '') === variantId) || null;
+  }
+  if (!matched && Object.keys(selectedAttributes).length) {
+    matched = variants.find((variant) => {
+      const attrs = normalizeAttributes(variant.attributes);
+      return Object.entries(selectedAttributes).every(([key, value]) => {
+        const attrKey = Object.keys(attrs).find((name) => name.toLowerCase() === key.toLowerCase());
+        return attrKey && attrs[attrKey] === value;
+      });
+    }) || null;
+  }
+  const variantTitle = String(
+    matched?.title || item.variantTitle || item.variation || nested.title || ''
+  ).trim();
+  const frozenAttributes = freezeSelectedAttributes(
+    selectedAttributes,
+    matched,
+    Boolean(variantSku || variantId)
+  );
+  return {
+    matched,
+    variantSku: String(matched?.sku || variantSku || '').trim(),
+    variantId: String(matched?._id || variantId || '').trim(),
+    variantTitle,
+    selectedAttributes: frozenAttributes,
+  };
+};
+
 // Place Order
 export const placeOrder = async (req, res, next) => {
   try {
@@ -256,7 +357,35 @@ export const placeOrder = async (req, res, next) => {
     let itemsToProcess = [];
 
     if (userDoc && userDoc.cart && userDoc.cart.length > 0) {
-      itemsToProcess = userDoc.cart;
+      const bodyItems = Array.isArray(rawBodyItems) ? rawBodyItems : [];
+      itemsToProcess = userDoc.cart.map((cartItem) => {
+        const plain = typeof cartItem.toObject === 'function' ? cartItem.toObject() : { ...cartItem };
+        const productId = String(plain.product?._id || plain.product || '');
+        const match = bodyItems.find((bodyItem) => {
+          const bodyId = String(bodyItem.product?._id || bodyItem.product || bodyItem.productId || bodyItem.id || '');
+          if (bodyId !== productId) return false;
+          const bodySku = String(bodyItem.variantSku || '').trim();
+          const cartSku = String(plain.variantSku || '').trim();
+          if (bodySku || cartSku) return bodySku === cartSku;
+          return true;
+        });
+        const hasStoredVariant = Boolean(
+          plain.variantSku
+          || plain.variantId
+          || (plain.selectedAttributes && Object.keys(plain.selectedAttributes).length)
+          || (Array.isArray(plain.selectedVariants) && plain.selectedVariants.length)
+        );
+        if (!match || hasStoredVariant) return plain;
+        return {
+          ...plain,
+          variantSku: match.variantSku || '',
+          variantId: match.variantId || '',
+          variantTitle: match.variantTitle || '',
+          selectedAttributes: match.selectedAttributes,
+          selectedVariants: match.selectedVariants,
+          image: match.image || plain.image,
+        };
+      });
     } else if (rawBodyItems && Array.isArray(rawBodyItems) && rawBodyItems.length > 0) {
       itemsToProcess = rawBodyItems;
     }
@@ -290,16 +419,42 @@ export const placeOrder = async (req, res, next) => {
       }
 
       const qty = Math.max(1, Number(item.quantity || 1));
-
-      if (product.stock !== undefined && product.stock < qty) {
+      const chosen = pickOrderedVariant(product, item);
+      const missingOptions = missingOptionNames(product, chosen.selectedAttributes);
+      if (missingOptions.length) {
         return res.status(400).json({
           success: false,
-          message: `Insufficient stock for "${product.name}". Available: ${product.stock}, Requested: ${qty}`,
+          message: `Select ${missingOptions.join(', ')} for "${product.name}" before placing the order.`,
+        });
+      }
+      if (
+        product.hasVariants
+        && Array.isArray(product.variants)
+        && product.variants.some((variant) => variant && variant.active !== false)
+        && !chosen.matched
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: `The selected options for "${product.name}" are not available.`,
+        });
+      }
+      const availableStock = chosen.matched
+        ? Number(chosen.matched.stock ?? product.stock ?? 0)
+        : product.stock;
+
+      if (availableStock !== undefined && availableStock < qty) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for "${product.name}". Available: ${availableStock}, Requested: ${qty}`,
         });
       }
 
-      const unitPrice = Number(product.salePrice || product.price || item.price || 0);
-      const originalUnitPrice = Number(product.mrp || product.originalPrice || item.originalPrice || unitPrice);
+      const unitPrice = chosen.matched
+        ? Number(chosen.matched.price || product.salePrice || product.price || item.price || 0)
+        : Number(product.salePrice || product.price || item.price || 0);
+      const originalUnitPrice = chosen.matched
+        ? Number(chosen.matched.originalPrice || chosen.matched.price || product.mrp || product.originalPrice || unitPrice)
+        : Number(product.mrp || product.originalPrice || item.originalPrice || unitPrice);
 
       itemsTotal += unitPrice * qty;
       totalOriginalPrice += originalUnitPrice * qty;
@@ -310,8 +465,18 @@ export const placeOrder = async (req, res, next) => {
         price: unitPrice,
         originalPrice: originalUnitPrice,
         quantity: qty,
-        image: cleanImage(product.mainImage || product.image || item.image || (product.variants?.[0]?.image) || '') || product.mainImage || product.image || item.image || '',
+        image: cleanImage(
+          chosen.matched?.image || product.mainImage || product.image || item.image || (product.variants?.[0]?.image) || ''
+        ) || chosen.matched?.image || product.mainImage || product.image || item.image || '',
         seller: product.seller || item.seller || 'ShippNex Official Store',
+        variantSku: chosen.variantSku,
+        variantId: chosen.variantId,
+        sku: chosen.variantSku || String(product.sku || '').trim(),
+        variantTitle: chosen.variantTitle,
+        selectedAttributes: Object.keys(chosen.selectedAttributes || {}).length
+          ? chosen.selectedAttributes
+          : undefined,
+        selectedVariants: rowsFromAttributes(chosen.selectedAttributes, chosen.variantId),
       });
     }
 
@@ -407,11 +572,17 @@ export const placeOrder = async (req, res, next) => {
     console.log(`[OrderController] Successfully created Order in MongoDB: OrderID=${order.orderId}, UserID=${userId}, ItemsTotal=₹${itemsTotal}, Shipping=₹${shippingFee}, COD=₹${codCharge}, GrandTotal=₹${grandTotal}`);
 
     // Parallel stock reduction for all ordered items
-    const stockUpdates = orderItems.map((orderItem) =>
-      Product.findByIdAndUpdate(orderItem.product, {
+    const stockUpdates = orderItems.map((orderItem) => {
+      if (orderItem.variantSku) {
+        return Product.updateOne(
+          { _id: orderItem.product, 'variants.sku': orderItem.variantSku },
+          { $inc: { 'variants.$.stock': -orderItem.quantity, stock: -orderItem.quantity } }
+        );
+      }
+      return Product.findByIdAndUpdate(orderItem.product, {
         $inc: { stock: -orderItem.quantity },
-      })
-    );
+      });
+    });
 
     // -------------------------------------------------------------
     // MULTI-SELLER ORDER SPLITTING & SELLER NOTIFICATION CREATION
@@ -792,7 +963,7 @@ export const getSellerNotifications = async (req, res, next) => {
     };
 
     let dbQuery = SellerNotification.find(query)
-      .select('sellerId sellerName order orderId items.name items.price items.originalPrice items.quantity items.image items.product customerDetails deliveryAddress deliverySlot paymentMethod paymentStatus totalAmount status rejectionReason commissionRate commissionAmount netSellerAmount settlementStatus proofOfDeliveryUrl pickupOtp pickupOtpVerified pickupOtpVerifiedAt captainId captainName captainPhone viewedAt acceptedAt rejectedAt settledAt createdAt updatedAt')
+      .select('sellerId sellerName order orderId items.name items.price items.originalPrice items.quantity items.image items.product items.variantSku items.variantId items.sku items.variantTitle items.selectedAttributes items.selectedVariants customerDetails deliveryAddress deliverySlot paymentMethod paymentStatus totalAmount status rejectionReason commissionRate commissionAmount netSellerAmount settlementStatus proofOfDeliveryUrl pickupOtp pickupOtpVerified pickupOtpVerifiedAt captainId captainName captainPhone viewedAt acceptedAt rejectedAt settledAt createdAt updatedAt')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -911,9 +1082,6 @@ export const acceptSellerOrder = async (req, res, next) => {
 
     console.log(`[OrderController] Seller accepted Order ID ${notification.orderId}`);
 
-    // Auto-assign nearest available captain and notify them immediately
-    await autoAssignCaptainToOrder(notification);
-
     res.status(200).json({
       success: true,
       message: 'Order accepted successfully and assigned to nearest delivery captain!',
@@ -1013,6 +1181,26 @@ export const updateSellerOrderStatus = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Order notification not found' });
     }
 
+    const sellerAlreadyAccepted = [
+      'ACCEPTED',
+      'Accepted',
+      'PROCESSING',
+      'Processing',
+      'PACKED',
+      'Packed',
+      'OUT_FOR_DELIVERY',
+      'Out for Delivery',
+      'DELIVERED',
+      'Delivered',
+    ].includes(notification.status);
+    const movingPastAccept = ['Out for Delivery', 'OUT_FOR_DELIVERY', 'Delivered', 'DELIVERED', 'Processing', 'PACKED', 'Packed'].includes(status);
+    if (movingPastAccept && !sellerAlreadyAccepted) {
+      return res.status(400).json({
+        success: false,
+        message: 'Accept the order before updating delivery status',
+      });
+    }
+
     const now = new Date();
     let mappedNotificationStatus = status;
     let mappedOrderStatus = status;
@@ -1021,7 +1209,9 @@ export const updateSellerOrderStatus = async (req, res, next) => {
       mappedNotificationStatus = 'ACCEPTED';
       mappedOrderStatus = 'Accepted';
       notification.acceptedAt = now;
-      await autoAssignCaptainToOrder(notification);
+    } else if (status === 'Packed' || status === 'PACKED') {
+      mappedNotificationStatus = 'PACKED';
+      mappedOrderStatus = 'Packed';
     } else if (status === 'REJECTED' || status === 'Rejected') {
       mappedNotificationStatus = 'REJECTED';
       mappedOrderStatus = 'Rejected';
@@ -1037,14 +1227,19 @@ export const updateSellerOrderStatus = async (req, res, next) => {
         }
       }
     } else if (status === 'Out for Delivery' || status === 'OUT_FOR_DELIVERY') {
+      if (!['PACKED', 'Packed', 'OUT_FOR_DELIVERY', 'Out for Delivery'].includes(notification.status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Mark the order as packed before sending it out for delivery',
+        });
+      }
       mappedNotificationStatus = 'OUT_FOR_DELIVERY';
       mappedOrderStatus = 'Out for Delivery';
-      await autoAssignCaptainToOrder(notification);
     } else if (status === 'Delivered' || status === 'DELIVERED') {
       mappedNotificationStatus = 'DELIVERED';
       mappedOrderStatus = 'Delivered';
       notification.paymentStatus = 'Paid';
-    } else if (status === 'Processing' || status === 'PACKED') {
+    } else if (status === 'Processing') {
       mappedNotificationStatus = 'PROCESSING';
       mappedOrderStatus = 'Processing';
     }
@@ -1060,6 +1255,10 @@ export const updateSellerOrderStatus = async (req, res, next) => {
         ...(mappedNotificationStatus === 'DELIVERED' ? { paymentStatus: 'Paid' } : {}),
         ...(mappedNotificationStatus === 'REJECTED' ? { rejectionReason: notification.rejectionReason } : {}),
       });
+    }
+
+    if (mappedNotificationStatus === 'PACKED') {
+      await autoAssignCaptainToOrder(notification);
     }
 
     console.log(`[OrderController] Updated Order ID ${notification.orderId} status to "${mappedOrderStatus}"`);

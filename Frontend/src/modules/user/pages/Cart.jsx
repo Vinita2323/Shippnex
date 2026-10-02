@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trash2, Minus, Plus, Tag, ShoppingCart, Sparkles } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
+import { cartLineId, variantLabel } from '../../../utils/variantLabel';
 import commissionService from '../../../services/commissionService';
 
 const Cart = () => {
@@ -85,28 +86,45 @@ const Cart = () => {
             <div className="md:col-span-7 lg:col-span-8 space-y-4">
               <div className="flex flex-col gap-3">
                 {cartItems.map((item) => {
-                  const itemId = item.productId || item.id || item._id;
+                  const itemId = item.lineId || item.productId || item.id || item._id;
+                  const productLinkId = item.productId || item.sku || item.id || item._id;
+                  const optionLabel = variantLabel(item);
                   const itemPrice = Number(item.price ?? item.salePrice ?? 0);
-                  const itemImg = getImageUrl(item.image || item.mainImage);
+                  const openProduct = () => {
+                    if (!productLinkId) return;
+                    navigate(`/product/${productLinkId}`, {
+                      state: { cartLineId: item.lineId || cartLineId(item) },
+                    });
+                  };
 
                   return (
                     <div key={itemId} className="bg-white border border-slate-100 rounded-2xl p-4 md:p-5 flex gap-4 shadow-xs hover:shadow-md transition-shadow">
-                      <div className="w-[70px] h-[80px] md:w-[90px] md:h-[100px] flex justify-center items-center overflow-hidden rounded-xl bg-slate-50 shrink-0">
+                      <button
+                        type="button"
+                        onClick={openProduct}
+                        className="w-[70px] h-[80px] md:w-[90px] md:h-[100px] flex justify-center items-center overflow-hidden rounded-xl bg-slate-50 shrink-0 border-none p-0 cursor-pointer"
+                      >
                         <img 
                           src={getImageUrl(item.image || item.mainImage, item.name)} 
                           alt={item.name} 
                           className="max-w-full max-h-full object-contain mix-blend-multiply" 
                           onError={(e) => handleImageError(e, item.name)}
                         />
-                      </div>
+                      </button>
                       <div className="flex-1 flex flex-col min-w-0">
                         <div className="flex justify-between items-start gap-2">
-                          <h4 className="text-[13px] md:text-sm font-bold text-slate-800 m-0 mb-1 truncate">{item.name}</h4>
+                          <button
+                            type="button"
+                            onClick={openProduct}
+                            className="text-[13px] md:text-sm font-bold text-slate-800 m-0 mb-1 truncate text-left bg-transparent border-none p-0 cursor-pointer hover:text-[#ff5500]"
+                          >
+                            {item.name}
+                          </button>
                           <button onClick={() => removeFromCart(itemId)} className="bg-transparent border-none cursor-pointer p-1 text-slate-300 hover:text-red-500 transition-colors" title="Remove item">
                             <Trash2 size={16} />
                           </button>
                         </div>
-                        <p className="text-[11px] text-slate-400 m-0 mb-3">{item.unit || item.variation || '1 Pack'}</p>
+                        <p className="text-[11px] text-slate-400 m-0 mb-3">{optionLabel || item.unit || '1 Pack'}</p>
                         <div className="flex justify-between items-center mt-auto">
                           <span className="text-[15px] md:text-base font-extrabold text-slate-900">₹{itemPrice.toFixed(2)}</span>
                           <div className="flex items-center gap-3 border border-slate-200 rounded-xl py-1 px-2.5 bg-slate-50">

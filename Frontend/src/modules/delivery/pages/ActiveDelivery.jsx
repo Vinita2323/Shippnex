@@ -68,6 +68,7 @@ const ActiveDelivery = () => {
   // OTP & Verification Modals (Used for Product Delivery, Transport & Return Delivery)
   const [showProductDeliveryModal, setShowProductDeliveryModal] = useState(false);
   const [showSellerPickupOtpModal, setShowSellerPickupOtpModal] = useState(false);
+  const [showCustomerDeliveryOtpModal, setShowCustomerDeliveryOtpModal] = useState(false);
   const [showPickupOtpModal, setShowPickupOtpModal] = useState(false);
   const [showDropOtpModal, setShowDropOtpModal] = useState(false);
   const [showReturnOtpModal, setShowReturnOtpModal] = useState(false);
@@ -316,6 +317,13 @@ const ActiveDelivery = () => {
   };
 
   const handleConfirmProductDelivery = async () => {
+    if (!activeItem?.deliveryOtpVerified) {
+      setShowProductDeliveryModal(false);
+      setOtpDigits(['', '', '', '']);
+      setOtpError('');
+      setShowCustomerDeliveryOtpModal(true);
+      return;
+    }
     const finalProof = proofUrl || capturedPhoto;
     if (!finalProof || !String(finalProof).trim()) {
       setOtpError('Product delivery photo is mandatory. Please capture a photo of the product.');
@@ -356,6 +364,33 @@ const ActiveDelivery = () => {
       setOtpDigits(['', '', '', '']);
     } catch (err) {
       setOtpError(err?.response?.data?.message || err?.message || 'Invalid Seller Store Pickup OTP. Please ask the seller.');
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
+  const handleVerifyCustomerDeliveryOtp = async () => {
+    const otpStr = otpDigits.join('');
+    if (otpStr.length < 4) {
+      setOtpError('Please enter the 4-digit delivery OTP from the customer.');
+      return;
+    }
+    setVerifyingOtp(true);
+    setOtpError('');
+    try {
+      const orderId = activeItem.orderId || activeItem._id;
+      await captainService.verifyDeliveryOtp(orderId, otpStr);
+      setActiveItem((prev) => ({
+        ...prev,
+        deliveryOtpVerified: true,
+      }));
+      setShowCustomerDeliveryOtpModal(false);
+      setOtpDigits(['', '', '', '']);
+      setCapturedPhoto(null);
+      setProofUrl('');
+      setShowProductDeliveryModal(true);
+    } catch (err) {
+      setOtpError(err?.response?.data?.message || err?.message || 'Invalid delivery OTP. Please ask the customer.');
     } finally {
       setVerifyingOtp(false);
     }
@@ -980,7 +1015,7 @@ const ActiveDelivery = () => {
               {[
                 { step: 1, label: 'Order Accepted', sub: 'Proceed to store / seller' },
                 { step: 2, label: 'Reached Store', sub: 'Verify 4-digit Seller Pickup OTP to collect package' },
-                { step: 3, label: 'Out for Delivery', sub: 'En route to customer drop location' },
+                { step: 3, label: 'Out for Delivery', sub: 'At the customer door, verify the delivery OTP, then take a photo' },
                 { step: 4, label: 'Delivered', sub: 'Package handed over & payout credited' },
               ].map(({ step, label, sub }) => (
                 <div key={step} className="flex gap-3 relative z-10 items-start">
@@ -1188,21 +1223,35 @@ const ActiveDelivery = () => {
             {!isTransport && !isReturn &&
               (activeItem.captainStatus === 'In Transit' || activeItem.captainStatus === 'Picked Up') && (
                 <div className="space-y-2">
-                  <button
-                    onClick={() => {
-                      setOtpError('');
-                      setShowProductDeliveryModal(true);
-                    }}
-                    disabled={statusUpdating}
-                    className="w-full py-3.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-2xl font-bold text-xs shadow-lg cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
-                  >
-                    {statusUpdating ? (
-                      <span className="material-symbols-outlined animate-spin text-base">sync</span>
-                    ) : (
-                      <span className="material-symbols-outlined text-base">photo_camera</span>
-                    )}
-                    Take Product Photo & Complete Delivery
-                  </button>
+                  {activeItem.deliveryOtpVerified ? (
+                    <button
+                      onClick={() => {
+                        setOtpError('');
+                        setShowProductDeliveryModal(true);
+                      }}
+                      disabled={statusUpdating}
+                      className="w-full py-3.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-2xl font-bold text-xs shadow-lg cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
+                    >
+                      {statusUpdating ? (
+                        <span className="material-symbols-outlined animate-spin text-base">sync</span>
+                      ) : (
+                        <span className="material-symbols-outlined text-base">photo_camera</span>
+                      )}
+                      Take Product Photo & Complete Delivery
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setOtpDigits(['', '', '', '']);
+                        setOtpError('');
+                        setShowCustomerDeliveryOtpModal(true);
+                      }}
+                      className="w-full py-3.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-2xl font-bold text-xs shadow-lg cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <span className="material-symbols-outlined text-base">pin</span>
+                      Enter Customer Delivery OTP
+                    </button>
+                  )}
                 </div>
               )}
           </div>
@@ -1716,6 +1765,61 @@ const ActiveDelivery = () => {
                 {statusUpdating ? 'Finalizing…' : capturedPhoto ? 'Confirm Delivery & Mark Delivered' : 'Capture Photo to Enable'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showCustomerDeliveryOtpModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-100">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="font-bold text-base text-slate-900 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-emerald-700">pin</span>
+                Customer Delivery OTP
+              </h3>
+              <button
+                onClick={() => setShowCustomerDeliveryOtpModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Ask the customer for the 4-digit <span className="font-bold text-slate-800">delivery OTP</span> shown on their order tracking screen. The photo step opens after this OTP is verified.
+            </p>
+
+            <div className="flex justify-between gap-2 max-w-xs mx-auto py-2">
+              {otpDigits.map((digit, idx) => (
+                <input
+                  key={idx}
+                  id={`modal-otp-input-${idx}`}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                  placeholder="•"
+                  className="w-12 h-14 text-center text-2xl font-bold rounded-2xl border border-slate-300 bg-slate-50 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-200 outline-none"
+                />
+              ))}
+            </div>
+
+            {otpError && <p className="text-center text-xs text-red-500 font-semibold">{otpError}</p>}
+
+            <button
+              onClick={handleVerifyCustomerDeliveryOtp}
+              disabled={verifyingOtp || otpDigits.join('').length < 4}
+              className="w-full py-3.5 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-2xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {verifyingOtp ? (
+                <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+              ) : (
+                <span className="material-symbols-outlined text-base">check_circle</span>
+              )}
+              {verifyingOtp ? 'Verifying OTP…' : 'Verify OTP & Take Photo'}
+            </button>
           </div>
         </div>
       )}

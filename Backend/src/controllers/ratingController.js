@@ -1,8 +1,42 @@
 import mongoose from 'mongoose';
 import Rating from '../models/Rating.model.js';
 import TransportBooking from '../models/TransportBooking.model.js';
+import Order from '../models/Order.model.js';
 import User from '../models/User.model.js';
 import Captain from '../models/Captain.model.js';
+
+const DELIVERED_ORDER_STATUSES = new Set([
+  'Delivered',
+  'Returned',
+  'Return Requested',
+  'Return Approved',
+  'Return Rejected',
+  'Refund Completed',
+  'Refunded',
+]);
+
+const refId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'object' && value._id) return value._id;
+  return value;
+};
+
+const findRideOrOrder = async (rideId) => {
+  const id = String(rideId || '').trim();
+  const isMongoId = mongoose.Types.ObjectId.isValid(id) && id.length === 24;
+
+  const booking = await TransportBooking.findOne(
+    isMongoId ? { $or: [{ _id: id }, { bookingId: id }] } : { bookingId: id }
+  );
+  if (booking) return { kind: 'ride', doc: booking };
+
+  const order = await Order.findOne(
+    isMongoId ? { $or: [{ _id: id }, { orderId: id }] } : { orderId: id }
+  );
+  if (order) return { kind: 'order', doc: order };
+
+  return null;
+};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helper: Recalculate and update recipient's average rating and total count
@@ -67,18 +101,27 @@ export const submitRating = async (req, res, next) => {
       });
     }
 
-    // Find the transport booking by _id or bookingId
-    const isMongoId = mongoose.Types.ObjectId.isValid(rideId);
-    const booking = await TransportBooking.findOne(
-      isMongoId ? { $or: [{ _id: rideId }, { bookingId: rideId }] } : { bookingId: rideId }
-    );
-
-    if (!booking) {
+    const subject = await findRideOrOrder(rideId);
+    if (!subject) {
       return res.status(404).json({ success: false, message: 'Ride not found' });
     }
 
-    // Only COMPLETED rides can be rated
-    if (booking.status !== 'RIDE_COMPLETED') {
+    const booking = subject.doc;
+    const isOrder = subject.kind === 'order';
+    const subjectUserId = refId(booking.user);
+    const subjectCaptainId = refId(booking.captainId);
+    const subjectCode = isOrder ? booking.orderId : booking.bookingId;
+
+    if (isOrder) {
+      const delivered =
+        booking.captainStatus === 'Delivered' || DELIVERED_ORDER_STATUSES.has(booking.orderStatus);
+      if (!delivered) {
+        return res.status(400).json({
+          success: false,
+          message: 'Only a delivered order can be rated.',
+        });
+      }
+    } else if (booking.status !== 'RIDE_COMPLETED') {
       return res.status(400).json({
         success: false,
         message: `Ride cannot be rated in "${booking.status}" status. Only completed rides are eligible for rating.`,
@@ -92,44 +135,51 @@ export const submitRating = async (req, res, next) => {
     let reviewedModel = '';
 
     if (reviewerRole === 'user') {
-      // Verify user owns this booking
-      if (booking.user?.toString() !== reviewerId.toString()) {
+      if (subjectUserId?.toString() !== reviewerId.toString()) {
         return res.status(403).json({
           success: false,
-          message: 'You are not the customer for this ride',
+          message: isOrder ? 'You are not the customer for this order' : 'You are not the customer for this ride',
         });
       }
 
-      if (!booking.captainId) {
+      if (!subjectCaptainId) {
         return res.status(400).json({
           success: false,
-          message: 'No captain was assigned to this ride',
+          message: isOrder ? 'No captain was assigned to this order' : 'No captain was assigned to this ride',
         });
       }
 
       reviewerType = 'user';
       reviewerModel = 'User';
-      reviewedId = booking.captainId;
+      reviewedId = subjectCaptainId;
       reviewedType = 'captain';
       reviewedModel = 'Captain';
     } else if (reviewerRole === 'captain') {
-      // Verify captain was assigned to this booking
-      if (booking.captainId?.toString() !== reviewerId.toString()) {
+      if (subjectCaptainId?.toString() !== reviewerId.toString()) {
         return res.status(403).json({
           success: false,
-          message: 'You are not the assigned captain for this ride',
+          message: isOrder
+            ? 'You are not the assigned captain for this order'
+            : 'You are not the assigned captain for this ride',
+        });
+      }
+
+      if (!subjectUserId) {
+        return res.status(400).json({
+          success: false,
+          message: 'No customer is linked to this order',
         });
       }
 
       reviewerType = 'captain';
       reviewerModel = 'Captain';
-      reviewedId = booking.user;
+      reviewedId = subjectUserId;
       reviewedType = 'user';
       reviewedModel = 'User';
     } else {
       return res.status(403).json({
         success: false,
-        message: 'Forbidden: Only users and captains can rate rides',
+        message: 'Forbidden: Only users and captains can submit a rating',
       });
     }
 
@@ -150,7 +200,7 @@ export const submitRating = async (req, res, next) => {
     if (existingRating) {
       return res.status(400).json({
         success: false,
-        message: 'You have already rated this ride',
+        message: isOrder ? 'You have already rated this order' : 'You have already rated this ride',
         existingRating,
       });
     }
@@ -158,7 +208,7 @@ export const submitRating = async (req, res, next) => {
     // Create the rating record
     const newRating = await Rating.create({
       ride: booking._id,
-      rideBookingId: booking.bookingId,
+      rideBookingId: subjectCode,
       reviewerId,
       reviewerType,
       reviewerModel,
@@ -174,7 +224,7 @@ export const submitRating = async (req, res, next) => {
     const updatedStats = await recalculateRatingStats(reviewedId, reviewedType);
 
     console.log(
-      `[Rating] Created rating (${newRating.rating}★) for Ride #${booking.bookingId}: ${reviewerType} -> ${reviewedType} ${reviewedId}. New Stats: Avg=${updatedStats.ratingAverage}, Count=${updatedStats.ratingCount}`
+      `[Rating] Created rating (${newRating.rating}★) for ${isOrder ? 'Order' : 'Ride'} #${subjectCode}: ${reviewerType} -> ${reviewedType} ${reviewedId}. New Stats: Avg=${updatedStats.ratingAverage}, Count=${updatedStats.ratingCount}`
     );
 
     res.status(201).json({
@@ -187,7 +237,7 @@ export const submitRating = async (req, res, next) => {
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: 'You have already submitted a rating for this ride',
+        message: 'You have already submitted a rating',
       });
     }
     next(error);
@@ -204,14 +254,16 @@ export const getRideRatingStatus = async (req, res, next) => {
     const { rideId } = req.params;
     const currentUserId = req.user?.id;
 
-    const isMongoId = mongoose.Types.ObjectId.isValid(rideId);
-    const booking = await TransportBooking.findOne(
-      isMongoId ? { $or: [{ _id: rideId }, { bookingId: rideId }] } : { bookingId: rideId }
-    );
-
-    if (!booking) {
+    const subject = await findRideOrOrder(rideId);
+    if (!subject) {
       return res.status(404).json({ success: false, message: 'Ride not found' });
     }
+
+    const booking = subject.doc;
+    const isOrder = subject.kind === 'order';
+    const canRate = isOrder
+      ? (booking.captainStatus === 'Delivered' || DELIVERED_ORDER_STATUSES.has(booking.orderStatus))
+      : booking.status === 'RIDE_COMPLETED';
 
     const ratings = await Rating.find({ ride: booking._id });
 
@@ -224,7 +276,7 @@ export const getRideRatingStatus = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      rideId: booking.bookingId,
+      rideId: isOrder ? booking.orderId : booking.bookingId,
       hasUserRated: Boolean(userRatingDoc),
       userRating: userRatingDoc ? userRatingDoc.rating : null,
       userReview: userRatingDoc ? userRatingDoc.review : '',
@@ -234,7 +286,7 @@ export const getRideRatingStatus = async (req, res, next) => {
       captainReview: captainRatingDoc ? captainRatingDoc.review : '',
       captainFeedbackTags: captainRatingDoc ? captainRatingDoc.feedbackTags : [],
       myRating: myRatingDoc || null,
-      canRate: booking.status === 'RIDE_COMPLETED' && !myRatingDoc,
+      canRate: canRate && !myRatingDoc,
     });
   } catch (error) {
     next(error);

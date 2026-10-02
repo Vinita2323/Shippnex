@@ -5,7 +5,7 @@ export const notFound = (req, res, next) => {
 };
 
 export const errorHandler = (err, req, res, next) => {
-  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  const statusCode = err.statusCode || err.status || (res.statusCode === 200 ? 500 : res.statusCode);
   if (statusCode >= 500) {
     console.error(`[ERROR] ${req.method} ${req.originalUrl} -`, err);
   }

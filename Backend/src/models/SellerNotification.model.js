@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { selectedVariantSchema } from '../utils/selectedVariants.js';
 
 const sellerNotificationItemSchema = new mongoose.Schema({
   product: {
@@ -10,6 +11,12 @@ const sellerNotificationItemSchema = new mongoose.Schema({
   originalPrice: { type: Number },
   quantity: { type: Number, required: true, min: 1 },
   image: { type: String },
+  variantSku: { type: String, default: '' },
+  variantId: { type: String, default: '' },
+  sku: { type: String, default: '' },
+  variantTitle: { type: String, default: '' },
+  selectedAttributes: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  selectedVariants: { type: [selectedVariantSchema], default: undefined },
 });
 
 const sellerNotificationSchema = new mongoose.Schema(
@@ -67,7 +74,7 @@ const sellerNotificationSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['NEW', 'VIEWED', 'ACCEPTED', 'REJECTED', 'PROCESSING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'Accepted', 'Rejected', 'Out for Delivery', 'Delivered', 'Processing', 'Placed'],
+      enum: ['NEW', 'VIEWED', 'ACCEPTED', 'REJECTED', 'PACKED', 'Packed', 'PROCESSING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'Accepted', 'Rejected', 'Out for Delivery', 'Delivered', 'Processing', 'Placed'],
       default: 'NEW',
     },
     rejectionReason: {

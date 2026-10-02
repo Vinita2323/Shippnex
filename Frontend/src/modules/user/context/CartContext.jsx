@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { cartService } from '../../../services/authService';
 import { useAuth } from '../../../context/AuthContext';
+import { cartLineId, normalizeAttributes, toSelectedVariants } from '../../../utils/variantLabel';
 
 const CartContext = createContext();
 
@@ -52,14 +53,24 @@ export const CartProvider = ({ children }) => {
         const prodId = String(prod._id || prod.id || prod.productId || '');
         if (!prodId) return;
 
-        const price = Number(prod.salePrice ?? prod.price ?? 0);
-        const originalPrice = Number(prod.mrp ?? prod.originalPrice ?? price);
+        const selectedAttributes = normalizeAttributes(item.selectedAttributes);
+        const variantSku = String(item.variantSku || '').trim();
+        const variantId = String(item.variantId || '').trim();
+        const variantTitle = String(item.variantTitle || '').trim();
+        const selectedVariants = toSelectedVariants({ ...item, variantId, selectedAttributes });
+        const price = Number(item.price ?? prod.salePrice ?? prod.price ?? 0);
+        const originalPrice = Number(item.originalPrice ?? prod.mrp ?? prod.originalPrice ?? price);
         const name = prod.name || '';
-        const image = prod.mainImage || prod.image || (prod.variants?.[0]?.image) || '';
+        const image = item.image || prod.mainImage || prod.image || (prod.variants?.[0]?.image) || '';
         const qty = Math.max(1, Number(item.quantity || 1));
-
-        // Use unique identifier or name key to avoid duplicate cards
-        const key = prodId;
+        const formatted = {
+          productId: prodId,
+          variantSku,
+          variantId,
+          selectedAttributes,
+          selectedVariants,
+        };
+        const key = cartLineId(formatted);
 
         if (itemMap.has(key)) {
           const existing = itemMap.get(key);
@@ -70,11 +81,18 @@ export const CartProvider = ({ children }) => {
             id: prodId,
             _id: prodId,
             productId: prodId,
+            lineId: key,
             name,
             image,
             price,
             originalPrice,
             quantity: qty,
+            variantSku,
+            variantId,
+            variantTitle,
+            variation: variantTitle,
+            selectedAttributes,
+            selectedVariants,
           });
         }
       });
@@ -133,31 +151,14 @@ export const CartProvider = ({ children }) => {
       // Build a map of authoritative server items
       const map = new Map();
       formatted.forEach((item) => {
-        const idKey = String(item.productId || item.id || item._id);
-        map.set(idKey, item);
+        map.set(cartLineId(item), item);
       });
 
       // Check if there are other pending local items that haven't synced yet
       prev.forEach((localItem) => {
-        const pid = String(localItem.productId || localItem.id || localItem._id);
-        if (pendingSyncIds.current.has(pid)) {
-          // Look for matching item by ID or Name
-          let exists = false;
-          for (const [k, v] of map.entries()) {
-            if (
-              k === pid ||
-              String(v.id) === pid ||
-              String(v.productId) === pid ||
-              String(v._id) === pid ||
-              (v.name && localItem.name && v.name.trim().toLowerCase() === localItem.name.trim().toLowerCase())
-            ) {
-              exists = true;
-              break;
-            }
-          }
-          if (!exists) {
-            map.set(pid, localItem);
-          }
+        const pid = cartLineId(localItem);
+        if (pendingSyncIds.current.has(pid) && !map.has(pid)) {
+          map.set(pid, localItem);
         }
       });
 
@@ -169,17 +170,16 @@ export const CartProvider = ({ children }) => {
 
   const runSync = useCallback(async (productId) => {
     const key = String(productId);
-    const item = cartItemsRef.current.find((i) => {
-      const iId = String(i.productId || i.id || i._id || '');
-      return iId === key;
-    });
+    const item = cartItemsRef.current.find((i) => cartLineId(i) === key)
+      || cartItemsRef.current.find((i) => String(i.productId || i.id || i._id || '') === key);
+    const serverProductId = item?.productId || item?.id || key.split('::')[0];
 
     try {
       let res;
       if (!item || (item.quantity || 0) <= 0) {
-        res = await cartService.removeFromCart(productId);
+        res = await cartService.removeFromCart(serverProductId, item);
       } else {
-        res = await cartService.updateCartItem(productId, undefined, item.quantity, item);
+        res = await cartService.updateCartItem(serverProductId, undefined, item.quantity, item);
       }
       pendingSyncIds.current.delete(key);
       if (res && res.success && res.cart) {
@@ -245,39 +245,61 @@ export const CartProvider = ({ children }) => {
     // Update local cart instantly so the UI reflects the change on click
     const price = Number(product.salePrice ?? product.price ?? 0);
     const originalPrice = Number(product.mrp ?? product.originalPrice ?? price);
+    const selectedAttributes = normalizeAttributes(product.selectedAttributes || product.selectedVariant?.attributes);
+    const variantSku = String(product.variantSku || product.selectedVariant?.sku || '').trim();
+    const variantId = String(product.variantId || product.selectedVariant?._id || '').trim();
+    const variantTitle = String(product.variantTitle || product.variation || product.selectedVariant?.title || '').trim();
+    const selectedVariants = toSelectedVariants({ selectedAttributes, selectedVariants: product.selectedVariants, variantId });
+    const lineId = cartLineId({ productId, variantSku, selectedAttributes });
 
     setCartItems((prev) => {
-      const idx = prev.findIndex((i) => {
-        const iId = String(i.productId || i.id || i._id || '');
-        const nameMatch = i.name && product.name && i.name.trim().toLowerCase() === product.name.trim().toLowerCase();
-        return iId === productId || nameMatch;
-      });
-
+      const idx = prev.findIndex((i) => cartLineId(i) === lineId);
+      let next;
       if (idx > -1) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], quantity: (next[idx].quantity || 0) + Number(quantity) };
-        return next;
-      }
-
-      return [
-        ...prev,
-        {
-          ...product,
-          id: productId,
-          _id: productId,
-          productId,
-          name: product.name,
-          image: product.mainImage || product.image || (product.variants?.[0]?.image) || '',
+        next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          quantity: (next[idx].quantity || 0) + Number(quantity),
           price,
           originalPrice,
-          quantity: Number(quantity),
-        },
-      ];
+          variantSku,
+          variantId,
+          variantTitle,
+          variation: variantTitle,
+          selectedAttributes,
+          selectedVariants,
+          image: product.image || next[idx].image,
+        };
+      } else {
+        next = [
+          ...prev,
+          {
+            ...product,
+            id: productId,
+            _id: productId,
+            productId,
+            lineId,
+            name: product.name,
+            image: product.image || product.mainImage || (product.variants?.[0]?.image) || '',
+            price,
+            originalPrice,
+            quantity: Number(quantity),
+            variantSku,
+            variantId,
+            variantTitle,
+            variation: variantTitle,
+            selectedAttributes,
+            selectedVariants,
+          },
+        ];
+      }
+      cartItemsRef.current = next;
+      return next;
     });
 
     if (options.isBuyNow) {
       try {
-        const res = await scheduleSync(productId, { immediate: true });
+        const res = await scheduleSync(lineId, { immediate: true });
         if (res && res.success) return { success: true };
         return { success: false, message: res?.message || 'Failed to add item to cart' };
       } catch (err) {
@@ -285,53 +307,159 @@ export const CartProvider = ({ children }) => {
       }
     }
 
-    scheduleSync(productId);
+    scheduleSync(lineId);
     return { success: true };
+  };
+
+  const replaceCartLineVariant = async (sourceLineId, product) => {
+    if (!authContextIsAuthenticated) return { success: false, requiresAuth: true };
+    const source = findCartLine(sourceLineId);
+    if (!source || !product) return { success: false };
+
+    const productId = String(source.productId || source.id || source._id || '');
+    const selectedAttributes = normalizeAttributes(product.selectedAttributes || product.selectedVariant?.attributes);
+    const variantSku = String(product.variantSku || product.selectedVariant?.sku || '').trim();
+    const variantId = String(product.variantId || product.selectedVariant?._id || '').trim();
+    const variantTitle = String(product.variantTitle || product.variation || product.selectedVariant?.title || '').trim();
+    const selectedVariants = toSelectedVariants({ selectedAttributes, selectedVariants: product.selectedVariants, variantId });
+    const price = Number(product.salePrice ?? product.price ?? source.price ?? 0);
+    const originalPrice = Number(product.mrp ?? product.originalPrice ?? source.originalPrice ?? price);
+    const newLineId = cartLineId({ productId, variantSku, selectedAttributes });
+    const oldLineId = cartLineId(source);
+    const qty = source.quantity || 1;
+
+    if (syncTimers.current[oldLineId]) {
+      clearTimeout(syncTimers.current[oldLineId]);
+      delete syncTimers.current[oldLineId];
+    }
+    pendingSyncIds.current.delete(oldLineId);
+
+    if (newLineId === oldLineId) return { success: true };
+
+    const target = cartItemsRef.current.find((item) => cartLineId(item) === newLineId);
+    if (target) {
+      setCartItems((prev) => {
+        const next = prev.filter((item) => cartLineId(item) !== oldLineId);
+        cartItemsRef.current = next;
+        return next;
+      });
+      try {
+        await cartService.removeFromCart(productId, {
+          variantSku: source.variantSku,
+          selectedAttributes: source.selectedAttributes,
+        });
+      } catch {
+        fetchCart();
+        return { success: false };
+      }
+      return { success: true };
+    }
+
+    setCartItems((prev) => {
+      const next = prev.map((item) => {
+        if (cartLineId(item) !== oldLineId) return item;
+        return {
+          ...item,
+          lineId: newLineId,
+          variantSku,
+          variantId,
+          variantTitle,
+          variation: variantTitle,
+          selectedAttributes,
+          selectedVariants,
+          price,
+          originalPrice,
+          image: product.image || item.image,
+          quantity: qty,
+        };
+      });
+      cartItemsRef.current = next;
+      return next;
+    });
+
+    try {
+      const res = await cartService.updateCartItem(productId, undefined, qty, {
+        variantSku,
+        variantId,
+        variantTitle,
+        selectedAttributes,
+        selectedVariants,
+        price,
+        originalPrice,
+        image: product.image || source.image || '',
+        replaceLine: true,
+        previousVariantSku: source.variantSku || '',
+        previousSelectedAttributes: source.selectedAttributes || {},
+      });
+      if (res?.success && res.cart) {
+        reconcileServerCart(res.cart.items || [], newLineId);
+      }
+      return { success: true };
+    } catch {
+      fetchCart();
+      return { success: false };
+    }
+  };
+
+  const findCartLine = (productOrLineId) => {
+    const key = String(productOrLineId);
+    return cartItemsRef.current.find((i) => cartLineId(i) === key)
+      || cartItemsRef.current.find((i) => !key.includes('::') && String(i.productId || i.id || i._id || '') === key);
   };
 
   const updateQuantity = async (productId, delta, exactQty) => {
     if (!authContextIsAuthenticated) return;
-    const key = String(productId);
+    const current = findCartLine(productId);
+    if (!current) return;
+    const line = cartLineId(current);
 
     setCartItems((prev) => {
-      const idx = prev.findIndex((i) => {
-        const iId = String(i.productId || i.id || i._id || '');
-        return iId === key;
-      });
+      const idx = prev.findIndex((i) => cartLineId(i) === line);
       if (idx === -1) return prev;
 
-      const current = prev[idx];
-      const newQty = exactQty !== undefined ? Number(exactQty) : (current.quantity || 0) + Number(delta);
-      if (newQty <= 0) {
-        return prev.filter((_, i) => i !== idx);
-      }
-      const next = [...prev];
-      next[idx] = { ...current, quantity: newQty };
+      const row = prev[idx];
+      const newQty = exactQty !== undefined ? Number(exactQty) : (row.quantity || 0) + Number(delta);
+      const next = newQty <= 0
+        ? prev.filter((_, i) => i !== idx)
+        : prev.map((item, i) => (i === idx ? { ...item, quantity: newQty } : item));
+      cartItemsRef.current = next;
       return next;
     });
 
-    scheduleSync(productId);
+    scheduleSync(line);
   };
 
   const removeFromCart = async (productId) => {
     if (!authContextIsAuthenticated) return;
 
     const key = String(productId);
-    if (syncTimers.current[key]) {
-      clearTimeout(syncTimers.current[key]);
-      delete syncTimers.current[key];
-    }
-    pendingSyncIds.current.delete(key);
+    const exact = cartItemsRef.current.filter((i) => cartLineId(i) === key);
+    const targets = exact.length
+      ? exact
+      : cartItemsRef.current.filter((i) => String(i.productId || i.id || i._id || '') === key);
+    if (!targets.length) return;
 
-    setCartItems((prev) =>
-      prev.filter((i) => {
-        const iId = String(i.productId || i.id || i._id || '');
-        return iId !== key;
-      })
-    );
+    const lineIds = new Set(targets.map((item) => cartLineId(item)));
+    targets.forEach((item) => {
+      const line = cartLineId(item);
+      if (syncTimers.current[line]) {
+        clearTimeout(syncTimers.current[line]);
+        delete syncTimers.current[line];
+      }
+      pendingSyncIds.current.delete(line);
+    });
+
+    setCartItems((prev) => {
+      const next = prev.filter((i) => !lineIds.has(cartLineId(i)));
+      cartItemsRef.current = next;
+      return next;
+    });
 
     try {
-      await scheduleSync(productId, { immediate: true });
+      await Promise.all(targets.map((item) => cartService.removeFromCart(item.productId || item.id || item._id, {
+        variantSku: item.variantSku,
+        selectedAttributes: item.selectedAttributes,
+      })));
     } catch {
       fetchCart();
     }
@@ -347,6 +475,7 @@ export const CartProvider = ({ children }) => {
       return;
     }
     setCartItems([]);
+    cartItemsRef.current = [];
     try {
       await cartService.clearCart();
     } catch (err) {
@@ -354,9 +483,17 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  const isInCart = (productId) => {
+  const isInCart = (productId, variant) => {
     if (!productId) return false;
     const target = String(productId);
+    if (variant) {
+      const line = cartLineId({
+        productId: target,
+        variantSku: variant.variantSku,
+        selectedAttributes: variant.selectedAttributes,
+      });
+      return cartItems.some((item) => cartLineId(item) === line);
+    }
     return cartItems.some((item) => {
       const id1 = String(item.id || '');
       const id2 = String(item._id || '');
@@ -366,9 +503,18 @@ export const CartProvider = ({ children }) => {
     });
   };
 
-  const getItemQuantity = (productId) => {
+  const getItemQuantity = (productId, variant) => {
     if (!productId) return 0;
-    const item = cartItems.find((i) => String(i.id || i._id) === String(productId));
+    if (variant) {
+      const line = cartLineId({
+        productId: String(productId),
+        variantSku: variant.variantSku,
+        selectedAttributes: variant.selectedAttributes,
+      });
+      const item = cartItems.find((i) => cartLineId(i) === line);
+      return item ? item.quantity || 0 : 0;
+    }
+    const item = cartItems.find((i) => String(i.id || i._id || i.productId) === String(productId));
     return item ? item.quantity || 0 : 0;
   };
 
@@ -393,6 +539,7 @@ export const CartProvider = ({ children }) => {
   const value = {
     cartItems,
     addToCart,
+    replaceCartLineVariant,
     removeFromCart,
     updateQuantity,
     clearCart,

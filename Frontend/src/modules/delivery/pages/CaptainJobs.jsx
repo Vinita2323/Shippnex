@@ -9,7 +9,7 @@ import RatingModal from '../../../components/RatingModal';
 const CaptainJobs = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') || 'transport';
+  const initialTab = searchParams.get('tab') || 'deliveries';
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
   const [acceptedJob, setAcceptedJob] = useState(null);
@@ -47,8 +47,8 @@ const CaptainJobs = () => {
     } catch (e) {}
   }, []);
 
-  const fetchJobs = useCallback(async (tab) => {
-    setLoading(true);
+  const fetchJobs = useCallback(async (tab, silent = false) => {
+    if (!silent) setLoading(true);
     try {
       if (tab === 'transport') {
         const res = await transportService.captainGetRequests();
@@ -72,13 +72,18 @@ const CaptainJobs = () => {
       else if (tab === 'returns') setReturnJobs([]);
       else setJobs([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchJobs(activeTab);
     fetchTabCounts();
+    const interval = setInterval(() => {
+      fetchJobs(activeTab, true);
+      fetchTabCounts();
+    }, 5000);
+    return () => clearInterval(interval);
   }, [activeTab, fetchJobs, fetchTabCounts]);
 
   const handleTabChange = (tab) => {
