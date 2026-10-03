@@ -100,7 +100,20 @@ export function applySavedAddressesAsDeliveryLocation(addresses, { notify = true
         const ownerId = currentUserId();
         const belongsToUser = !ownerId || !stored.ownerId || String(stored.ownerId) === ownerId;
         const matchesThisUser = belongsToUser && addresses.some((addr) => locationMatchesSavedAddress(stored, addr));
-        if (matchesThisUser && isDeliverableLocation(stored)) {
+        let matchesSelected = false;
+        try {
+          const selectedRaw = localStorage.getItem('shippnex_selected_checkout_address');
+          if (selectedRaw) {
+            const selected = JSON.parse(selectedRaw);
+            matchesSelected = locationMatchesSavedAddress(stored, {
+              ...selected,
+              addressLine1: selected.addressLine1 || selected.address,
+              pincode: selected.pincode || selected.zip,
+              _id: selected._id || selected.id,
+            });
+          }
+        } catch (e) {}
+        if ((matchesThisUser || matchesSelected) && isDeliverableLocation(stored)) {
           if (notify) {
             window.dispatchEvent(new CustomEvent('shippnex_location_changed', { detail: stored }));
           }
@@ -114,4 +127,59 @@ export function applySavedAddressesAsDeliveryLocation(addresses, { notify = true
     }
   } catch (e) {}
   return loc;
+}
+
+function findMatchingAddress(record, addresses) {
+  if (!record || !Array.isArray(addresses)) return null;
+  return addresses.find((addr) => locationMatchesSavedAddress(
+    {
+      ...record,
+      addressLine1: record.addressLine1 || record.address,
+      _id: record._id || record.id,
+      id: record.id || record._id,
+    },
+    addr
+  )) || null;
+}
+
+// Refresh stored lists after an address is saved without replacing a delivery
+// location the user already picked, unless that pick is one of these addresses.
+export function syncSavedAddressesAfterChange(addresses) {
+  if (!Array.isArray(addresses)) return null;
+  try {
+    localStorage.setItem('shippnex_saved_addresses', JSON.stringify(addresses));
+
+    const selectedRaw = localStorage.getItem('shippnex_selected_checkout_address');
+    if (selectedRaw) {
+      const parsed = JSON.parse(selectedRaw);
+      const match = findMatchingAddress(parsed, addresses);
+      if (match) {
+        localStorage.setItem('shippnex_selected_checkout_address', JSON.stringify(match));
+      }
+    } else {
+      const fallback = pickDefaultSavedAddress(addresses);
+      if (fallback) {
+        localStorage.setItem('shippnex_selected_checkout_address', JSON.stringify(fallback));
+      }
+    }
+
+    const storedRaw = localStorage.getItem('userLocation');
+    if (storedRaw) {
+      const stored = JSON.parse(storedRaw);
+      const match = findMatchingAddress(stored, addresses);
+      if (match) {
+        const loc = addressToDeliveryLocation(match);
+        if (loc && isDeliverableLocation(loc)) {
+          localStorage.setItem('userLocation', JSON.stringify(loc));
+          window.dispatchEvent(new CustomEvent('shippnex_location_changed', { detail: loc }));
+          return loc;
+        }
+      }
+      return isDeliverableLocation(stored) ? stored : null;
+    }
+
+    return applySavedAddressesAsDeliveryLocation(addresses);
+  } catch (e) {
+    return null;
+  }
 }

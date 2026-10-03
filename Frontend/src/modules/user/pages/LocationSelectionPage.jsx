@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, Search, Navigation, Check, Home as HomeIcon, Briefcase, ChevronDown, ChevronUp, Loader2, Building2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Search, Navigation, Check, Home as HomeIcon, Briefcase, Loader2, Building2, Plus } from 'lucide-react';
 import { useLocationContext } from '../../../context/LocationContext';
 import { addressService } from '../../../services/authService';
 import { MapService } from '../../../services/MapService';
 import LocationSearchModal from '../../../components/LocationSearchModal';
+import AddAddressForm from '../components/AddAddressForm';
+import { locationMatchesSavedAddress, syncSavedAddressesAfterChange } from '../../../utils/userLocation';
 
 const LocationSelectionPage = () => {
   const navigate = useNavigate();
@@ -16,43 +18,46 @@ const LocationSelectionPage = () => {
   const [predictions, setPredictions] = useState([]);
   const [searching, setSearching] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState([]);
-  const [showManualForm, setShowManualForm] = useState(false);
+  const [isAddAddressOpen, setIsAddAddressOpen] = useState(false);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const searchDebounceRef = useRef(null);
 
-  // Manual Detailed Address Form State
-  const [manualForm, setManualForm] = useState({
-    addressType: 'Home',
-    addressLine1: '',
-    landmark: '',
-    city: 'Noida',
-    state: 'Uttar Pradesh',
-    pincode: '201301',
-    fullName: '',
-    phone: '',
-  });
+  const loadSavedAddresses = async ({ syncSelection = false } = {}) => {
+    try {
+      const res = await addressService.getAddresses();
+      if (res && res.success && Array.isArray(res.addresses)) {
+        setSavedAddresses(res.addresses);
+        localStorage.setItem('shippnex_saved_addresses', JSON.stringify(res.addresses));
+        if (syncSelection) syncSavedAddressesAfterChange(res.addresses);
+        return res.addresses;
+      }
+    } catch (err) {}
+
+    const saved = localStorage.getItem('shippnex_saved_addresses');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setSavedAddresses(parsed);
+          if (syncSelection) syncSavedAddressesAfterChange(parsed);
+          return parsed;
+        }
+      } catch (e) {}
+    }
+    return [];
+  };
 
   useEffect(() => {
-    const fetchAddresses = async () => {
-      try {
-        const res = await addressService.getAddresses();
-        if (res && res.success && Array.isArray(res.addresses)) {
-          setSavedAddresses(res.addresses);
-          localStorage.setItem('shippnex_saved_addresses', JSON.stringify(res.addresses));
-          return;
-        }
-      } catch (err) {}
-
-      const saved = localStorage.getItem('shippnex_saved_addresses');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) setSavedAddresses(parsed);
-        } catch (e) {}
-      }
-    };
-    fetchAddresses();
+    loadSavedAddresses();
   }, []);
+
+  const handleAddressSaved = async (addresses) => {
+    if (Array.isArray(addresses)) {
+      setSavedAddresses(addresses);
+      syncSavedAddressesAfterChange(addresses);
+    }
+    await loadSavedAddresses({ syncSelection: true });
+  };
 
   // GPS Auto-Detection with Google Maps Reverse Geocode
   const handleUseCurrentLocation = async () => {
@@ -61,27 +66,97 @@ const LocationSelectionPage = () => {
 
     try {
       const coords = await MapService.getCurrentCoordinates();
-      const detailed = await MapService.reverseGeocode(coords.lat, coords.lng);
+      let detailed = null;
+      try {
+        detailed = await MapService.reverseGeocode(coords.lat, coords.lng);
+      } catch (geoErr) {
+        console.error('Reverse geocode failed, saving GPS coordinates:', geoErr);
+      }
 
-      const locObj = {
-        lat: detailed.latitude || detailed.lat,
-        lng: detailed.longitude || detailed.lng,
-        latitude: detailed.latitude || detailed.lat,
-        longitude: detailed.longitude || detailed.lng,
-        city: detailed.city || 'City',
-        state: detailed.state || '',
-        pincode: detailed.postalCode || detailed.pincode || '',
-        area: detailed.area || detailed.city || 'Current Location',
-        addressLine1: detailed.formattedAddress || detailed.address,
-        formattedAddress: detailed.formattedAddress,
-        addressType: 'GPS',
+      const lat = Number(detailed?.latitude || detailed?.lat || coords.lat);
+      const lng = Number(detailed?.longitude || detailed?.lng || coords.lng);
+      const city = [detailed?.city, detailed?.district, detailed?.area].find((part) => part && part !== 'City') || '';
+      const state = detailed?.state || '';
+      const pincode = detailed?.postalCode || detailed?.pincode || '';
+      const addressLine1 = detailed?.formattedAddress || detailed?.address || `Current location (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+
+      let fullName = localStorage.getItem('shippnex_user_name') || '';
+      let phone = localStorage.getItem('shippnex_user_phone') || '';
+      try {
+        const userData = JSON.parse(localStorage.getItem('shippnex_user_data') || '{}');
+        if (!fullName && userData.name) fullName = userData.name;
+        if (!phone && userData.phone) phone = userData.phone;
+      } catch (e) {}
+      if (!fullName || fullName === 'User') fullName = 'Customer';
+
+      const point = { type: 'Point', coordinates: [lng, lat] };
+      let saved = savedAddresses.find((addr) => locationMatchesSavedAddress({ addressLine1, pincode }, addr)) || null;
+      let addressList = savedAddresses;
+
+      if (!saved && localStorage.getItem('shippnex_user_token') && phone && city && state && pincode) {
+        try {
+          const res = await addressService.addAddress({
+            fullName,
+            phone,
+            addressLine1,
+            city,
+            state,
+            pincode,
+            country: detailed?.country || 'India',
+            addressType: savedAddresses.length === 0 ? 'Home' : 'Other',
+            isDefault: savedAddresses.length === 0,
+            location: point,
+          });
+          if (res?.success && Array.isArray(res.addresses) && res.addresses.length > 0) {
+            addressList = res.addresses;
+            setSavedAddresses(res.addresses);
+            saved = res.addresses.find((addr) => locationMatchesSavedAddress({ addressLine1, pincode }, addr))
+              || res.addresses[res.addresses.length - 1];
+          }
+        } catch (saveErr) {
+          console.error('Could not store GPS address:', saveErr);
+        }
+      }
+
+      const selected = {
+        ...(saved || {}),
+        fullName: saved?.fullName || fullName,
+        phone: saved?.phone || phone,
+        addressLine1: saved?.addressLine1 || addressLine1,
+        address: saved?.addressLine1 || addressLine1,
+        city: saved?.city || city,
+        state: saved?.state || state,
+        pincode: saved?.pincode || pincode,
+        addressType: saved?.addressType || (savedAddresses.length === 0 ? 'Home' : 'Other'),
+        location: saved?.location?.coordinates ? saved.location : point,
       };
 
-      setLocation(locObj);
+      localStorage.setItem('shippnex_selected_checkout_address', JSON.stringify(selected));
+      if (saved && addressList.length > 0) syncSavedAddressesAfterChange(addressList);
+
+      setLocation({
+        lat,
+        lng,
+        latitude: lat,
+        longitude: lng,
+        city: selected.city,
+        state: selected.state,
+        pincode: selected.pincode,
+        area: detailed?.area || selected.city || 'Current Location',
+        addressLine1: selected.addressLine1,
+        address: selected.addressLine1,
+        formattedAddress: addressLine1,
+        addressType: selected.addressType,
+        fullName: selected.fullName,
+        phone: selected.phone,
+        _id: saved?._id || saved?.id || '',
+        id: saved?._id || saved?.id || '',
+        fromSavedAddress: true,
+      });
       navigate(-1);
     } catch (err) {
       console.error('Google Maps location detection error:', err);
-      setError(err.message || 'Failed to detect GPS location. Please enter location manually below.');
+      setError(err.message || 'Failed to detect GPS location. Please try again.');
     } finally {
       setIsLocating(false);
     }
@@ -211,73 +286,6 @@ const LocationSelectionPage = () => {
     navigate(-1);
   };
 
-  const handleManualFormSubmit = async (e) => {
-    e.preventDefault();
-    if (!manualForm.addressLine1.trim()) {
-      setError('Please enter street address / house number');
-      return;
-    }
-
-    const cleanLine1 = manualForm.addressLine1.trim();
-    const cleanLandmark = manualForm.landmark.trim();
-    const cleanCity = manualForm.city.trim() || 'Indore';
-    const cleanState = manualForm.state.trim() || 'Madhya Pradesh';
-    const cleanPincode = manualForm.pincode.trim() || '452001';
-
-    let resolvedCoords = null;
-    try {
-      const fullAddrStr = `${cleanLine1}, ${cleanLandmark ? cleanLandmark + ', ' : ''}${cleanCity}, ${cleanState} ${cleanPincode}`.trim();
-      const geoRes = await MapService.geocodeAddress(fullAddrStr).catch(async () => {
-        return await MapService.geocodeAddress(`${cleanCity}, ${cleanState} ${cleanPincode}`).catch(() => null);
-      });
-      if (geoRes && (geoRes.latitude || geoRes.lat)) {
-        resolvedCoords = {
-          lat: Number(geoRes.latitude || geoRes.lat),
-          lng: Number(geoRes.longitude || geoRes.lng),
-          latitude: Number(geoRes.latitude || geoRes.lat),
-          longitude: Number(geoRes.longitude || geoRes.lng),
-        };
-      }
-    } catch (e) {}
-
-    const locObj = {
-      addressType: manualForm.addressType,
-      addressLine1: cleanLine1,
-      landmark: cleanLandmark,
-      city: cleanCity,
-      state: cleanState,
-      pincode: cleanPincode,
-      area: `${cleanLine1}, ${cleanCity}`,
-      formattedAddress: `${cleanLine1}, ${cleanLandmark ? cleanLandmark + ', ' : ''}${cleanCity}, ${cleanState} ${cleanPincode}`,
-      ...(resolvedCoords || {})
-    };
-
-    setLocation(locObj);
-
-    // Save to user address list if logged in
-    try {
-      await addressService.addAddress({
-        addressType: manualForm.addressType,
-        fullName: manualForm.fullName || localStorage.getItem('shippnex_user_name') || 'Customer',
-        phone: manualForm.phone || localStorage.getItem('shippnex_user_phone') || '',
-        addressLine1: cleanLine1,
-        landmark: cleanLandmark,
-        city: cleanCity,
-        state: cleanState,
-        pincode: cleanPincode,
-        country: 'India',
-        ...(resolvedCoords ? {
-          location: {
-            type: 'Point',
-            coordinates: [resolvedCoords.lng, resolvedCoords.lat]
-          }
-        } : {})
-      });
-    } catch (err) {}
-
-    navigate(-1);
-  };
-
   return (
     <div className="h-[100dvh] md:h-auto md:min-h-screen bg-[#f8fafc] font-sans max-w-[480px] md:max-w-3xl mx-auto relative flex flex-col md:py-8 md:px-6 overflow-hidden md:overflow-visible">
       {/* Mobile Header */}
@@ -380,123 +388,19 @@ const LocationSelectionPage = () => {
           )}
         </div>
 
-        {/* Enter Detailed Manual Location Form Card */}
-        <div className="bg-white rounded-2xl shadow-xs border border-slate-100 overflow-hidden">
-          <div 
-            onClick={() => setShowManualForm(!showManualForm)}
-            className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50/80 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-orange-100/60 text-[#ea580c] flex items-center justify-center shrink-0">
-                <MapPin size={18} />
-              </div>
-              <div>
-                <h3 className="text-[14px] font-extrabold text-slate-900 m-0">Enter Location Manually</h3>
-                <p className="text-[11px] text-slate-500 font-medium m-0">Fill flat no, street, city & pincode</p>
-              </div>
-            </div>
-            <button className="bg-transparent border-none text-slate-500 cursor-pointer p-1">
-              {showManualForm ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-            </button>
+        <button
+          type="button"
+          onClick={() => setIsAddAddressOpen(true)}
+          className="w-full bg-white rounded-2xl p-4 flex items-center gap-3 shadow-xs border border-slate-100 hover:border-[#ea580c] cursor-pointer transition-all active:scale-[0.99] text-left"
+        >
+          <div className="w-9 h-9 rounded-full bg-orange-100/60 text-[#ea580c] flex items-center justify-center shrink-0">
+            <Plus size={18} />
           </div>
-
-          {showManualForm && (
-            <form onSubmit={handleManualFormSubmit} className="p-4 pt-0 flex flex-col gap-3 border-t border-slate-100 mt-1">
-              
-              {/* Address Type Tag Selector */}
-              <div>
-                <label className="text-[11px] font-bold text-slate-500 mb-1.5 block uppercase tracking-wider">Address Type</label>
-                <div className="flex gap-2">
-                  {['Home', 'Office', 'Other'].map((type) => (
-                    <button
-                      type="button"
-                      key={type}
-                      onClick={() => setManualForm({ ...manualForm, addressType: type })}
-                      className={`flex-1 py-2 px-3 rounded-xl border text-[12px] font-bold cursor-pointer transition-all ${
-                        manualForm.addressType === type
-                          ? 'border-[#ea580c] bg-orange-50 text-[#ea580c] shadow-xs'
-                          : 'border-slate-200 bg-slate-50 text-slate-600'
-                      }`}
-                    >
-                      {type}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Flat / Street Address */}
-              <div>
-                <label className="text-[11px] font-bold text-slate-500 mb-1 block">Flat / House No / Street Address *</label>
-                <input
-                  required
-                  type="text"
-                  placeholder="e.g. Flat 302, Palm Grove Apartment, Sector 45"
-                  value={manualForm.addressLine1}
-                  onChange={(e) => setManualForm({ ...manualForm, addressLine1: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[12px] font-semibold text-slate-800 outline-none focus:border-[#ea580c]"
-                />
-              </div>
-
-              {/* Landmark */}
-              <div>
-                <label className="text-[11px] font-bold text-slate-500 mb-1 block">Landmark (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Near City Hospital"
-                  value={manualForm.landmark}
-                  onChange={(e) => setManualForm({ ...manualForm, landmark: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[12px] font-semibold text-slate-800 outline-none focus:border-[#ea580c]"
-                />
-              </div>
-
-              {/* City & State */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 mb-1 block">City *</label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="City"
-                    value={manualForm.city}
-                    onChange={(e) => setManualForm({ ...manualForm, city: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-[12px] font-semibold text-slate-800 outline-none focus:border-[#ea580c]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 mb-1 block">State *</label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="State"
-                    value={manualForm.state}
-                    onChange={(e) => setManualForm({ ...manualForm, state: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-[12px] font-semibold text-slate-800 outline-none focus:border-[#ea580c]"
-                  />
-                </div>
-              </div>
-
-              {/* Pincode */}
-              <div>
-                <label className="text-[11px] font-bold text-slate-500 mb-1 block">Pincode *</label>
-                <input
-                  required
-                  type="text"
-                  placeholder="e.g. 201301"
-                  value={manualForm.pincode}
-                  onChange={(e) => setManualForm({ ...manualForm, pincode: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-[12px] font-semibold text-slate-800 outline-none focus:border-[#ea580c]"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-[#ea580c] hover:bg-[#d97706] text-white rounded-xl py-3 mt-1 font-bold text-[14px] cursor-pointer shadow-[0_4px_12px_rgba(234,88,12,0.25)] border-none transition-all active:scale-[0.98]"
-              >
-                Save & Set Delivery Location
-              </button>
-            </form>
-          )}
-        </div>
+          <div className="flex-1">
+            <h3 className="text-[14px] font-extrabold text-slate-900 m-0">Add New Address</h3>
+            <p className="text-[11px] text-slate-500 font-medium m-0">Save a name, street, city, ZIP code and phone</p>
+          </div>
+        </button>
 
         {/* Saved Addresses List */}
         {savedAddresses.length > 0 && (
@@ -542,6 +446,13 @@ const LocationSelectionPage = () => {
       </div>
 
       {/* Full Google Maps Location Search Modal */}
+      <AddAddressForm
+        open={isAddAddressOpen}
+        onClose={() => setIsAddAddressOpen(false)}
+        isDefault={savedAddresses.length === 0}
+        onSaved={handleAddressSaved}
+      />
+
       <LocationSearchModal
         isOpen={isMapModalOpen}
         onClose={() => setIsMapModalOpen(false)}

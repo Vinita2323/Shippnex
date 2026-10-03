@@ -39,6 +39,7 @@ export const addAddress = async (req, res, next) => {
       country,
       addressType,
       isDefault,
+      location,
     } = req.body;
 
     if (!fullName || !phone || !addressLine1 || !city || !state || !pincode) {
@@ -57,6 +58,10 @@ export const addAddress = async (req, res, next) => {
       });
     }
 
+    const lng = Number(location?.coordinates?.[0]);
+    const lat = Number(location?.coordinates?.[1]);
+    const hasPoint = Number.isFinite(lng) && Number.isFinite(lat) && !(lng === 0 && lat === 0);
+
     user.addresses.push({
       fullName,
       phone,
@@ -71,6 +76,14 @@ export const addAddress = async (req, res, next) => {
       country: country || 'India',
       addressType: addressType || 'Home',
       isDefault: shouldBeDefault,
+      ...(hasPoint
+        ? {
+            location: {
+              type: 'Point',
+              coordinates: [lng, lat],
+            },
+          }
+        : {}),
     });
 
     await user.save();

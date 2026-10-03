@@ -3670,11 +3670,13 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
   const [treeData, setTreeData] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [uploadingImage, setUploadingImage] = React.useState(false);
+  const [categoryToDelete, setCategoryToDelete] = React.useState(null);
+  const [deletingCategory, setDeletingCategory] = React.useState(false);
 
   const fetchCategories = async () => {
     try {
       setLoading(true);
-      const res = await categoryService.getCategories();
+      const res = await categoryService.getCategories(true);
       if (res.success && res.categories) {
         // Map backend category format into flat array first
         const flatCategories = res.categories.map((c, index) => ({
@@ -3809,9 +3811,10 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
   };
 
   const openEditCategoryModal = (cat) => {
-    setAddModalType('category');
-    setSelectedParentId(null);
-    setSelectedParentName('');
+    const isSubcategory = Boolean(cat.parent || cat.parentName);
+    setAddModalType(isSubcategory ? 'subcategory' : 'category');
+    setSelectedParentId(cat.parentId || cat.parent || null);
+    setSelectedParentName(cat.parentName || '');
     setEditingItem(cat);
     setFormData({
       name: cat.name,
@@ -3881,14 +3884,22 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
     }
   };
 
-  // Delete Item Action
-  const handleDeleteItem = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this category item?')) return;
+  const handleDeleteItem = (item) => {
+    if (!item?.id) return;
+    setCategoryToDelete(item);
+  };
+
+  const confirmDeleteCategory = async () => {
+    if (!categoryToDelete?.id) return;
+    setDeletingCategory(true);
     try {
-      await categoryService.deleteCategory(id);
-      fetchCategories();
+      await categoryService.deleteCategory(categoryToDelete.id);
+      setCategoryToDelete(null);
+      await fetchCategories();
     } catch (err) {
-      alert('Failed to delete category');
+      alert(err?.response?.data?.message || err?.message || 'Failed to delete category');
+    } finally {
+      setDeletingCategory(false);
     }
   };
 
@@ -3995,18 +4006,18 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
       {/* Main Container Card */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Header Bar matching Light Orange Theme */}
-        <div className="bg-[#fff4ed] border-b border-orange-200/70 text-[#002625] px-6 py-4 flex items-center justify-between">
+        <div className="bg-[#fff4ed] border-b border-orange-200/70 text-[#002625] px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-bold tracking-tight text-[#002625] flex items-center gap-2">
             <ChevronRight size={18} className="text-[#ff5500]" />
             Category Management
           </h2>
-          <span className="text-[10px] uppercase font-extrabold tracking-wider bg-[#ff5500] text-white px-3 py-1 rounded-full shadow-2xs">
+          <span className="text-[10px] uppercase font-extrabold tracking-wider bg-[#ff5500] text-white px-3 py-1 rounded-full shadow-2xs text-center">
             Taxonomy Structure ({treeData.length} Root Categories)
           </span>
         </div>
 
         {/* Toolbar & Controls */}
-        <div className="p-6 space-y-5">
+        <div className="p-3 sm:p-6 space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
               {/* Add Category / Subcategory Button depending on mode */}
@@ -4061,14 +4072,14 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
               </div>
 
               {/* Search Bar */}
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 w-full sm:w-auto">
                 <span>Search:</span>
                 <input 
                   type="text" 
                   placeholder="Search by name..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-64 border border-slate-200 rounded-xl px-3.5 py-1.5 bg-slate-50 text-xs text-slate-800 outline-none focus:border-[#ff5500]"
+                  className="w-full min-w-0 sm:w-64 border border-slate-200 rounded-xl px-3.5 py-1.5 bg-slate-50 text-xs text-slate-800 outline-none focus:border-[#ff5500]"
                 />
               </div>
             </div>
@@ -4109,8 +4120,8 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                   (cat.subcategories || []).map(sub => ({ ...sub, parentName: cat.name, parentId: cat.id }))
                 ).map((sub) => (
                   <div key={sub.id} className="space-y-3">
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex items-center justify-between hover:border-slate-300 transition-all">
-                      <div className="flex items-center gap-3">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between hover:border-slate-300 transition-all">
+                      <div className="flex items-center gap-3 min-w-0">
                         {sub.children && sub.children.length > 0 ? (
                           <button 
                             onClick={() => toggleExpand(sub.id)}
@@ -4127,9 +4138,9 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                           className="w-12 h-12 rounded-xl object-cover border border-slate-100 shadow-2xs" 
                           onError={(e) => handleImageError(e, sub.name)}
                         />
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-bold text-slate-900">{sub.name}</h3>
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-sm font-bold text-slate-900 break-words">{sub.name}</h3>
                             <span className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-medium rounded-md">
                               Parent Category: <span className="font-semibold text-[#002625]">{sub.parentName}</span>
                             </span>
@@ -4149,15 +4160,22 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                         <button 
                           onClick={() => openAddNestedSubcategoryModal(sub)}
                           className="px-3.5 py-1.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-lg flex items-center gap-1 border-none cursor-pointer shadow-2xs transition-transform active:scale-95"
                         >
                           <Plus size={13} /> Add Sub-subcategory
                         </button>
+                        <button
+                          onClick={() => openEditCategoryModal(sub)}
+                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg flex items-center gap-1 border border-blue-200 cursor-pointer transition-colors"
+                          title="Edit Subcategory"
+                        >
+                          <Pencil size={13} /> Edit
+                        </button>
                         <button 
-                          onClick={() => handleToggleStatus(sub.id)}
+                          onClick={() => handleToggleStatus(sub.id, sub.status)}
                           className={`px-3 py-1.5 text-xs font-bold rounded-lg border-none cursor-pointer transition-colors ${
                             sub.status === 'Active' ? 'bg-amber-100 hover:bg-amber-200 text-amber-800' : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
                           }`}
@@ -4165,7 +4183,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                           {sub.status === 'Active' ? 'Deactivate' : 'Activate'}
                         </button>
                         <button 
-                          onClick={() => handleDeleteItem(sub.id)}
+                          onClick={() => handleDeleteItem(sub)}
                           className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border-none cursor-pointer transition-colors"
                           title="Delete Subcategory"
                         >
@@ -4174,10 +4192,10 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                       </div>
                     </div>
                     {expanded[sub.id] && sub.children && sub.children.length > 0 && (
-                      <div className="ml-6 border-l-2 border-[#ff5500]/60 pl-4 space-y-2">
+                      <div className="ml-2 sm:ml-6 border-l-2 border-[#ff5500]/60 pl-2 sm:pl-4 space-y-2">
                         {sub.children.map((child) => (
-                          <div key={child.id} className="bg-slate-50/70 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
+                          <div key={child.id} className="bg-slate-50/70 border border-slate-200 rounded-xl p-3 flex flex-col gap-2 min-[480px]:flex-row min-[480px]:items-center min-[480px]:justify-between">
+                            <div className="flex items-center gap-3 min-w-0">
                               <ChevronRight size={14} className="text-[#ff5500]" />
                               <img 
                                 src={getImageUrl(child.image, child.name)} 
@@ -4185,9 +4203,9 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                                 className="w-9 h-9 rounded-lg object-cover border border-slate-200" 
                                 onError={(e) => handleImageError(e, child.name)}
                               />
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h5 className="text-xs font-bold text-slate-900">{child.name}</h5>
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h5 className="text-xs font-bold text-slate-900 break-words">{child.name}</h5>
                                   <span className="px-1.5 py-0.2 bg-amber-50 text-amber-700 text-[10px] font-bold rounded border border-amber-200">Sub-subcategory</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
@@ -4198,9 +4216,12 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                                 </div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <button onClick={() => handleToggleStatus(child.id)} className="p-1.5 bg-amber-500/20 text-amber-700 hover:bg-amber-500/30 rounded-md border-none cursor-pointer text-xs font-bold px-2">×</button>
-                              <button onClick={() => handleDeleteItem(child.id)} className="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-600 rounded-md border-none cursor-pointer"><Trash2 size={13} /></button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button onClick={() => openEditCategoryModal({ ...child, parentName: sub.name, parentId: sub.id })} className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-md border border-blue-200 cursor-pointer flex items-center gap-1">
+                                <Pencil size={12} /> Edit
+                              </button>
+                              <button onClick={() => handleToggleStatus(child.id, child.status)} className="p-1.5 bg-amber-500/20 text-amber-700 hover:bg-amber-500/30 rounded-md border-none cursor-pointer text-xs font-bold px-2">×</button>
+                              <button onClick={() => handleDeleteItem(child)} className="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-600 rounded-md border-none cursor-pointer" title="Delete"><Trash2 size={13} /></button>
                             </div>
                           </div>
                         ))}
@@ -4212,8 +4233,8 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                 /* Standard Root Category Tree View */
                 filteredTreeData.map((cat) => (
                   <div key={cat.id} className="space-y-3">
-                    <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xs flex items-center justify-between hover:border-slate-300 transition-all">
-                      <div className="flex items-center gap-3">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-3.5 shadow-xs flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between hover:border-slate-300 transition-all">
+                      <div className="flex items-center gap-3 min-w-0">
                         <button onClick={() => toggleExpand(cat.id)} className="text-slate-400 hover:text-slate-600 cursor-pointer bg-transparent border-none p-1">
                           {expanded[cat.id] ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                         </button>
@@ -4223,8 +4244,8 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                           className="w-12 h-12 rounded-xl object-cover border border-slate-100 shadow-2xs" 
                           onError={(e) => handleImageError(e, cat.name)}
                         />
-                        <div className="space-y-1">
-                          <h3 className="text-sm font-bold text-slate-900">{cat.name}</h3>
+                        <div className="space-y-1 min-w-0">
+                          <h3 className="text-sm font-bold text-slate-900 break-words">{cat.name}</h3>
                           <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                             <span className={`px-2 py-0.5 font-semibold rounded-full border ${cat.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
                               {cat.status}
@@ -4238,7 +4259,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                         <button onClick={() => openAddSubcategoryModal(cat)} className="px-3.5 py-1.5 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-lg flex items-center gap-1 border-none cursor-pointer shadow-2xs transition-transform active:scale-95">
                           <Plus size={13} /> Add Subcategory
                         </button>
@@ -4248,15 +4269,15 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                         <button onClick={() => handleToggleStatus(cat.id, cat.status)} className={`px-3 py-1.5 text-xs font-bold rounded-lg border-none cursor-pointer transition-colors ${cat.status === 'Active' ? 'bg-amber-100 hover:bg-amber-200 text-amber-800' : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'}`}>
                           {cat.status === 'Active' ? 'Deactivate' : 'Activate'}
                         </button>
-                        <button onClick={() => handleDeleteItem(cat.id)} className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border-none cursor-pointer transition-colors"><Trash2 size={14} /></button>
+                        <button onClick={() => handleDeleteItem(cat)} className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border-none cursor-pointer transition-colors"><Trash2 size={14} /></button>
                       </div>
                     </div>
                     {expanded[cat.id] && cat.subcategories && cat.subcategories.length > 0 && (
-                      <div className="ml-6 border-l-2 border-[#ff5500]/60 pl-4 space-y-3">
+                      <div className="ml-2 sm:ml-6 border-l-2 border-[#ff5500]/60 pl-2 sm:pl-4 space-y-3">
                         {cat.subcategories.map((sub) => (
                           <div key={sub.id} className="space-y-3">
-                            <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-3 flex items-center justify-between hover:bg-slate-100/70 transition-all">
-                              <div className="flex items-center gap-3">
+                            <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-2 hover:bg-slate-100/70 transition-all">
+                              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                                 <span className="w-5" />
                                 <img 
                                   src={getImageUrl(sub.image, sub.name)} 
@@ -4264,9 +4285,9 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                                   className="w-10 h-10 rounded-lg object-cover border border-slate-200" 
                                   onError={(e) => handleImageError(e, sub.name)}
                                 />
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <h4 className="text-xs font-bold text-slate-900">{sub.name}</h4>
+                                <div className="space-y-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="text-xs font-bold text-slate-900 break-words">{sub.name}</h4>
                                     <span className="px-2 py-0.2 bg-amber-50 text-amber-700 text-[10px] font-bold rounded border border-amber-200">Subcategory</span>
                                   </div>
                                   <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
@@ -4277,9 +4298,12 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button onClick={() => openEditCategoryModal({ ...sub, parentName: cat.name, parentId: cat.id })} className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-md border border-blue-200 cursor-pointer flex items-center gap-1">
+                                  <Pencil size={12} /> Edit
+                                </button>
                                 <button onClick={() => handleToggleStatus(sub.id, sub.status)} className="p-1.5 bg-amber-500/20 text-amber-700 hover:bg-amber-500/30 rounded-md border-none cursor-pointer text-xs font-bold px-2">×</button>
-                                <button onClick={() => handleDeleteItem(sub.id)} className="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-600 rounded-md border-none cursor-pointer"><Trash2 size={13} /></button>
+                                <button onClick={() => handleDeleteItem(sub)} className="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-600 rounded-md border-none cursor-pointer" title="Delete"><Trash2 size={13} /></button>
                               </div>
                             </div>
                           </div>
@@ -4319,7 +4343,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                           <button onClick={() => openEditCategoryModal(c)} className="text-xs text-blue-600 font-semibold hover:underline border-none bg-transparent cursor-pointer flex items-center gap-1">
                             <Pencil size={12} /> Edit
                           </button>
-                          <button onClick={() => handleDeleteItem(c.id)} className="text-xs text-rose-600 font-semibold hover:underline border-none bg-transparent cursor-pointer">
+                          <button onClick={() => handleDeleteItem(c)} className="text-xs text-rose-600 font-semibold hover:underline border-none bg-transparent cursor-pointer">
                             Delete
                           </button>
                         </div>
@@ -4333,6 +4357,46 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
         </div>
       </div>
 
+      {categoryToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-[#002625] text-white px-6 py-4">
+              <h3 className="text-sm font-bold m-0">Delete category</h3>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <p className="text-sm text-slate-800 m-0">
+                Permanently delete <span className="font-bold">{categoryToDelete.name}</span>?
+              </p>
+              <p className="text-xs text-slate-500 m-0">
+                This removes the category from the store
+                {(categoryToDelete.subcategories?.length || 0) > 0
+                  ? `, including ${categoryToDelete.subcategories.length} subcategories under it`
+                  : ''}
+                . This cannot be undone.
+              </p>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={deletingCategory}
+                  onClick={() => setCategoryToDelete(null)}
+                  className="px-4 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 border-none cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingCategory}
+                  onClick={confirmDeleteCategory}
+                  className="px-4 py-2 text-xs font-bold rounded-lg bg-rose-600 hover:bg-rose-700 text-white border-none cursor-pointer disabled:opacity-60"
+                >
+                  {deletingCategory ? 'Deleting…' : 'Delete permanently'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Interactive Modal for Add Category / Add Subcategory */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -4342,7 +4406,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
               <h3 className="text-sm font-bold flex items-center gap-2">
                 {editingItem ? <Pencil size={16} className="text-[#ff5500]" /> : <Plus size={16} className="text-[#ff5500]" />}
                 {editingItem
-                  ? 'Edit Root Category'
+                  ? (editingItem.parent || editingItem.parentName ? 'Edit Subcategory' : 'Edit Root Category')
                   : addModalType === 'category'
                   ? 'Create New Root Category'
                   : addModalType === 'subcategory'
@@ -4456,7 +4520,7 @@ export const CategoryManagement = ({ initialSubcategoriesOnly = false }) => {
                   type="submit"
                   className="px-5 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer shadow-sm transition-all"
                 >
-                  {editingItem ? 'Update Category' : 'Save Category'}
+                  {editingItem ? (editingItem.parent || editingItem.parentName ? 'Update Subcategory' : 'Update Category') : 'Save Category'}
                 </button>
               </div>
             </form>

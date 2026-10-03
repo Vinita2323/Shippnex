@@ -65,9 +65,9 @@ const Checkout = () => {
     addressLine1: '',
     addressLine2: '',
     landmark: '',
-    city: 'Noida',
-    state: 'Uttar Pradesh',
-    pincode: '201301',
+    city: '',
+    state: '',
+    pincode: '',
     country: 'India',
     addressType: 'Home',
   });

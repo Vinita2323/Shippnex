@@ -66,7 +66,7 @@ const AdminFinancialDashboard = lazy(() => import('../pages/AdminFinancialDashbo
 const AdminCashSettlements = lazy(() => import('../pages/AdminCashSettlements').then(m => ({ default: m.AdminCashSettlements || m.default })));
 
 export const AdminLayout = () => {
-  const { activeTab, setActiveTab } = useAdmin();
+  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, isCompact } = useAdmin();
 
   const renderActiveTabContent = () => {
     switch (activeTab) {
@@ -270,16 +270,20 @@ export const AdminLayout = () => {
 
   return (
     <div className="flex h-screen bg-[#f8fafc] font-sans text-slate-800 overflow-hidden select-none">
-      {/* Super Admin Sidebar (Preserved) */}
+      {isCompact && sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-900/50 border-none cursor-pointer"
+        />
+      )}
       <AdminSidebar />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        {/* Header like Seller Panel */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden relative min-w-0">
         <AdminHeader />
 
-        {/* Scrollable Main Content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6">
           <Suspense fallback={<PageSkeleton />}>
             {renderActiveTabContent()}
           </Suspense>

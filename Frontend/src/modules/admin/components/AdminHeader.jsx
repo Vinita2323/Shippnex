@@ -26,7 +26,7 @@ export const AdminHeader = () => {
   ];
 
   return (
-    <header className="h-20 bg-white border-b border-slate-200/80 px-6 flex items-center justify-between shrink-0 z-30 shadow-xs font-sans relative">
+    <header className="h-16 sm:h-20 bg-white border-b border-slate-200/80 px-3 sm:px-6 flex items-center justify-between shrink-0 z-30 shadow-xs font-sans relative">
       {/* Left Section: Toggle Button */}
       <div className="flex items-center gap-4">
         <button 
@@ -54,7 +54,7 @@ export const AdminHeader = () => {
       </div>
 
       {/* Right Section: User, Logout Icons */}
-      <div className="flex items-center gap-6 text-slate-700">
+      <div className="flex items-center gap-2 sm:gap-6 text-slate-700">
         <button 
           onClick={() => setActiveTab('profile')}
           className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer"

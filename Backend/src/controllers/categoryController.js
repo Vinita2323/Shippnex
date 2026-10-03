@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import Category from '../models/Category.model.js';
-import Product from '../models/Product.model.js';
 import { uploadToCloudinary } from '../config/cloudinary.js';
 
 // Initial default categories seed
@@ -94,53 +93,10 @@ export const getCategories = async (req, res, next) => {
       .sort({ priority: 1 })
       .lean();
 
-    // Seed default categories if database is empty
+    // Seed defaults only on a brand-new empty collection.
+    // A category an admin deletes must stay deleted.
     if (categories.length === 0) {
       categories = await Category.insertMany(initialCategories);
-    } else {
-      // Ensure missing initial core categories are present
-      const existingLower = new Set(categories.map(c => (c.name || '').toLowerCase().trim()));
-      const missingInitial = initialCategories.filter(ic => !existingLower.has(ic.name.toLowerCase().trim()));
-      if (missingInitial.length > 0) {
-        try {
-          await Category.insertMany(missingInitial, { ordered: false });
-          categories = await Category.find()
-            .select('name slug icon image parent status priority')
-            .sort({ priority: 1 })
-            .lean();
-        } catch (e) {
-          // Ignore duplicate errors
-        }
-      }
-    }
-
-    // Ensure categories associated with existing products also appear
-    try {
-      const existingLower = new Set(categories.map(c => (c.name || '').toLowerCase().trim()));
-      const productCategories = await Product.distinct('category');
-      const missingFromProducts = [];
-      for (const pCat of productCategories) {
-        if (pCat && pCat.trim() && !existingLower.has(pCat.toLowerCase().trim())) {
-          missingFromProducts.push({
-            name: pCat.trim(),
-            icon: 'Package',
-            image: '',
-            status: 'Active',
-            priority: 20,
-            parent: null,
-          });
-          existingLower.add(pCat.toLowerCase().trim());
-        }
-      }
-      if (missingFromProducts.length > 0) {
-        await Category.insertMany(missingFromProducts, { ordered: false });
-        categories = await Category.find()
-          .select('name slug icon image parent status priority')
-          .sort({ priority: 1 })
-          .lean();
-      }
-    } catch (e) {
-      // Ignore
     }
 
     // Normalize image paths for seamless rendering
@@ -235,21 +191,29 @@ export const updateCategory = async (req, res, next) => {
   }
 };
 
-// Delete category (Admin)
+const deleteCategoryTree = async (id) => {
+  const children = await Category.find({ parent: id }).select('_id');
+  for (const child of children) {
+    await deleteCategoryTree(child._id);
+  }
+  return Category.findByIdAndDelete(id);
+};
+
+// Delete category (Admin) — removes the category and any categories under it
 export const deleteCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const category = await Category.findByIdAndDelete(id);
-
-    if (!category) {
+    const existing = await Category.findById(id).select('_id name');
+    if (!existing) {
       return res.status(404).json({ success: false, message: 'Category not found' });
     }
 
+    await deleteCategoryTree(id);
     invalidateCategoriesCache();
 
     res.status(200).json({
       success: true,
-      message: 'Category deleted successfully',
+      message: 'Category deleted permanently',
     });
   } catch (error) {
     next(error);

@@ -54,7 +54,7 @@ import {
 
 export const AdminSidebar = () => {
   const navigate = useNavigate();
-  const { sidebarOpen, activeTab, setActiveTab } = useAdmin();
+  const { sidebarOpen, isCompact, activeTab, setActiveTab } = useAdmin();
   const [searchQuery, setSearchQuery] = useState('');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [adminUser, setAdminUser] = useState(() => {
@@ -330,7 +330,11 @@ export const AdminSidebar = () => {
 
   return (
     <aside 
-      className={`${sidebarOpen ? 'w-72' : 'w-20'} bg-[#002625] text-slate-200 border-r border-[#0b3d3b] transition-all duration-300 flex flex-col h-screen sticky top-0 z-40 shrink-0 select-none shadow-2xl font-sans`}
+      className={`${
+        isCompact
+          ? `fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`
+          : `sticky top-0 z-40 shrink-0 ${sidebarOpen ? 'w-72' : 'w-20'}`
+      } bg-[#002625] text-slate-200 border-r border-[#0b3d3b] transition-all duration-300 flex flex-col h-screen select-none shadow-2xl font-sans`}
     >
       {/* Brand Header with white background */}
       <div className="h-20 bg-white border-b border-slate-200 flex items-center justify-center px-3 shrink-0">

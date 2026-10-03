@@ -5,7 +5,8 @@ export const AdminContext = createContext();
 
 
 export const AdminProvider = ({ children }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isCompact, setIsCompact] = useState(() => window.innerWidth < 1024);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -19,8 +20,22 @@ export const AdminProvider = ({ children }) => {
     setActiveState(tab);
   }, [location.pathname]);
 
+  useEffect(() => {
+    let compact = window.innerWidth < 1024;
+    const syncLayout = () => {
+      const next = window.innerWidth < 1024;
+      if (next === compact) return;
+      compact = next;
+      setIsCompact(next);
+      setSidebarOpen(!next);
+    };
+    window.addEventListener('resize', syncLayout);
+    return () => window.removeEventListener('resize', syncLayout);
+  }, []);
+
   const setActiveTab = (tab) => {
     setActiveState(tab);
+    if (window.innerWidth < 1024) setSidebarOpen(false);
     if (tab === 'dashboard') {
       navigate('/admin');
     } else {
@@ -41,6 +56,7 @@ export const AdminProvider = ({ children }) => {
       value={{
         sidebarOpen,
         setSidebarOpen,
+        isCompact,
         toggleSidebar,
         activeTab,
         setActiveTab,

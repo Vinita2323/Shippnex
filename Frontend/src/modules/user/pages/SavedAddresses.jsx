@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, Plus, Edit2, Trash2, X, Check } from 'lucide-react';
+import { ArrowLeft, MapPin, Plus, Edit2, Trash2, Check } from 'lucide-react';
 import { addressService } from '../../../services/authService';
-import { clearStoredUserLocation } from '../../../utils/userLocation';
+import { clearStoredUserLocation, syncSavedAddressesAfterChange } from '../../../utils/userLocation';
+import AddAddressForm from '../components/AddAddressForm';
 
 const SavedAddresses = () => {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ const SavedAddresses = () => {
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState(null);
+  const [makeDefault, setMakeDefault] = useState(false);
 
   const formatAddresses = (rawList) => {
     return rawList.map(a => ({
@@ -40,7 +42,7 @@ const SavedAddresses = () => {
         if (formatted.length === 0) {
           localStorage.removeItem('shippnex_selected_checkout_address');
         }
-        return;
+        return formatted;
       }
     } catch (err) {
       console.error('Failed to fetch backend addresses:', err);
@@ -54,14 +56,16 @@ const SavedAddresses = () => {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          setAddresses(formatAddresses(parsed));
-          return;
+          const formatted = formatAddresses(parsed);
+          setAddresses(formatted);
+          return formatted;
         }
       } catch (err) {
         console.error('Failed to parse saved addresses:', err);
       }
     }
     setAddresses([]);
+    return [];
   };
 
   useEffect(() => {
@@ -115,69 +119,25 @@ const SavedAddresses = () => {
 
   const handleEdit = (addr, e) => {
     e.stopPropagation();
-    setEditingAddress({
-      ...addr,
-      type: addr.addressType || addr.type || 'Home',
-      name: addr.fullName || addr.name || userName,
-      address: addr.addressLine1 || addr.address || '',
-      city: addr.city || '',
-      state: addr.state || '',
-      zip: addr.pincode || addr.zip || '',
-      phone: addr.phone || userPhone || '',
-    });
+    setEditingAddress(addr);
+    setMakeDefault(!!addr.isDefault);
     setIsModalOpen(true);
   };
 
   const handleAddNew = () => {
-    setEditingAddress({
-      id: '',
-      type: 'Home',
-      name: '',
-      address: '',
-      city: '',
-      state: '',
-      zip: '',
-      phone: '',
-      isDefault: addresses.length === 0
-    });
+    setEditingAddress(null);
+    setMakeDefault(addresses.length === 0);
     setIsModalOpen(true);
   };
 
-  const handleSaveModal = async (e) => {
-    e.preventDefault();
-    const payload = {
-      fullName: editingAddress.name,
-      phone: editingAddress.phone,
-      addressLine1: editingAddress.address,
-      city: editingAddress.city,
-      state: editingAddress.state,
-      pincode: editingAddress.zip,
-      country: editingAddress.country || 'India',
-      addressType: editingAddress.type || 'Home',
-      isDefault: editingAddress.isDefault,
-    };
-
-    try {
-      if (editingAddress.id && !String(editingAddress.id).startsWith('addr_')) {
-        await addressService.updateAddress(editingAddress.id, payload);
-      } else {
-        await addressService.addAddress(payload);
-      }
-      await fetchUserAddresses();
-    } catch (err) {
-      console.error('Failed to save address on backend:', err);
-      // Local fallback
-      let updated;
-      if (editingAddress.id && addresses.some(a => a.id === editingAddress.id)) {
-        updated = addresses.map(a => a.id === editingAddress.id ? { ...editingAddress, fullName: editingAddress.name, addressLine1: editingAddress.address, pincode: editingAddress.zip } : a);
-      } else {
-        const newAddr = { ...editingAddress, id: `addr_${Date.now()}`, fullName: editingAddress.name, addressLine1: editingAddress.address, pincode: editingAddress.zip };
-        updated = [...addresses, newAddr];
-      }
-      setAddresses(updated);
-      localStorage.setItem('shippnex_saved_addresses', JSON.stringify(updated));
+  const handleAddressSaved = async (savedAddresses) => {
+    if (Array.isArray(savedAddresses)) {
+      syncSavedAddressesAfterChange(savedAddresses);
     }
-    setIsModalOpen(false);
+    const list = await fetchUserAddresses();
+    if (Array.isArray(list)) {
+      syncSavedAddressesAfterChange(list);
+    }
   };
 
   return (
@@ -291,128 +251,13 @@ const SavedAddresses = () => {
         </button>
       </div>
 
-      {/* Edit / Add Address Modal */}
-      {isModalOpen && editingAddress && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4">
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs" onClick={() => setIsModalOpen(false)}></div>
-          
-          {/* Modal Container */}
-          <div className="relative bg-white w-full rounded-t-[32px] sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom-full duration-300 max-w-[480px] sm:max-w-lg mx-auto z-10">
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="text-[18px] font-extrabold text-slate-900 m-0">
-                {addresses.some(a => a.id === editingAddress.id) ? 'Edit Address' : 'Add Address'}
-              </h3>
-              <button 
-                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border-none cursor-pointer text-slate-500 hover:bg-slate-200 transition-colors"
-                onClick={() => setIsModalOpen(false)}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveModal} className="flex flex-col gap-3.5">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Address Tag</label>
-                  <select 
-                    value={editingAddress.type}
-                    onChange={e => setEditingAddress({...editingAddress, type: e.target.value})}
-                    className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-bold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors cursor-pointer"
-                  >
-                    <option value="Home">Home</option>
-                    <option value="Work">Work</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Full Name</label>
-                  <input 
-                    required
-                    type="text" 
-                    placeholder="Full Name" 
-                    value={editingAddress.name}
-                    onChange={e => setEditingAddress({...editingAddress, name: e.target.value})}
-                    className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Street Address</label>
-                <input 
-                  required
-                  type="text" 
-                  placeholder="House / Flat No., Building, Street" 
-                  value={editingAddress.address}
-                  onChange={e => setEditingAddress({...editingAddress, address: e.target.value})}
-                  className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">City</label>
-                  <input 
-                    required
-                    type="text" 
-                    placeholder="City" 
-                    value={editingAddress.city}
-                    onChange={e => setEditingAddress({...editingAddress, city: e.target.value})}
-                    className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">State</label>
-                  <input 
-                    required
-                    type="text" 
-                    placeholder="State" 
-                    value={editingAddress.state}
-                    onChange={e => setEditingAddress({...editingAddress, state: e.target.value})}
-                    className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Zip Code</label>
-                  <input 
-                    required
-                    type="text" 
-                    placeholder="Pincode / Zip" 
-                    value={editingAddress.zip}
-                    onChange={e => setEditingAddress({...editingAddress, zip: e.target.value})}
-                    className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Phone Number</label>
-                  <input 
-                    required
-                    type="tel" 
-                    placeholder="Phone" 
-                    value={editingAddress.phone}
-                    onChange={e => setEditingAddress({...editingAddress, phone: e.target.value})}
-                    className="w-full bg-[#f8fafc] border border-slate-200 rounded-[12px] p-3 text-[13px] font-semibold text-slate-800 outline-none focus:border-[#ea580c] focus:bg-white transition-colors"
-                  />
-                </div>
-              </div>
-
-              <button 
-                type="submit"
-                className="w-full bg-[#ea580c] text-white rounded-[16px] py-4 mt-2 font-bold text-[15px] cursor-pointer active:scale-[0.98] transition-transform border-none shadow-[0_4px_16px_rgba(234,88,12,0.25)]"
-              >
-                Save Address
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      <AddAddressForm
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        address={editingAddress}
+        isDefault={makeDefault}
+        onSaved={handleAddressSaved}
+      />
 
     </div>
   );

@@ -112,10 +112,10 @@ export const MapService = {
    */
   getPlaceDetails: async (placeId) => {
     try {
-      await MapService.loadGoogleMaps();
+      const Geocoder = await MapService.ensureGeocoder();
 
       // First try using Geocoder with placeId for clean address components
-      const geocoder = new window.google.maps.Geocoder();
+      const geocoder = new Geocoder();
       return new Promise((resolve, reject) => {
         geocoder.geocode({ placeId }, (results, status) => {
           if (status === window.google.maps.GeocoderStatus.OK && results && results[0]) {
@@ -152,6 +152,18 @@ export const MapService = {
     }
   },
 
+  ensureGeocoder: async () => {
+    await MapService.loadGoogleMaps();
+    if (window.google?.maps?.importLibrary) {
+      const lib = await window.google.maps.importLibrary('geocoding');
+      if (lib?.Geocoder) return lib.Geocoder;
+    }
+    if (typeof window.google?.maps?.Geocoder === 'function') {
+      return window.google.maps.Geocoder;
+    }
+    throw new Error('Google Maps geocoder is not available');
+  },
+
   /**
    * Reverse geocode GPS coordinates into a complete structured address.
    * @param {number} lat - Latitude
@@ -166,16 +178,25 @@ export const MapService = {
     }
 
     try {
-      await MapService.loadGoogleMaps();
-      const geocoder = new window.google.maps.Geocoder();
+      const Geocoder = await MapService.ensureGeocoder();
+      const geocoder = new Geocoder();
       const latlng = { lat: latN, lng: lngN };
 
       return new Promise((resolve, reject) => {
         geocoder.geocode({ location: latlng }, (results, status) => {
           if (status === window.google.maps.GeocoderStatus.OK && results && results.length > 0) {
-            // Pick best detailed result (usually results[0])
-            const best = results[0];
-            resolve(MapService.parseAddressComponents(best));
+            const parsed = MapService.parseAddressComponents(results[0]);
+            if (parsed && !parsed.postalCode) {
+              for (const result of results) {
+                const postal = (result.address_components || []).find((comp) => (comp.types || []).includes('postal_code'));
+                if (postal?.long_name) {
+                  parsed.postalCode = postal.long_name;
+                  parsed.pincode = postal.long_name;
+                  break;
+                }
+              }
+            }
+            resolve(parsed);
           } else {
             reject(new Error(`Reverse geocoding failed: ${status}`));
           }
@@ -198,8 +219,8 @@ export const MapService = {
     }
 
     try {
-      await MapService.loadGoogleMaps();
-      const geocoder = new window.google.maps.Geocoder();
+      const Geocoder = await MapService.ensureGeocoder();
+      const geocoder = new Geocoder();
 
       return new Promise((resolve, reject) => {
         geocoder.geocode({ address: address.trim(), componentRestrictions: { country: 'in' } }, (results, status) => {
@@ -307,29 +328,32 @@ export const MapService = {
         return;
       }
 
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          resolve({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
-          });
-        },
-        (err) => {
-          let errorMsg = 'Unable to detect your current location.';
-          if (err.code === 1) {
-            errorMsg = 'Location permission was denied. Please enable GPS/location permissions in your browser.';
-          } else if (err.code === 2) {
-            errorMsg = 'Location is unavailable. Please check your device GPS signal.';
-          } else if (err.code === 3) {
-            errorMsg = 'Location request timed out. Please try again.';
-          }
-          reject(new Error(errorMsg));
-        },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 10000 }
-      );
+      const readPosition = (options) => new Promise((resolvePos, rejectPos) => {
+        navigator.geolocation.getCurrentPosition(resolvePos, rejectPos, options);
+      });
+
+      const toCoords = (pos) => ({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+      });
+
+      const describeError = (err) => {
+        if (err?.code === 1) return 'Location permission was denied. Please enable GPS/location permissions in your browser.';
+        if (err?.code === 2) return 'Location is unavailable. Please check your device GPS signal.';
+        if (err?.code === 3) return 'Location request timed out. Please try again.';
+        return 'Unable to detect your current location.';
+      };
+
+      readPosition({ enableHighAccuracy: true, timeout: 8000, maximumAge: 0 })
+        .catch((err) => {
+          if (err?.code === 1) throw err;
+          return readPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
+        })
+        .then((pos) => resolve(toCoords(pos)))
+        .catch((err) => reject(new Error(describeError(err))));
     });
   },
 

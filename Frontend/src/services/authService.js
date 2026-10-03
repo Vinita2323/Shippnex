@@ -352,7 +352,7 @@ export const categoryService = {
       return clientMemCache.categories.promise;
     }
 
-    clientMemCache.categories.promise = API.get('/categories')
+    clientMemCache.categories.promise = API.get(forceRefresh ? '/categories?fresh=1' : '/categories')
       .then((response) => {
         clientMemCache.categories.data = response.data;
         clientMemCache.categories.timestamp = Date.now();

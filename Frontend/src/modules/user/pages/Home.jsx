@@ -84,8 +84,12 @@ const Home = () => {
         const res = await addressService.getAddresses();
         if (cancelled || !res?.success || !Array.isArray(res.addresses)) return;
         localStorage.setItem('shippnex_saved_addresses', JSON.stringify(res.addresses));
-        if (res.addresses.length === 0) clearStoredUserLocation();
-        else applySavedAddressesAsDeliveryLocation(res.addresses);
+        if (res.addresses.length === 0) {
+          const hasSelectedLocation = localStorage.getItem('userLocation') && localStorage.getItem('shippnex_selected_checkout_address');
+          if (!hasSelectedLocation) clearStoredUserLocation();
+        } else {
+          applySavedAddressesAsDeliveryLocation(res.addresses);
+        }
       } catch (e) {}
     })();
     return () => {
