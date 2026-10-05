@@ -296,6 +296,7 @@ const Checkout = () => {
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded) {
         setErrorMsg('Failed to load payment gateway. Please try again.');
+        setPlacingOrder(false);
         return;
       }
 
@@ -303,28 +304,30 @@ const Checkout = () => {
       const orderRes = await orderService.placeOrder(orderPayload);
       if (!orderRes || !orderRes.success || !orderRes.order) {
         setErrorMsg('Failed to create order.');
+        setPlacingOrder(false);
         return;
       }
 
       const orderId = orderRes.order._id || orderRes.order.orderId;
-      const amount = Math.round(finalGrandTotal * 100); // Razorpay expects amount in paise
 
-      // Create Razorpay order
-      const razorpayOrderRes = await orderService.createRazorpayOrder(amount, orderId);
+      // Amount is calculated on the server from the saved order. The value sent here is ignored.
+      const razorpayOrderRes = await orderService.createRazorpayOrder(0, orderId);
       if (!razorpayOrderRes || !razorpayOrderRes.success || !razorpayOrderRes.orderId) {
         setErrorMsg('Failed to initialize payment. Please try again.');
+        setPlacingOrder(false);
         return;
       }
 
       const userEmail = profileForm.email || localStorage.getItem('shippnex_user_email') || (selectedAddress && selectedAddress.email) || '';
+      const notCompleted = 'Payment was not completed. Your order has not been placed.';
 
-      // Open Razorpay payment modal
+      let settled = false;
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-        amount: amount,
-        currency: 'INR',
+        key: razorpayOrderRes.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: razorpayOrderRes.amount,
+        currency: razorpayOrderRes.currency || 'INR',
         name: 'ShippNex',
-        description: `Order #${orderPayload.orderId || 'SHOP'}`,
+        description: `Order #${orderRes.order.orderId || 'SHOP'}`,
         order_id: razorpayOrderRes.orderId,
         prefill: {
           name: userName,
@@ -332,7 +335,7 @@ const Checkout = () => {
           contact: userPhone,
         },
         handler: async (response) => {
-          // Verify payment
+          settled = true;
           try {
             const verifyRes = await orderService.verifyRazorpayPayment({
               razorpay_order_id: response.razorpay_order_id,
@@ -341,39 +344,43 @@ const Checkout = () => {
               orderId: orderId,
             });
 
-            if (verifyRes && verifyRes.success) {
-              setPlacedOrder(orderRes.order);
+            if (verifyRes && verifyRes.success && verifyRes.order && verifyRes.order.paymentStatus === 'Paid') {
+              setErrorMsg('');
+              setPlacedOrder(verifyRes.order);
               await clearCart();
-              // Sync user data
-              if (orderRes.user) {
-                if (orderRes.user.name) localStorage.setItem('shippnex_user_name', orderRes.user.name);
-                if (orderRes.user.email) localStorage.setItem('shippnex_user_email', orderRes.user.email);
-                if (orderRes.user.phone) localStorage.setItem('shippnex_user_phone', orderRes.user.phone);
-                localStorage.setItem('shippnex_user_data', JSON.stringify(orderRes.user));
-                if (orderRes.user.addresses) {
-                  localStorage.setItem('shippnex_saved_addresses', JSON.stringify(orderRes.user.addresses));
-                }
-              }
             } else {
-              setErrorMsg(verifyRes?.message || 'Payment verification failed. Please contact support.');
+              setErrorMsg(verifyRes?.message || notCompleted);
             }
           } catch (err) {
             console.error('Payment verification failed:', err);
-            setErrorMsg('Payment verification failed. Please contact support.');
+            setErrorMsg(notCompleted);
+          } finally {
+            setPlacingOrder(false);
           }
         },
         modal: {
           ondismiss: () => {
-            setErrorMsg('Payment cancelled. Please try again.');
+            if (settled) return;
+            settled = true;
+            setErrorMsg(notCompleted);
+            setPlacingOrder(false);
           },
         },
       };
 
       const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', () => {
+        if (settled) return;
+        settled = true;
+        setErrorMsg(notCompleted);
+        setPlacingOrder(false);
+      });
       rzp.open();
+      return true;
     } catch (err) {
       console.error('Payment error:', err);
       setErrorMsg(err.response?.data?.message || 'Payment failed. Please try again.');
+      setPlacingOrder(false);
     }
   };
 
@@ -405,6 +412,7 @@ const Checkout = () => {
       return;
     }
 
+    let onlineCheckoutOpen = false;
     try {
       setPlacingOrder(true);
 
@@ -446,7 +454,8 @@ const Checkout = () => {
 
       // If online payment method, handle via Razorpay
       if (['UPI', 'CARD', 'NETBANKING', 'WALLET'].includes(selectedPayment)) {
-        await handleRazorpayPayment(orderPayload);
+        onlineCheckoutOpen = Boolean(await handleRazorpayPayment(orderPayload));
+        return;
       } else {
         // COD - place order directly
         const res = await orderService.placeOrder(orderPayload);
@@ -471,7 +480,7 @@ const Checkout = () => {
       console.error('Order placement failed:', err);
       setErrorMsg(err.response?.data?.message || 'Order placement failed. Please check stock and try again.');
     } finally {
-      setPlacingOrder(false);
+      if (!onlineCheckoutOpen) setPlacingOrder(false);
     }
   };
 
@@ -505,6 +514,8 @@ const Checkout = () => {
   const isFreeDelivery = safeTotal === 0 || (deliverySettings.isFreeDeliveryEnabled && safeTotal >= deliverySettings.freeDeliveryMinOrder);
   const deliveryCharge = isFreeDelivery ? 0 : deliverySettings.deliveryCharge;
   const isCod = selectedPayment === 'COD';
+  const isOnlinePay = ['UPI', 'CARD', 'NETBANKING', 'WALLET'].includes(selectedPayment);
+  const paymentNotFinished = errorMsg.startsWith('Payment was not completed');
   const codCharge = (isCod && deliverySettings.isCodChargeEnabled) ? Number(deliverySettings.codCharge ?? 9) : 0;
   const savings = originalTotal > safeTotal ? originalTotal - safeTotal : 0;
   const finalGrandTotal = safeTotal + deliveryCharge + codCharge;
@@ -726,11 +737,13 @@ const Checkout = () => {
             >
               {placingOrder ? (
                 <>
-                  <Loader2 size={18} className="animate-spin" /> Placing Order...
+                  <Loader2 size={18} className="animate-spin" /> {isOnlinePay ? 'Processing...' : 'Placing Order...'}
                 </>
               ) : (
                 <>
-                  <span>Place Order • ₹{finalGrandTotal.toFixed(2)}</span>
+                  <span>
+                    {isOnlinePay ? (paymentNotFinished ? 'Retry Payment' : 'Pay') : 'Place Order'} • ₹{finalGrandTotal.toFixed(2)}
+                  </span>
                   <ChevronRight size={18} />
                 </>
               )}
@@ -761,11 +774,11 @@ const Checkout = () => {
         >
           {placingOrder ? (
             <>
-              <Loader2 size={18} className="animate-spin" /> Placing Order...
+              <Loader2 size={18} className="animate-spin" /> {isOnlinePay ? 'Processing...' : 'Placing...'}
             </>
           ) : (
             <>
-              <span>Place Order</span>
+              <span>{isOnlinePay ? (paymentNotFinished ? 'Retry Payment' : 'Pay') : 'Place Order'}</span>
               <ChevronRight size={18} />
             </>
           )}
@@ -1028,7 +1041,7 @@ const Checkout = () => {
       )}
 
       {/* Order Success Modal */}
-      {placedOrder && (
+      {placedOrder && (placedOrder.paymentMethod === 'COD' || placedOrder.paymentStatus === 'Paid') && (
         <div className="fixed inset-0 z-[200] bg-white flex flex-col items-center justify-center px-5 overflow-hidden">
           <div className="flex flex-col items-center justify-center w-full max-w-[400px]">
             <div className="w-20 h-20 bg-[#22c55e] rounded-full flex items-center justify-center shadow-lg mb-4">

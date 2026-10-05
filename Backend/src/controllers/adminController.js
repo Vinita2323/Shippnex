@@ -55,7 +55,7 @@ export const getDashboardStats = async (req, res, next) => {
       Product.countDocuments().catch(() => 0),
       Product.countDocuments({ stock: { $lte: 0 } }).catch(() => 0),
       Product.countDocuments({ stock: { $gt: 0, $lte: 5 } }).catch(() => 0),
-      Order.countDocuments().catch(() => 0),
+      Order.countDocuments({ $or: [{ paymentStatus: 'Paid' }, { paymentMethod: 'COD' }] }).catch(() => 0),
       Order.countDocuments({ orderStatus: { $in: ['Delivered', 'Completed'] } }).catch(() => 0),
       Order.countDocuments({ orderStatus: { $in: ['Placed', 'Processing', 'Out for Delivery'] } }).catch(() => 0),
       Order.countDocuments({ orderStatus: 'Cancelled' }).catch(() => 0),
@@ -64,10 +64,11 @@ export const getDashboardStats = async (req, res, next) => {
       Captain.countDocuments().catch(() => 0),
       Captain.countDocuments({ isOnline: true }).catch(() => 0),
       Order.aggregate([
-        { $match: { createdAt: { $gte: todayStart } } },
+        { $match: { createdAt: { $gte: todayStart }, $or: [{ paymentStatus: 'Paid' }, { paymentMethod: 'COD' }] } },
         { $group: { _id: null, total: { $sum: '$grandTotal' } } }
       ]).catch(() => []),
       Order.aggregate([
+        { $match: { $or: [{ paymentStatus: 'Paid' }, { paymentMethod: 'COD' }] } },
         { $group: { _id: null, total: { $sum: '$grandTotal' } } }
       ]).catch(() => []),
       Order.find()
@@ -83,7 +84,7 @@ export const getDashboardStats = async (req, res, next) => {
         .lean()
         .catch(() => []),
       Order.aggregate([
-        { $match: { createdAt: { $gte: sevenDaysAgo } } },
+        { $match: { createdAt: { $gte: sevenDaysAgo }, $or: [{ paymentStatus: 'Paid' }, { paymentMethod: 'COD' }] } },
         {
           $group: {
             _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },

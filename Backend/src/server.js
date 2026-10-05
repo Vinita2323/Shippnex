@@ -21,6 +21,7 @@ import cartRoutes from './routes/cartRoutes.js';
 import wishlistRoutes from './routes/wishlistRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
+import { releaseAllExpiredPaymentHolds } from './controllers/orderController.js';
 import adminRoutes from './routes/adminRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
 import vehicleTypeRoutes from './routes/vehicleTypeRoutes.js';
@@ -171,6 +172,13 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'production'} mode on port ${PORT}`);
+  const sweepUnpaidOrders = () => {
+    releaseAllExpiredPaymentHolds().catch((err) => {
+      console.error('[Orders] Failed to release expired payment holds:', err.message);
+    });
+  };
+  setTimeout(sweepUnpaidOrders, 15000);
+  setInterval(sweepUnpaidOrders, 5 * 60 * 1000);
 });
 
 // Connect to MongoDB Atlas

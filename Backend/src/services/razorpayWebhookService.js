@@ -90,34 +90,23 @@ const handleCaptured = async (order, payment) => {
     return ignored('amount_mismatch');
   }
 
-  // Atomic guard: only the first capture (webhook or frontend verification) wins.
-  const updated = await Order.findOneAndUpdate(
-    { _id: order._id, 'razorpay.paymentStatus': { $ne: 'captured' } },
-    {
-      $set: {
-        paymentStatus: 'Paid',
-        'razorpay.orderId': payment.order_id,
-        'razorpay.paymentId': payment.id,
-        'razorpay.paymentStatus': 'captured',
-        'razorpay.method': payment.method || null,
-        'razorpay.amount': payment.amount,
-        'razorpay.currency': payment.currency || 'INR',
-        'razorpay.capturedAt': toDate(payment.created_at),
-        'razorpay.failedAt': null,
-        'razorpay.failureCode': null,
-        'razorpay.failureReason': null,
-      },
-    }
-  );
-  if (updated) return processed('captured');
-
-  if (order.razorpay?.paymentId && order.razorpay.paymentId !== payment.id) {
+  if (order.paymentStatus === 'Paid' && order.razorpay?.paymentId && order.razorpay.paymentId !== payment.id) {
     console.warn(
       `[Razorpay Webhook] Order ${order.orderId} already captured with a different payment; possible double payment, review for refund`
     );
     return ignored('second_capture_for_paid_order');
   }
-  return ignored('already_captured');
+
+  const { confirmOnlinePayment } = await import('../controllers/orderController.js');
+  const result = await confirmOnlinePayment(order, {
+    amount: Number(payment.amount),
+    currency: payment.currency || 'INR',
+    razorpayOrderId: payment.order_id,
+    paymentId: payment.id,
+    method: payment.method || null,
+  });
+  if (result.ok) return processed(result.already ? 'already_captured' : 'captured');
+  return ignored(result.reason || 'not_confirmed');
 };
 
 const handleFailed = async (order, payment) => {

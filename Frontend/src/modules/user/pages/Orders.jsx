@@ -10,6 +10,9 @@ import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
 const formatRawOrdersData = (rawList = []) => {
   return rawList.map(o => {
     let displayStatus = (o.orderStatus || o.status || 'Placed').trim();
+    if (displayStatus === 'Payment Pending' || (o.paymentStatus === 'Pending' && o.paymentMethod && o.paymentMethod !== 'COD' && displayStatus !== 'Placed' && displayStatus !== 'Cancelled')) {
+      displayStatus = 'Payment Pending';
+    }
     if (o.orderStatus === 'Refund Completed' || o.refundStatus === 'Completed' || o.returnStatus === 'Refunded') {
       displayStatus = 'Refund Completed';
     } else if (o.orderStatus === 'Returned' || o.returnStatus === 'Completed') {
@@ -112,6 +115,7 @@ const Orders = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
+      case 'Payment Pending': return 'text-amber-700 font-bold bg-amber-50 border-amber-200';
       case 'Placed': return 'text-orange-600 font-bold bg-orange-50 border-orange-200';
       case 'Accepted': return 'text-emerald-600 font-extrabold bg-emerald-50 border-emerald-200';
       case 'Rejected': return 'text-red-600 font-extrabold bg-red-50 border-red-200';

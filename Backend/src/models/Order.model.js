@@ -66,6 +66,7 @@ const orderSchema = new mongoose.Schema(
     orderStatus: {
       type: String,
       enum: [
+        'Payment Pending',
         'Placed',
         'Accepted',
         'Packed',
@@ -123,6 +124,12 @@ const orderSchema = new mongoose.Schema(
     acceptedAt: { type: Date },
     rejectedAt: { type: Date },
     // Razorpay gateway state (written by order verification and the Razorpay webhook)
+    // reserved = stock held for an unpaid online order; finalized = deduction kept; released = returned
+    stockHold: {
+      type: String,
+      enum: ['none', 'reserved', 'finalized', 'released'],
+      default: 'none',
+    },
     razorpay: {
       orderId: { type: String, default: null },
       paymentId: { type: String, default: null },

@@ -78,6 +78,7 @@ export const getFinancialDashboardStats = async (req, res, next) => {
     ] = await Promise.all([
       // Total Gross Volume & Total Orders
       Order.aggregate([
+        { $match: { $or: [{ paymentStatus: 'Paid' }, { paymentMethod: 'COD' }] } },
         {
           $group: {
             _id: null,
@@ -89,7 +90,7 @@ export const getFinancialDashboardStats = async (req, res, next) => {
 
       // Today's Revenue & Transactions
       Order.aggregate([
-        { $match: { createdAt: { $gte: todayStart } } },
+        { $match: { createdAt: { $gte: todayStart }, $or: [{ paymentStatus: 'Paid' }, { paymentMethod: 'COD' }] } },
         {
           $group: {
             _id: null,
@@ -187,7 +188,7 @@ export const getFinancialDashboardStats = async (req, res, next) => {
 
       // Monthly Volumes (last 6 months)
       Order.aggregate([
-        { $match: { createdAt: { $gte: sixMonthsAgo } } },
+        { $match: { createdAt: { $gte: sixMonthsAgo }, $or: [{ paymentStatus: 'Paid' }, { paymentMethod: 'COD' }] } },
         {
           $group: {
             _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
@@ -1286,7 +1287,7 @@ export const getFinancialReports = async (req, res, next) => {
 
     if (reportType === 'platform-revenue') {
       const orders = await Order.aggregate([
-        { $match: dateQuery.createdAt ? { createdAt: dateQuery.createdAt } : {} },
+        { $match: { ...(dateQuery.createdAt ? { createdAt: dateQuery.createdAt } : {}), $or: [{ paymentStatus: 'Paid' }, { paymentMethod: 'COD' }] } },
         {
           $group: {
             _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },

@@ -14,6 +14,7 @@ import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
 const formatRawOrdersList = (rawList = []) => {
   return rawList.map(o => {
     let rawStatus = (o.orderStatus || o.status || 'Placed').trim();
+    if (rawStatus === 'Payment Pending') rawStatus = 'Payment Pending';
     if (o.orderStatus === 'Refund Completed' || o.refundStatus === 'Completed' || o.returnStatus === 'Refunded') {
       rawStatus = 'Refund Completed';
     } else if (o.orderStatus === 'Returned' || o.returnStatus === 'Completed') {
@@ -250,6 +251,12 @@ const OrderHistory = () => {
           bg: 'bg-purple-50 border-purple-200 text-purple-700',
           icon: <RotateCcw size={10} className="text-purple-600" />,
           label: 'Returned',
+        };
+      case 'Payment Pending':
+        return {
+          bg: 'bg-amber-50 border-amber-200 text-amber-800',
+          icon: <Clock size={10} className="text-amber-600" />,
+          label: 'Payment Pending',
         };
       case 'Placed':
       case 'Accepted':

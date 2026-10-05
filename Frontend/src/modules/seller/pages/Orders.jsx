@@ -60,8 +60,6 @@ const Orders = () => {
   const [selectedReason, setSelectedReason] = useState('Product unavailable');
   const [customReasonText, setCustomReasonText] = useState('');
 
-  const knownOrderIdsRef = React.useRef(new Set());
-
   const playOrderRingtone = () => {
     try {
       const audio = new Audio('/SellerOrder.mpeg');
@@ -94,37 +92,12 @@ const Orders = () => {
       if (res && res.notifications && Array.isArray(res.notifications)) {
         setNotifications(res.notifications);
         
-        // Keep active modal synced with latest polled DB data
+        // Refresh an already-open details modal. Never treat a refreshed row as a new order.
         setSelectedNotification(prev => {
           if (!prev) return null;
           const fresh = res.notifications.find(n => n._id === prev._id);
           return fresh || prev;
         });
-
-        // Detect brand new incoming orders to trigger ringtone alert
-        let hasBrandNewOrder = false;
-        for (const n of res.notifications) {
-          if (!knownOrderIdsRef.current.has(n._id)) {
-            knownOrderIdsRef.current.add(n._id);
-            if (n.status === 'NEW') {
-              hasBrandNewOrder = true;
-            }
-          }
-        }
-
-        if (hasBrandNewOrder) {
-          playOrderRingtone();
-        }
-
-        // Auto-open SMALL modal for newest incoming order if no modal currently opened
-        const newestNew = res.notifications.find(n => n.status === 'NEW');
-        if (newestNew && !selectedNotification && !rejectionModalOpen) {
-          setSelectedNotification(newestNew);
-          setModalMode('SMALL');
-          playOrderRingtone();
-          // Mark notification as viewed
-          orderService.markNotificationViewed(newestNew._id).catch(() => {});
-        }
       }
     } catch (err) {
       console.warn('Error fetching seller notifications:', err.message);
@@ -176,6 +149,7 @@ const Orders = () => {
     setActionLoading(true);
     try {
       const res = await orderService.acceptSellerOrder(notification._id);
+      window.dispatchEvent(new CustomEvent('seller-order-handled', { detail: { id: notification._id } }));
       showToast(`Order #${notification.orderId} Accepted Successfully! 🎉`);
       
       const updatedObj = res.notification || { ...notification, status: 'ACCEPTED', acceptedAt: new Date() };
@@ -203,6 +177,7 @@ const Orders = () => {
     setActionLoading(true);
     try {
       const res = await orderService.updateSellerOrderStatus(notification._id, newStatus);
+      window.dispatchEvent(new CustomEvent('seller-order-handled', { detail: { id: notification._id } }));
       showToast(`Order #${notification.orderId} status changed to "${newStatus}"! 🎉`);
       
       const targetStatus = (res.notification && res.notification.status)
@@ -235,6 +210,7 @@ const Orders = () => {
         rejectionReason: selectedReason,
         customReason: customReasonText
       });
+      window.dispatchEvent(new CustomEvent('seller-order-handled', { detail: { id: selectedNotification._id } }));
 
       showToast(`Order #${selectedNotification.orderId} Rejected`);
       

@@ -20,6 +20,11 @@ const SellerOrderNotifier = () => {
   const [isMuted, setIsMuted] = useState(false);
 
   const knownOrderIdsRef = useRef(new Set());
+  const notifiedOrderIdsRef = useRef(new Set());
+  const baselineReadyRef = useRef(false);
+  const activeOrderIdRef = useRef(null);
+  const pendingQueueRef = useRef([]);
+  const isMutedRef = useRef(false);
   const audioRef = useRef(null);
   const ringtoneIntervalRef = useRef(null);
   const isPollingRef = useRef(false);
@@ -31,7 +36,7 @@ const SellerOrderNotifier = () => {
 
   // Play Sound / Ringtone
   const playRingtone = () => {
-    if (isMuted) return;
+    if (isMutedRef.current) return;
 
     try {
       if (!audioRef.current) {
@@ -78,39 +83,64 @@ const SellerOrderNotifier = () => {
     }
   };
 
-  // Polling loop for active seller orders across ALL pages
+  const presentNextNewOrder = () => {
+    if (activeOrderIdRef.current) return;
+    const next = pendingQueueRef.current.shift();
+    if (!next) return;
+    const id = String(next._id);
+    notifiedOrderIdsRef.current.add(id);
+    activeOrderIdRef.current = id;
+    console.info('[SellerOrderNotifier] opening incoming modal for new order', next.orderId);
+    setActiveNewOrder(next);
+    playRingtone();
+  };
+
+  const closeIncomingModal = () => {
+    activeOrderIdRef.current = null;
+    setActiveNewOrder(null);
+    stopRingtone();
+    presentNextNewOrder();
+  };
+
+  // Polling loop for active seller orders across ALL pages.
+  // The first response is the baseline. Only an order id that appears after that,
+  // and is still status NEW, can open the incoming modal.
   const pollSellerOrders = async () => {
     if (isPollingRef.current) return;
     isPollingRef.current = true;
     try {
       const res = await orderService.getSellerNotifications({ limit: 15 });
       if (res && res.notifications && Array.isArray(res.notifications)) {
-        
-        // Broadcast updates to any listening components (e.g. Orders.jsx)
-        window.dispatchEvent(new CustomEvent('seller-order-update', { detail: res.notifications }));
+        const notifications = res.notifications;
+        window.dispatchEvent(new CustomEvent('seller-order-update', { detail: notifications }));
 
-        // Check for any NEW order
-        const newestNew = res.notifications.find(n => n.status === 'NEW');
+        if (!baselineReadyRef.current) {
+          notifications.forEach((n) => knownOrderIdsRef.current.add(String(n._id)));
+          baselineReadyRef.current = true;
+          console.info('[SellerOrderNotifier] baseline', knownOrderIdsRef.current.size, 'existing orders; no incoming modal');
+          return;
+        }
 
-        // Check if there are newly arrived unseen orders
-        let isBrandNewArrival = false;
-        for (const n of res.notifications) {
-          if (!knownOrderIdsRef.current.has(n._id)) {
-            knownOrderIdsRef.current.add(n._id);
-            if (n.status === 'NEW') {
-              isBrandNewArrival = true;
-            }
+        for (const n of notifications) {
+          const id = String(n._id);
+          if (knownOrderIdsRef.current.has(id)) continue;
+          knownOrderIdsRef.current.add(id);
+          if (n.status === 'NEW' && !notifiedOrderIdsRef.current.has(id)) {
+            pendingQueueRef.current.push(n);
           }
         }
 
-        if (newestNew && (!activeNewOrder || isBrandNewArrival)) {
-          setActiveNewOrder(newestNew);
-          playRingtone();
-        } else if (!newestNew && activeNewOrder && activeNewOrder.status === 'NEW') {
-          // If the order was handled on another tab
-          setActiveNewOrder(null);
-          stopRingtone();
+        if (activeOrderIdRef.current) {
+          const current = notifications.find((n) => String(n._id) === activeOrderIdRef.current);
+          if (current && current.status !== 'NEW') {
+            console.info('[SellerOrderNotifier] order', current.orderId, 'is now', current.status, '; closing incoming modal');
+            activeOrderIdRef.current = null;
+            setActiveNewOrder(null);
+            stopRingtone();
+          }
         }
+
+        presentNextNewOrder();
       }
     } catch (err) {
       // Ignore network silent errors during background poll
@@ -120,30 +150,48 @@ const SellerOrderNotifier = () => {
   };
 
   useEffect(() => {
+    const markHandled = (id) => {
+      if (!id) return;
+      const key = String(id);
+      knownOrderIdsRef.current.add(key);
+      notifiedOrderIdsRef.current.add(key);
+      pendingQueueRef.current = pendingQueueRef.current.filter((n) => String(n._id) !== key);
+      if (activeOrderIdRef.current === key) {
+        activeOrderIdRef.current = null;
+        setActiveNewOrder(null);
+        stopRingtone();
+        presentNextNewOrder();
+      }
+    };
+    const onHandled = (event) => markHandled(event.detail?.id);
+
     pollSellerOrders();
     const interval = setInterval(pollSellerOrders, 10000);
+    window.addEventListener('seller-order-handled', onHandled);
     return () => {
       clearInterval(interval);
+      window.removeEventListener('seller-order-handled', onHandled);
       stopRingtone();
     };
   }, []);
 
   const handleDismissPopup = () => {
-    stopRingtone();
     if (activeNewOrder) {
+      notifiedOrderIdsRef.current.add(String(activeNewOrder._id));
       orderService.markNotificationViewed(activeNewOrder._id).catch(() => {});
     }
-    setActiveNewOrder(null);
+    closeIncomingModal();
   };
 
   const handleAcceptOrder = async () => {
     if (!activeNewOrder) return;
     setActionLoading(true);
-    stopRingtone();
+    knownOrderIdsRef.current.add(String(activeNewOrder._id));
+    notifiedOrderIdsRef.current.add(String(activeNewOrder._id));
     try {
       await orderService.acceptSellerOrder(activeNewOrder._id);
       showToast(`Order #${activeNewOrder.orderId} Accepted Successfully! 🎉`);
-      setActiveNewOrder(null);
+      closeIncomingModal();
       pollSellerOrders();
     } catch (err) {
       showToast(err.response?.data?.message || 'Failed to accept order.');
@@ -162,13 +210,14 @@ const SellerOrderNotifier = () => {
     }
 
     setActionLoading(true);
-    stopRingtone();
+    knownOrderIdsRef.current.add(String(activeNewOrder._id));
+    notifiedOrderIdsRef.current.add(String(activeNewOrder._id));
     try {
       await orderService.rejectSellerOrder(activeNewOrder._id, finalReason);
       showToast(`Order #${activeNewOrder.orderId} Rejected.`);
       setRejectionModalOpen(false);
-      setActiveNewOrder(null);
       setCustomReasonText('');
+      closeIncomingModal();
       pollSellerOrders();
     } catch (err) {
       showToast(err.response?.data?.message || 'Failed to reject order.');
@@ -221,10 +270,12 @@ const SellerOrderNotifier = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    if (isMuted) {
+                    if (isMutedRef.current) {
+                      isMutedRef.current = false;
                       setIsMuted(false);
                       playRingtone();
                     } else {
+                      isMutedRef.current = true;
                       setIsMuted(true);
                       stopRingtone();
                     }
@@ -361,9 +412,9 @@ const SellerOrderNotifier = () => {
               <button
                 type="button"
                 onClick={() => {
-                  stopRingtone();
+                  notifiedOrderIdsRef.current.add(String(activeNewOrder._id));
                   navigate('/seller/orders');
-                  setActiveNewOrder(null);
+                  closeIncomingModal();
                 }}
                 className="px-3 py-2 text-slate-600 hover:text-slate-900 font-bold text-xs bg-transparent border-none cursor-pointer flex items-center gap-1"
               >

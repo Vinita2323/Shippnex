@@ -260,7 +260,7 @@ const TrackOrder = () => {
 
   // Status steps mapping
   const steps = [
-    { key: 'Placed', label: 'Order Placed', sub: 'Order received' },
+    { key: 'Placed', label: orderStatus === 'Payment Pending' ? 'Payment Pending' : 'Order Placed', sub: orderStatus === 'Payment Pending' ? 'Complete payment to place this order' : 'Order received' },
     { key: 'Processing', label: 'Store Processing', sub: captainStatus === 'At Pickup' ? 'Captain at Store' : 'Preparing items' },
     { key: 'Out for Delivery', label: 'Out for Delivery', sub: 'On the way to you' },
     { 
@@ -291,6 +291,7 @@ const TrackOrder = () => {
     if (sellerHasAccepted && (captainStatus === 'At Pickup' || orderStatus === 'Reached Store / Pickup')) return { text: 'Captain at Store', color: 'bg-blue-50 text-blue-700 border-blue-200' };
     if (sellerHasAccepted && (orderStatus === 'Accepted' || orderStatus === 'Processing' || sellerStatus === 'Accepted' || sellerStatus === 'ACCEPTED')) return { text: 'Order Accepted', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
     if (orderStatus === 'Rejected') return { text: 'Rejected', color: 'bg-red-50 text-red-700 border-red-200' };
+    if (orderStatus === 'Payment Pending') return { text: 'Payment Pending', color: 'bg-amber-50 text-amber-800 border-amber-200' };
     return { text: 'Order Placed', color: 'bg-orange-50 text-[#ea580c] border-orange-200/60' };
   };
 
