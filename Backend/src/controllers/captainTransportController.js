@@ -12,6 +12,43 @@ import { invalidateCaptainDashboardCache } from './captainController.js';
 const generateRideOtp = () => Math.floor(1000 + Math.random() * 9000).toString();
 const generateTxnId = () => `CTX-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
 
+const ACTIVE_LOCATION_STATUSES = [
+  'CAPTAIN_ASSIGNED',
+  'CAPTAIN_ARRIVING',
+  'CAPTAIN_REACHED_PICKUP',
+  'RIDE_STARTED',
+  'CAPTAIN_REACHED_DROP',
+];
+
+const findCaptainBooking = (captainId, bookingId) => {
+  const isMongoId = mongoose.Types.ObjectId.isValid(bookingId);
+  const query = {
+    ...(isMongoId ? { $or: [{ _id: bookingId }, { bookingId }] } : { bookingId }),
+    captainId,
+  };
+  return TransportBooking.findOne(query);
+};
+
+const collectPhotoUrls = (body = {}) => {
+  const raw = [];
+  if (Array.isArray(body.photos)) raw.push(...body.photos);
+  if (typeof body.photos === 'string') raw.push(body.photos);
+  if (body.proofUrl) raw.push(body.proofUrl);
+  if (body.url) raw.push(body.url);
+  const urls = [];
+  for (const item of raw) {
+    const url = String(item?.url || item || '').trim();
+    if (!url) continue;
+    if (!/^https?:\/\//i.test(url) && !url.startsWith('/uploads/')) continue;
+    if (!urls.includes(url)) urls.push(url);
+  }
+  return urls.slice(0, 6);
+};
+
+const hasPickupPhotos = (booking) => Array.isArray(booking?.pickupPhotos) && booking.pickupPhotos.length > 0;
+const hasDropPhotos = (booking) =>
+  (Array.isArray(booking?.dropPhotos) && booking.dropPhotos.length > 0) || Boolean(booking?.proofOfDeliveryUrl);
+
 // ──────────────────────────────────────────────────────────────────────────────
 // GET /api/captain/transport/requests
 // Auth: Captain required
@@ -274,15 +311,14 @@ export const getActiveTransportDelivery = async (req, res, next) => {
 
     const booking = await TransportBooking.findOne({
       captainId,
-      status: {
-        $in: [
-          'CAPTAIN_ASSIGNED',
-          'CAPTAIN_ARRIVING',
-          'CAPTAIN_REACHED_PICKUP',
-          'RIDE_STARTED',
-          'CAPTAIN_REACHED_DROP',
-        ],
-      },
+      $or: [
+        { status: { $in: ACTIVE_LOCATION_STATUSES } },
+        {
+          status: 'RIDE_COMPLETED',
+          'returnRoute.required': true,
+          'returnRoute.status': { $in: ['PENDING', 'IN_PROGRESS'] },
+        },
+      ],
     })
       .populate('user', 'name phone email')
       .populate('vehicleTypeId', 'name slug icon')
@@ -330,6 +366,44 @@ export const updateTransportStatus = async (req, res, next) => {
       });
     }
 
+    if (status === 'CAPTAIN_ARRIVING' && !['CAPTAIN_ASSIGNED', 'CAPTAIN_ARRIVING'].includes(booking.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Navigation to pickup is available after the request is accepted.',
+      });
+    }
+
+    if (
+      status === 'CAPTAIN_REACHED_PICKUP' &&
+      !['CAPTAIN_ASSIGNED', 'CAPTAIN_ARRIVING', 'CAPTAIN_REACHED_PICKUP'].includes(booking.status)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'You can mark arrival at pickup only after this ride is assigned to you.',
+      });
+    }
+
+    if (status === 'RIDE_STARTED' && (!booking.pickupOtpVerified || !hasPickupPhotos(booking))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Capture goods photos and verify the pickup OTP before starting the ride.',
+      });
+    }
+
+    if (status === 'CAPTAIN_REACHED_DROP' && !['RIDE_STARTED', 'CAPTAIN_REACHED_DROP'].includes(booking.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reach the drop only after the ride has started.',
+      });
+    }
+
+    if (status === 'RIDE_COMPLETED' && (!booking.dropOtpVerified || !hasDropPhotos(booking))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Upload a delivery photo and verify the drop OTP before completing this ride.',
+      });
+    }
+
     const now = new Date();
     const updates = { status };
 
@@ -350,7 +424,6 @@ export const updateTransportStatus = async (req, res, next) => {
     }
 
     if (status === 'CAPTAIN_REACHED_DROP') {
-      updates.pickupOtpVerified = true;
       updates.captainReachedDropAt = now;
       if (!booking.dropOtp) {
         updates.dropOtp = generateRideOtp();
@@ -364,6 +437,7 @@ export const updateTransportStatus = async (req, res, next) => {
       updates.rideCompletedAt = now;
       updates.paymentStatus = 'Paid';
       if (proofUrl) updates.proofOfDeliveryUrl = proofUrl;
+      updates.liveLocation = { lat: null, lng: null, heading: null, accuracy: null, updatedAt: null };
 
       // Credit wallet
       const totalFare = Number(booking.fareBreakdown?.totalFare || 0);
@@ -484,6 +558,20 @@ export const verifyPickupOtp = async (req, res, next) => {
       });
     }
 
+    if (booking.status !== 'CAPTAIN_REACHED_PICKUP') {
+      return res.status(400).json({
+        success: false,
+        message: 'Mark yourself as arrived at pickup before verifying the pickup OTP.',
+      });
+    }
+
+    if (!hasPickupPhotos(booking)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Upload at least one photo of the goods before verifying the pickup OTP.',
+      });
+    }
+
     // Attempt count check (prevent brute force)
     if (booking.pickupOtpAttempts >= 6) {
       return res.status(429).json({
@@ -589,6 +677,21 @@ export const verifyDropOtp = async (req, res, next) => {
       });
     }
 
+    if (booking.status !== 'CAPTAIN_REACHED_DROP') {
+      return res.status(400).json({
+        success: false,
+        message: 'Mark yourself as arrived at the drop before verifying the drop OTP.',
+      });
+    }
+
+    const incomingDropPhotos = collectPhotoUrls({ proofUrl });
+    if (!hasDropPhotos(booking) && incomingDropPhotos.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Upload at least one delivery photo before verifying the drop OTP.',
+      });
+    }
+
     // OTP validation (supports dev bypass '0000', dropOtp, or pickupOtp)
     const cleanOtp = String(otp).trim();
     const isDevBypass = cleanOtp === '0000';
@@ -607,6 +710,13 @@ export const verifyDropOtp = async (req, res, next) => {
 
     const now = new Date();
     const earnings = booking.captainEarnings || Math.round((booking.fareBreakdown?.totalFare || 0) * 0.8) || 0;
+    const dropPhotos = Array.isArray(booking.dropPhotos) ? [...booking.dropPhotos] : [];
+    incomingDropPhotos.forEach((url) => {
+      if (!dropPhotos.some((photo) => photo.url === url)) {
+        dropPhotos.push({ url, uploadedAt: now });
+      }
+    });
+    const storedProof = booking.proofOfDeliveryUrl || dropPhotos[0]?.url || null;
 
     // ── Complete the Booking ──
     const updatedBooking = await TransportBooking.findByIdAndUpdate(
@@ -620,7 +730,9 @@ export const verifyDropOtp = async (req, res, next) => {
           status: 'RIDE_COMPLETED',
           rideCompletedAt: now,
           paymentStatus: 'Paid',
-          ...(proofUrl ? { proofOfDeliveryUrl: proofUrl } : {}),
+          dropPhotos,
+          ...(storedProof ? { proofOfDeliveryUrl: storedProof } : {}),
+          liveLocation: { lat: null, lng: null, heading: null, accuracy: null, updatedAt: null },
         },
         $push: {
           statusHistory: {
@@ -703,9 +815,20 @@ export const submitTransportProof = async (req, res, next) => {
       captainId,
     };
 
+    const now = new Date();
+    const photoUrl = collectPhotoUrls({ proofUrl })[0];
     const booking = await TransportBooking.findOneAndUpdate(
       query,
-      { $set: { proofOfDeliveryUrl: proofUrl } },
+      {
+        $set: { proofOfDeliveryUrl: proofUrl },
+        ...(photoUrl
+          ? {
+              $addToSet: {
+                dropPhotos: { url: photoUrl, uploadedAt: now },
+              },
+            }
+          : {}),
+      },
       { new: true }
     );
 
@@ -717,6 +840,150 @@ export const submitTransportProof = async (req, res, next) => {
       success: true,
       message: 'Proof of delivery submitted successfully',
       proofUrl,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const saveStagePhotos = async (req, res, next, stage) => {
+  try {
+    const captainId = req.user.id;
+    const booking = await findCaptainBooking(captainId, req.params.bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Transport booking not found or not assigned to you' });
+    }
+
+    const expectedStatus = stage === 'pickup' ? 'CAPTAIN_REACHED_PICKUP' : 'CAPTAIN_REACHED_DROP';
+    if (booking.status !== expectedStatus) {
+      return res.status(400).json({
+        success: false,
+        message:
+          stage === 'pickup'
+            ? 'Goods photos can be uploaded after you arrive at pickup.'
+            : 'Delivery photos can be uploaded after you arrive at the drop.',
+      });
+    }
+
+    const urls = collectPhotoUrls(req.body);
+    if (urls.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Upload at least one photo. Use an image URL returned by the upload API.',
+      });
+    }
+
+    const now = new Date();
+    const field = stage === 'pickup' ? 'pickupPhotos' : 'dropPhotos';
+    const existing = Array.isArray(booking[field]) ? booking[field] : [];
+    urls.forEach((url) => {
+      if (!existing.some((photo) => photo.url === url)) {
+        existing.push({ url, uploadedAt: now });
+      }
+    });
+
+    const updates = { [field]: existing };
+    if (stage === 'pickup') updates.pickupPhotosVerified = existing.length > 0;
+    if (stage === 'drop') updates.proofOfDeliveryUrl = existing[0]?.url || booking.proofOfDeliveryUrl;
+
+    const updated = await TransportBooking.findByIdAndUpdate(booking._id, { $set: updates }, { new: true })
+      .populate('user', 'name phone')
+      .populate('vehicleTypeId', 'name slug icon');
+
+    res.status(200).json({
+      success: true,
+      message: stage === 'pickup' ? 'Goods photos saved.' : 'Delivery photos saved.',
+      booking: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/captain/transport/active/:bookingId/pickup-photos
+export const uploadPickupPhotos = (req, res, next) => saveStagePhotos(req, res, next, 'pickup');
+
+// POST /api/captain/transport/active/:bookingId/drop-photos
+export const uploadDropPhotos = (req, res, next) => saveStagePhotos(req, res, next, 'drop');
+
+// POST /api/captain/transport/active/:bookingId/location
+export const updateTransportLocation = async (req, res, next) => {
+  try {
+    const captainId = req.user.id;
+    const lat = Number(req.body.lat);
+    const lng = Number(req.body.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      return res.status(400).json({ success: false, message: 'A valid latitude and longitude are required.' });
+    }
+
+    const booking = await findCaptainBooking(captainId, req.params.bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Transport booking not found or not assigned to you' });
+    }
+    if (!ACTIVE_LOCATION_STATUSES.includes(booking.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Location tracking is only available while this trip is active.',
+      });
+    }
+
+    const now = new Date();
+    const liveLocation = {
+      lat,
+      lng,
+      heading: Number.isFinite(Number(req.body.heading)) ? Number(req.body.heading) : null,
+      accuracy: Number.isFinite(Number(req.body.accuracy)) ? Number(req.body.accuracy) : null,
+      updatedAt: now,
+    };
+
+    await TransportBooking.updateOne({ _id: booking._id }, { $set: { liveLocation } });
+    await Captain.updateOne(
+      { _id: captainId },
+      { $set: { liveLocation: { type: 'Point', coordinates: [lng, lat] } } }
+    );
+
+    res.status(200).json({ success: true, liveLocation });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/captain/transport/active/:bookingId/return/complete
+// Marks the optional return leg finished. Does not create a booking or credit the wallet again.
+export const completeTransportReturn = async (req, res, next) => {
+  try {
+    const captainId = req.user.id;
+    const booking = await findCaptainBooking(captainId, req.params.bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Transport booking not found or not assigned to you' });
+    }
+    if (booking.status !== 'RIDE_COMPLETED' || !booking.returnRoute?.required) {
+      return res.status(400).json({
+        success: false,
+        message: 'This booking does not have a return route to complete.',
+      });
+    }
+    if (booking.returnRoute.status === 'COMPLETED') {
+      return res.status(200).json({ success: true, message: 'Return route is already complete.', booking });
+    }
+
+    const now = new Date();
+    const updated = await TransportBooking.findByIdAndUpdate(
+      booking._id,
+      {
+        $set: {
+          'returnRoute.status': 'COMPLETED',
+          'returnRoute.completedAt': now,
+          liveLocation: { lat: null, lng: null, heading: null, accuracy: null, updatedAt: null },
+        },
+      },
+      { new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Return route completed. The original trip payout is unchanged.',
+      booking: updated,
     });
   } catch (error) {
     next(error);

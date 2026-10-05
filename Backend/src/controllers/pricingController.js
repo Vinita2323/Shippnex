@@ -199,6 +199,7 @@ export const updateTransportPricing = async (req, res, next) => {
       additionalStopCharge,
       platformFee,
       nightPeakPricing,
+      returnToPickup,
       isActive,
       reason,
     } = req.body;
@@ -233,6 +234,9 @@ export const updateTransportPricing = async (req, res, next) => {
     if (platformFee !== undefined) {
       if (Number(platformFee) < 0) return res.status(400).json({ success: false, message: 'Platform fee cannot be negative.' });
       config.platformFee = Number(platformFee);
+    }
+    if (returnToPickup !== undefined) {
+      config.returnToPickup = Boolean(returnToPickup);
     }
 
     if (configName !== undefined) config.configName = configName.trim();

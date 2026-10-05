@@ -205,6 +205,7 @@ export const PricingChargesManagement = ({ initialTab = 'transport' }) => {
       nightPeakFlat: cfg.nightPeakPricing?.surgeFlat ?? 0,
       nightPeakStart: cfg.nightPeakPricing?.startHour || '22:00',
       nightPeakEnd: cfg.nightPeakPricing?.endHour || '06:00',
+      returnToPickup: Boolean(cfg.returnToPickup),
     });
   };
 
@@ -353,6 +354,7 @@ export const PricingChargesManagement = ({ initialTab = 'transport' }) => {
           description: transportActive.nightPeakPricing?.description || 'Night / Peak hours surcharge',
         },
         isActive: true,
+        returnToPickup: Boolean(activeTransportDraft.returnToPickup),
         reason: 'Direct quick update from Admin Pricing Dashboard',
       };
 
@@ -859,6 +861,19 @@ export const PricingChargesManagement = ({ initialTab = 'transport' }) => {
                 <p className="text-sm text-slate-500 m-0 mt-0.5 font-normal">
                   These universal rules (driver idle waiting fee, multi-drop stop charge, night surge) apply across all vehicle rides.
                 </p>
+                <label className="mt-3 flex items-start gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    disabled={!isEditingActiveTransport}
+                    checked={Boolean(isEditingActiveTransport ? activeTransportDraft?.returnToPickup : transportActive?.returnToPickup)}
+                    onChange={(e) => setActiveTransportDraft((prev) => ({ ...prev, returnToPickup: e.target.checked }))}
+                  />
+                  <span>
+                    Require a return-to-pickup route after delivery. This does not create a second booking or a second payout.
+                    <span className="block text-xs text-slate-500">Currently {transportActive?.returnToPickup ? 'on' : 'off'} for new bookings.</span>
+                  </span>
+                </label>
               </div>
 
               {isEditingActiveTransport ? (

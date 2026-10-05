@@ -36,6 +36,10 @@ import {
   verifyPickupOtp,
   verifyDropOtp,
   submitTransportProof,
+  uploadPickupPhotos,
+  uploadDropPhotos,
+  updateTransportLocation,
+  completeTransportReturn,
 } from '../controllers/captainTransportController.js';
 
 const router = express.Router();
@@ -76,6 +80,10 @@ router.put('/transport/active/:bookingId/status', captainAuth, updateTransportSt
 router.post('/transport/active/:bookingId/verify-pickup-otp', captainAuth, verifyPickupOtp);
 router.post('/transport/active/:bookingId/verify-drop-otp', captainAuth, verifyDropOtp);
 router.post('/transport/active/:bookingId/proof', captainAuth, submitTransportProof);
+router.post('/transport/active/:bookingId/pickup-photos', captainAuth, uploadPickupPhotos);
+router.post('/transport/active/:bookingId/drop-photos', captainAuth, uploadDropPhotos);
+router.post('/transport/active/:bookingId/location', captainAuth, updateTransportLocation);
+router.post('/transport/active/:bookingId/return/complete', captainAuth, completeTransportReturn);
 
 // Delivery Actions
 router.get('/active-delivery', captainAuth, getActiveDelivery);

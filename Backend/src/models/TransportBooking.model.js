@@ -215,7 +215,60 @@ const transportBookingSchema = new mongoose.Schema(
     dropOtpVerifiedAt: { type: Date, default: null },
     dropOtpAttempts: { type: Number, default: 0 },
 
-    // ── Proof of Delivery ─────────────────────────────────────────────
+    // ── Goods photos taken at pickup (required before the ride starts) ─
+    pickupPhotos: {
+      type: [
+        new mongoose.Schema(
+          {
+            url: { type: String, required: true },
+            uploadedAt: { type: Date, default: Date.now },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
+    pickupPhotosVerified: { type: Boolean, default: false },
+
+    // ── Delivery photos taken at drop (required before completion) ──
+    dropPhotos: {
+      type: [
+        new mongoose.Schema(
+          {
+            url: { type: String, required: true },
+            uploadedAt: { type: Date, default: Date.now },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
+
+    // ── Latest captain GPS while the trip is active ──────────────────
+    liveLocation: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+      heading: { type: Number, default: null },
+      accuracy: { type: Number, default: null },
+      updatedAt: { type: Date, default: null },
+    },
+
+    // ── Optional return / next route after delivery (not a new booking)
+    returnRoute: {
+      required: { type: Boolean, default: false },
+      status: {
+        type: String,
+        enum: ['NONE', 'PENDING', 'IN_PROGRESS', 'COMPLETED'],
+        default: 'NONE',
+      },
+      destination: { type: locationSchema, required: false },
+      distanceKm: { type: Number, default: null },
+      estimatedDurationMin: { type: Number, default: null },
+      startedAt: { type: Date, default: null },
+      completedAt: { type: Date, default: null },
+    },
+
+    // ── Proof of Delivery (first drop photo, kept for existing readers)
     proofOfDeliveryUrl: { type: String, default: null },
 
     // ── Cancellation ──────────────────────────────────────────────────

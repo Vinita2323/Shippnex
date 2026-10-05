@@ -72,6 +72,12 @@ const transportPricingSchema = new mongoose.Schema(
       min: [0, 'Platform fee cannot be negative'],
       default: 10,
     },
+    // When true, new bookings include a return-to-pickup leg after delivery.
+    // Existing bookings stay unchanged, and no second booking is created.
+    returnToPickup: {
+      type: Boolean,
+      default: false,
+    },
     nightPeakPricing: {
       enabled: {
         type: Boolean,

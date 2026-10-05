@@ -163,4 +163,53 @@ export const transportService = {
       throw error.response?.data || error.message;
     }
   },
+
+  uploadTransportPhoto: async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const response = await API.post('/upload?folder=transport', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  captainUploadPickupPhotos: async (bookingId, photos) => {
+    try {
+      const response = await API.post(`/captain/transport/active/${bookingId}/pickup-photos`, { photos });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  captainUploadDropPhotos: async (bookingId, photos) => {
+    try {
+      const response = await API.post(`/captain/transport/active/${bookingId}/drop-photos`, { photos });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  captainUpdateLocation: async (bookingId, location) => {
+    try {
+      const response = await API.post(`/captain/transport/active/${bookingId}/location`, location);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
+
+  captainCompleteReturn: async (bookingId) => {
+    try {
+      const response = await API.post(`/captain/transport/active/${bookingId}/return/complete`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error.message;
+    }
+  },
 };

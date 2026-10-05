@@ -39,6 +39,70 @@ const IN_PROGRESS_STATUSES = [
 // Statuses that are terminal (cannot be cancelled or modified by user)
 const TERMINAL_STATUSES = ['RIDE_COMPLETED', 'CANCELLED'];
 
+// Statuses where the user may see the captain's live position
+const TRACKING_STATUSES = [
+  'CAPTAIN_ASSIGNED',
+  'CAPTAIN_ARRIVING',
+  'CAPTAIN_REACHED_PICKUP',
+  'RIDE_STARTED',
+  'CAPTAIN_REACHED_DROP',
+];
+
+// Copies the active pricing flag onto the booking. Default is no return leg.
+const buildReturnRoute = (pricing, pickupLocation) => {
+  if (!pricing?.returnToPickup || !pickupLocation?.address) {
+    return { required: false, status: 'NONE' };
+  }
+  let distanceKm = null;
+  let estimatedDurationMin = null;
+  return {
+    required: true,
+    status: 'PENDING',
+    destination: {
+      address: pickupLocation.address,
+      landmark: pickupLocation.landmark || '',
+      city: pickupLocation.city || '',
+      state: pickupLocation.state || '',
+      pincode: pickupLocation.pincode || '',
+      lat: pickupLocation.lat ?? null,
+      lng: pickupLocation.lng ?? null,
+    },
+    distanceKm,
+    estimatedDurationMin,
+  };
+};
+
+const withReturnDistance = (route, dropLocation) => {
+  if (!route?.required || !route.destination || dropLocation?.lat == null || route.destination.lat == null) {
+    return route;
+  }
+  const distanceKm = haversineDistance(
+    parseFloat(dropLocation.lat),
+    parseFloat(dropLocation.lng),
+    parseFloat(route.destination.lat),
+    parseFloat(route.destination.lng)
+  );
+  return {
+    ...route,
+    distanceKm,
+    estimatedDurationMin: estimateDuration(distanceKm),
+  };
+};
+
+// Hide captain coordinates once the trip is no longer active.
+const hideInactiveTracking = (bookingObj) => {
+  if (!bookingObj) return bookingObj;
+  if (!TRACKING_STATUSES.includes(bookingObj.status)) {
+    bookingObj.liveLocation = null;
+    if (bookingObj.captainId && typeof bookingObj.captainId === 'object') {
+      const captain = { ...bookingObj.captainId };
+      delete captain.liveLocation;
+      bookingObj.captainId = captain;
+    }
+  }
+  return bookingObj;
+};
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
@@ -619,6 +683,21 @@ export const verifyTransportPayment = async (req, res, next) => {
       captainCommissionAmount: captainCommAmount,
       captainEarnings,
       captainEarning: captainEarnings,
+      returnRoute: withReturnDistance(
+        buildReturnRoute(transportPricing, {
+          address: pickupAddr,
+          landmark: pickupLocation.landmark || '',
+          city: pickupLocation.city || '',
+          state: pickupLocation.state || '',
+          pincode: pickupLocation.pincode || '',
+          lat: hasPickupCoords ? parseFloat(pickupLat) : null,
+          lng: hasPickupCoords ? parseFloat(pickupLng) : null,
+        }),
+        {
+          lat: hasDropCoords ? parseFloat(dropLat) : null,
+          lng: hasDropCoords ? parseFloat(dropLng) : null,
+        }
+      ),
       status: 'SEARCHING_CAPTAIN',
       statusHistory: [
         {
@@ -869,6 +948,18 @@ export const createBooking = async (req, res, next) => {
       captainCommissionAmount: captainCommAmount,
       captainEarnings,
       captainEarning: captainEarnings,
+      returnRoute: withReturnDistance(buildReturnRoute(transportPricing, {
+        address: pickupLocation.address.trim(),
+        landmark: pickupLocation.landmark || '',
+        city: pickupLocation.city || '',
+        state: pickupLocation.state || '',
+        pincode: pickupLocation.pincode || '',
+        lat: hasPickupCoords ? parseFloat(pickupLocation.lat) : null,
+        lng: hasPickupCoords ? parseFloat(pickupLocation.lng) : null,
+      }), {
+        lat: hasDropCoords ? parseFloat(dropLocation.lat) : null,
+        lng: hasDropCoords ? parseFloat(dropLocation.lng) : null,
+      }),
       status: 'SEARCHING_CAPTAIN',
       statusHistory: [
         {
@@ -953,7 +1044,7 @@ export const getUserBookings = async (req, res, next) => {
     });
 
     const enrichedBookings = bookings.map((b) => {
-      const bObj = b.toObject();
+      const bObj = hideInactiveTracking(b.toObject());
       const userRating = ratingMap.get(b._id.toString());
       return {
         ...bObj,
@@ -996,9 +1087,11 @@ export const getActiveBooking = async (req, res, next) => {
       .populate('captainId', 'name phone vehicleType liveLocation isOnline documents.profilePhoto ratingAverage ratingCount')
       .select('-__v');
 
+    const bookingObj = booking ? hideInactiveTracking(booking.toObject()) : null;
+
     res.status(200).json({
       success: true,
-      booking: booking || null,
+      booking: bookingObj,
     });
   } catch (error) {
     next(error);
@@ -1035,7 +1128,7 @@ export const getBookingById = async (req, res, next) => {
       reviewerId: new mongoose.Types.ObjectId(userId),
     });
 
-    const bObj = booking.toObject();
+    const bObj = hideInactiveTracking(booking.toObject());
     bObj.hasUserRated = Boolean(userRating);
     bObj.userRating = userRating ? userRating.rating : null;
     bObj.userReview = userRating ? userRating.review : '';

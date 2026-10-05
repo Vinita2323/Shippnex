@@ -17,8 +17,46 @@ import {
 } from 'lucide-react';
 import { transportService } from '../../../../services/transportService';
 import RatingModal from '../../../../components/RatingModal';
+import LiveDeliveryMap from '../../components/LiveDeliveryMap';
+import { calculateDistanceKm } from '../../../../utils/geocodeUtils';
 
 // Map backend status to human-readable labels
+const PHASE_COPY = {
+  SEARCHING_CAPTAIN: 'Searching for a captain.',
+  CAPTAIN_ASSIGNED: 'A captain is assigned and can navigate to pickup.',
+  CAPTAIN_ARRIVING: 'The captain is travelling to the pickup location.',
+  CAPTAIN_REACHED_PICKUP: 'The captain has arrived at pickup.',
+  RIDE_STARTED: 'The ride has started. The captain is travelling to the drop.',
+  CAPTAIN_REACHED_DROP: 'The captain has arrived at the destination.',
+  RIDE_COMPLETED: 'Delivery is complete.',
+  CANCELLED: 'This booking was cancelled.',
+};
+
+const TRACKING_STATUSES = [
+  'CAPTAIN_ASSIGNED',
+  'CAPTAIN_ARRIVING',
+  'CAPTAIN_REACHED_PICKUP',
+  'RIDE_STARTED',
+  'CAPTAIN_REACHED_DROP',
+];
+
+const pointFrom = (loc) => {
+  if (loc?.lat == null || loc?.lng == null) return null;
+  const lat = Number(loc.lat);
+  const lng = Number(loc.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return null;
+  return { lat, lng };
+};
+
+const captainPointFrom = (booking) => {
+  const live = pointFrom(booking?.liveLocation);
+  if (live) return { ...live, updatedAt: booking.liveLocation?.updatedAt };
+  const coords = booking?.captainId?.liveLocation?.coordinates;
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+  const point = pointFrom({ lng: coords[0], lat: coords[1] });
+  return point;
+};
+
 const STATUS_LABELS = {
   SEARCHING_CAPTAIN: 'Searching for Captain',
   CAPTAIN_ASSIGNED: 'Captain Assigned',
@@ -175,6 +213,21 @@ const TransportBookingDetails = () => {
     booking.dropOtp &&
     !booking.dropOtpVerified;
 
+  const showLiveTracking = TRACKING_STATUSES.includes(bStatus);
+  const captainPosition = showLiveTracking ? captainPointFrom(booking) : null;
+  const headingToDrop = ['RIDE_STARTED', 'CAPTAIN_REACHED_DROP'].includes(bStatus);
+  const targetLocation = headingToDrop ? booking.dropLocation : booking.pickupLocation;
+  const targetPosition = pointFrom(targetLocation);
+  const pickupPosition = pointFrom(booking.pickupLocation);
+  const dropPosition = pointFrom(booking.dropLocation);
+  const liveDistanceKm = calculateDistanceKm(captainPosition, targetPosition);
+  const liveEtaMin = liveDistanceKm != null ? Math.max(2, Math.round((liveDistanceKm / 25) * 60)) : null;
+  const pickupPhotoUrls = (booking.pickupPhotos || []).map((photo) => photo.url).filter(Boolean);
+  const dropPhotoUrls = [
+    ...(booking.dropPhotos || []).map((photo) => photo.url),
+    booking.proofOfDeliveryUrl,
+  ].filter(Boolean);
+
   return (
     <div className="h-[100dvh] md:h-auto md:min-h-screen bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] md:max-w-6xl mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col md:py-8 md:px-6 overflow-hidden md:overflow-visible">
       {/* Mobile Header */}
@@ -276,6 +329,7 @@ const TransportBookingDetails = () => {
               {STATUS_LABELS[bStatus] || bStatus}
             </span>
           </div>
+          <p className="text-[12px] text-slate-600 m-0">{PHASE_COPY[bStatus] || STATUS_LABELS[bStatus]}</p>
 
           <div className="w-full h-px bg-slate-100" />
 
@@ -307,6 +361,62 @@ const TransportBookingDetails = () => {
             </span>
           </div>
         </div>
+
+        {showLiveTracking && (
+          <div className="md:col-span-12 bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-sm border border-slate-100 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[14px] font-bold text-slate-800 m-0">Captain live location</h3>
+                <p className="text-[11px] text-slate-500 m-0 mt-1">
+                  {headingToDrop ? 'Travelling to the drop location.' : 'Travelling to the pickup location.'}
+                  {liveDistanceKm != null ? ` ${liveDistanceKm} km · about ${liveEtaMin} min.` : ''}
+                </p>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
+                Live
+              </span>
+            </div>
+            {captainPosition ? (
+              <LiveDeliveryMap
+                captainPosition={captainPosition}
+                destinationPosition={targetPosition}
+                destinationAddress={targetLocation?.address}
+                pickupPosition={pickupPosition}
+                dropPosition={dropPosition}
+              />
+            ) : (
+              <p className="text-[12px] text-slate-500 bg-slate-50 rounded-xl px-3 py-3 m-0">
+                Waiting for the captain's GPS. This screen updates on its own once a location is received.
+              </p>
+            )}
+          </div>
+        )}
+
+        {(pickupPhotoUrls.length > 0 || dropPhotoUrls.length > 0) && (
+          <div className="md:col-span-12 bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-sm border border-slate-100">
+            <h3 className="text-[14px] font-bold text-slate-800 mb-3">Photos</h3>
+            {pickupPhotoUrls.length > 0 && (
+              <div className="mb-3">
+                <p className="text-[11px] font-bold uppercase text-slate-400 mb-2">Goods at pickup</p>
+                <div className="flex gap-2 overflow-x-auto">
+                  {pickupPhotoUrls.map((url) => (
+                    <img key={url} src={url} alt="Goods at pickup" className="w-20 h-20 rounded-xl object-cover border border-slate-200" />
+                  ))}
+                </div>
+              </div>
+            )}
+            {dropPhotoUrls.length > 0 && (
+              <div>
+                <p className="text-[11px] font-bold uppercase text-slate-400 mb-2">Delivery proof</p>
+                <div className="flex gap-2 overflow-x-auto">
+                  {[...new Set(dropPhotoUrls)].map((url) => (
+                    <img key={url} src={url} alt="Delivery proof" className="w-20 h-20 rounded-xl object-cover border border-slate-200" />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Assigned Captain Card (if assigned) */}
         {captain && (

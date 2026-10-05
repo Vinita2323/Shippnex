@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import CaptainBottomNav from '../components/CaptainBottomNav';
 import DeliveryMap from '../components/DeliveryMap';
+import TransportPhotoUploader from '../components/TransportPhotoUploader';
 import { captainService, returnService } from '../../../services/authService';
 import { transportService } from '../../../services/transportService';
 import RatingModal from '../../../components/RatingModal';
@@ -90,6 +91,9 @@ const ActiveDelivery = () => {
 
   // Proof of delivery
   const [capturedPhoto, setCapturedPhoto] = useState(null);
+  const [locationNotice, setLocationNotice] = useState('');
+  const [returnCompleting, setReturnCompleting] = useState(false);
+  const lastLocationPostRef = useRef(0);
   const [proofUploading, setProofUploading] = useState(false);
   const [proofUrl, setProofUrl] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -213,6 +217,9 @@ const ActiveDelivery = () => {
             : 'Customer Pickup Address';
         } else if (isTransport) {
           pickupAddr = activeItem.pickupLocation?.address || '';
+          if (activeItem.pickupLocation?.lat != null && activeItem.pickupLocation?.lng != null && !pickupCoords) {
+            setPickupCoords({ lat: Number(activeItem.pickupLocation.lat), lng: Number(activeItem.pickupLocation.lng) });
+          }
         } else {
           // Standard product delivery pickup: seller store
           if (activeItem.sellerDetails?.coordinates && Array.isArray(activeItem.sellerDetails.coordinates) && activeItem.sellerDetails.coordinates.length === 2) {
@@ -232,6 +239,9 @@ const ActiveDelivery = () => {
           dropAddr = activeItem.seller?.storeAddress || activeItem.seller?.address || `${activeItem.seller?.storeName || 'Seller'} Store / Warehouse`;
         } else if (isTransport) {
           dropAddr = activeItem.dropLocation?.address || '';
+          if (activeItem.dropLocation?.lat != null && activeItem.dropLocation?.lng != null && !dropCoords) {
+            setDropCoords({ lat: Number(activeItem.dropLocation.lat), lng: Number(activeItem.dropLocation.lng) });
+          }
         } else {
           const ship = activeItem.shippingAddress || {};
           dropAddr = [ship.addressLine1, ship.addressLine2, ship.city, ship.state, ship.pincode].filter(Boolean).join(', ');
@@ -241,8 +251,11 @@ const ActiveDelivery = () => {
           }
         }
 
+        const pickupAlreadyKnown = isTransport && activeItem.pickupLocation?.lat != null && activeItem.pickupLocation?.lng != null;
+        const dropAlreadyKnown = isTransport && activeItem.dropLocation?.lat != null && activeItem.dropLocation?.lng != null;
+
         // Get pickup coordinates
-        if (pickupAddr && !pickupCoords) {
+        if (pickupAddr && !pickupCoords && !pickupAlreadyKnown) {
           try {
             const coords = await geocodeAddress(pickupAddr);
             setPickupCoords(coords);
@@ -252,7 +265,7 @@ const ActiveDelivery = () => {
         }
 
         // Get drop-off coordinates
-        if (dropAddr && !dropCoords) {
+        if (dropAddr && !dropCoords && !dropAlreadyKnown) {
           try {
             const coords = await geocodeAddress(dropAddr);
             setDropCoords(coords);
@@ -279,6 +292,49 @@ const ActiveDelivery = () => {
 
     loadLocations();
   }, [activeItem, isReturn, isTransport, pickupCoords, dropCoords, captainCoords]);
+
+  // Share captain GPS while a transport trip is active. Stops after completion or cancel.
+  useEffect(() => {
+    if (!isTransport || !activeItem?.status) return undefined;
+    if (['RIDE_COMPLETED', 'CANCELLED'].includes(activeItem.status)) {
+      setLocationNotice('');
+      return undefined;
+    }
+    if (!navigator.geolocation) {
+      setLocationNotice('This device cannot share GPS. You can still open navigation and mark arrival manually.');
+      return undefined;
+    }
+
+    const bookingId = activeItem.bookingId || activeItem._id;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setCaptainCoords(coords);
+        setLocationNotice('');
+        const now = Date.now();
+        if (now - lastLocationPostRef.current < 8000) return;
+        lastLocationPostRef.current = now;
+        transportService.captainUpdateLocation(bookingId, {
+          lat: coords.lat,
+          lng: coords.lng,
+          heading: pos.coords.heading,
+          accuracy: pos.coords.accuracy,
+        }).catch(() => {
+          setLocationNotice('Live location could not be sent. The next GPS update will retry.');
+        });
+      },
+      (err) => {
+        setLocationNotice(
+          err?.code === 1
+            ? 'Location permission is off. Allow location to share your position and see distance.'
+            : 'GPS is unavailable. You can still open navigation and mark arrival manually.'
+        );
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [isTransport, activeItem?.status, activeItem?.bookingId, activeItem?._id]);
 
   // ── Status Updates for Standard Order ──
   const handleUpdateOrderStatus = async (newStatus, explicitProofUrl = null) => {
@@ -436,6 +492,53 @@ const ActiveDelivery = () => {
     }
   };
 
+  const openExternalNavigation = (coords, address) => {
+    const destination = coords?.lat != null
+      ? `${coords.lat},${coords.lng}`
+      : encodeURIComponent(address || '');
+    if (!destination) {
+      alert('This stop does not have a location yet.');
+      return;
+    }
+    const origin = captainCoords ? `&origin=${captainCoords.lat},${captainCoords.lng}` : '';
+    window.open(
+      `https://www.google.com/maps/dir/?api=1&destination=${destination}${origin}&travelmode=driving`,
+      '_blank',
+      'noopener,noreferrer'
+    );
+  };
+
+  const handleNavigateToPickup = async () => {
+    openExternalNavigation(pickupCoords, activeItem?.pickupLocation?.address);
+    if (activeItem?.status === 'CAPTAIN_ASSIGNED') {
+      await handleUpdateTransportStatus('CAPTAIN_ARRIVING');
+    }
+  };
+
+  const handleSaveTransportPhotos = async (stage, photos) => {
+    const bookingId = activeItem.bookingId || activeItem._id;
+    const res = stage === 'pickup'
+      ? await transportService.captainUploadPickupPhotos(bookingId, photos)
+      : await transportService.captainUploadDropPhotos(bookingId, photos);
+    if (res?.booking) setActiveItem(res.booking);
+  };
+
+  const handleCompleteReturnRoute = async () => {
+    if (!activeItem) return;
+    setReturnCompleting(true);
+    try {
+      const bookingId = activeItem.bookingId || activeItem._id;
+      await transportService.captainCompleteReturn(bookingId);
+      setActiveItem(null);
+      setShowSuccessModal(false);
+      navigate('/captain/dashboard');
+    } catch (err) {
+      alert(err?.message || err?.response?.data?.message || 'Could not complete the return route.');
+    } finally {
+      setReturnCompleting(false);
+    }
+  };
+
   // ── Verify Return Pickup OTP with Quality Inspection ──
   const handleVerifyReturnOtp = async () => {
     const allChecked =
@@ -554,7 +657,8 @@ const ActiveDelivery = () => {
     setOtpError('');
     try {
       const bookingId = activeItem.bookingId || activeItem._id;
-      const res = await transportService.captainVerifyDropOtp(bookingId, otpStr, proofUrl);
+      const deliveryPhoto = activeItem.dropPhotos?.[0]?.url || activeItem.proofOfDeliveryUrl || proofUrl;
+      const res = await transportService.captainVerifyDropOtp(bookingId, otpStr, deliveryPhoto);
       setActiveItem(res.booking);
       setCurrentStep(5); // RIDE_COMPLETED
       setShowDropOtpModal(false);
@@ -688,6 +792,19 @@ const ActiveDelivery = () => {
   const payout = isReturn
     ? (activeItem.captainFee || 60)
     : (activeItem.captainEarnings || 0);
+
+  const returnPending = isTransport
+    && activeItem.status === 'RIDE_COMPLETED'
+    && Boolean(activeItem.returnRoute?.required)
+    && activeItem.returnRoute?.status !== 'COMPLETED';
+  const returnDestination = activeItem.returnRoute?.destination || null;
+  const returnCoords = returnDestination?.lat != null && returnDestination?.lng != null
+    ? { lat: Number(returnDestination.lat), lng: Number(returnDestination.lng) }
+    : pickupCoords;
+  const returnDistanceKm = returnPending
+    ? (calculateDistanceKm(captainCoords, returnCoords) ?? activeItem.returnRoute?.distanceKm)
+    : null;
+  const returnEtaMin = returnDistanceKm != null ? Math.max(2, Math.round((Number(returnDistanceKm) / 25) * 60)) : activeItem.returnRoute?.estimatedDurationMin;
 
   const statusBadgeText = isReturn
     ? activeItem.status
@@ -831,15 +948,20 @@ const ActiveDelivery = () => {
               <span>Refresh GPS</span>
             </button>
           </div>
+          {isTransport && locationNotice && (
+            <p className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              {locationNotice}
+            </p>
+          )}
           <DeliveryMap
-            pickupLocation={pickupCoords}
-            dropLocation={dropCoords}
+            pickupLocation={returnPending ? dropCoords : pickupCoords}
+            dropLocation={returnPending ? returnCoords : dropCoords}
             captainLocation={captainCoords}
-            pickupAddress={pickupAddress}
-            dropAddress={dropAddress}
-            sellerStoreName={sellerStoreName}
-            recipientName={recipientName}
-            currentStep={currentStep}
+            pickupAddress={returnPending ? dropAddress : pickupAddress}
+            dropAddress={returnPending ? (returnDestination?.address || 'Return destination') : dropAddress}
+            sellerStoreName={returnPending ? 'Completed drop' : sellerStoreName}
+            recipientName={returnPending ? 'Return destination' : recipientName}
+            currentStep={returnPending ? 3 : currentStep}
             isReturn={isReturn}
             isTransport={isTransport}
           />
@@ -984,11 +1106,11 @@ const ActiveDelivery = () => {
             // Transport Milestones
             <div className="space-y-3.5 relative before:absolute before:left-[9px] before:top-1.5 before:bottom-1.5 before:w-[2px] before:bg-outline-variant/40">
               {[
-                { step: 1, label: 'Captain Assigned', sub: 'Proceeding to pickup location' },
-                { step: 2, label: 'Reached Pickup', sub: 'Verify customer Pickup OTP before loading' },
-                { step: 3, label: 'Goods Picked Up / In Transit', sub: 'Transporting cargo to drop destination' },
-                { step: 4, label: 'Reached Drop Location', sub: 'Verify customer Drop OTP to complete' },
-                { step: 5, label: 'Delivered & Completed', sub: 'Trip finished & payout credited' },
+                { step: 1, label: 'Navigate to Pickup', sub: 'Follow the map. Arrival is confirmed only when you tap Arrived' },
+                { step: 2, label: 'Arrived at Pickup', sub: 'Photograph the goods, then enter the pickup OTP' },
+                { step: 3, label: 'Ride Started', sub: 'Navigate to the drop. Your live location is shared with the customer' },
+                { step: 4, label: 'Arrived at Drop', sub: 'Photograph the delivery, then enter the drop OTP' },
+                { step: 5, label: 'Delivered & Completed', sub: 'Payout credited. Return route appears only when this booking requires it' },
               ].map(({ step, label, sub }) => (
                 <div key={step} className="flex gap-3 relative z-10 items-start">
                   <div
@@ -1116,78 +1238,132 @@ const ActiveDelivery = () => {
               </button>
             )}
 
-            {/* Transport Action 1: Reached Pickup */}
+            {/* Transport: navigate, then the captain confirms arrival. Navigation does not mark arrival. */}
             {isTransport && (activeItem.status === 'CAPTAIN_ASSIGNED' || activeItem.status === 'CAPTAIN_ARRIVING') && (
-              <button
-                onClick={() => handleUpdateTransportStatus('CAPTAIN_REACHED_PICKUP')}
-                disabled={statusUpdating}
-                className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
-              >
-                {statusUpdating ? (
-                  <span className="material-symbols-outlined animate-spin text-base">sync</span>
-                ) : (
-                  <span className="material-symbols-outlined text-base">store</span>
-                )}
-                Arrived at Pickup Location
-              </button>
+              <>
+                <button
+                  onClick={handleNavigateToPickup}
+                  disabled={statusUpdating}
+                  className="w-full py-3.5 bg-[#002625] hover:bg-[#003837] text-white rounded-2xl font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
+                >
+                  <span className="material-symbols-outlined text-base">navigation</span>
+                  Navigate to Pickup
+                </button>
+                <button
+                  onClick={() => handleUpdateTransportStatus('CAPTAIN_REACHED_PICKUP')}
+                  disabled={statusUpdating}
+                  className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
+                >
+                  {statusUpdating ? (
+                    <span className="material-symbols-outlined animate-spin text-base">sync</span>
+                  ) : (
+                    <span className="material-symbols-outlined text-base">store</span>
+                  )}
+                  Arrived at Pickup
+                </button>
+              </>
             )}
 
-            {/* Transport Action 2: Enter Pickup OTP */}
             {isTransport && activeItem.status === 'CAPTAIN_REACHED_PICKUP' && (
-              <button
-                onClick={() => {
-                  setOtpDigits(['', '', '', '']);
-                  setOtpError('');
-                  setShowPickupOtpModal(true);
-                }}
-                className="w-full py-3.5 bg-[#366b00] hover:bg-[#2d5800] text-white rounded-2xl font-bold text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 animate-pulse"
-              >
-                <span className="material-symbols-outlined text-base">pin</span>
-                Enter Customer Pickup OTP & Start Ride
-              </button>
+              <>
+                <TransportPhotoUploader
+                  title="Goods photos"
+                  hint="Photograph the packages before the pickup OTP. At least one saved photo is required."
+                  photos={activeItem.pickupPhotos || []}
+                  onSave={(photos) => handleSaveTransportPhotos('pickup', photos)}
+                />
+                <button
+                  onClick={() => {
+                    if (!activeItem.pickupPhotos?.length) {
+                      alert('Save at least one goods photo before entering the pickup OTP.');
+                      return;
+                    }
+                    setOtpDigits(['', '', '', '']);
+                    setOtpError('');
+                    setShowPickupOtpModal(true);
+                  }}
+                  disabled={!activeItem.pickupPhotos?.length}
+                  className="w-full py-3.5 bg-[#366b00] hover:bg-[#2d5800] text-white rounded-2xl font-bold text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:animate-none animate-pulse"
+                >
+                  <span className="material-symbols-outlined text-base">pin</span>
+                  Enter Pickup OTP & Start Ride
+                </button>
+              </>
             )}
 
-            {/* Transport Action 3: Reached Drop Destination */}
             {isTransport && activeItem.status === 'RIDE_STARTED' && (
-              <button
-                onClick={() => handleUpdateTransportStatus('CAPTAIN_REACHED_DROP')}
-                disabled={statusUpdating}
-                className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
-              >
-                {statusUpdating ? (
-                  <span className="material-symbols-outlined animate-spin text-base">sync</span>
-                ) : (
-                  <span className="material-symbols-outlined text-base">location_on</span>
-                )}
-                Arrived at Drop Destination
-              </button>
+              <>
+                <button
+                  onClick={() => openExternalNavigation(dropCoords, activeItem.dropLocation?.address)}
+                  className="w-full py-3.5 bg-[#002625] hover:bg-[#003837] text-white rounded-2xl font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-base">navigation</span>
+                  Navigate to Drop
+                </button>
+                <button
+                  onClick={() => handleUpdateTransportStatus('CAPTAIN_REACHED_DROP')}
+                  disabled={statusUpdating}
+                  className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
+                >
+                  {statusUpdating ? (
+                    <span className="material-symbols-outlined animate-spin text-base">sync</span>
+                  ) : (
+                    <span className="material-symbols-outlined text-base">location_on</span>
+                  )}
+                  Arrived at Drop
+                </button>
+              </>
             )}
 
-            {/* Transport Action 4: Enter Drop OTP & Complete */}
             {isTransport && activeItem.status === 'CAPTAIN_REACHED_DROP' && (
-              <button
-                onClick={() => {
-                  setOtpDigits(['', '', '', '']);
-                  setOtpError('');
-                  setShowDropOtpModal(true);
-                }}
-                className="w-full py-3.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-2xl font-bold text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 animate-pulse"
-              >
-                <span className="material-symbols-outlined text-base">verified</span>
-                Enter Drop OTP & Complete Transport
-              </button>
+              <>
+                <TransportPhotoUploader
+                  title="Delivery photo"
+                  hint="Photograph the handover before the drop OTP. At least one saved photo is required."
+                  photos={activeItem.dropPhotos || []}
+                  onSave={(photos) => handleSaveTransportPhotos('drop', photos)}
+                />
+                <button
+                  onClick={() => {
+                    if (!activeItem.dropPhotos?.length && !activeItem.proofOfDeliveryUrl) {
+                      alert('Save at least one delivery photo before entering the drop OTP.');
+                      return;
+                    }
+                    setOtpDigits(['', '', '', '']);
+                    setOtpError('');
+                    setShowDropOtpModal(true);
+                  }}
+                  disabled={!activeItem.dropPhotos?.length && !activeItem.proofOfDeliveryUrl}
+                  className="w-full py-3.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-2xl font-bold text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:animate-none animate-pulse"
+                >
+                  <span className="material-symbols-outlined text-base">verified</span>
+                  Enter Drop OTP & Complete Delivery
+                </button>
+              </>
             )}
 
-            {/* Quick Complete / Bypass Button for Captains */}
-            {isTransport && activeItem.status !== 'RIDE_COMPLETED' && (
-              <button
-                onClick={() => handleUpdateTransportStatus('RIDE_COMPLETED')}
-                disabled={statusUpdating}
-                className="w-full py-2 bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-[#15803d] border border-slate-200 rounded-xl font-bold text-[11px] transition-all cursor-pointer flex items-center justify-center gap-1.5 mt-2"
-              >
-                <span className="material-symbols-outlined text-sm">task_alt</span>
-                Complete Ride & Credit Wallet (₹{payout.toFixed(2)})
-              </button>
+            {returnPending && (
+              <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3 space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-wider text-sky-800">Return route · original trip {tripId}</p>
+                <p className="text-xs font-bold text-slate-800">{returnDestination?.address || pickupAddress}</p>
+                <p className="text-[11px] text-slate-600">
+                  {returnDistanceKm != null ? `${returnDistanceKm} km` : 'Distance unavailable'}
+                  {returnEtaMin ? ` · about ${returnEtaMin} min` : ''}
+                </p>
+                <button
+                  onClick={() => openExternalNavigation(returnCoords, returnDestination?.address || pickupAddress)}
+                  className="w-full py-3 bg-[#002625] text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Navigate return route
+                </button>
+                <button
+                  onClick={handleCompleteReturnRoute}
+                  disabled={returnCompleting}
+                  className="w-full py-3 bg-white border border-slate-300 text-slate-800 rounded-xl text-xs font-bold cursor-pointer disabled:opacity-60"
+                >
+                  {returnCompleting ? 'Saving...' : 'Return route complete'}
+                </button>
+              </div>
             )}
 
             {/* ── Standard Product Delivery Actions (OTP Required at Seller Store Pickup) ── */}
@@ -2050,11 +2226,17 @@ const ActiveDelivery = () => {
                 </button>
               )}
               <button
-                onClick={() => navigate('/captain/dashboard')}
+                onClick={() => {
+                  if (returnPending) {
+                    setShowSuccessModal(false);
+                    return;
+                  }
+                  navigate('/captain/dashboard');
+                }}
                 className="w-full py-2.5 bg-[#366b00] hover:bg-[#2d5800] text-white font-bold rounded-xl cursor-pointer transition-colors text-xs flex items-center justify-center gap-1.5"
               >
-                <span className="material-symbols-outlined text-base">home</span>
-                <span>Back to Dashboard</span>
+                <span className="material-symbols-outlined text-base">{returnPending ? 'navigation' : 'home'}</span>
+                <span>{returnPending ? 'Continue return route' : 'Back to Dashboard'}</span>
               </button>
             </div>
           </div>

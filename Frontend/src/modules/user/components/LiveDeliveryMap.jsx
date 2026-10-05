@@ -5,10 +5,12 @@ import { MapService } from '../../../services/MapService';
 // to the customer's delivery address. Uses the same Google Maps SDK loader
 // (MapService) already used elsewhere in the app so the script is only
 // injected once.
-const LiveDeliveryMap = ({ captainPosition, destinationAddress }) => {
+const LiveDeliveryMap = ({ captainPosition, destinationAddress, destinationPosition, pickupPosition, dropPosition }) => {
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
   const captainMarkerRef = useRef(null);
+  const pickupMarkerRef = useRef(null);
+  const dropMarkerRef = useRef(null);
   const directionsRendererRef = useRef(null);
   const lastRouteKeyRef = useRef('');
 
@@ -67,9 +69,38 @@ const LiveDeliveryMap = ({ captainPosition, destinationAddress }) => {
     captainMarkerRef.current?.setPosition(captainPosition);
     mapRef.current?.panTo(captainPosition);
 
-    if (!destinationAddress) return;
+    const placeMarker = (ref, position, color) => {
+      if (!position) {
+        ref.current?.setMap(null);
+        return;
+      }
+      if (!ref.current) {
+        ref.current = new window.google.maps.Marker({
+          map: mapRef.current,
+          position,
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            scale: 7,
+            fillColor: color,
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2,
+          },
+        });
+      } else {
+        ref.current.setMap(mapRef.current);
+        ref.current.setPosition(position);
+      }
+    };
+    placeMarker(pickupMarkerRef, pickupPosition, '#047857');
+    placeMarker(dropMarkerRef, dropPosition, '#ff5500');
 
-    const routeKey = `${captainPosition.lat.toFixed(4)},${captainPosition.lng.toFixed(4)}|${destinationAddress}`;
+    const destination = destinationPosition || destinationAddress;
+    if (!destination) return;
+
+    const routeKey = `${captainPosition.lat.toFixed(4)},${captainPosition.lng.toFixed(4)}|${
+      destinationPosition ? `${destinationPosition.lat},${destinationPosition.lng}` : destinationAddress
+    }`;
     if (routeKey === lastRouteKeyRef.current) return;
     lastRouteKeyRef.current = routeKey;
 
@@ -77,7 +108,7 @@ const LiveDeliveryMap = ({ captainPosition, destinationAddress }) => {
     directionsService.route(
       {
         origin: captainPosition,
-        destination: destinationAddress,
+        destination,
         travelMode: window.google.maps.TravelMode.DRIVING,
       },
       (result, status) => {
@@ -86,7 +117,7 @@ const LiveDeliveryMap = ({ captainPosition, destinationAddress }) => {
         }
       }
     );
-  }, [mapReady, captainPosition, destinationAddress]);
+  }, [mapReady, captainPosition, destinationAddress, destinationPosition, pickupPosition, dropPosition]);
 
   if (mapError) return null;
 

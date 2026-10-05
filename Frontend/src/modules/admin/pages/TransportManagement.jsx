@@ -926,6 +926,43 @@ export const TransportManagement = ({ initialTab = 'ALL' }) => {
                 </div>
               </div>
 
+              {(selectedBooking.pickupPhotos?.length > 0 || selectedBooking.dropPhotos?.length > 0 || selectedBooking.proofOfDeliveryUrl) && (
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3 text-xs">
+                  <h4 className="text-xs font-black uppercase text-slate-700 tracking-wider m-0">Goods and delivery photos</h4>
+                  {selectedBooking.pickupPhotos?.length > 0 && (
+                    <div className="flex gap-2 flex-wrap">
+                      {selectedBooking.pickupPhotos.map((photo) => (
+                        <a key={photo.url} href={photo.url} target="_blank" rel="noreferrer">
+                          <img src={photo.url} alt="Pickup goods" className="w-20 h-20 rounded-xl object-cover border border-slate-200" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {(selectedBooking.dropPhotos?.length > 0 || selectedBooking.proofOfDeliveryUrl) && (
+                    <div className="flex gap-2 flex-wrap">
+                      {[...(selectedBooking.dropPhotos || []).map((photo) => photo.url), selectedBooking.proofOfDeliveryUrl]
+                        .filter(Boolean)
+                        .filter((url, index, list) => list.indexOf(url) === index)
+                        .map((url) => (
+                          <a key={url} href={url} target="_blank" rel="noreferrer">
+                            <img src={url} alt="Delivery proof" className="w-20 h-20 rounded-xl object-cover border border-slate-200" />
+                          </a>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selectedBooking.returnRoute?.required && (
+                <div className="p-4 bg-sky-50 rounded-2xl border border-sky-200 text-xs">
+                  <h4 className="text-xs font-black uppercase text-sky-800 tracking-wider m-0">Return route</h4>
+                  <p className="m-0 mt-2 text-slate-700">
+                    Separate from the delivery trip. Status: {selectedBooking.returnRoute.status || 'PENDING'}.
+                    Destination: {selectedBooking.returnRoute.destination?.address || 'Pickup'}.
+                  </p>
+                </div>
+              )}
+
               {/* Full Route */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3 text-xs">
                 <h4 className="text-xs font-black uppercase text-slate-700 tracking-wider m-0 flex items-center gap-1.5">
