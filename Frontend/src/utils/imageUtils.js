@@ -163,9 +163,20 @@ export const getImageUrl = (url, nameOrFallback = '') => {
   if (trimmed.includes('personalcare-removebg-preview')) return personalCareImg;
   if (trimmed.includes('Grocery-removebg-preview')) return groceryImg;
 
-  // Determine current backend base URL
+  // Determine current backend base URL. Public HTTPS pages use the site origin,
+  // not http://hostname:5000, so uploaded images are not mixed content.
   const apiBase = import.meta.env.VITE_API_URL || '';
-  const defaultBackendHost = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:5000` : 'http://localhost:5000';
+  const page = typeof window !== 'undefined' ? window.location : null;
+  const localHost = page && (
+    page.hostname === 'localhost' ||
+    page.hostname === '127.0.0.1' ||
+    page.hostname.startsWith('192.168.') ||
+    page.hostname.startsWith('10.') ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(page.hostname)
+  );
+  const defaultBackendHost = page
+    ? (localHost ? `${page.protocol}//${page.hostname}:5000` : `${page.protocol}//${page.hostname}`)
+    : 'http://localhost:5000';
   const hostBase = apiBase ? apiBase.replace(/\/api\/?$/, '') : defaultBackendHost;
 
   // Local uploads path: e.g. /uploads/... or uploads/... or /api/uploads/...
@@ -186,8 +197,17 @@ export const getImageUrl = (url, nameOrFallback = '') => {
     return `${hostBase}${legacyUploadMatch[1]}`;
   }
 
-  // Standard absolute URL (e.g. Cloudinary, Unsplash, external CDN)
+  // Standard absolute URL (e.g. Cloudinary, Unsplash, external CDN).
+  // Upgrade this site's own http uploads when the page itself is https.
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    if (page && page.protocol === 'https:' && trimmed.startsWith('http://')) {
+      try {
+        const parsed = new URL(trimmed);
+        const ownUpload = parsed.pathname.startsWith('/uploads/')
+          && (parsed.hostname === page.hostname || parsed.port === '5000' || parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1');
+        if (ownUpload) return `${page.origin}${parsed.pathname}${parsed.search}`;
+      } catch (err) {}
+    }
     return trimmed;
   }
 

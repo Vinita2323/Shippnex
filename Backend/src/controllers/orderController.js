@@ -1852,13 +1852,27 @@ export const createRazorpayOrder = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Order amount is not payable' });
     }
 
-    if (order.razorpay?.orderId) {
-      return res.status(200).json({
-        success: true,
-        orderId: order.razorpay.orderId,
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    if (!keyId || !process.env.RAZORPAY_KEY_SECRET) {
+      return res.status(500).json({ success: false, message: 'Payment is not configured' });
+    }
+
+    const storedId = order.razorpay?.orderId;
+    const storedAmount = Number(order.razorpay?.amount);
+    if (storedId && String(storedId).startsWith('order_') && storedAmount === amount) {
+      console.info('[Razorpay] reuse order', {
+        shippnexOrderId: order.orderId,
+        razorpayOrderId: storedId,
         amount,
         currency: 'INR',
-        keyId: process.env.RAZORPAY_KEY_ID,
+      });
+      return res.status(200).json({
+        success: true,
+        orderId: storedId,
+        razorpayOrderId: storedId,
+        amount,
+        currency: 'INR',
+        keyId,
       });
     }
 
@@ -1869,33 +1883,29 @@ export const createRazorpayOrder = async (req, res, next) => {
       payment_capture: 1,
     });
 
-    const linked = await Order.findOneAndUpdate(
-      { _id: order._id, paymentStatus: { $ne: 'Paid' }, 'razorpay.orderId': { $in: [null, ''] } },
-      { $set: { 'razorpay.orderId': razorpayOrder.id, 'razorpay.amount': razorpayOrder.amount, 'razorpay.currency': 'INR' } },
+    const saved = await Order.findOneAndUpdate(
+      { _id: order._id, paymentStatus: { $ne: 'Paid' }, orderStatus: 'Payment Pending' },
+      { $set: { 'razorpay.orderId': razorpayOrder.id, 'razorpay.amount': Number(razorpayOrder.amount), 'razorpay.currency': 'INR' } },
       { new: true }
     );
-    if (!linked) {
-      const fresh = await Order.findById(order._id).select('razorpay paymentStatus orderStatus');
-      if (fresh?.paymentStatus === 'Paid' || fresh?.orderStatus !== 'Payment Pending') {
-        return res.status(400).json({ success: false, message: 'This order is not awaiting payment' });
-      }
-      if (fresh?.razorpay?.orderId) {
-        return res.status(200).json({
-          success: true,
-          orderId: fresh.razorpay.orderId,
-          amount,
-          currency: 'INR',
-          keyId: process.env.RAZORPAY_KEY_ID,
-        });
-      }
+    if (!saved) {
+      return res.status(400).json({ success: false, message: 'This order is not awaiting payment' });
     }
+
+    console.info('[Razorpay] created order', {
+      shippnexOrderId: order.orderId,
+      razorpayOrderId: razorpayOrder.id,
+      amount: Number(razorpayOrder.amount),
+      currency: razorpayOrder.currency || 'INR',
+    });
 
     res.status(200).json({
       success: true,
-      orderId: linked?.razorpay?.orderId || razorpayOrder.id,
-      amount,
-      currency: 'INR',
-      keyId: process.env.RAZORPAY_KEY_ID,
+      orderId: razorpayOrder.id,
+      razorpayOrderId: razorpayOrder.id,
+      amount: Number(razorpayOrder.amount),
+      currency: razorpayOrder.currency || 'INR',
+      keyId,
     });
   } catch (error) {
     console.error('[Razorpay Create Order Error]', error);
@@ -1921,6 +1931,11 @@ export const verifyRazorpayPayment = async (req, res, next) => {
     const generated_signature = hmac.digest('hex');
 
     if (generated_signature !== razorpay_signature) {
+      console.info('[Razorpay] signature rejected', {
+        razorpayOrderId: razorpay_order_id,
+        razorpayPaymentId: razorpay_payment_id,
+        paymentStatus: 'FAILED',
+      });
       return res.status(400).json({ success: false, message: 'Payment verification failed' });
     }
 
@@ -1944,6 +1959,12 @@ export const verifyRazorpayPayment = async (req, res, next) => {
     if (!payment || payment.order_id !== razorpay_order_id) {
       return res.status(400).json({ success: false, message: 'Payment does not match this Razorpay order' });
     }
+    console.info('[Razorpay] verify', {
+      shippnexOrderId: order.orderId,
+      razorpayOrderId: razorpay_order_id,
+      razorpayPaymentId: razorpay_payment_id,
+      paymentStatus: payment.status,
+    });
     if (payment.status !== 'captured') {
       return res.status(400).json({ success: false, message: 'Payment was not completed' });
     }

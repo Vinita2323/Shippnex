@@ -280,14 +280,32 @@ const Checkout = () => {
 
   // Order Placement Action
   const loadRazorpayScript = () => {
+    if (window.Razorpay) return Promise.resolve(true);
     return new Promise((resolve) => {
+      const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+      if (existing) {
+        existing.addEventListener('load', () => resolve(Boolean(window.Razorpay)), { once: true });
+        existing.addEventListener('error', () => resolve(false), { once: true });
+        return;
+      }
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.async = true;
-      script.onload = () => resolve(true);
+      script.onload = () => resolve(Boolean(window.Razorpay));
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
     });
+  };
+
+  const indianMobile = (value) => {
+    const digits = String(value || '').replace(/\D/g, '');
+    const ten = digits.length >= 10 ? digits.slice(-10) : '';
+    return /^[6-9]\d{9}$/.test(ten) ? ten : '';
+  };
+
+  const usableEmail = (value) => {
+    const email = String(value || '').trim();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
   };
 
   const handleRazorpayPayment = async (orderPayload) => {
@@ -318,24 +336,55 @@ const Checkout = () => {
         return;
       }
 
-      const userEmail = profileForm.email || localStorage.getItem('shippnex_user_email') || (selectedAddress && selectedAddress.email) || '';
+      const contact = indianMobile(selectedAddress?.phone || profileForm.phone || userPhone);
+      const email = usableEmail(profileForm.email || localStorage.getItem('shippnex_user_email') || selectedAddress?.email);
       const notCompleted = 'Payment was not completed. Your order has not been placed.';
+      const paymentFailed = 'Payment failed. Your order has not been placed. Please try again.';
+      const razorpayOrderId = razorpayOrderRes.razorpayOrderId || razorpayOrderRes.orderId;
+      const amountPaise = Number(razorpayOrderRes.amount);
+      const key = razorpayOrderRes.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID;
+
+      if (!key || !String(razorpayOrderId).startsWith('order_') || !Number.isInteger(amountPaise) || amountPaise < 100) {
+        console.info('[Checkout] Razorpay order was not usable', {
+          shippnexOrderId: orderRes.order.orderId,
+          razorpayOrderId,
+          amount: razorpayOrderRes.amount,
+          currency: razorpayOrderRes.currency,
+          hasPublicKey: Boolean(key),
+        });
+        setErrorMsg('Failed to initialize payment. Please try again.');
+        setPlacingOrder(false);
+        return;
+      }
+
+      console.info('[Checkout] Opening Razorpay', {
+        shippnexOrderId: orderRes.order.orderId,
+        razorpayOrderId,
+        amount: amountPaise,
+        currency: razorpayOrderRes.currency || 'INR',
+      });
 
       let settled = false;
+      const prefill = { name: userName || undefined };
+      if (email) prefill.email = email;
+      if (contact) prefill.contact = contact;
+
       const options = {
-        key: razorpayOrderRes.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
-        amount: razorpayOrderRes.amount,
+        key,
+        amount: amountPaise,
         currency: razorpayOrderRes.currency || 'INR',
         name: 'ShippNex',
-        description: `Order #${orderRes.order.orderId || 'SHOP'}`,
-        order_id: razorpayOrderRes.orderId,
-        prefill: {
-          name: userName,
-          email: userEmail,
-          contact: userPhone,
-        },
+        description: 'Order Payment',
+        order_id: razorpayOrderId,
+        prefill,
+        theme: { color: '#ff5500' },
         handler: async (response) => {
           settled = true;
+          console.info('[Checkout] Razorpay success callback', {
+            shippnexOrderId: orderRes.order.orderId,
+            razorpayOrderId: response?.razorpay_order_id,
+            razorpayPaymentId: response?.razorpay_payment_id,
+          });
           try {
             const verifyRes = await orderService.verifyRazorpayPayment({
               razorpay_order_id: response.razorpay_order_id,
@@ -343,17 +392,25 @@ const Checkout = () => {
               razorpay_signature: response.razorpay_signature,
               orderId: orderId,
             });
+            console.info('[Checkout] verify response', {
+              status: verifyRes?.success ? 200 : 400,
+              paymentStatus: verifyRes?.order?.paymentStatus,
+              orderStatus: verifyRes?.order?.orderStatus,
+            });
 
             if (verifyRes && verifyRes.success && verifyRes.order && verifyRes.order.paymentStatus === 'Paid') {
               setErrorMsg('');
               setPlacedOrder(verifyRes.order);
               await clearCart();
             } else {
-              setErrorMsg(verifyRes?.message || notCompleted);
+              setErrorMsg(verifyRes?.message || paymentFailed);
             }
           } catch (err) {
-            console.error('Payment verification failed:', err);
-            setErrorMsg(notCompleted);
+            console.info('[Checkout] verify failed', {
+              status: err.response?.status,
+              message: err.response?.data?.message,
+            });
+            setErrorMsg(paymentFailed);
           } finally {
             setPlacingOrder(false);
           }
@@ -362,6 +419,11 @@ const Checkout = () => {
           ondismiss: () => {
             if (settled) return;
             settled = true;
+            console.info('[Checkout] Razorpay closed', {
+              shippnexOrderId: orderRes.order.orderId,
+              razorpayOrderId,
+              paymentStatus: 'CANCELLED',
+            });
             setErrorMsg(notCompleted);
             setPlacingOrder(false);
           },
@@ -369,10 +431,17 @@ const Checkout = () => {
       };
 
       const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', () => {
+      rzp.on('payment.failed', (response) => {
         if (settled) return;
         settled = true;
-        setErrorMsg(notCompleted);
+        console.info('[Checkout] Razorpay payment failed', {
+          shippnexOrderId: orderRes.order.orderId,
+          razorpayOrderId: response?.error?.metadata?.order_id || razorpayOrderId,
+          razorpayPaymentId: response?.error?.metadata?.payment_id,
+          paymentStatus: 'FAILED',
+          reason: response?.error?.reason,
+        });
+        setErrorMsg(paymentFailed);
         setPlacingOrder(false);
       });
       rzp.open();

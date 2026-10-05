@@ -22,6 +22,10 @@ export const getBaseApiUrl = () => {
     if (isLocalOrLAN) {
       return `${protocol}//${hostname}:5000/api`;
     }
+
+    // Production is served over HTTPS. Use the same origin so the page never
+    // calls http://localhost:5000 or a raw IP.
+    return `${protocol}//${hostname}/api`;
   }
 
   return 'http://localhost:5000/api';
