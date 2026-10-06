@@ -5,6 +5,7 @@ import { authService, membershipService, categoryService, sellerRegistrationFeeS
 import { MapService } from '../../../../services/MapService';
 import LocationSearchModal from '../../../../components/LocationSearchModal';
 import { loadRazorpaySdk } from '../../../../utils/razorpay';
+import { uploadRegistrationImage } from '../../../../utils/uploadRegistrationImage';
 
 const FALLBACK_CATEGORIES = [
   'Grocery Essentials',
@@ -442,31 +443,46 @@ const SellerRegister = () => {
       setPaymentSuccessMsg('');
       setPaymentFailed(false);
 
-      const basePayload = {
-        businessName: formData.businessName,
-        ownerName: formData.ownerName,
-        phone: formData.phone,
-        password: formData.password,
-        email: formData.email,
-        businessType: formData.businessType || 'Retail',
-        storeLogo: formData.storeLogo,
-        categories: selectedCategories,
-        serviceRadius: formData.serviceRadius ? Number(formData.serviceRadius) : 5,
-        completeAddress: formData.completeAddress,
-        city: formData.city,
-        state: formData.state,
-        pincode: formData.pincode,
-        lat: formData.lat,
-        lng: formData.lng,
-        gstNumber: formData.gstNumber,
-        panNumber: formData.panNumber,
-        fssaiLicense: formData.fssaiLicense,
-        gstPhoto: formData.gstPhoto,
-        bankPassbookPhoto: formData.bankPassbookPhoto,
-        referralCode: (formData.referralCode || refCodeFromUrl || (typeof window !== 'undefined' ? sessionStorage.getItem('seller_referral_code') : '') || '').trim().toUpperCase(),
-      };
-
       try {
+        // Upload photos first. Do not send multi-MB base64 in initiate-order —
+        // nginx rejects that with 413 Request Entity Too Large.
+        const [storeLogoUrl, gstPhotoUrl, bankPassbookPhotoUrl] = await Promise.all([
+          uploadRegistrationImage(formData.storeLogo, 'profiles'),
+          uploadRegistrationImage(formData.gstPhoto, 'misc'),
+          uploadRegistrationImage(formData.bankPassbookPhoto, 'misc'),
+        ]);
+
+        setFormData((prev) => ({
+          ...prev,
+          storeLogo: storeLogoUrl || prev.storeLogo,
+          gstPhoto: gstPhotoUrl || prev.gstPhoto,
+          bankPassbookPhoto: bankPassbookPhotoUrl || prev.bankPassbookPhoto,
+        }));
+
+        const basePayload = {
+          businessName: formData.businessName,
+          ownerName: formData.ownerName,
+          phone: formData.phone,
+          password: formData.password,
+          email: formData.email,
+          businessType: formData.businessType || 'Retail',
+          storeLogo: storeLogoUrl,
+          categories: selectedCategories,
+          serviceRadius: formData.serviceRadius ? Number(formData.serviceRadius) : 5,
+          completeAddress: formData.completeAddress,
+          city: formData.city,
+          state: formData.state,
+          pincode: formData.pincode,
+          lat: formData.lat,
+          lng: formData.lng,
+          gstNumber: formData.gstNumber,
+          panNumber: formData.panNumber,
+          fssaiLicense: formData.fssaiLicense,
+          gstPhoto: gstPhotoUrl,
+          bankPassbookPhoto: bankPassbookPhotoUrl,
+          referralCode: (formData.referralCode || refCodeFromUrl || (typeof window !== 'undefined' ? sessionStorage.getItem('seller_referral_code') : '') || '').trim().toUpperCase(),
+        };
+
         const res = await sellerRegistrationFeeService.initiateOrder(basePayload);
 
         if (res && res.sellerId) {
@@ -494,7 +510,18 @@ const SellerRegister = () => {
         setErrorMessage(res?.message || 'Failed to initiate registration fee order. / पंजीकरण शुल्क ऑर्डर प्रारंभ करने में विफल।');
       } catch (err) {
         console.error('Registration order initiation error:', err);
-        setErrorMessage(err.response?.data?.message || err.message || 'Server error occurred during payment initiation. / भुगतान प्रारंभ करने के दौरान सर्वर त्रुटि हुई।');
+        const status = err?.response?.status;
+        if (status === 413) {
+          setErrorMessage(
+            'Document photos are too large for the server. Please use smaller images (under 2MB) and try again. / दस्तावेज़ की फ़ोटो सर्वर के लिए बहुत बड़ी हैं। कृपया छोटी छवियाँ (2MB से कम) उपयोग करें।'
+          );
+        } else {
+          setErrorMessage(
+            err.response?.data?.message ||
+              err.message ||
+              'Server error occurred during payment initiation. / भुगतान प्रारंभ करने के दौरान सर्वर त्रुटि हुई।'
+          );
+        }
       } finally {
         setIsSubmitting(false);
       }
