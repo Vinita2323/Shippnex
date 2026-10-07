@@ -51,6 +51,7 @@ import {
   Navigation,
   Car
 } from 'lucide-react';
+import { authService } from '../../../services/authService';
 
 export const AdminSidebar = () => {
   const navigate = useNavigate();
@@ -85,9 +86,13 @@ export const AdminSidebar = () => {
   const adminName = adminUser?.name || adminUser?.fullName || 'Administrator';
   const adminRole = adminUser?.role === 'super_admin' ? 'Super Administrator' : (adminUser?.role === 'admin' ? 'Root Administrator' : (adminUser?.role || 'Administrator'));
 
-  const confirmLogout = () => {
+  const confirmLogout = async () => {
+    try {
+      await authService.adminLogout();
+    } catch (e) {}
     localStorage.removeItem('shippnex_admin_token');
     localStorage.removeItem('shippnex_admin_data');
+    localStorage.removeItem('shippnex_admin_session');
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminUser');
     localStorage.removeItem('token');

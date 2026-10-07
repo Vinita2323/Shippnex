@@ -209,12 +209,13 @@ export const authService = {
     return response.data;
   },
 
-  // Admin Auth
-  adminLogin: async (email, password) => {
-    const response = await API.post('/auth/admin/login', { email, password });
-    if (response.data.token) {
-      localStorage.setItem('shippnex_admin_token', response.data.token);
+  // Admin Auth — session is HttpOnly cookie; never store the password or JWT in localStorage.
+  adminLogin: async (email, password, rememberMe = false) => {
+    const response = await API.post('/auth/admin/login', { email, password, rememberMe: Boolean(rememberMe) });
+    if (response.data?.success && response.data.admin) {
+      localStorage.removeItem('shippnex_admin_token');
       localStorage.setItem('shippnex_admin_data', JSON.stringify(response.data.admin));
+      localStorage.setItem('shippnex_admin_session', '1');
       registerFCMToken(true, 'admin').catch(() => {});
     }
     return response.data;
@@ -224,6 +225,7 @@ export const authService = {
     const response = await API.get('/auth/admin/profile');
     if (response.data && response.data.admin) {
       localStorage.setItem('shippnex_admin_data', JSON.stringify(response.data.admin));
+      localStorage.setItem('shippnex_admin_session', '1');
       try {
         window.dispatchEvent(new Event('admin_profile_updated'));
       } catch (e) {}
@@ -235,9 +237,7 @@ export const authService = {
     const response = await API.put('/auth/admin/profile', profileData);
     if (response.data && response.data.admin) {
       localStorage.setItem('shippnex_admin_data', JSON.stringify(response.data.admin));
-      if (response.data.token) {
-        localStorage.setItem('shippnex_admin_token', response.data.token);
-      }
+      localStorage.removeItem('shippnex_admin_token');
       try {
         window.dispatchEvent(new Event('admin_profile_updated'));
       } catch (e) {}
@@ -245,6 +245,15 @@ export const authService = {
     return response.data;
   },
 
+  adminLogout: async () => {
+    try {
+      await API.post('/auth/admin/logout');
+    } catch (e) {}
+    removeFCMToken('admin').catch(() => {});
+    localStorage.removeItem('shippnex_admin_token');
+    localStorage.removeItem('shippnex_admin_data');
+    localStorage.removeItem('shippnex_admin_session');
+  },
 
   // Logout utility
   logout: (role) => {
@@ -269,8 +278,15 @@ export const authService = {
       localStorage.removeItem('shippnex_captain_token');
       localStorage.removeItem('shippnex_captain_data');
     } else if (role === 'admin') {
+      API.post('/auth/admin/logout').catch(() => {});
       localStorage.removeItem('shippnex_admin_token');
       localStorage.removeItem('shippnex_admin_data');
+      localStorage.removeItem('shippnex_admin_session');
+    } else if (role === 'super_admin') {
+      API.post('/auth/super-admin/logout').catch(() => {});
+      localStorage.removeItem('shippnex_super_admin_token');
+      localStorage.removeItem('shippnex_super_admin_data');
+      localStorage.removeItem('shippnex_super_admin_session');
     }
   },
 };

@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { SuperAdminProvider } from '../context/SuperAdminContext';
+import { SuperAdminProvider, useSuperAdmin } from '../context/SuperAdminContext';
 import { SuperAdminLayout } from '../layouts/SuperAdminLayout';
 import PageSkeleton from '../../../components/PageSkeleton';
 
@@ -18,10 +18,13 @@ const SuperAdminAdjustments = lazy(() => import('../pages/SuperAdminAdjustments'
 const SuperAdminReports = lazy(() => import('../pages/SuperAdminReports').then(m => ({ default: m.SuperAdminReports })));
 const SuperAdminAuditLogs = lazy(() => import('../pages/SuperAdminAuditLogs').then(m => ({ default: m.SuperAdminAuditLogs })));
 
-// Protected Route Component for Super Admin
+// Protected Route Component for Super Admin — cookie session must be validated
 const SuperAdminProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('shippnex_super_admin_token');
-  if (!token) {
+  const { isAuthenticated, sessionChecking } = useSuperAdmin();
+  if (sessionChecking) {
+    return <PageSkeleton />;
+  }
+  if (!isAuthenticated) {
     return <Navigate to="/super-admin/login" replace />;
   }
   return children;

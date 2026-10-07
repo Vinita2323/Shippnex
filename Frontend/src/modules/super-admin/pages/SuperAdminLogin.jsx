@@ -1,17 +1,48 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSuperAdmin } from '../context/SuperAdminContext';
 import { superAdminService } from '../../../services/superAdminService';
-import { Shield, Lock, Mail, ArrowRight, Building2, AlertCircle, Loader2 } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext';
+import { Lock, Mail, ArrowRight, Building2, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 
 export const SuperAdminLogin = () => {
   const navigate = useNavigate();
   const { login } = useSuperAdmin();
+  const { setSuperAdminSessionValid } = useAuth() || {};
 
-  const [email, setEmail] = useState('superadmin@shippnex.com');
-  const [password, setPassword] = useState('SuperAdmin@123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    const validate = async () => {
+      try {
+        const res = await superAdminService.getProfile();
+        if (!cancelled && res?.success && res.superAdmin) {
+          login(res.superAdmin);
+          setSuperAdminSessionValid?.(true);
+          navigate('/super-admin/dashboard', { replace: true });
+          return;
+        }
+      } catch (e) {
+        localStorage.removeItem('shippnex_super_admin_token');
+        localStorage.removeItem('shippnex_super_admin_session');
+      } finally {
+        if (!cancelled) setCheckingSession(false);
+      }
+    };
+    validate();
+    return () => {
+      cancelled = true;
+    };
+    // Run once on mount to resume a valid cookie session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,9 +55,15 @@ export const SuperAdminLogin = () => {
     setError('');
 
     try {
-      const res = await superAdminService.login({ email, password });
-      if (res.success && res.token) {
-        login(res.token, res.superAdmin);
+      const res = await superAdminService.login({
+        email: email.trim(),
+        password,
+        rememberMe: Boolean(rememberMe),
+      });
+      if (res.success && res.superAdmin) {
+        setPassword('');
+        login(res.superAdmin);
+        setSuperAdminSessionValid?.(true);
         navigate('/super-admin/dashboard');
       } else {
         setError(res.message || 'Login failed');
@@ -40,9 +77,16 @@ export const SuperAdminLogin = () => {
     }
   };
 
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen bg-[#001c1b] flex items-center justify-center">
+        <Loader2 className="animate-spin text-[#ff5500]" size={28} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#001c1b] flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
-      {/* Background glowing gradients */}
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#ff5500]/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -67,7 +111,7 @@ export const SuperAdminLogin = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="on">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 Super Admin Email
@@ -77,9 +121,10 @@ export const SuperAdminLogin = () => {
                 <input
                   type="email"
                   required
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="superadmin@shippnex.com"
+                  placeholder="Enter super admin email"
                   className="w-full bg-slate-50 border border-slate-200 focus:border-[#002625] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition-all font-medium"
                 />
               </div>
@@ -92,15 +137,37 @@ export const SuperAdminLogin = () => {
               <div className="relative">
                 <Lock size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-[#002625] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition-all font-medium"
+                  placeholder="Enter password"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-[#002625] focus:bg-white rounded-xl pl-10 pr-11 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition-all font-medium"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer p-1"
+                >
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
               </div>
             </div>
+
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 text-[#ff5500] focus:ring-[#ff5500] cursor-pointer"
+              />
+              <span className="text-xs font-semibold text-slate-600">Remember me for 30 days</span>
+            </label>
+            <p className="text-[10px] text-slate-400 -mt-2 leading-relaxed">
+              Remember me only extends a verified login session. It never grants access without valid credentials.
+            </p>
 
             <button
               type="submit"
@@ -120,20 +187,6 @@ export const SuperAdminLogin = () => {
               )}
             </button>
           </form>
-
-          {/* Quick Demo Credentials Info */}
-          <div className="pt-2 border-t border-slate-100 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('superadmin@shippnex.com');
-                setPassword('SuperAdmin@123');
-              }}
-              className="text-[11px] text-[#002625] hover:text-[#ff5500] font-semibold underline bg-transparent border-none cursor-pointer font-mono transition-colors"
-            >
-              Autofill Root Super Admin Credentials
-            </button>
-          </div>
         </div>
       </div>
     </div>

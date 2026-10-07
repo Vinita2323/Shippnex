@@ -1,34 +1,41 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { clearStoredUserLocation } from '../utils/userLocation';
+import { authService } from '../services/authService';
+import API from '../services/api';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAuthInitializing, setIsAuthInitializing] = useState(true);
-  const [userRole, setUserRole] = useState(null); // 'user', 'seller', 'captain', 'admin', 'super_admin'
+  const [userRole, setUserRole] = useState(null);
+  const [adminSessionValid, setAdminSessionValid] = useState(false);
+  const [superAdminSessionValid, setSuperAdminSessionValid] = useState(false);
 
   const computeRoleAndAuth = useCallback((preferredRole = null) => {
     try {
       const userToken = localStorage.getItem('shippnex_user_token');
       const sellerToken = localStorage.getItem('shippnex_seller_token');
       const captainToken = localStorage.getItem('shippnex_captain_token');
-      const adminToken = localStorage.getItem('shippnex_admin_token');
-      const superAdminToken = localStorage.getItem('shippnex_super_admin_token');
+      const adminSession = localStorage.getItem('shippnex_admin_session') === '1' || adminSessionValid;
+      const superAdminSession =
+        localStorage.getItem('shippnex_super_admin_session') === '1' || superAdminSessionValid;
 
-      // 1. Check preferred role if passed explicitly
-      if (preferredRole === 'super_admin' && superAdminToken) return { isAuth: true, role: 'super_admin' };
-      if (preferredRole === 'admin' && (adminToken || superAdminToken)) return { isAuth: true, role: 'admin' };
+      if (preferredRole === 'super_admin' && (superAdminSession || superAdminSessionValid)) {
+        return { isAuth: true, role: 'super_admin' };
+      }
+      if (preferredRole === 'admin' && (adminSession || adminSessionValid || superAdminSession)) {
+        return { isAuth: true, role: 'admin' };
+      }
       if (preferredRole === 'seller' && sellerToken) return { isAuth: true, role: 'seller' };
       if (preferredRole === 'captain' && captainToken) return { isAuth: true, role: 'captain' };
       if (preferredRole === 'user' && userToken) return { isAuth: true, role: 'user' };
 
-      // 2. Check path-based role
       const path = typeof window !== 'undefined' && window.location ? window.location.pathname : '';
-      if (path.startsWith('/super-admin') && superAdminToken) {
+      if (path.startsWith('/super-admin') && (superAdminSession || superAdminSessionValid)) {
         return { isAuth: true, role: 'super_admin' };
       }
-      if (path.startsWith('/admin') && (adminToken || superAdminToken)) {
+      if (path.startsWith('/admin') && (adminSession || adminSessionValid || superAdminSession)) {
         return { isAuth: true, role: 'admin' };
       }
       if (path.startsWith('/seller') && sellerToken) {
@@ -38,10 +45,9 @@ export const AuthProvider = ({ children }) => {
         return { isAuth: true, role: 'captain' };
       }
 
-      // 3. Fallback based on available tokens
       if (userToken) return { isAuth: true, role: 'user' };
-      if (adminToken) return { isAuth: true, role: 'admin' };
-      if (superAdminToken) return { isAuth: true, role: 'super_admin' };
+      if (adminSession || adminSessionValid) return { isAuth: true, role: 'admin' };
+      if (superAdminSession || superAdminSessionValid) return { isAuth: true, role: 'super_admin' };
       if (sellerToken) return { isAuth: true, role: 'seller' };
       if (captainToken) return { isAuth: true, role: 'captain' };
 
@@ -50,7 +56,7 @@ export const AuthProvider = ({ children }) => {
       console.error('[AuthContext] computeRoleAndAuth error:', e);
       return { isAuth: false, role: null };
     }
-  }, []);
+  }, [adminSessionValid, superAdminSessionValid]);
 
   const isRoleAuthenticated = useCallback((role) => {
     try {
@@ -58,10 +64,18 @@ export const AuthProvider = ({ children }) => {
         return !!localStorage.getItem('shippnex_user_token');
       }
       if (role === 'admin') {
-        return !!(localStorage.getItem('shippnex_admin_token') || localStorage.getItem('shippnex_super_admin_token'));
+        // Provisional UI access after a successful login sets shippnex_admin_session.
+        // Cookie is still required for every admin API; invalid cookies are cleared on init/401.
+        return (
+          adminSessionValid === true ||
+          localStorage.getItem('shippnex_admin_session') === '1'
+        );
       }
       if (role === 'super_admin') {
-        return !!localStorage.getItem('shippnex_super_admin_token');
+        return (
+          superAdminSessionValid === true ||
+          localStorage.getItem('shippnex_super_admin_session') === '1'
+        );
       }
       if (role === 'seller') {
         return !!localStorage.getItem('shippnex_seller_token');
@@ -73,7 +87,7 @@ export const AuthProvider = ({ children }) => {
     } catch (e) {
       return false;
     }
-  }, []);
+  }, [adminSessionValid, superAdminSessionValid]);
 
   const syncAuthFromStorage = useCallback((explicitRole = null) => {
     const { isAuth, role } = computeRoleAndAuth(explicitRole);
@@ -81,10 +95,66 @@ export const AuthProvider = ({ children }) => {
     setUserRole(role);
   }, [computeRoleAndAuth]);
 
-  // Initialize auth on app load
+  // Initialize auth on app load — admin/super-admin must be validated by the backend.
   useEffect(() => {
-    syncAuthFromStorage();
-    setIsAuthInitializing(false);
+    let cancelled = false;
+
+    const init = async () => {
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+
+      if (path.startsWith('/admin') && !path.startsWith('/admin/login')) {
+        try {
+          const res = await authService.getAdminProfile();
+          if (!cancelled && res?.success && res.admin) {
+            setAdminSessionValid(true);
+            setIsAuthenticated(true);
+            setUserRole('admin');
+          } else if (!cancelled) {
+            setAdminSessionValid(false);
+            localStorage.removeItem('shippnex_admin_session');
+            localStorage.removeItem('shippnex_admin_token');
+          }
+        } catch (e) {
+          if (!cancelled) {
+            setAdminSessionValid(false);
+            localStorage.removeItem('shippnex_admin_session');
+            localStorage.removeItem('shippnex_admin_token');
+            localStorage.removeItem('shippnex_admin_data');
+          }
+        }
+      } else if (path.startsWith('/super-admin') && !path.startsWith('/super-admin/login')) {
+        try {
+          const res = await API.get('/auth/super-admin/me');
+          if (!cancelled && res.data?.success && res.data.superAdmin) {
+            setSuperAdminSessionValid(true);
+            setIsAuthenticated(true);
+            setUserRole('super_admin');
+            localStorage.setItem('shippnex_super_admin_session', '1');
+            localStorage.setItem('shippnex_super_admin_data', JSON.stringify(res.data.superAdmin));
+          } else if (!cancelled) {
+            setSuperAdminSessionValid(false);
+            localStorage.removeItem('shippnex_super_admin_session');
+            localStorage.removeItem('shippnex_super_admin_token');
+          }
+        } catch (e) {
+          if (!cancelled) {
+            setSuperAdminSessionValid(false);
+            localStorage.removeItem('shippnex_super_admin_session');
+            localStorage.removeItem('shippnex_super_admin_token');
+            localStorage.removeItem('shippnex_super_admin_data');
+          }
+        }
+      } else {
+        syncAuthFromStorage();
+      }
+
+      if (!cancelled) setIsAuthInitializing(false);
+    };
+
+    init();
+    return () => {
+      cancelled = true;
+    };
   }, [syncAuthFromStorage]);
 
   const logout = (role = 'user') => {
@@ -102,11 +172,17 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('shippnex_captain_token');
       localStorage.removeItem('shippnex_captain_data');
     } else if (role === 'admin') {
+      authService.adminLogout?.().catch(() => {});
       localStorage.removeItem('shippnex_admin_token');
       localStorage.removeItem('shippnex_admin_data');
+      localStorage.removeItem('shippnex_admin_session');
+      setAdminSessionValid(false);
     } else if (role === 'super_admin') {
+      API.post('/auth/super-admin/logout').catch(() => {});
       localStorage.removeItem('shippnex_super_admin_token');
       localStorage.removeItem('shippnex_super_admin_data');
+      localStorage.removeItem('shippnex_super_admin_session');
+      setSuperAdminSessionValid(false);
     }
 
     syncAuthFromStorage();
@@ -121,6 +197,10 @@ export const AuthProvider = ({ children }) => {
         isRoleAuthenticated,
         logout,
         syncAuthFromStorage,
+        adminSessionValid,
+        setAdminSessionValid,
+        superAdminSessionValid,
+        setSuperAdminSessionValid,
       }}
     >
       {children}
@@ -135,4 +215,3 @@ export const useAuth = () => {
   }
   return context;
 };
-

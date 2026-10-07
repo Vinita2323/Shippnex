@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import connectDB from './config/db.js';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import healthRoutes from './routes/healthRoutes.js';
@@ -67,7 +68,10 @@ app.use(compression({
 }));
 
 app.use(cors({
-  origin: '*',
+  // Reflect the request origin so credentialed admin cookie auth works
+  // (origin cannot be "*" when credentials are enabled).
+  origin: (origin, callback) => callback(null, origin || true),
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   // Let browsers cache the preflight so every cart/wishlist/order mutation
@@ -75,6 +79,8 @@ app.use(cors({
   // OPTIONS round trip on top of the actual request.
   maxAge: 86400,
 }));
+
+app.use(cookieParser());
 
 // CSP headers to allow Google Maps and other third-party services
 app.use((req, res, next) => {

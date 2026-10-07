@@ -34,6 +34,7 @@ export const getBaseApiUrl = () => {
 const API = axios.create({
   baseURL: getBaseApiUrl(),
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -121,6 +122,7 @@ API.interceptors.response.use(
         if (!currentPath.startsWith('/super-admin/login')) {
           localStorage.removeItem('shippnex_super_admin_token');
           localStorage.removeItem('shippnex_super_admin_data');
+          localStorage.removeItem('shippnex_super_admin_session');
           sessionStorage.setItem('shippnex_super_admin_auth_expired_redirect', currentPath);
           window.location.href = '/super-admin/login';
         }
@@ -143,6 +145,7 @@ API.interceptors.response.use(
         if (!currentPath.startsWith('/admin/login')) {
           localStorage.removeItem('shippnex_admin_token');
           localStorage.removeItem('shippnex_admin_data');
+          localStorage.removeItem('shippnex_admin_session');
           sessionStorage.setItem('shippnex_admin_auth_expired_redirect', currentPath);
           window.location.href = '/admin/login';
         }

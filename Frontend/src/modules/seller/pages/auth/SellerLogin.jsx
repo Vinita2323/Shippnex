@@ -1,28 +1,49 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Lock, Phone, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, KeyRound, ArrowLeft } from 'lucide-react';
 import { authService } from '../../../../services/authService';
 import { useAuth } from '../../../../context/AuthContext';
+import {
+  SELLER_LOGIN_DRAFT_KEY,
+  clearLoginDraft,
+  readLoginDraft,
+  writeLoginDraft,
+} from '../../../../utils/loginFormDraft';
 
 const SellerLogin = () => {
   const navigate = useNavigate();
   const { syncAuthFromStorage } = useAuth();
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [password, setPassword] = useState('');
+  const savedDraft = readLoginDraft(SELLER_LOGIN_DRAFT_KEY) || {};
+  const [mobileNumber, setMobileNumber] = useState(savedDraft.mobileNumber || '');
+  const [password, setPassword] = useState(savedDraft.password || '');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   // Mode: 'login' | 'forgot_password'
-  const [authMode, setAuthMode] = useState('login');
-  const [forgotStep, setForgotStep] = useState(1); // 1 = enter phone & send OTP, 2 = enter OTP & new password
-  const [forgotPhone, setForgotPhone] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [authMode, setAuthMode] = useState(savedDraft.authMode || 'login');
+  const [forgotStep, setForgotStep] = useState(savedDraft.forgotStep || 1); // 1 = enter phone & send OTP, 2 = enter OTP & new password
+  const [forgotPhone, setForgotPhone] = useState(savedDraft.forgotPhone || '');
+  const [otpCode, setOtpCode] = useState(savedDraft.otpCode || '');
+  const [newPassword, setNewPassword] = useState(savedDraft.newPassword || '');
+  const [confirmPassword, setConfirmPassword] = useState(savedDraft.confirmPassword || '');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
+
+  // Keep login details when user opens Terms / Privacy in the same tab
+  useEffect(() => {
+    writeLoginDraft(SELLER_LOGIN_DRAFT_KEY, {
+      mobileNumber,
+      password,
+      authMode,
+      forgotStep,
+      forgotPhone,
+      otpCode,
+      newPassword,
+      confirmPassword,
+    });
+  }, [mobileNumber, password, authMode, forgotStep, forgotPhone, otpCode, newPassword, confirmPassword]);
 
   const startResendCountdown = () => {
     setResendTimer(30);
@@ -58,6 +79,7 @@ const SellerLogin = () => {
       const res = await authService.sellerLogin(cleanPhone, password);
 
       if (res.success && res.token) {
+        clearLoginDraft(SELLER_LOGIN_DRAFT_KEY);
         syncAuthFromStorage();
         if (res.requiresMembership) {
           navigate('/seller/membership');
@@ -156,6 +178,7 @@ const SellerLogin = () => {
       if (res.success) {
         if (res.token) {
           // Approved seller: directly logged in
+          clearLoginDraft(SELLER_LOGIN_DRAFT_KEY);
           syncAuthFromStorage();
           setSuccessMsg('Password set successfully! Redirecting to dashboard...');
           setTimeout(() => {

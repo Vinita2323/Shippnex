@@ -1,28 +1,49 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, Lock, Eye, EyeOff, Loader2, ArrowRight, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { authService } from '../../../services/authService';
 import { useAuth } from '../../../context/AuthContext';
+import {
+  CAPTAIN_LOGIN_DRAFT_KEY,
+  clearLoginDraft,
+  readLoginDraft,
+  writeLoginDraft,
+} from '../../../utils/loginFormDraft';
 
 const CaptainLogin = () => {
   const navigate = useNavigate();
   const { syncAuthFromStorage } = useAuth();
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [password, setPassword] = useState('');
+  const savedDraft = readLoginDraft(CAPTAIN_LOGIN_DRAFT_KEY) || {};
+  const [mobileNumber, setMobileNumber] = useState(savedDraft.mobileNumber || '');
+  const [password, setPassword] = useState(savedDraft.password || '');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   // Mode: 'login' | 'forgot_password'
-  const [authMode, setAuthMode] = useState('login');
-  const [forgotStep, setForgotStep] = useState(1); // 1 = enter phone & send OTP, 2 = enter OTP & new password
-  const [forgotPhone, setForgotPhone] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [authMode, setAuthMode] = useState(savedDraft.authMode || 'login');
+  const [forgotStep, setForgotStep] = useState(savedDraft.forgotStep || 1); // 1 = enter phone & send OTP, 2 = enter OTP & new password
+  const [forgotPhone, setForgotPhone] = useState(savedDraft.forgotPhone || '');
+  const [otpCode, setOtpCode] = useState(savedDraft.otpCode || '');
+  const [newPassword, setNewPassword] = useState(savedDraft.newPassword || '');
+  const [confirmPassword, setConfirmPassword] = useState(savedDraft.confirmPassword || '');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
+
+  // Keep login details when user opens Privacy / Terms in the same tab
+  useEffect(() => {
+    writeLoginDraft(CAPTAIN_LOGIN_DRAFT_KEY, {
+      mobileNumber,
+      password,
+      authMode,
+      forgotStep,
+      forgotPhone,
+      otpCode,
+      newPassword,
+      confirmPassword,
+    });
+  }, [mobileNumber, password, authMode, forgotStep, forgotPhone, otpCode, newPassword, confirmPassword]);
 
   const startResendCountdown = () => {
     setResendTimer(30);
@@ -58,6 +79,7 @@ const CaptainLogin = () => {
       const res = await authService.captainLogin(cleanPhone, password);
 
       if (res.success && res.token) {
+        clearLoginDraft(CAPTAIN_LOGIN_DRAFT_KEY);
         syncAuthFromStorage();
         /* Temporarily commented out: Captain Membership redirect
         if (res.requiresMembership) {
@@ -159,6 +181,7 @@ const CaptainLogin = () => {
       if (res.success) {
         if (res.token) {
           // Approved captain: directly logged in
+          clearLoginDraft(CAPTAIN_LOGIN_DRAFT_KEY);
           syncAuthFromStorage();
           setSuccessMsg('Password set successfully! Redirecting to Captain dashboard...');
           setTimeout(() => {
