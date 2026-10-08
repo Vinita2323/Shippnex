@@ -8,11 +8,19 @@ import { sendOtpSMS, normalizePhoneNumber } from '../services/smsIndiaHubService
 import { generateOtp } from '../utils/generateOtp.js';
 import { applyReferralCodeAtRegistration } from './referralController.js';
 
-// Helper: Process doc image (Base64 -> Cloudinary)
+// Helper: Process doc image (URL passthrough, or Base64 -> Cloudinary)
 const processDocImage = async (imgStr, docName = 'doc') => {
   if (!imgStr) return '';
-  if (typeof imgStr === 'string' && (imgStr.startsWith('http://') || imgStr.startsWith('https://'))) {
-    return imgStr;
+  if (typeof imgStr === 'string') {
+    // Already uploaded via /api/upload (avoids nginx 413 on initiate-order)
+    if (
+      imgStr.startsWith('http://') ||
+      imgStr.startsWith('https://') ||
+      imgStr.startsWith('/uploads/') ||
+      imgStr.startsWith('uploads/')
+    ) {
+      return imgStr.startsWith('uploads/') ? `/${imgStr}` : imgStr;
+    }
   }
   if (typeof imgStr === 'string' && imgStr.startsWith('data:image/')) {
     try {

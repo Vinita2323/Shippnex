@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { authService, captainRegistrationFeeService } from '../../../services/authService';
 import { loadRazorpaySdk } from '../../../utils/razorpay';
+import { uploadRegistrationImage } from '../../../utils/uploadRegistrationImage';
 
 const CaptainRegister = () => {
   const navigate = useNavigate();
@@ -303,50 +304,6 @@ const CaptainRegister = () => {
     }
   };
 
-  const compressImageFile = (file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) => {
-    return new Promise((resolve) => {
-      if (!file) return resolve('');
-      if (typeof file === 'string') {
-        if (!file.startsWith('data:image/') || file.length < 50000) return resolve(file);
-      }
-      const processSource = (src) => {
-        const img = new Image();
-        img.onload = () => {
-          let width = img.width;
-          let height = img.height;
-          if (width > height) {
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
-            }
-          } else {
-            if (height > maxHeight) {
-              width = Math.round((width * maxHeight) / height);
-              height = maxHeight;
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', quality));
-        };
-        img.onerror = () => resolve(typeof file === 'string' ? file : '');
-        img.src = src;
-      };
-
-      if (typeof file === 'string') {
-        processSource(file);
-      } else {
-        const reader = new FileReader();
-        reader.onload = (e) => processSource(e.target.result);
-        reader.onerror = () => resolve('');
-        reader.readAsDataURL(file);
-      }
-    });
-  };
-
   const handleOtpPaste = (e) => {
     e.preventDefault();
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
@@ -574,7 +531,10 @@ const CaptainRegister = () => {
 
     setIsSubmitting(true);
     try {
-      // Convert all uploaded documents to base64
+      // Upload each document via /api/upload first (small multipart).
+      // Do NOT send multi-MB base64 blobs in initiate-order — live nginx returns 413.
+      const uploadDoc = (file) => uploadRegistrationImage(file, 'misc');
+
       const [
         dl,
         rc,
@@ -589,18 +549,18 @@ const CaptainRegister = () => {
         panDoc,
         passbookDoc
       ] = await Promise.all([
-        compressImageFile(files.drivingLicense),
-        compressImageFile(files.rcDocument),
-        compressImageFile(files.aadhaarFront),
-        compressImageFile(files.aadhaarBack),
-        compressImageFile(files.profilePhoto),
-        compressImageFile(files.pucDocument),
-        compressImageFile(files.permitDocument),
-        compressImageFile(files.fitnessDocument),
-        compressImageFile(files.roadTaxDocument),
-        compressImageFile(files.form21Document),
-        compressImageFile(files.panCardDocument),
-        compressImageFile(files.bankPassbook),
+        uploadDoc(files.drivingLicense),
+        uploadDoc(files.rcDocument),
+        uploadDoc(files.aadhaarFront),
+        uploadDoc(files.aadhaarBack),
+        uploadDoc(files.profilePhoto),
+        uploadDoc(files.pucDocument),
+        uploadDoc(files.permitDocument),
+        uploadDoc(files.fitnessDocument),
+        uploadDoc(files.roadTaxDocument),
+        uploadDoc(files.form21Document),
+        uploadDoc(files.panCardDocument),
+        uploadDoc(files.bankPassbook),
       ]);
 
       const payload = {
@@ -640,7 +600,11 @@ const CaptainRegister = () => {
       }
     } catch (err) {
       console.error('API submission failed:', err);
-      setErrorMsg(err.response?.data?.message || err.message || 'Failed to submit registration application.');
+      if (err.response?.status === 413) {
+        setErrorMsg('Uploaded documents are too large for the server. Please use clearer, smaller photos and try again.');
+      } else {
+        setErrorMsg(err.response?.data?.message || err.message || 'Failed to submit registration application.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -798,19 +762,6 @@ const CaptainRegister = () => {
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
                 We sent a 6-digit OTP to <strong className="text-slate-800">+91 {formData.mobileNumber}</strong> to complete your application.
               </p>
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOtp(['1', '2', '3', '4', '5', '6']);
-                    setErrorMsg('');
-                  }}
-                  title="Click to fill test OTP 123456"
-                  className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-lg font-mono hover:bg-emerald-100 transition-colors cursor-pointer"
-                >
-                  ⚡ Test OTP: 123456 (Click to fill)
-                </button>
-              </div>
             </div>
 
             {errorMsg && (

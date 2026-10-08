@@ -2,7 +2,7 @@ import React from 'react';
 
 export const PageSkeleton = () => {
   return (
-    <div className="w-full min-h-[60vh] p-4 sm:p-6 max-w-7xl mx-auto animate-pulse space-y-6 select-none">
+    <div className="w-full min-h-[100dvh] bg-white p-4 sm:p-6 max-w-7xl mx-auto animate-pulse space-y-6 select-none">
       {/* Header Bar Skeleton */}
       <div className="flex items-center justify-between gap-4 pb-4 border-b border-slate-100">
         <div className="flex items-center gap-3">

@@ -320,15 +320,13 @@ export const verifyOtp = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Captain account not found. Please register first.' });
     }
 
-    // Allow test OTP '123456' or matching OTP
-    const isTestOtp = cleanOtp === '123456';
     const isMatchingOtp = captain.otp && String(captain.otp).trim() === cleanOtp;
 
-    if (!isTestOtp && !isMatchingOtp) {
+    if (!isMatchingOtp) {
       return res.status(400).json({ success: false, message: 'Invalid OTP code' });
     }
 
-    if (!isTestOtp && captain.otpExpiry && new Date() > new Date(captain.otpExpiry)) {
+    if (captain.otpExpiry && new Date() > new Date(captain.otpExpiry)) {
       return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new OTP.' });
     }
 
@@ -548,17 +546,16 @@ export const resetPassword = async (req, res, next) => {
     }
 
     // Verify OTP
-    const isTestOtp = cleanOtp === '123456';
     const isMatchingOtp = captain.otp && String(captain.otp).trim() === cleanOtp;
 
-    if (!isTestOtp && !isMatchingOtp) {
+    if (!isMatchingOtp) {
       return res.status(400).json({
         success: false,
         message: 'Invalid OTP code. Please check and try again.',
       });
     }
 
-    if (!isTestOtp && captain.otpExpiry && new Date() > new Date(captain.otpExpiry)) {
+    if (captain.otpExpiry && new Date() > new Date(captain.otpExpiry)) {
       return res.status(400).json({
         success: false,
         message: 'OTP has expired. Please request a new OTP.',

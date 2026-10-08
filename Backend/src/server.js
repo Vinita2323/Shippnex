@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -7,7 +8,9 @@ import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import healthRoutes from './routes/healthRoutes.js';
 import path from 'path';
 import fs from 'fs';
+import { initSocket } from './socket/socket.js';
 import userAuthRoutes from './routes/userAuthRoutes.js';
+import userNotificationRoutes from './routes/userNotificationRoutes.js';
 import sellerAuthRoutes from './routes/sellerAuthRoutes.js';
 import captainAuthRoutes from './routes/captainAuthRoutes.js';
 import captainRoutes from './routes/captainRoutes.js';
@@ -123,6 +126,7 @@ app.use('/api/uploads', handleUploadFallback);
 // Core API Routes (Mounted under both /api and root for backwards compatibility)
 const registerRoutes = (prefix = '') => {
   app.use(`${prefix}/auth/user`, userAuthRoutes);
+  app.use(`${prefix}/user/notifications`, userNotificationRoutes);
   app.use(`${prefix}/auth/seller`, sellerAuthRoutes);
   app.use(`${prefix}/auth/captain`, captainAuthRoutes);
   app.use(`${prefix}/captain`, captainRoutes);
@@ -176,7 +180,10 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+const httpServer = http.createServer(app);
+initSocket(httpServer);
+
+httpServer.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'production'} mode on port ${PORT}`);
   const sweepUnpaidOrders = () => {
     releaseAllExpiredPaymentHolds().catch((err) => {

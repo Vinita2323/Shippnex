@@ -17,6 +17,7 @@ import {
   sendNotificationToSeller, 
   sendNotificationToCaptain 
 } from '../utils/pushNotificationHelper.js';
+import { notifyUserOrderEvent } from '../utils/userNotificationHelper.js';
 import { invalidateCaptainDashboardCache } from './captainController.js';
 import {
   normalizeAttributes,
@@ -379,6 +380,15 @@ const releaseStockHold = async (order) => {
   );
   if (!released) return false;
   await adjustOrderStock(order.items || [], 1);
+  // Payment failed → Order Failed (not Cancelled) for customer inbox
+  if (order.user && order.orderId) {
+    notifyUserOrderEvent({
+      userId: order.user,
+      orderId: order.orderId,
+      order: order._id,
+      type: 'ORDER_FAILED',
+    });
+  }
   return true;
 };
 
@@ -530,6 +540,12 @@ export const confirmOnlinePayment = async (order, paymentMeta = {}) => {
   });
   await User.updateOne({ _id: claimed.user }, { $set: { cart: [] } });
   invalidateUserOrdersCache(String(claimed.user));
+  notifyUserOrderEvent({
+    userId: claimed.user,
+    orderId: claimed.orderId,
+    order: claimed._id,
+    type: 'ORDER_PLACED',
+  });
   setImmediate(() => {
     sendNotificationToUser(claimed.user, {
       title: 'Order Placed Successfully! 🎉',
@@ -925,6 +941,13 @@ export const placeOrder = async (req, res, next) => {
     // Execute stock updates and seller notifications concurrently
     await Promise.all([...stockUpdates, ...sellerNotificationPromises]);
     await Order.updateOne({ _id: order._id }, { $set: { stockHold: 'finalized' } });
+
+    notifyUserOrderEvent({
+      userId,
+      orderId: order.orderId,
+      order: order._id,
+      type: 'ORDER_PLACED',
+    });
 
     // Asynchronous non-blocking push notification to user
     setImmediate(() => {
@@ -1387,12 +1410,25 @@ export const acceptSellerOrder = async (req, res, next) => {
 
     // Update parent order
     if (notification.order) {
-      await Order.findByIdAndUpdate(notification.order, {
-        orderStatus: 'Accepted',
-        sellerStatus: 'Accepted',
-        acceptedAt: now,
-        ...(notification.pickupOtp ? { pickupOtp: notification.pickupOtp } : {}),
-      });
+      const parentOrder = await Order.findByIdAndUpdate(
+        notification.order,
+        {
+          orderStatus: 'Accepted',
+          sellerStatus: 'Accepted',
+          acceptedAt: now,
+          ...(notification.pickupOtp ? { pickupOtp: notification.pickupOtp } : {}),
+        },
+        { new: true }
+      ).select('user orderId');
+
+      if (parentOrder?.user && parentOrder?.orderId) {
+        notifyUserOrderEvent({
+          userId: parentOrder.user,
+          orderId: parentOrder.orderId,
+          order: parentOrder._id,
+          type: 'ORDER_CONFIRMED',
+        });
+      }
     }
 
     console.log(`[OrderController] Seller accepted Order ID ${notification.orderId}; status update only, no new-order notification`);
@@ -1459,12 +1495,25 @@ export const rejectSellerOrder = async (req, res, next) => {
 
     // Update parent order
     if (notification.order) {
-      await Order.findByIdAndUpdate(notification.order, {
-        orderStatus: 'Rejected',
-        sellerStatus: 'Rejected',
-        rejectionReason: finalReason,
-        rejectedAt: now,
-      });
+      const parentOrder = await Order.findByIdAndUpdate(
+        notification.order,
+        {
+          orderStatus: 'Rejected',
+          sellerStatus: 'Rejected',
+          rejectionReason: finalReason,
+          rejectedAt: now,
+        },
+        { new: true }
+      ).select('user orderId');
+
+      if (parentOrder?.user && parentOrder?.orderId) {
+        notifyUserOrderEvent({
+          userId: parentOrder.user,
+          orderId: parentOrder.orderId,
+          order: parentOrder._id,
+          type: 'ORDER_FAILED',
+        });
+      }
     }
 
     console.log(`[OrderController] Seller rejected Order ID ${notification.orderId}; status update only, no new-order notification. Reason: "${finalReason}"`);
@@ -1564,12 +1613,34 @@ export const updateSellerOrderStatus = async (req, res, next) => {
     invalidateSellerNotifCache();
 
     if (notification.order) {
-      await Order.findByIdAndUpdate(notification.order, {
-        orderStatus: mappedOrderStatus,
-        sellerStatus: mappedNotificationStatus,
-        ...(mappedNotificationStatus === 'DELIVERED' ? { paymentStatus: 'Paid' } : {}),
-        ...(mappedNotificationStatus === 'REJECTED' ? { rejectionReason: notification.rejectionReason } : {}),
-      });
+      const parentOrder = await Order.findByIdAndUpdate(
+        notification.order,
+        {
+          orderStatus: mappedOrderStatus,
+          sellerStatus: mappedNotificationStatus,
+          ...(mappedNotificationStatus === 'DELIVERED' ? { paymentStatus: 'Paid' } : {}),
+          ...(mappedNotificationStatus === 'REJECTED' ? { rejectionReason: notification.rejectionReason } : {}),
+        },
+        { new: true }
+      ).select('user orderId');
+
+      // Only the 6 customer-facing events (skip Packed / Processing / etc.)
+      const eventTypeMap = {
+        Accepted: 'ORDER_CONFIRMED',
+        'Out for Delivery': 'ORDER_OUT_FOR_DELIVERY',
+        Delivered: 'ORDER_DELIVERED',
+        Rejected: 'ORDER_FAILED',
+        Cancelled: 'ORDER_CANCELLED',
+      };
+      const notifType = eventTypeMap[mappedOrderStatus];
+      if (notifType && parentOrder?.user && parentOrder?.orderId) {
+        notifyUserOrderEvent({
+          userId: parentOrder.user,
+          orderId: parentOrder.orderId,
+          order: parentOrder._id,
+          type: notifType,
+        });
+      }
     }
 
     if (mappedNotificationStatus === 'PACKED') {

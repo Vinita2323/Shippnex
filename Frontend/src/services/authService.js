@@ -1,5 +1,6 @@
 import API from './api';
 import { registerFCMToken, removeFCMToken } from './pushNotificationService';
+import { disconnectUserSocket } from './userSocket';
 import { applySavedAddressesAsDeliveryLocation, clearStoredUserLocation } from '../utils/userLocation';
 
 const saveCaptainAuthSession = (token, captain) => {
@@ -255,11 +256,33 @@ export const authService = {
     localStorage.removeItem('shippnex_admin_session');
   },
 
+  // User in-app notifications
+  getUserNotifications: async () => {
+    const response = await API.get('/user/notifications');
+    return response.data;
+  },
+
+  getUserUnreadNotificationCount: async () => {
+    const response = await API.get('/user/notifications/unread-count');
+    return response.data;
+  },
+
+  markUserNotificationRead: async (id) => {
+    const response = await API.put(`/user/notifications/${id}/read`);
+    return response.data;
+  },
+
+  markAllUserNotificationsRead: async () => {
+    const response = await API.put('/user/notifications/read-all');
+    return response.data;
+  },
+
   // Logout utility
   logout: (role) => {
     removeFCMToken(role).catch(() => {});
 
     if (role === 'user') {
+      disconnectUserSocket();
       localStorage.removeItem('shippnex_user_token');
       localStorage.removeItem('shippnex_user_data');
       localStorage.removeItem('shippnex_user_name');

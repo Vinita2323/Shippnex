@@ -1,13 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Phone, ArrowRight, ArrowLeft, Package, MapPin, Loader2 } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { authService } from '../../../services/authService';
+import {
+  USER_LOGIN_DRAFT_KEY,
+  readLoginDraft,
+  writeLoginDraft,
+} from '../../../utils/loginFormDraft';
 
 const Login = () => {
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const savedDraft = readLoginDraft(USER_LOGIN_DRAFT_KEY) || {};
+  const initialPhone =
+    location.state?.phone ||
+    savedDraft.phoneNumber ||
+    '';
+  const [phoneNumber, setPhoneNumber] = useState(initialPhone);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const navigate = useNavigate();
+
+  // Keep the phone number when user opens Privacy Policy / edits from OTP and comes back
+  useEffect(() => {
+    writeLoginDraft(USER_LOGIN_DRAFT_KEY, { phoneNumber });
+  }, [phoneNumber]);
 
   const handleSendOtp = async (e) => {
     e.preventDefault();
@@ -20,6 +36,7 @@ const Login = () => {
     try {
       setLoading(true);
       await authService.sendUserOtp(phoneNumber);
+      writeLoginDraft(USER_LOGIN_DRAFT_KEY, { phoneNumber });
       // Navigate to OTP verification page passing phone number in route state
       navigate('/verify-otp', { state: { phone: phoneNumber } });
     } catch (err) {

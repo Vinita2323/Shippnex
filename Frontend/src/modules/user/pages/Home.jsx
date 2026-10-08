@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useNotifications } from '../context/NotificationContext';
 import { useLocationContext } from '../../../context/LocationContext';
 import { applySavedAddressesAsDeliveryLocation, isDeliverableLocation, clearStoredUserLocation } from '../../../utils/userLocation';
 import { addressService, bannerService, categoryService, productService, sellerService } from '../../../services/authService';
@@ -51,6 +52,7 @@ const Home = () => {
   const navigate = useNavigate();
   const { addToCart, updateQuantity, getItemQuantity, isInCart, cartCount, removeFromCart } = useCart();
   const { wishlistCount } = useWishlist();
+  const { unreadCount: notificationUnreadCount } = useNotifications();
   const locationContext = useLocationContext();
   const deliveryLocation = isDeliverableLocation(locationContext?.currentLocation)
     ? locationContext.currentLocation
@@ -279,7 +281,7 @@ const Home = () => {
   return (
     <div className="w-full h-[100dvh] md:h-auto md:min-h-screen bg-white font-sans text-slate-800 relative shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none overflow-y-auto md:overflow-visible overflow-x-hidden hide-scrollbar [&::-webkit-scrollbar]:hidden px-0 md:px-0 md:py-6">
       {/* Top Header Section with Dark Orange Background (Mobile Only) */}
-      <div className="md:hidden bg-gradient-to-r from-[#ea580c] to-[#f97316] rounded-b-[20px] pb-3 mb-4 shadow-sm relative z-10 pt-1">
+      <div className="md:hidden bg-gradient-to-r from-[#ea580c] to-[#f97316] rounded-b-[20px] pb-3 mb-4 shadow-sm sticky top-0 z-30 pt-1">
         {/* Header Section */}
         <header className="flex justify-between items-center px-4 pt-1.5 pb-2.5">
           <div className="flex items-center flex-1">
@@ -300,7 +302,11 @@ const Home = () => {
           <div className="flex gap-4 items-center pr-1 shrink-0">
             <div className="relative cursor-pointer" onClick={() => navigate('/notifications')}>
               <Bell size={22} color="white" strokeWidth={1.8} />
-              <span className="absolute top-[2px] right-[2px] bg-white w-2 h-2 rounded-full border border-[#ea580c]"></span>
+              {notificationUnreadCount > 0 && (
+                <span className="absolute -top-1 -right-2 bg-white text-[#ea580c] text-[10px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center shadow-sm border border-[#ea580c]/30">
+                  {notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}
+                </span>
+              )}
             </div>
             <div className="cursor-pointer relative" onClick={() => navigate('/wishlist')}>
               <Heart size={22} color="white" strokeWidth={1.8} />

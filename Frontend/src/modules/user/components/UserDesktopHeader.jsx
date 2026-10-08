@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useNotifications } from '../context/NotificationContext';
 import { useLocationContext } from '../../../context/LocationContext';
 import { isDeliverableLocation } from '../../../utils/userLocation';
 import LocationSearchModal from '../../../components/LocationSearchModal';
@@ -29,6 +30,7 @@ const UserDesktopHeader = () => {
   const location = useLocation();
   const { cartCount, cartTotal } = useCart();
   const { wishlistCount } = useWishlist();
+  const { unreadCount: notificationUnreadCount } = useNotifications();
   const locationContext = useLocationContext();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -273,6 +275,11 @@ const UserDesktopHeader = () => {
               title="Notifications"
             >
               <Bell size={20} />
+              {notificationUnreadCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-4 h-4 px-1 bg-[#ff5500] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs">
+                  {notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}
+                </span>
+              )}
             </button>
 
             {/* Cart Button */}

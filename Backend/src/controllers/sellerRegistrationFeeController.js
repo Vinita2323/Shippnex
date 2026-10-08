@@ -5,6 +5,7 @@ import Seller from '../models/Seller.model.js';
 import { razorpayInstance } from '../config/razorpay.js';
 import { uploadToCloudinary } from '../config/cloudinary.js';
 import { sendOtpSMS } from '../services/smsIndiaHubService.js';
+import { generateOtp } from '../utils/generateOtp.js';
 import { applyReferralCodeAtRegistration } from './referralController.js';
 
 // Helper: Normalize 10-digit phone
@@ -12,15 +13,6 @@ const normalizePhone = (phone) => {
   if (!phone) return '';
   const digits = String(phone).replace(/\D/g, '');
   return digits.length > 10 ? digits.slice(-10) : digits;
-};
-
-// Helper: Generate OTP
-const generateOtp = () => {
-  const otp = process.env.NODE_ENV === 'production' 
-    ? Math.floor(100000 + Math.random() * 900000).toString() 
-    : '123456';
-  const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-  return { otp, otpExpiry };
 };
 
 // Helper: Generate Unique Receipt ID

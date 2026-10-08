@@ -112,15 +112,13 @@ export const verifyOtp = async (req, res, next) => {
       });
     }
 
-    // Allow hardcoded OTP '123456' for testing or matching OTP
-    const isTestOtp = cleanOtp === '123456';
     const isMatchingOtp = user.otp && String(user.otp).trim() === cleanOtp;
 
-    if (!isTestOtp && !isMatchingOtp) {
+    if (!isMatchingOtp) {
       return res.status(400).json({ success: false, message: 'Invalid OTP code' });
     }
 
-    if (!isTestOtp && user.otpExpiry && new Date() > new Date(user.otpExpiry)) {
+    if (user.otpExpiry && new Date() > new Date(user.otpExpiry)) {
       return res.status(400).json({ success: false, message: 'OTP has expired' });
     }
 

@@ -1155,19 +1155,6 @@ const SellerRegister = () => {
                   <p className="text-xs text-slate-500 font-normal">
                     Enter OTP sent to <strong className="font-semibold text-slate-800">+91 {formData.phone}</strong> <span className="text-slate-400">/ पर भेजा गया ओटीपी दर्ज करें</span>
                   </p>
-                  <div className="pt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOtp(['1', '2', '3', '4', '5', '6']);
-                        setErrorMessage('');
-                      }}
-                      title="Click to fill test OTP 123456 / टेस्ट ओटीपी 123456 भरने के लिए क्लिक करें"
-                      className="text-[10px] text-orange-600 bg-orange-50 border border-orange-200/80 px-2 py-0.5 rounded font-mono hover:bg-orange-100 transition-colors cursor-pointer"
-                    >
-                      ⚡ Test OTP: 123456 (Click to fill) / ⚡ टेस्ट ओटीपी (भरें)
-                    </button>
-                  </div>
                 </div>
 
                 {/* 6 Digit OTP Boxes */}

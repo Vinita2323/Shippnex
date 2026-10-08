@@ -14,6 +14,7 @@ import { CartProvider } from './modules/user/context/CartContext';
 import { WishlistProvider } from './modules/user/context/WishlistContext';
 import { OrderProvider } from './modules/user/context/OrderContext';
 import { TransportProvider } from './modules/user/context/TransportContext';
+import { NotificationProvider } from './modules/user/context/NotificationContext';
 
 import { LocationProvider } from './context/LocationContext';
 import { AuthProvider } from './context/AuthContext';
@@ -62,23 +63,25 @@ function App() {
       <ErrorBoundary>
         <AuthProvider>
           <LocationProvider>
-            <WishlistProvider>
-              <CartProvider>
-                <OrderProvider>
-                  <TransportProvider>
-                    <Suspense fallback={<PageSkeleton />}>
-                      <Routes>
-                        <Route path="/captain/*" element={<DeliveryRoutes />} />
-                        <Route path="/seller/*" element={<SellerRoutes />} />
-                        <Route path="/admin/*" element={<AdminRoutes />} />
-                        <Route path="/super-admin/*" element={<SuperAdminRoutes />} />
-                        <Route path="/*" element={<UserRoutes />} />
-                      </Routes>
-                    </Suspense>
-                  </TransportProvider>
-                </OrderProvider>
-              </CartProvider>
-            </WishlistProvider>
+            <NotificationProvider>
+              <WishlistProvider>
+                <CartProvider>
+                  <OrderProvider>
+                    <TransportProvider>
+                      <Suspense fallback={<PageSkeleton />}>
+                        <Routes>
+                          <Route path="/captain/*" element={<DeliveryRoutes />} />
+                          <Route path="/seller/*" element={<SellerRoutes />} />
+                          <Route path="/admin/*" element={<AdminRoutes />} />
+                          <Route path="/super-admin/*" element={<SuperAdminRoutes />} />
+                          <Route path="/*" element={<UserRoutes />} />
+                        </Routes>
+                      </Suspense>
+                    </TransportProvider>
+                  </OrderProvider>
+                </CartProvider>
+              </WishlistProvider>
+            </NotificationProvider>
           </LocationProvider>
         </AuthProvider>
       </ErrorBoundary>

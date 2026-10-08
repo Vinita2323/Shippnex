@@ -5,6 +5,11 @@ import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { authService } from '../../../services/authService';
 import { useAuth } from '../../../context/AuthContext';
+import {
+  USER_LOGIN_DRAFT_KEY,
+  clearLoginDraft,
+  writeLoginDraft,
+} from '../../../utils/loginFormDraft';
 
 const VerifyOtp = () => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -20,6 +25,16 @@ const VerifyOtp = () => {
 
   const phone = location.state?.phone || '+91 9876543210';
 
+  const goEditPhone = () => {
+    const hasRealPhone = Boolean(phone && phone !== '+91 9876543210');
+    if (hasRealPhone) {
+      writeLoginDraft(USER_LOGIN_DRAFT_KEY, { phoneNumber: phone });
+      navigate('/login', { state: { phone } });
+      return;
+    }
+    navigate('/login');
+  };
+
   const handleVerify = async (e) => {
     e.preventDefault();
     setErrorMsg('');
@@ -29,6 +44,7 @@ const VerifyOtp = () => {
     try {
       setLoading(true);
       await authService.verifyUserOtp(phone, enteredOtp);
+      clearLoginDraft(USER_LOGIN_DRAFT_KEY);
       syncAuthFromStorage();
 
       // 1. Sync guest wishlist to backend database
@@ -120,7 +136,7 @@ const VerifyOtp = () => {
           {/* Header Navigation */}
           <div className="flex items-center justify-between mb-6">
             <button 
-              onClick={() => navigate('/login')}
+              onClick={goEditPhone}
               className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer text-slate-700"
             >
               <ArrowLeft size={18} />
@@ -139,7 +155,8 @@ const VerifyOtp = () => {
             <div className="inline-flex items-center gap-1.5 bg-orange-50 text-[#ea580c] font-bold text-[13px] px-3 py-1 rounded-full mt-1 border border-orange-100">
               <span>{phone}</span>
               <button 
-                onClick={() => navigate('/login')} 
+                type="button"
+                onClick={goEditPhone} 
                 className="text-[#ea580c] hover:opacity-80 cursor-pointer"
                 title="Edit Phone Number"
               >

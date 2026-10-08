@@ -15,6 +15,10 @@ import PlatformLedger from '../models/PlatformLedger.model.js';
 import { processReferralReward } from './referralController.js';
 import { invalidateUserOrdersCache } from './orderController.js';
 import { invalidateProductsCache } from './productController.js';
+import {
+  mapOrderEventToNotificationType,
+  notifyUserOrderEvent,
+} from '../utils/userNotificationHelper.js';
 
 // ==========================================
 // ADMIN DASHBOARD LIVE AGGREGATIONS
@@ -774,6 +778,16 @@ export const assignCaptainToOrder = async (req, res, next) => {
       { new: true }
     );
 
+    // Customer inbox only when admin moves order to Out for Delivery (not on assign alone)
+    if (updates.orderStatus === 'Out for Delivery' && updatedOrder?.user && updatedOrder?.orderId) {
+      notifyUserOrderEvent({
+        userId: updatedOrder.user,
+        orderId: updatedOrder.orderId,
+        order: updatedOrder._id,
+        type: 'ORDER_OUT_FOR_DELIVERY',
+      });
+    }
+
     // Notify the captain
     await CaptainNotification.create({
       captainId,
@@ -843,6 +857,20 @@ export const updateAdminOrderStatus = async (req, res, next) => {
     }
 
     await order.save();
+
+    const notifType = mapOrderEventToNotificationType({
+      orderStatus: order.orderStatus,
+      paymentStatus: order.paymentStatus,
+      preferFailed: paymentStatus === 'Failed',
+    });
+    if (notifType && order.user && order.orderId) {
+      notifyUserOrderEvent({
+        userId: order.user,
+        orderId: order.orderId,
+        order: order._id,
+        type: notifType,
+      });
+    }
 
     console.log(`[Admin] Updated Order #${order.orderId} status to "${order.orderStatus}"`);
 

@@ -14,6 +14,7 @@ import PlatformLedger from '../models/PlatformLedger.model.js';
 import CodCashCollection from '../models/CodCashCollection.model.js';
 import CaptainCashSettlement from '../models/CaptainCashSettlement.model.js';
 import { getVehicleMatchPattern } from './transportBookingController.js';
+import { notifyUserOrderEvent } from '../utils/userNotificationHelper.js';
 
 // In-memory fast cache for Captain Dashboard stats
 const captainDashboardCache = new Map();
@@ -850,6 +851,25 @@ export const updateDeliveryStatus = async (req, res, next) => {
       { new: true }
     );
 
+    // Customer inbox: only Out for Delivery / Delivered (not At Pickup / Assigned / etc.)
+    if (updatedOrder?.user && updatedOrder?.orderId) {
+      if (updates.orderStatus === 'Out for Delivery') {
+        notifyUserOrderEvent({
+          userId: updatedOrder.user,
+          orderId: updatedOrder.orderId,
+          order: updatedOrder._id,
+          type: 'ORDER_OUT_FOR_DELIVERY',
+        });
+      } else if (updates.orderStatus === 'Delivered') {
+        notifyUserOrderEvent({
+          userId: updatedOrder.user,
+          orderId: updatedOrder.orderId,
+          order: updatedOrder._id,
+          type: 'ORDER_DELIVERED',
+        });
+      }
+    }
+
     console.log(`[Captain updateDeliveryStatus] Order #${order.orderId} updated to captainStatus="${updates.captainStatus}", orderStatus="${updates.orderStatus || order.orderStatus}"`);
     invalidateCaptainDashboardCache(captainId);
     res.json({ success: true, message: `Status updated to ${status}`, order: updatedOrder });
@@ -954,6 +974,16 @@ export const verifyOrderPickupOtp = async (req, res, next) => {
 
     console.log(`[Captain verifyOrderPickupOtp] Verified seller pickup OTP for Order #${order.orderId}, status is now In Transit`);
     invalidateCaptainDashboardCache(captainId);
+
+    const ofdOrder = updatedOrder || order;
+    if (ofdOrder?.user && ofdOrder?.orderId) {
+      notifyUserOrderEvent({
+        userId: ofdOrder.user,
+        orderId: ofdOrder.orderId,
+        order: ofdOrder._id,
+        type: 'ORDER_OUT_FOR_DELIVERY',
+      });
+    }
 
     res.json({
       success: true,

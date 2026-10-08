@@ -52,13 +52,29 @@ export const compressImageFile = (fileOrBlob, { maxWidth = 1280, quality = 0.72 
   });
 
 export const uploadRegistrationImage = async (value, folder = 'misc') => {
-  if (!value || typeof value !== 'string') return '';
-  if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/uploads/')) {
-    return value;
-  }
-  if (!value.startsWith('data:image/')) return value;
+  if (!value) return '';
 
-  const rawBlob = dataUrlToBlob(value);
+  // Already a hosted URL — nothing to upload
+  if (typeof value === 'string') {
+    if (
+      value.startsWith('http://') ||
+      value.startsWith('https://') ||
+      value.startsWith('/uploads/')
+    ) {
+      return value;
+    }
+    if (!value.startsWith('data:image/')) return value;
+  }
+
+  let rawBlob;
+  if (typeof value === 'string' && value.startsWith('data:image/')) {
+    rawBlob = dataUrlToBlob(value);
+  } else if (typeof Blob !== 'undefined' && value instanceof Blob) {
+    rawBlob = value;
+  } else {
+    return '';
+  }
+
   const compressed = await compressImageFile(rawBlob);
   const formData = new FormData();
   formData.append('image', compressed, `doc-${Date.now()}.jpg`);
