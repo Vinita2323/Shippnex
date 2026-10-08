@@ -92,6 +92,69 @@ const Settings = () => {
     fetchCategories();
   }, []);
 
+  const applySellerToForm = (s) => {
+    if (!s || typeof s !== 'object') return false;
+    const coords = s.warehouseLocation?.location?.coordinates || s.location?.coordinates || [null, null];
+    const lng = Array.isArray(coords) ? coords[0] : null;
+    const lat = Array.isArray(coords) ? coords[1] : null;
+
+    setFormData({
+      fullName: s.ownerName || s.fullName || '',
+      email: s.email || '',
+      mobile: s.phone || s.mobile || '',
+      storeName: s.businessName || s.storeName || '',
+      storeLocation:
+        s.warehouseLocation?.storeAddress ||
+        s.storeAddress ||
+        s.address?.line1 ||
+        '',
+      city: s.warehouseLocation?.city || s.city || '',
+      state: s.warehouseLocation?.state || s.state || '',
+      pincode: s.warehouseLocation?.pincode || s.pincode || '',
+      area: s.warehouseLocation?.area || s.area || '',
+      lat: lat != null && Number(lat) !== 0 ? Number(lat) : null,
+      lng: lng != null && Number(lng) !== 0 ? Number(lng) : null,
+      serviceRadius: String(s.serviceRadius ?? '5'),
+      tagline: s.tagline || '',
+      gstin: s.gstNumber || s.gstin || '',
+      panNumber: s.panNumber || '',
+      fssai: s.fssaiLicense || s.fssai || '',
+      bankName: s.bankName || '',
+      accountNumber: s.accountNumber || '',
+      ifscCode: s.ifscCode || '',
+      gstPhoto: s.gstPhoto || '',
+      bankPassbookPhoto: s.bankPassbookPhoto || '',
+      businessType: s.businessType || 'Retail Store',
+      storeLogo: s.storeLogo || '',
+      status: s.accountStatus || s.status || 'approved',
+      createdAt: s.createdAt ? new Date(s.createdAt).getFullYear() : '',
+      joinedDate: s.createdAt
+        ? new Date(s.createdAt).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          })
+        : '',
+    });
+
+    if (Array.isArray(s.categories)) {
+      setSelectedCategories(s.categories);
+    } else {
+      setSelectedCategories([]);
+    }
+    return true;
+  };
+
+  const applyCachedSellerFallback = () => {
+    try {
+      const cached = localStorage.getItem('shippnex_seller_data');
+      if (!cached) return false;
+      return applySellerToForm(JSON.parse(cached));
+    } catch {
+      return false;
+    }
+  };
+
   const fetchCategories = async () => {
     try {
       const res = await categoryService.getCategories();
@@ -112,8 +175,19 @@ const Settings = () => {
       setLoading(true);
       setErrorMsg('');
 
-      const [res, memRes, histRes, reqRes] = await Promise.all([
-        authService.getSellerProfile().catch(() => null),
+      // Seed from session cache immediately so fields are not blank while API loads
+      applyCachedSellerFallback();
+
+      let profileRes = null;
+      let profileError = null;
+      try {
+        profileRes = await authService.getSellerProfile();
+      } catch (err) {
+        profileError = err;
+        console.error('getSellerProfile failed:', err);
+      }
+
+      const [memRes, histRes, reqRes] = await Promise.all([
         membershipService.getSellerMembership().catch(() => ({ membership: null })),
         membershipService.getSellerMembershipHistory().catch(() => ({ memberships: [] })),
         profileEditRequestService.getMyPendingEditRequest().catch(() => ({ hasPendingRequest: false, request: null })),
@@ -127,8 +201,8 @@ const Settings = () => {
 
       if (memRes?.membership) {
         setMembership(memRes.membership);
-      } else if (res?.seller?.membership) {
-        setMembership(res.seller.membership);
+      } else if (profileRes?.seller?.membership) {
+        setMembership(profileRes.seller.membership);
       } else {
         setMembership(null);
       }
@@ -137,60 +211,23 @@ const Settings = () => {
         setMembershipHistory(histRes.memberships);
       }
 
-      if (res && res.seller) {
-        const s = res.seller;
-        const coords = s.warehouseLocation?.location?.coordinates || [null, null];
-        setFormData({
-          fullName: s.ownerName || '',
-          email: s.email || '',
-          mobile: s.phone || '',
-          storeName: s.businessName || '',
-          storeLocation: s.warehouseLocation?.storeAddress || s.address?.line1 || '',
-          city: s.warehouseLocation?.city || s.city || '',
-          state: s.warehouseLocation?.state || s.state || '',
-          pincode: s.warehouseLocation?.pincode || s.pincode || '',
-          area: s.warehouseLocation?.area || '',
-          lat: coords[1] != null && coords[1] !== 0 ? coords[1] : null,
-          lng: coords[0] != null && coords[0] !== 0 ? coords[0] : null,
-          serviceRadius: String(s.serviceRadius || '5'),
-          tagline: s.tagline || '',
-          gstin: s.gstNumber || '',
-          panNumber: s.panNumber || '',
-          fssai: s.fssaiLicense || '',
-          bankName: s.bankName || '',
-          accountNumber: s.accountNumber || '',
-          ifscCode: s.ifscCode || '',
-          gstPhoto: s.gstPhoto || '',
-          bankPassbookPhoto: s.bankPassbookPhoto || '',
-          businessType: s.businessType || 'Retail Store',
-          storeLogo: s.storeLogo || '',
-          status: s.status || 'approved',
-          createdAt: s.createdAt ? new Date(s.createdAt).getFullYear() : '2026',
-          joinedDate: s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '2026',
-        });
-        if (s.categories && Array.isArray(s.categories)) {
-          setSelectedCategories(s.categories);
-        } else {
-          setSelectedCategories([]);
-        }
+      if (profileRes?.seller) {
+        applySellerToForm(profileRes.seller);
+      } else if (!applyCachedSellerFallback()) {
+        setErrorMsg(
+          profileError?.response?.data?.message ||
+            'Could not load seller profile. Please log in again.'
+        );
+      } else if (profileError) {
+        setErrorMsg('Could not refresh profile from server. Showing saved session data.');
       }
     } catch (err) {
       console.error('Failed to fetch seller profile:', err);
-      const cached = localStorage.getItem('shippnex_seller_data');
-      if (cached) {
-        try {
-          const s = JSON.parse(cached);
-          setFormData(prev => ({
-            ...prev,
-            fullName: s.ownerName || s.businessName || '',
-            email: s.email || '',
-            mobile: s.phone || '',
-            storeName: s.businessName || '',
-            status: s.status || 'approved',
-          }));
-        } catch (e) {}
+      if (!applyCachedSellerFallback()) {
+        setErrorMsg('Could not fetch profile from server.');
+      } else {
+        setErrorMsg('Could not fetch profile from server. Displaying cached session data.');
       }
-      setErrorMsg('Could not fetch profile from server. Displaying cached session data.');
     } finally {
       setLoading(false);
     }
@@ -280,50 +317,85 @@ const Settings = () => {
     e.preventDefault();
     setSuccessMsg('');
     setErrorMsg('');
+
+    const cleanPhone = String(formData.mobile || '').replace(/\D/g, '').slice(-10);
+    if (!formData.fullName?.trim()) {
+      setErrorMsg('Owner / seller name is required.');
+      return;
+    }
+    if (!formData.storeName?.trim()) {
+      setErrorMsg('Store / business name is required.');
+      return;
+    }
+    if (cleanPhone.length !== 10) {
+      setErrorMsg('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    if (!formData.storeLocation?.trim()) {
+      setErrorMsg('Store address is required.');
+      return;
+    }
+
     setSaving(true);
 
     try {
+      // Direct update for the logged-in seller (JWT → req.user.id on backend)
       const payload = {
-        role: 'seller',
-        ownerName: formData.fullName,
-        email: formData.email,
-        phone: formData.mobile,
+        ownerName: formData.fullName.trim(),
+        email: formData.email?.trim() || '',
+        phone: cleanPhone,
         businessType: formData.businessType,
-        businessName: formData.storeName,
-        storeAddress: formData.storeLocation,
-        city: formData.city,
-        state: formData.state,
-        pincode: formData.pincode,
-        area: formData.area,
+        businessName: formData.storeName.trim(),
+        storeAddress: formData.storeLocation.trim(),
+        city: formData.city?.trim() || '',
+        state: formData.state?.trim() || '',
+        pincode: formData.pincode?.trim() || '',
+        area: formData.area?.trim() || '',
         lat: formData.lat,
         lng: formData.lng,
         serviceRadius: formData.serviceRadius,
-        tagline: formData.tagline,
-        gstNumber: formData.gstin,
-        panNumber: formData.panNumber,
-        fssaiLicense: formData.fssai,
-        bankName: formData.bankName,
-        accountNumber: formData.accountNumber,
-        ifscCode: formData.ifscCode,
-        gstPhoto: formData.gstPhoto,
-        bankPassbookPhoto: formData.bankPassbookPhoto,
+        tagline: formData.tagline?.trim() || '',
+        gstNumber: formData.gstin?.trim() || '',
+        panNumber: formData.panNumber?.trim() || '',
+        fssaiLicense: formData.fssai?.trim() || '',
+        bankName: formData.bankName?.trim() || '',
+        accountNumber: formData.accountNumber?.trim() || '',
+        ifscCode: formData.ifscCode?.trim() || '',
+        gstPhoto: formData.gstPhoto || '',
+        bankPassbookPhoto: formData.bankPassbookPhoto || '',
         categories: selectedCategories,
-        storeLogo: formData.storeLogo,
+        storeLogo: formData.storeLogo || '',
       };
 
-      const res = await profileEditRequestService.submitEditRequest(payload);
+      const res = await authService.updateSellerProfile(payload);
       if (res && res.success) {
-        setSuccessMsg('Profile update submitted for admin verification! Changes will take effect once reviewed by admin.');
-        if (res.request) {
-          setPendingRequest(res.request);
+        if (res.seller) {
+          applySellerToForm(res.seller);
+        } else {
+          applySellerToForm({ ...payload, phone: cleanPhone, ownerName: payload.ownerName, businessName: payload.businessName, warehouseLocation: {
+            storeAddress: payload.storeAddress,
+            city: payload.city,
+            state: payload.state,
+            pincode: payload.pincode,
+            area: payload.area,
+            location: {
+              type: 'Point',
+              coordinates: [
+                formData.lng != null ? Number(formData.lng) : 0,
+                formData.lat != null ? Number(formData.lat) : 0,
+              ],
+            },
+          }, gstNumber: payload.gstNumber, fssaiLicense: payload.fssaiLicense });
         }
+        setSuccessMsg(res.message || 'Profile updated successfully.');
         setIsEditing(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
-        setErrorMsg(res.message || 'Failed to submit edit request');
+        setErrorMsg(res?.message || 'Failed to update profile.');
       }
     } catch (err) {
-      console.error('Error submitting seller edit request:', err);
-      setErrorMsg(err.response?.data?.message || 'Server error submitting profile for verification.');
+      console.error('Error updating seller profile:', err);
+      setErrorMsg(err.response?.data?.message || 'Server error while saving profile. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -1338,25 +1410,34 @@ const Settings = () => {
                 </div>
               )}
 
-              {/* Submit / Edit Controls */}
+              {/* Save Changes — visible whenever editing (any tab) */}
               {isEditing && (
-                <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(false)}
-                    disabled={saving}
-                    className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 font-medium text-sm cursor-pointer disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="px-5 py-2.5 bg-[#ff7526] hover:bg-[#e65507] text-white rounded-lg font-bold text-sm cursor-pointer border-none shadow-sm flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Shield size={16} />}
-                    {saving ? 'Submitting Request...' : 'Submit for Verification'}
-                  </button>
+                <div className="sticky bottom-0 z-20 -mx-4 sm:-mx-6 mt-6 px-4 sm:px-6 py-4 bg-white/95 backdrop-blur-sm border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
+                  <p className="text-xs text-slate-500 m-0">
+                    Changes are saved to your live seller profile immediately.
+                  </p>
+                  <div className="flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditing(false);
+                        setErrorMsg('');
+                        fetchProfile();
+                      }}
+                      disabled={saving}
+                      className="px-4 py-2.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 font-medium text-sm cursor-pointer disabled:opacity-50 bg-white"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="px-6 py-2.5 bg-[#ff7526] hover:bg-[#e65507] text-white rounded-lg font-bold text-sm cursor-pointer border-none shadow-sm flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                      {saving ? 'Saving Changes...' : 'Save Changes'}
+                    </button>
+                  </div>
                 </div>
               )}
 

@@ -966,8 +966,29 @@ export const updateSellerDetails = async (req, res, next) => {
     // Update fields if provided
     if (name) seller.ownerName = name;
     if (storeName) seller.businessName = storeName;
-    if (commission !== undefined) seller.commissionPercentage = Number(commission);
-    if (balance !== undefined) seller.walletBalance = Number(balance);
+
+    // Accept "10", "10%", empty — never write NaN to Mongo
+    if (commission !== undefined && commission !== null && String(commission).trim() !== '') {
+      const commissionNum = Number(String(commission).replace(/%/g, '').trim());
+      if (Number.isNaN(commissionNum)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Commission must be a valid number',
+        });
+      }
+      seller.commissionPercentage = Math.max(0, Math.min(100, commissionNum));
+    }
+
+    if (balance !== undefined && balance !== null && String(balance).trim() !== '') {
+      const balanceNum = Number(String(balance).replace(/[₹,\s]/g, '').trim());
+      if (Number.isNaN(balanceNum)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Wallet balance must be a valid number',
+        });
+      }
+      seller.walletBalance = balanceNum;
+    }
 
     await seller.save();
     invalidateSellersCache();

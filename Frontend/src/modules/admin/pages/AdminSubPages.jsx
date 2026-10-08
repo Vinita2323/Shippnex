@@ -1244,8 +1244,10 @@ export const SellerManagement = () => {
   // Modal / Drawer States
   const [selectedSellerCategoryDrawer, setSelectedSellerCategoryDrawer] = React.useState(null);
   const [editingSellerModal, setEditingSellerModal] = React.useState(null);
+  const [sellerModalMode, setSellerModalMode] = React.useState('view'); // 'view' | 'edit'
   const [editFormData, setEditFormData] = React.useState({ name: '', storeName: '', commission: '', balance: '' });
   const [previewDocImage, setPreviewDocImage] = React.useState(null);
+  const isSellerEditMode = sellerModalMode === 'edit';
 
   // Column Sort Handler
   const handleSort = (field) => {
@@ -1317,16 +1319,20 @@ export const SellerManagement = () => {
     }
   };
 
-  // Open Edit Modal
-  const openEditModal = (seller) => {
+  // Open seller modal: Eye → view (read-only), Pencil → edit
+  const openSellerModal = (seller, mode = 'view') => {
+    setSellerModalMode(mode);
     setEditingSellerModal(seller);
     setEditFormData({
-      name: seller.name,
-      storeName: seller.storeName,
-      commission: (seller.commission || '').replace('%', ''),
-      balance: seller.balance
+      name: seller.name || '',
+      storeName: seller.storeName || '',
+      commission: String(seller.commission || '').replace(/%/g, ''),
+      balance: seller.balance ?? '',
     });
   };
+
+  const openEditModal = (seller) => openSellerModal(seller, 'edit');
+  const openViewModal = (seller) => openSellerModal(seller, 'view');
 
   // Save Edit Modal
   const handleSaveEdit = async (e) => {
@@ -1544,10 +1550,7 @@ export const SellerManagement = () => {
                       <td className="py-3.5 px-4">
                         <div className="flex items-center justify-center gap-1.5">
                           <button 
-                            onClick={() => {
-                              setEditFormData({ name: seller.name, storeName: seller.storeName, commission: seller.commission, balance: seller.balance });
-                              setEditingSellerModal(seller);
-                            }}
+                            onClick={() => openViewModal(seller)}
                             className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg border border-emerald-200 cursor-pointer transition-colors flex items-center gap-1 font-semibold text-xs px-2"
                             title="View Seller Details"
                           >
@@ -1590,10 +1593,7 @@ export const SellerManagement = () => {
                             </button>
                           )}
                           <button 
-                            onClick={() => {
-                              setEditFormData({ name: seller.name, storeName: seller.storeName, commission: seller.commission, balance: seller.balance });
-                              setEditingSellerModal(seller);
-                            }}
+                            onClick={() => openEditModal(seller)}
                             className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg border border-blue-200 cursor-pointer transition-colors"
                             title="Edit Seller Details"
                           >
@@ -1704,10 +1704,10 @@ export const SellerManagement = () => {
             <div className="bg-[#fff4ed] border-b border-orange-200/70 text-[#002625] px-6 py-4 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-base font-bold text-[#002625] m-0">
-                  Edit Seller - {editingSellerModal.name}
+                  {isSellerEditMode ? 'Edit Seller' : 'Seller Details'} - {editingSellerModal.name}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  View and manage seller details
+                  {isSellerEditMode ? 'Update seller details and save changes' : 'Read-only view of seller information'}
                 </p>
               </div>
               <button 
@@ -1814,8 +1814,9 @@ export const SellerManagement = () => {
                     <input 
                       type="text"
                       value={editFormData.name}
+                      disabled={!isSellerEditMode}
                       onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500] disabled:bg-slate-50 disabled:text-slate-600"
                     />
                   </div>
 
@@ -1824,8 +1825,9 @@ export const SellerManagement = () => {
                     <input 
                       type="text"
                       value={editFormData.storeName}
+                      disabled={!isSellerEditMode}
                       onChange={(e) => setEditFormData({ ...editFormData, storeName: e.target.value })}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500] disabled:bg-slate-50 disabled:text-slate-600"
                     />
                   </div>
 
@@ -1834,7 +1836,8 @@ export const SellerManagement = () => {
                     <input 
                       type="email"
                       defaultValue={editingSellerModal.contactEmail}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      readOnly
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none"
                     />
                   </div>
 
@@ -1843,7 +1846,8 @@ export const SellerManagement = () => {
                     <input 
                       type="text"
                       defaultValue={editingSellerModal.contactPhone}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      readOnly
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none"
                     />
                   </div>
 
@@ -1875,9 +1879,10 @@ export const SellerManagement = () => {
                         max="100"
                         step="0.1"
                         value={editFormData.commission !== undefined && editFormData.commission !== null ? editFormData.commission : ''}
+                        disabled={!isSellerEditMode}
                         onChange={(e) => setEditFormData({ ...editFormData, commission: e.target.value })}
                         placeholder="10"
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500] font-bold"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500] font-bold disabled:bg-slate-50 disabled:text-slate-600"
                       />
                       <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
                         %
@@ -1890,8 +1895,9 @@ export const SellerManagement = () => {
                     <input
                       type="number"
                       value={editFormData.balance}
+                      disabled={!isSellerEditMode}
                       onChange={(e) => setEditFormData({ ...editFormData, balance: e.target.value })}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500]"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 outline-none focus:border-[#ff5500] disabled:bg-slate-50 disabled:text-slate-600"
                     />
                   </div>
                 </div>
@@ -1901,13 +1907,15 @@ export const SellerManagement = () => {
               <div className="bg-slate-50/70 p-5 rounded-2xl border border-slate-200 space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-bold text-slate-800 m-0">Address Information</h4>
-                  <button 
-                    type="button"
-                    onClick={() => alert('Address information updated')}
-                    className="px-3.5 py-1.5 bg-[#002625] hover:bg-[#003837] text-white font-bold rounded-xl border-none cursor-pointer"
-                  >
-                    Update Address
-                  </button>
+                  {isSellerEditMode && (
+                    <button 
+                      type="button"
+                      onClick={() => alert('Address information updated')}
+                      className="px-3.5 py-1.5 bg-[#002625] hover:bg-[#003837] text-white font-bold rounded-xl border-none cursor-pointer"
+                    >
+                      Update Address
+                    </button>
+                  )}
                 </div>
 
                 <div className="space-y-3">
@@ -2184,31 +2192,63 @@ export const SellerManagement = () => {
                 onClick={() => setEditingSellerModal(null)}
                 className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl border-none cursor-pointer transition-colors"
               >
-                Cancel
+                {isSellerEditMode ? 'Cancel' : 'Close'}
               </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    const response = await adminService.updateSellerDetails(editingSellerModal.id, {
-                      name: editFormData.name,
-                      storeName: editFormData.storeName,
-                      commission: editFormData.commission,
-                      balance: editFormData.balance
-                    });
-                    if (response && response.success) {
-                      setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? { ...s, name: editFormData.name, storeName: editFormData.storeName, commission: editFormData.commission, balance: editFormData.balance } : s));
-                      setEditingSellerModal(null);
+              {!isSellerEditMode ? (
+                <button
+                  type="button"
+                  onClick={() => setSellerModalMode('edit')}
+                  className="px-5 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer transition-colors flex items-center gap-1.5"
+                >
+                  <Edit3 size={13} /> Edit Seller
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const commissionNum = Number(String(editFormData.commission ?? '').replace(/%/g, '').trim());
+                      const balanceNum = Number(String(editFormData.balance ?? '').replace(/[₹,\s]/g, '').trim());
+                      if (Number.isNaN(commissionNum)) {
+                        alert('Commission must be a valid number (without %).');
+                        return;
+                      }
+                      if (Number.isNaN(balanceNum)) {
+                        alert('Wallet balance must be a valid number.');
+                        return;
+                      }
+                      const response = await adminService.updateSellerDetails(editingSellerModal.id, {
+                        name: editFormData.name,
+                        storeName: editFormData.storeName,
+                        commission: commissionNum,
+                        balance: balanceNum,
+                      });
+                      if (response && response.success) {
+                        const savedCommission = response.seller?.commissionPercentage ?? commissionNum;
+                        const savedBalance = response.seller?.walletBalance ?? balanceNum;
+                        setSellers(prev => prev.map(s => s.id === editingSellerModal.id ? {
+                          ...s,
+                          name: editFormData.name,
+                          storeName: editFormData.storeName,
+                          commission: `${savedCommission}%`,
+                          balance: Number(savedBalance).toFixed(2),
+                          commissionPercentage: savedCommission,
+                          walletBalance: savedBalance,
+                        } : s));
+                        setEditingSellerModal(null);
+                      } else {
+                        alert(response?.message || 'Failed to update seller details');
+                      }
+                    } catch (err) {
+                      console.error('Error updating seller details:', err);
+                      alert(err.response?.data?.message || 'Failed to update seller details');
                     }
-                  } catch (err) {
-                    console.error('Error updating seller details:', err);
-                    alert('Failed to update seller details');
-                  }
-                }}
-                className="px-5 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer transition-colors"
-              >
-                Save Changes
-              </button>
+                  }}
+                  className="px-5 py-2 bg-[#ff5500] hover:bg-[#e04a00] text-white text-xs font-bold rounded-xl border-none cursor-pointer transition-colors"
+                >
+                  Save Changes
+                </button>
+              )}
             </div>
 
           </div>

@@ -560,7 +560,7 @@ export const loginSeller = async (req, res, next) => {
 // Get Seller Profile
 export const getSellerProfile = async (req, res, next) => {
   try {
-    const seller = await Seller.findById(req.user.id);
+    const seller = await Seller.findById(req.user.id).select('-password -otp -otpExpiry');
     if (!seller) {
       return res.status(404).json({ success: false, message: 'Seller profile not found' });
     }
@@ -589,6 +589,7 @@ export const updateSellerProfile = async (req, res, next) => {
       businessName,
       ownerName,
       email,
+      phone,
       businessType,
       storeLogo,
       serviceRadius,
@@ -620,6 +621,34 @@ export const updateSellerProfile = async (req, res, next) => {
     if (ownerName !== undefined) seller.ownerName = ownerName;
     if (email !== undefined) seller.email = email;
     if (businessType !== undefined) seller.businessType = businessType;
+
+    // Allow phone update for the logged-in seller only (must stay unique)
+    if (phone !== undefined && phone !== null && String(phone).trim() !== '') {
+      const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+      if (cleanPhone.length !== 10) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide a valid 10-digit mobile number',
+        });
+      }
+      if (cleanPhone !== seller.phone) {
+        const phoneTaken = await Seller.findOne({
+          _id: { $ne: seller._id },
+          $or: [
+            { phone: cleanPhone },
+            { phone: `+91${cleanPhone}` },
+            { phone: `+91 ${cleanPhone}` },
+          ],
+        }).select('_id');
+        if (phoneTaken) {
+          return res.status(400).json({
+            success: false,
+            message: 'This mobile number is already registered to another seller account',
+          });
+        }
+        seller.phone = cleanPhone;
+      }
+    }
     
     if (storeLogo && typeof storeLogo === 'string' && storeLogo.startsWith('data:image/')) {
       try {
@@ -718,10 +747,15 @@ export const updateSellerProfile = async (req, res, next) => {
     invalidateProductsCache();
     invalidatePublicSellersCache();
 
+    const sellerSafe = seller.toObject();
+    delete sellerSafe.password;
+    delete sellerSafe.otp;
+    delete sellerSafe.otpExpiry;
+
     res.status(200).json({
       success: true,
       message: 'Seller profile updated successfully',
-      seller,
+      seller: sellerSafe,
     });
   } catch (error) {
     next(error);
