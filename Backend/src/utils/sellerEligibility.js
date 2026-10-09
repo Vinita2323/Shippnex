@@ -9,10 +9,27 @@ import SellerMembership from '../models/SellerMembership.model.js';
  * 1. Admin-approved (accountStatus or status === approved; not rejected/suspended)
  * 2. Registration fee is paid or explicitly not_required
  * 3. Active membership exists (membershipStatus active AND expiryDate > now)
+ *    — EXCEPT legacy sellers registered before MEMBERSHIP_ENFORCEMENT_CUTOFF
  * 4. Store is online (isOnline !== false) — for customer-facing checks only
  */
 
 export const REGISTRATION_FEE_OK = ['paid', 'not_required'];
+
+/**
+ * Sellers created before this timestamp are grandfathered: subscription is NOT required
+ * for product visibility / orders. New sellers registered on/after this date must subscribe.
+ * Matches when storefront membership enforcement was introduced.
+ */
+export const MEMBERSHIP_ENFORCEMENT_CUTOFF = new Date('2026-10-09T00:00:00.000Z');
+
+/** True when this seller must have an active paid subscription to sell / be listed. */
+export const isMembershipRequiredForSeller = (seller) => {
+  if (!seller) return true;
+  if (seller.createdAt && new Date(seller.createdAt) < MEMBERSHIP_ENFORCEMENT_CUTOFF) {
+    return false;
+  }
+  return true;
+};
 
 export const isSellerApproved = (seller) => {
   if (!seller) return false;
@@ -189,6 +206,11 @@ export const evaluateSellerStorefrontEligibility = async (sellerOrId, options = 
     };
   }
 
+  // Legacy / already-registered sellers: skip subscription requirement
+  if (!isMembershipRequiredForSeller(seller)) {
+    return { eligible: true, reason: null, message: null, seller, membershipRequired: false };
+  }
+
   const hasMembership = await sellerHasActiveMembership(seller._id);
   if (!hasMembership) {
     if (seller.membershipStatus === 'active') {
@@ -199,6 +221,7 @@ export const evaluateSellerStorefrontEligibility = async (sellerOrId, options = 
       reason: 'membership',
       message: 'This store does not have an active subscription and is not available.',
       seller,
+      membershipRequired: true,
     };
   }
 
@@ -206,7 +229,7 @@ export const evaluateSellerStorefrontEligibility = async (sellerOrId, options = 
     await Seller.updateOne({ _id: seller._id }, { $set: { membershipStatus: 'active' } });
   }
 
-  return { eligible: true, reason: null, message: null, seller };
+  return { eligible: true, reason: null, message: null, seller, membershipRequired: true };
 };
 
 /**
@@ -239,8 +262,11 @@ export const filterStorefrontEligibleSellers = async (sellers = [], options = {}
     return true;
   });
 
-  const activeSet = await getActiveMembershipSellerIdSet(basePass.map((s) => s._id));
-  return basePass.filter((s) => activeSet.has(String(s._id)));
+  const legacy = basePass.filter((s) => !isMembershipRequiredForSeller(s));
+  const needsMembership = basePass.filter((s) => isMembershipRequiredForSeller(s));
+  const activeSet = await getActiveMembershipSellerIdSet(needsMembership.map((s) => s._id));
+  const subscribed = needsMembership.filter((s) => activeSet.has(String(s._id)));
+  return [...legacy, ...subscribed];
 };
 
 /**

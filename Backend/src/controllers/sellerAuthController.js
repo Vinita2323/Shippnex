@@ -10,7 +10,7 @@ import { applyReferralCodeAtRegistration } from './referralController.js';
 import { invalidateProductsCache } from './productController.js';
 import { invalidatePublicSellersCache } from '../routes/sellerRoutes.js';
 import SellerRegistrationFeeConfig from '../models/SellerRegistrationFeeConfig.model.js';
-import { hasRegistrationFeeCleared } from '../utils/sellerEligibility.js';
+import { hasRegistrationFeeCleared, isMembershipRequiredForSeller } from '../utils/sellerEligibility.js';
 
 // Send / Resend OTP
 export const sendOtp = async (req, res, next) => {
@@ -569,7 +569,10 @@ export const loginSeller = async (req, res, next) => {
     delete sellerSafe.otp;
     delete sellerSafe.otpExpiry;
 
-    if (!activeMembership) {
+    // Already-registered (legacy) sellers are exempt from mandatory subscription
+    const membershipRequired = isMembershipRequiredForSeller(seller);
+
+    if (membershipRequired && !activeMembership) {
       const pendingMembership = await SellerMembership.findOne({
         sellerId: seller._id,
         membershipStatus: 'pending_payment',
@@ -579,6 +582,7 @@ export const loginSeller = async (req, res, next) => {
       return res.status(200).json({
         success: true,
         requiresMembership: true,
+        membershipRequired: true,
         membershipStatus,
         message: 'Membership purchase required to activate your seller account.',
         token,
@@ -589,6 +593,8 @@ export const loginSeller = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Login successful',
+      requiresMembership: false,
+      membershipRequired,
       token,
       seller: sellerSafe,
     });

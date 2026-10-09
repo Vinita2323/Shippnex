@@ -3,9 +3,26 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import PageSkeleton from '../../../components/PageSkeleton';
 import { membershipService } from '../../../services/authService';
 
+/** Must match Backend MEMBERSHIP_ENFORCEMENT_CUTOFF — legacy sellers before this are exempt. */
+const MEMBERSHIP_ENFORCEMENT_CUTOFF = new Date('2026-10-09T00:00:00.000Z');
+
+const isLegacySellerFromStorage = () => {
+  try {
+    const raw = localStorage.getItem('shippnex_seller_data');
+    if (!raw) return false;
+    const seller = JSON.parse(raw);
+    if (seller?.createdAt && new Date(seller.createdAt) < MEMBERSHIP_ENFORCEMENT_CUTOFF) {
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+};
+
 /**
- * Keeps sellers without an active membership on /seller/membership.
- * Backend still enforces product/order eligibility; this is a panel UX gate.
+ * Keeps NEW sellers without an active membership on /seller/membership.
+ * Already-registered (legacy) sellers are exempt from this gate.
  */
 const SellerMembershipGate = () => {
   const location = useLocation();
@@ -17,6 +34,16 @@ const SellerMembershipGate = () => {
 
     const check = async () => {
       setChecking(true);
+
+      if (isLegacySellerFromStorage()) {
+        localStorage.removeItem('shippnex_seller_requires_membership');
+        if (!cancelled) {
+          setNeedsMembership(false);
+          setChecking(false);
+        }
+        return;
+      }
+
       try {
         const res = await membershipService.getSellerMembership();
         const mem = res?.membership;
@@ -35,7 +62,6 @@ const SellerMembershipGate = () => {
           }
         }
       } catch {
-        // If membership API fails, fall back to login flag rather than locking forever
         if (!cancelled) {
           setNeedsMembership(localStorage.getItem('shippnex_seller_requires_membership') === '1');
         }
