@@ -26,6 +26,7 @@ import {
   missingOptionNames,
   rowsFromAttributes,
 } from '../utils/selectedVariants.js';
+import { evaluateProductSellerEligibility } from '../utils/sellerEligibility.js';
 
 // Helper: Clean base64 image strings or invalid dummy links
 const cleanImage = (img) => {
@@ -638,6 +639,18 @@ export const placeOrder = async (req, res, next) => {
         return res.status(404).json({
           success: false,
           message: `One or more products in your cart are no longer available.`,
+        });
+      }
+
+      const eligibility = await evaluateProductSellerEligibility(product);
+      if (!eligibility.eligible) {
+        return res.status(403).json({
+          success: false,
+          message:
+            eligibility.message ||
+            `"${product.name}" is not available because the store is not eligible to sell.`,
+          reason: eligibility.reason,
+          productId: product._id,
         });
       }
 

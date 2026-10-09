@@ -9,6 +9,8 @@ import crypto from 'crypto';
 import { applyReferralCodeAtRegistration } from './referralController.js';
 import { invalidateProductsCache } from './productController.js';
 import { invalidatePublicSellersCache } from '../routes/sellerRoutes.js';
+import SellerRegistrationFeeConfig from '../models/SellerRegistrationFeeConfig.model.js';
+import { hasRegistrationFeeCleared } from '../utils/sellerEligibility.js';
 
 // Send / Resend OTP
 export const sendOtp = async (req, res, next) => {
@@ -117,6 +119,17 @@ export const verifyOtp = async (req, res, next) => {
 
     if (seller.otpExpiry && new Date() > new Date(seller.otpExpiry)) {
       return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new OTP.' });
+    }
+
+    // Registration fee must be paid (or waived via config as not_required) before OTP completes registration
+    if (!hasRegistrationFeeCleared(seller)) {
+      return res.status(403).json({
+        success: false,
+        accountStatus: 'pending_payment',
+        registrationFeeStatus: seller.registrationFeeStatus || 'pending',
+        message:
+          'Seller registration fee payment is pending. Please complete payment before verifying OTP.',
+      });
     }
 
     // Clear OTP after successful verification & set status to under_review
@@ -256,6 +269,29 @@ export const registerSeller = async (req, res, next) => {
 
     const { otp, otpExpiry } = generateOtp();
 
+    // Alternate register path: never default to not_required unless fee config is inactive/zero
+    let registrationFeeStatus = 'pending';
+    let registrationFeeAmount = 0;
+    try {
+      const feeConfig = await SellerRegistrationFeeConfig.getOrCreateActiveConfig();
+      if (!feeConfig.isActive || Number(feeConfig.amount) <= 0) {
+        registrationFeeStatus = 'not_required';
+        registrationFeeAmount = 0;
+      } else {
+        registrationFeeStatus = 'pending';
+        registrationFeeAmount = Number(feeConfig.amount) || 0;
+      }
+    } catch (feeErr) {
+      console.warn('[registerSeller] Fee config lookup failed; defaulting fee to pending:', feeErr.message);
+      registrationFeeStatus = 'pending';
+    }
+
+    // Do not overwrite an already-paid fee when re-submitting incomplete registration
+    if (existingSeller && existingSeller.registrationFeeStatus === 'paid') {
+      registrationFeeStatus = 'paid';
+      registrationFeeAmount = existingSeller.registrationFeeAmount || registrationFeeAmount;
+    }
+
     const sellerData = {
       businessName,
       ownerName,
@@ -289,7 +325,9 @@ export const registerSeller = async (req, res, next) => {
       otpExpiry,
       isVerified: false,
       accountStatus: 'pending_otp',
-      status: 'pending'
+      status: 'pending',
+      registrationFeeStatus,
+      registrationFeeAmount,
     };
 
     let seller;
@@ -450,26 +488,28 @@ export const loginSeller = async (req, res, next) => {
       });
     }
 
-    // 2. Check Registration Fee Status (Existing registered & approved sellers are exempt)
+    // 2. Check Registration Fee Status
+    // Legacy sellers created before the fee system may be marked not_required once.
+    // Everyone else must have paid (or config-waived not_required) — including approved accounts.
     const feeConfigCutoff = new Date('2026-09-12T12:46:51.865Z');
     const isPreFeeSeller = seller.createdAt && new Date(seller.createdAt) < feeConfigCutoff;
 
-    if (isApproved || isPreFeeSeller) {
-      // Existing sellers who registered previously or are approved do not need to pay registration fee
-      if (seller.registrationFeeStatus === 'pending') {
-        seller.registrationFeeStatus = 'not_required';
-        await Seller.updateOne({ _id: seller._id }, { $set: { registrationFeeStatus: 'not_required' } });
-      }
-    } else {
-      // Only new unapproved applicants registered after fee system was introduced must pay
-      if (seller.registrationFeeStatus === 'pending' || seller.registrationFeeStatus === 'failed') {
-        return res.status(403).json({
-          success: false,
-          accountStatus: 'pending_payment',
-          registrationFeeStatus: seller.registrationFeeStatus,
-          message: 'Seller registration fee payment is pending. Please complete your registration fee payment to proceed.',
-        });
-      }
+    if (isPreFeeSeller && seller.registrationFeeStatus === 'pending') {
+      seller.registrationFeeStatus = 'not_required';
+      await Seller.updateOne({ _id: seller._id }, { $set: { registrationFeeStatus: 'not_required' } });
+    }
+
+    if (
+      !isPreFeeSeller &&
+      (seller.registrationFeeStatus === 'pending' || seller.registrationFeeStatus === 'failed')
+    ) {
+      return res.status(403).json({
+        success: false,
+        accountStatus: 'pending_payment',
+        registrationFeeStatus: seller.registrationFeeStatus,
+        message:
+          'Seller registration fee payment is pending. Please complete your registration fee payment to proceed.',
+      });
     }
 
     // 3. Check OTP Verification

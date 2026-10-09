@@ -9,6 +9,7 @@ dotenv.config();
 import fs from 'fs';
 import path from 'path';
 import { getEligibleSellersForLocation, isValidCoordinate } from '../utils/sellerLocationHelper.js';
+import { evaluateSellerStorefrontEligibility, evaluateProductSellerEligibility } from '../utils/sellerEligibility.js';
 
 // High-speed In-memory Cache for Products listing
 const productsCache = new Map();
@@ -260,8 +261,9 @@ export const getProducts = async (req, res) => {
         const sQuery = sellerId && mongoose.Types.ObjectId.isValid(sellerId)
           ? { _id: sellerId }
           : { businessName: seller || sellerId };
-        const sellerDoc = await Seller.findOne(sQuery).select('isOnline').lean();
-        if (sellerDoc && sellerDoc.isOnline === false) {
+        const sellerDoc = await Seller.findOne(sQuery).lean();
+        const eligibility = await evaluateSellerStorefrontEligibility(sellerDoc || sellerId);
+        if (!eligibility.eligible) {
           const emptyResponse = {
             success: true,
             count: 0,
@@ -269,7 +271,7 @@ export const getProducts = async (req, res) => {
             page: 1,
             limit: 50,
             products: [],
-            message: 'This store is currently offline and not taking orders.',
+            message: eligibility.message || 'This store is not available for orders.',
           };
           productsCache.set(cacheKey, { data: emptyResponse, timestamp: now });
           return res.status(200).json(emptyResponse);
@@ -360,6 +362,11 @@ export const getProducts = async (req, res) => {
       query.name = { $regex: search, $options: 'i' };
     }
 
+    // Customer / public listings: only Published products
+    if (!isAdminOrInternal && !req.headers['x-seller-request']) {
+      query.status = 'Published';
+    }
+
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = req.query.limit !== undefined 
       ? (Number(req.query.limit) === 0 ? 0 : Math.min(100, Math.max(1, Number(req.query.limit))))
@@ -427,6 +434,30 @@ export const getProductById = async (req, res) => {
         success: false,
         message: 'Product not found'
       });
+    }
+
+    const isAdminOrInternal =
+      req.query.admin === 'true' ||
+      req.headers['x-admin-request'] === 'true' ||
+      req.headers['x-seller-request'] === 'true' ||
+      req.user?.role === 'admin' ||
+      req.user?.role === 'seller';
+
+    if (!isAdminOrInternal) {
+      if (product.status && product.status !== 'Published') {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found',
+        });
+      }
+
+      const eligibility = await evaluateProductSellerEligibility(product);
+      if (!eligibility.eligible) {
+        return res.status(404).json({
+          success: false,
+          message: eligibility.message || 'This product is not available.',
+        });
+      }
     }
 
     res.status(200).json({

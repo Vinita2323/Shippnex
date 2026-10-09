@@ -1,6 +1,10 @@
 import mongoose from 'mongoose';
 import Seller from '../models/Seller.model.js';
 import { haversineDistance } from './haversine.js';
+import {
+  storefrontSellerBaseMatch,
+  getActiveMembershipSellerIdSet,
+} from './sellerEligibility.js';
 
 /**
  * Validates geographical coordinates (Latitude & Longitude).
@@ -49,24 +53,8 @@ export const getEligibleSellersForLocation = async (userLat, userLng, options = 
 
   try {
     // 1. First attempt: High-performance MongoDB Aggregation using $geoNear
-    const matchQuery = {
-      $and: [
-        {
-          $or: [
-            { status: 'approved' },
-            { accountStatus: 'approved' },
-            { isVerified: true },
-          ],
-        },
-        {
-          status: { $nin: ['rejected', 'suspended'] },
-          accountStatus: { $nin: ['rejected', 'suspended'] },
-        },
-        {
-          isOnline: { $ne: false }
-        }
-      ]
-    };
+    // Requires approved + registration fee cleared + online. Membership filtered after geo match.
+    const matchQuery = storefrontSellerBaseMatch();
 
     if (options.search) {
       matchQuery.$and.push({ businessName: { $regex: options.search, $options: 'i' } });
@@ -134,18 +122,14 @@ export const getEligibleSellersForLocation = async (userLat, userLng, options = 
 
     // 2. Haversine Calculation Fallback if geoNear returned 0 or errored
     if (!results || results.length === 0) {
-      const candidates = await Seller.find({
-        $or: [
-          { status: 'approved' },
-          { accountStatus: 'approved' },
-          { isVerified: true },
-        ],
-        status: { $nin: ['rejected', 'suspended'] },
-        accountStatus: { $nin: ['rejected', 'suspended'] },
-        isOnline: { $ne: false },
-        ...(options.search ? { businessName: { $regex: options.search, $options: 'i' } } : {}),
-        ...(options.category && options.category.toLowerCase() !== 'all' ? { categories: { $regex: options.category, $options: 'i' } } : {}),
-      }).lean();
+      const fallbackQuery = storefrontSellerBaseMatch();
+      if (options.search) {
+        fallbackQuery.$and.push({ businessName: { $regex: options.search, $options: 'i' } });
+      }
+      if (options.category && options.category.toLowerCase() !== 'all') {
+        fallbackQuery.$and.push({ categories: { $regex: options.category, $options: 'i' } });
+      }
+      const candidates = await Seller.find(fallbackQuery).lean();
 
       results = [];
 
@@ -187,6 +171,10 @@ export const getEligibleSellersForLocation = async (userLat, userLng, options = 
       // Sort by distance ascending
       results.sort((a, b) => a.distanceKm - b.distanceKm);
     }
+
+    // 3. Require active paid subscription (SellerMembership) — not denormalized field alone
+    const membershipOk = await getActiveMembershipSellerIdSet(results.map((s) => s._id));
+    results = results.filter((s) => membershipOk.has(String(s._id)));
 
     const eligibleSellers = results.map((s) => ({
       _id: s._id,

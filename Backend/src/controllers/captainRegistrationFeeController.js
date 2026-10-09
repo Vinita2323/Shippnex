@@ -176,12 +176,14 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
         existingCaptain.otpExpiry = otpExpiry;
         await existingCaptain.save();
 
-        await sendOtpSMS({
+        sendOtpSMS({
           phone: cleanPhone,
           otp,
           appName: 'ShippNex',
           role: 'captain',
-        });
+        }).catch((smsErr) =>
+          console.warn('[CaptainRegFee] OTP SMS failed (already paid path):', smsErr.message)
+        );
 
         return res.status(200).json({
           success: true,
@@ -202,7 +204,7 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
     // Get active fee configuration from database (NEVER TRUST CLIENT)
     const feeConfig = await CaptainRegistrationFeeConfig.getOrCreateActiveConfig();
 
-    // Process image uploads
+    // Process image/PDF uploads (prefer pre-uploaded URLs from /api/upload)
     const rawDocs = documents || req.body.documents || {};
     const processedDocs = {};
     await Promise.all(
@@ -214,6 +216,24 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
         }
       })
     );
+
+    const requiredDocKeys = [
+      { key: 'profilePhoto', label: 'Live Selfie / Profile Photo' },
+      { key: 'drivingLicense', label: 'Driving License' },
+      { key: 'aadhaarFront', label: 'Aadhaar Front' },
+      { key: 'aadhaarBack', label: 'Aadhaar Back' },
+      { key: 'rcDocument', label: 'RC Document' },
+      { key: 'bankPassbook', label: 'Bank Passbook Photo' },
+    ];
+    const missingRequired = requiredDocKeys.filter(
+      (d) => !processedDocs[d.key] || !String(processedDocs[d.key]).trim()
+    );
+    if (missingRequired.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing required documents: ${missingRequired.map((d) => d.label).join(', ')}.`,
+      });
+    }
 
     const { otp, otpExpiry } = generateOtp();
 
@@ -294,12 +314,14 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
 
     // CASE 1: Registration Fee is DISABLED or ₹0 by Admin
     if (!feeConfig.isActive || feeConfig.amount <= 0) {
-      await sendOtpSMS({
+      sendOtpSMS({
         phone: cleanPhone,
         otp,
         appName: 'ShippNex',
         role: 'captain',
-      });
+      }).catch((smsErr) =>
+        console.warn('[CaptainRegFee] OTP SMS failed (fee waived):', smsErr.message)
+      );
 
       return res.status(200).json({
         success: true,

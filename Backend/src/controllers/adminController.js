@@ -392,8 +392,17 @@ export const toggleSellerStatus = async (req, res, next) => {
     }
 
     if (rawStatus === 'approved') {
-      if (seller.registrationFeeStatus === 'pending') {
-        seller.registrationFeeStatus = 'not_required';
+      // Do not waive unpaid registration fee — selling eligibility still requires paid/not_required
+      if (
+        seller.registrationFeeStatus === 'pending' ||
+        seller.registrationFeeStatus === 'failed'
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Cannot approve seller until the registration fee is paid (or marked not_required when fee is disabled).',
+          registrationFeeStatus: seller.registrationFeeStatus,
+        });
       }
       seller.accountStatus = 'approved';
       seller.status = 'approved';

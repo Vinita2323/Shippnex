@@ -121,6 +121,11 @@ export const authService = {
     if (response.data.token) {
       localStorage.setItem('shippnex_seller_token', response.data.token);
       localStorage.setItem('shippnex_seller_data', JSON.stringify(response.data.seller));
+      if (response.data.requiresMembership) {
+        localStorage.setItem('shippnex_seller_requires_membership', '1');
+      } else {
+        localStorage.removeItem('shippnex_seller_requires_membership');
+      }
       registerFCMToken(true, 'seller').catch(() => {});
     }
     return response.data;
@@ -297,6 +302,7 @@ export const authService = {
     } else if (role === 'seller') {
       localStorage.removeItem('shippnex_seller_token');
       localStorage.removeItem('shippnex_seller_data');
+      localStorage.removeItem('shippnex_seller_requires_membership');
     } else if (role === 'captain') {
       localStorage.removeItem('shippnex_captain_token');
       localStorage.removeItem('shippnex_captain_data');

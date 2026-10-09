@@ -30,6 +30,36 @@ import { authService, captainRegistrationFeeService } from '../../../services/au
 import { loadRazorpaySdk } from '../../../utils/razorpay';
 import { uploadRegistrationImage } from '../../../utils/uploadRegistrationImage';
 
+const VEHICLE_FIELD_CLASS =
+  'w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d] placeholder:text-slate-400';
+
+/**
+ * Native type="date" does not show custom placeholders reliably.
+ * Start as text with "dd-mm-yyyy", switch to date on focus so the picker still works.
+ */
+const DatePlaceholderInput = ({ name, value, onChange, className = VEHICLE_FIELD_CLASS }) => {
+  const [inputType, setInputType] = useState(value ? 'date' : 'text');
+
+  useEffect(() => {
+    if (value) setInputType('date');
+  }, [value]);
+
+  return (
+    <input
+      type={inputType}
+      name={name}
+      value={value || ''}
+      onChange={onChange}
+      placeholder="dd-mm-yyyy"
+      onFocus={() => setInputType('date')}
+      onBlur={(e) => {
+        if (!e.target.value) setInputType('text');
+      }}
+      className={className}
+    />
+  );
+};
+
 const CaptainRegister = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -172,6 +202,8 @@ const CaptainRegister = () => {
   const canvasRef = useRef(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  /** 'uploading' | 'registering' — shown while submit is in progress */
+  const [submitPhase, setSubmitPhase] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -491,8 +523,28 @@ const CaptainRegister = () => {
     }
   };
 
+  const REQUIRED_DOCUMENTS = [
+    { key: 'profilePhoto', label: 'Live Selfie / Profile Photo' },
+    { key: 'drivingLicense', label: 'Driving License' },
+    { key: 'aadhaarFront', label: 'Aadhaar Front' },
+    { key: 'aadhaarBack', label: 'Aadhaar Back' },
+    { key: 'rcDocument', label: 'RC Document' },
+    { key: 'bankPassbook', label: 'Bank Passbook Photo' },
+  ];
+
+  const OPTIONAL_DOCUMENTS = [
+    { key: 'pucDocument', label: 'Pollution (PUC) Certificate' },
+    { key: 'permitDocument', label: 'Commercial Vehicle Permit' },
+    { key: 'fitnessDocument', label: 'Fitness Certificate' },
+    { key: 'roadTaxDocument', label: 'Road Tax Receipt' },
+    { key: 'form21Document', label: 'Form-21' },
+    { key: 'panCardDocument', label: 'PAN Card', payloadKey: 'panCard' },
+  ];
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     setErrorMsg('');
     setPaymentErrorMessage('');
     setPaymentFailed(false);
@@ -524,63 +576,50 @@ const CaptainRegister = () => {
       return;
     }
 
-    if (!files.bankPassbook) {
-      setErrorMsg('Please upload a photo of your bank passbook.');
+    const missingDocs = REQUIRED_DOCUMENTS.filter((doc) => !files[doc.key]);
+    if (missingDocs.length > 0) {
+      setErrorMsg(
+        `Please upload all required documents: ${missingDocs.map((d) => d.label).join(', ')}.`
+      );
       return;
     }
 
     setIsSubmitting(true);
+    setSubmitPhase('uploading');
     try {
-      // Upload each document via /api/upload first (small multipart).
-      // Do NOT send multi-MB base64 blobs in initiate-order — live nginx returns 413.
-      const uploadDoc = (file) => uploadRegistrationImage(file, 'misc');
+      // Upload via /api/upload first (parallel — sequential was very slow with many docs).
+      const CAPTAIN_DOC_COMPRESS = { maxWidth: 1024, quality: 0.65 };
+      const allDocs = [...REQUIRED_DOCUMENTS, ...OPTIONAL_DOCUMENTS];
+      const docsToUpload = allDocs.filter((doc) => files[doc.key]);
 
-      const [
-        dl,
-        rc,
-        aFront,
-        aBack,
-        pPhoto,
-        pucDoc,
-        permitDoc,
-        fitnessDoc,
-        taxDoc,
-        form21Doc,
-        panDoc,
-        passbookDoc
-      ] = await Promise.all([
-        uploadDoc(files.drivingLicense),
-        uploadDoc(files.rcDocument),
-        uploadDoc(files.aadhaarFront),
-        uploadDoc(files.aadhaarBack),
-        uploadDoc(files.profilePhoto),
-        uploadDoc(files.pucDocument),
-        uploadDoc(files.permitDocument),
-        uploadDoc(files.fitnessDocument),
-        uploadDoc(files.roadTaxDocument),
-        uploadDoc(files.form21Document),
-        uploadDoc(files.panCardDocument),
-        uploadDoc(files.bankPassbook),
-      ]);
+      const uploadResults = await Promise.all(
+        docsToUpload.map(async (doc) => {
+          const payloadKey = doc.payloadKey || doc.key;
+          try {
+            const url = await uploadRegistrationImage(
+              files[doc.key],
+              'misc',
+              CAPTAIN_DOC_COMPRESS
+            );
+            return { payloadKey, url };
+          } catch (err) {
+            const apiMsg = err.response?.data?.message || err.message || 'Upload failed';
+            throw new Error(`${doc.label}: ${apiMsg}`);
+          }
+        })
+      );
+
+      const documentUrls = Object.fromEntries(
+        uploadResults.map(({ payloadKey, url }) => [payloadKey, url])
+      );
+
+      setSubmitPhase('registering');
 
       const payload = {
         ...formData,
         aadhaarNumber: cleanAadhaar,
         mobileNumber: cleanPhone,
-        documents: {
-          drivingLicense: dl,
-          rcDocument: rc,
-          aadhaarFront: aFront,
-          aadhaarBack: aBack,
-          pucDocument: pucDoc,
-          permitDocument: permitDoc,
-          fitnessDocument: fitnessDoc,
-          roadTaxDocument: taxDoc,
-          form21Document: form21Doc,
-          panCard: panDoc,
-          profilePhoto: pPhoto,
-          bankPassbook: passbookDoc,
-        },
+        documents: documentUrls,
       };
 
       const res = await captainRegistrationFeeService.initiateOrder(payload);
@@ -601,14 +640,22 @@ const CaptainRegister = () => {
     } catch (err) {
       console.error('API submission failed:', err);
       if (err.response?.status === 413) {
-        setErrorMsg('Uploaded documents are too large for the server. Please use clearer, smaller photos and try again.');
+        setErrorMsg('Uploaded documents are too large for the server. Please use clearer, smaller photos (or PDF under 10MB) and try again.');
       } else {
         setErrorMsg(err.response?.data?.message || err.message || 'Failed to submit registration application.');
       }
     } finally {
       setIsSubmitting(false);
+      setSubmitPhase(null);
     }
   };
+
+  const submitButtonBusyLabel =
+    submitPhase === 'uploading'
+      ? 'Uploading documents…'
+      : submitPhase === 'registering'
+        ? 'Submitting application…'
+        : 'Submitting Application...';
 
   return (
     <main className="min-h-screen bg-slate-50 py-10 px-4 md:px-8 flex items-center justify-center">
@@ -1136,10 +1183,10 @@ const CaptainRegister = () => {
                 <input
                   type="text"
                   name="drivingLicenseNumber"
-                  value={formData.drivingLicenseNumber}
+                  value={formData.drivingLicenseNumber || ''}
                   onChange={handleTextChange}
                   placeholder="Enter driving license number"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                  className={VEHICLE_FIELD_CLASS}
                 />
               </div>
 
@@ -1148,10 +1195,10 @@ const CaptainRegister = () => {
                 <input
                   type="text"
                   name="rcNumber"
-                  value={formData.rcNumber}
+                  value={formData.rcNumber || ''}
                   onChange={handleTextChange}
                   placeholder="Enter rc number"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                  className={VEHICLE_FIELD_CLASS}
                 />
               </div>
 
@@ -1161,21 +1208,19 @@ const CaptainRegister = () => {
                   <input
                     type="text"
                     name="vehicleInsuranceNumber"
-                    value={formData.vehicleInsuranceNumber}
+                    value={formData.vehicleInsuranceNumber || ''}
                     onChange={handleTextChange}
                     placeholder="Enter vehicle insurance number"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                    className={VEHICLE_FIELD_CLASS}
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700">Insurance Valid Till</label>
-                  <input
-                    type="date"
+                  <DatePlaceholderInput
                     name="insuranceValidTill"
                     value={formData.insuranceValidTill}
                     onChange={handleTextChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
                   />
                 </div>
               </div>
@@ -1187,21 +1232,19 @@ const CaptainRegister = () => {
                   <input
                     type="text"
                     name="pucNumber"
-                    value={formData.pucNumber}
+                    value={formData.pucNumber || ''}
                     onChange={handleTextChange}
                     placeholder="Enter PUC number"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                    className={VEHICLE_FIELD_CLASS}
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700">PUC Valid Till</label>
-                  <input
-                    type="date"
+                  <DatePlaceholderInput
                     name="pucValidTill"
                     value={formData.pucValidTill}
                     onChange={handleTextChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
                   />
                 </div>
               </div>
@@ -1213,21 +1256,19 @@ const CaptainRegister = () => {
                   <input
                     type="text"
                     name="permitNumber"
-                    value={formData.permitNumber}
+                    value={formData.permitNumber || ''}
                     onChange={handleTextChange}
                     placeholder="Enter permit number"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                    className={VEHICLE_FIELD_CLASS}
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700">Permit Valid Till</label>
-                  <input
-                    type="date"
+                  <DatePlaceholderInput
                     name="permitValidTill"
                     value={formData.permitValidTill}
                     onChange={handleTextChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
                   />
                 </div>
               </div>
@@ -1239,21 +1280,19 @@ const CaptainRegister = () => {
                   <input
                     type="text"
                     name="fitnessCertNumber"
-                    value={formData.fitnessCertNumber}
+                    value={formData.fitnessCertNumber || ''}
                     onChange={handleTextChange}
                     placeholder="Enter fitness certificate number"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                    className={VEHICLE_FIELD_CLASS}
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700">Fitness Valid Till</label>
-                  <input
-                    type="date"
+                  <DatePlaceholderInput
                     name="fitnessValidTill"
                     value={formData.fitnessValidTill}
                     onChange={handleTextChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
                   />
                 </div>
               </div>
@@ -1265,21 +1304,19 @@ const CaptainRegister = () => {
                   <input
                     type="text"
                     name="roadTaxNumber"
-                    value={formData.roadTaxNumber}
+                    value={formData.roadTaxNumber || ''}
                     onChange={handleTextChange}
                     placeholder="Enter road tax receipt number"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
+                    className={VEHICLE_FIELD_CLASS}
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700">Road Tax Valid Till</label>
-                  <input
-                    type="date"
+                  <DatePlaceholderInput
                     name="roadTaxValidTill"
                     value={formData.roadTaxValidTill}
                     onChange={handleTextChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-800 outline-none focus:border-[#15803d]"
                   />
                 </div>
               </div>
@@ -1341,7 +1378,7 @@ const CaptainRegister = () => {
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider m-0">
-                          Live Captain Selfie
+                          Live Captain Selfie <span className="text-red-500">*</span>
                         </h3>
                         <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
                           Required for KYC
@@ -1426,7 +1463,7 @@ const CaptainRegister = () => {
 
               {/* Driving License Upload */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Upload Driving License</label>
+                <label className="text-xs font-bold text-slate-700">Upload Driving License <span className="text-red-500">*</span></label>
                 <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
                   <span className="material-symbols-outlined text-slate-400">upload</span>
                   <span className="text-xs font-bold text-slate-600 truncate">
@@ -1444,7 +1481,7 @@ const CaptainRegister = () => {
               {/* Aadhaar Front & Back Upload */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Aadhaar Front</label>
+                  <label className="text-xs font-bold text-slate-700">Aadhaar Front <span className="text-red-500">*</span></label>
                   <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
                     <span className="material-symbols-outlined text-slate-400">upload</span>
                     <span className="text-xs font-bold text-slate-600 truncate">
@@ -1460,7 +1497,7 @@ const CaptainRegister = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Aadhaar Back</label>
+                  <label className="text-xs font-bold text-slate-700">Aadhaar Back <span className="text-red-500">*</span></label>
                   <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
                     <span className="material-symbols-outlined text-slate-400">upload</span>
                     <span className="text-xs font-bold text-slate-600 truncate">
@@ -1478,7 +1515,7 @@ const CaptainRegister = () => {
 
               {/* RC Document Upload */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">RC Document (Registration Certificate)</label>
+                <label className="text-xs font-bold text-slate-700">RC Document (Registration Certificate) <span className="text-red-500">*</span></label>
                 <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-4 px-3 bg-slate-50 hover:bg-slate-100/50 cursor-pointer transition-colors">
                   <span className="material-symbols-outlined text-slate-400">upload</span>
                   <span className="text-xs font-bold text-slate-600 truncate">
@@ -1807,7 +1844,7 @@ const CaptainRegister = () => {
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 size={16} className="animate-spin" /> Submitting Application...
+                    <Loader2 size={16} className="animate-spin" /> {submitButtonBusyLabel}
                   </>
                 ) : feeConfig.isActive && feeConfig.amount > 0 ? (
                   <>

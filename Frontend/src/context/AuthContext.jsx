@@ -168,6 +168,7 @@ export const AuthProvider = ({ children }) => {
     } else if (role === 'seller') {
       localStorage.removeItem('shippnex_seller_token');
       localStorage.removeItem('shippnex_seller_data');
+      localStorage.removeItem('shippnex_seller_requires_membership');
     } else if (role === 'captain') {
       localStorage.removeItem('shippnex_captain_token');
       localStorage.removeItem('shippnex_captain_data');

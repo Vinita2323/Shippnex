@@ -43,12 +43,18 @@ const calcExpiryDate = (startDate, durationMonths) => {
 const syncSellerMembershipStatus = async (sellerId) => {
   const now = new Date();
   await SellerMembership.updateMany(
-    { sellerId, membershipStatus: 'active', expiryDate: { $lt: now } },
+    { sellerId, membershipStatus: 'active', expiryDate: { $lte: now } },
     { $set: { membershipStatus: 'expired', paymentStatus: 'paid' } }
   );
-  const active = await SellerMembership.exists({ sellerId, membershipStatus: 'active' });
+  const active = await SellerMembership.exists({
+    sellerId,
+    membershipStatus: 'active',
+    expiryDate: { $gt: now },
+  });
   if (!active) {
     await Seller.findByIdAndUpdate(sellerId, { membershipStatus: 'expired' });
+  } else {
+    await Seller.findByIdAndUpdate(sellerId, { membershipStatus: 'active' });
   }
 };
 
@@ -67,6 +73,17 @@ const syncCaptainMembershipStatus = async (captainId) => {
 // Global background auto-expire (used by admin or background cron)
 const autoExpireMemberships = async () => {
   const now = new Date();
+  const [expiredSellerIds, expiredCaptainIds] = await Promise.all([
+    SellerMembership.distinct('sellerId', {
+      membershipStatus: 'active',
+      expiryDate: { $lt: now },
+    }),
+    CaptainMembership.distinct('captainId', {
+      membershipStatus: 'active',
+      expiryDate: { $lt: now },
+    }),
+  ]);
+
   await Promise.all([
     SellerMembership.updateMany(
       { membershipStatus: 'active', expiryDate: { $lt: now } },
@@ -77,6 +94,39 @@ const autoExpireMemberships = async () => {
       { $set: { membershipStatus: 'expired', paymentStatus: 'paid' } }
     ),
   ]);
+
+  // Keep denormalized seller/captain membershipStatus in sync for listings that use it
+  if (expiredSellerIds.length > 0) {
+    const stillActive = await SellerMembership.distinct('sellerId', {
+      sellerId: { $in: expiredSellerIds },
+      membershipStatus: 'active',
+      expiryDate: { $gt: now },
+    });
+    const stillActiveSet = new Set(stillActive.map((id) => String(id)));
+    const toExpire = expiredSellerIds.filter((id) => !stillActiveSet.has(String(id)));
+    if (toExpire.length > 0) {
+      await Seller.updateMany(
+        { _id: { $in: toExpire } },
+        { $set: { membershipStatus: 'expired' } }
+      );
+    }
+  }
+
+  if (expiredCaptainIds.length > 0) {
+    const stillActive = await CaptainMembership.distinct('captainId', {
+      captainId: { $in: expiredCaptainIds },
+      membershipStatus: 'active',
+      expiryDate: { $gt: now },
+    });
+    const stillActiveSet = new Set(stillActive.map((id) => String(id)));
+    const toExpire = expiredCaptainIds.filter((id) => !stillActiveSet.has(String(id)));
+    if (toExpire.length > 0) {
+      await Captain.updateMany(
+        { _id: { $in: toExpire } },
+        { $set: { membershipStatus: 'expired' } }
+      );
+    }
+  }
 };
 
 // ============================================================

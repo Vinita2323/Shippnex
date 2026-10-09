@@ -8,6 +8,7 @@ const router = express.Router();
 
 // Supported subfolders for clean organization
 const ALLOWED_FOLDERS = ['banners', 'products', 'categories', 'profiles', 'reviews', 'transport', 'misc'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 // Configure Multer dynamic storage destination based on folder parameter
 const storage = multer.diskStorage({
@@ -25,28 +26,35 @@ const storage = multer.diskStorage({
     cb(null, targetDir);
   },
   filename(req, file, cb) {
-    cb(
-      null,
-      `${file.fieldname}-${Date.now()}${path.extname(file.originalname)}`
-    );
+    const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
+    cb(null, `${file.fieldname}-${Date.now()}${ext}`);
   },
 });
 
 function checkFileType(file, cb) {
-  const filetypes = /jpg|jpeg|png|webp|gif|svg/;
-  const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = filetypes.test(file.mimetype);
+  const allowedExt = /\.(jpe?g|png|webp|gif|svg|pdf)$/i;
+  const allowedMime =
+    /^(image\/(jpeg|jpg|png|webp|gif|svg\+xml)|application\/pdf)$/i;
 
-  if (extname && mimetype) {
+  const extname = allowedExt.test(path.extname(file.originalname || '').toLowerCase());
+  const mimetype = allowedMime.test(file.mimetype || '');
+
+  // Some browsers send empty/octet-stream for camera blobs — allow if extension is valid
+  const looseMime =
+    !file.mimetype ||
+    file.mimetype === 'application/octet-stream' ||
+    file.mimetype === 'binary/octet-stream';
+
+  if ((extname && mimetype) || (extname && looseMime)) {
     return cb(null, true);
-  } else {
-    cb(new Error('Images only (jpg, jpeg, png, webp, gif, svg)!'));
   }
+  return cb(new Error('Only JPG, PNG, WEBP, GIF, SVG, or PDF files are allowed'));
 }
 
 const upload = multer({
   storage,
-  fileFilter: function (req, file, cb) {
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter(req, file, cb) {
     checkFileType(file, cb);
   },
 });
@@ -57,8 +65,21 @@ const isCloudinaryConfigured = () => {
   return Boolean(cloudName && cloudName !== 'your_cloud_name_here');
 };
 
-// Single File Upload Endpoint
-router.post('/', upload.single('image'), async (req, res) => {
+const runSingleUpload = (req, res, next) => {
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      const message =
+        err.code === 'LIMIT_FILE_SIZE'
+          ? `File is too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB.`
+          : err.message || 'File upload failed';
+      return res.status(400).json({ success: false, message });
+    }
+    return next();
+  });
+};
+
+// Single File Upload Endpoint (images + PDF for registration docs)
+router.post('/', runSingleUpload, async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'No file uploaded' });
   }
@@ -67,6 +88,10 @@ router.post('/', upload.single('image'), async (req, res) => {
   if (!ALLOWED_FOLDERS.includes(folder.toLowerCase())) {
     folder = 'misc';
   }
+
+  const isPdf =
+    (req.file.mimetype || '').includes('pdf') ||
+    /\.pdf$/i.test(req.file.originalname || req.file.filename || '');
 
   // If Cloudinary is configured, upload to Cloudinary
   if (isCloudinaryConfigured()) {
@@ -79,10 +104,12 @@ router.post('/', upload.single('image'), async (req, res) => {
 
       return res.status(200).json({
         success: true,
-        message: 'Image uploaded to Cloudinary successfully',
+        message: isPdf
+          ? 'PDF uploaded to Cloudinary successfully'
+          : 'Image uploaded to Cloudinary successfully',
         imageUrl: uploadRes.secure_url,
         publicId: uploadRes.public_id,
-        provider: 'cloudinary'
+        provider: 'cloudinary',
       });
     } catch (err) {
       console.warn('Cloudinary upload failed, falling back to local file storage:', err.message);
@@ -96,10 +123,10 @@ router.post('/', upload.single('image'), async (req, res) => {
 
   res.status(200).json({
     success: true,
-    message: 'Image uploaded locally',
+    message: isPdf ? 'PDF uploaded locally' : 'Image uploaded locally',
     imageUrl: fileUrl,
     filePath: `/${relativePath}`,
-    provider: 'local'
+    provider: 'local',
   });
 });
 
@@ -118,7 +145,7 @@ router.post('/base64', async (req, res) => {
         message: 'Base64 image uploaded to Cloudinary successfully',
         imageUrl: uploadRes.secure_url,
         publicId: uploadRes.public_id,
-        provider: 'cloudinary'
+        provider: 'cloudinary',
       });
     }
 
@@ -126,12 +153,12 @@ router.post('/base64', async (req, res) => {
       success: true,
       message: 'Cloudinary not configured yet. Returning original data URL.',
       imageUrl: image,
-      provider: 'base64'
+      provider: 'base64',
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message || 'Error uploading base64 image'
+      message: error.message || 'Error uploading base64 image',
     });
   }
 });

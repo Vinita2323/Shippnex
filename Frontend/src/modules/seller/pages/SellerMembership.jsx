@@ -127,6 +127,7 @@ const SellerMembership = () => {
 
             const res = await fn(verificationPayload);
             if (res.success) {
+              localStorage.removeItem('shippnex_seller_requires_membership');
               setSuccessMsg(`🎉 Payment successful! Your "${selectedPlan.name}" has been activated instantly.`);
               setShowCheckoutModal(false);
               setSelectedPlan(null);
@@ -184,9 +185,15 @@ const SellerMembership = () => {
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button 
-              onClick={() => navigate('/seller/dashboard')} 
+              onClick={() => {
+                const active =
+                  membership?.membershipStatus === 'active' &&
+                  membership?.expiryDate &&
+                  new Date(membership.expiryDate) > new Date();
+                navigate(active ? '/seller/dashboard' : '/seller/login');
+              }} 
               className="p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer border-none bg-transparent"
-              title="Back to Dashboard"
+              title="Back"
             >
               <ChevronRight size={20} className="text-slate-500 rotate-180" />
             </button>

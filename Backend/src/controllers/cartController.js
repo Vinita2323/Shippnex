@@ -5,6 +5,7 @@ import {
   readCustomerAttributes,
   rowsFromAttributes,
 } from '../utils/selectedVariants.js';
+import { evaluateProductSellerEligibility } from '../utils/sellerEligibility.js';
 
 // Helper to find existing product or auto-create fallback for seed/mock frontend items
 const findOrCreateProduct = async (productId, productData = {}) => {
@@ -171,6 +172,15 @@ export const addToCart = async (req, res, next) => {
     const product = await findOrCreateProduct(productId, productPayload);
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    const eligibility = await evaluateProductSellerEligibility(product);
+    if (!eligibility.eligible) {
+      return res.status(403).json({
+        success: false,
+        message: eligibility.message || 'This product is not available from an eligible store.',
+        reason: eligibility.reason,
+      });
     }
 
     if (product.stock !== undefined && product.stock <= 0) {

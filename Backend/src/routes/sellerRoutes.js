@@ -8,6 +8,7 @@ const router = express.Router();
 import { getEligibleSellersForLocation, isValidCoordinate } from '../utils/sellerLocationHelper.js';
 import { haversineDistance } from '../utils/haversine.js';
 import { deleteSeller } from '../controllers/adminController.js';
+import { evaluateSellerStorefrontEligibility } from '../utils/sellerEligibility.js';
 
 // In-memory cache for public sellers listing (TTL: 10s)
 let publicSellersCache = new Map();
@@ -51,11 +52,11 @@ router.get('/', async (req, res) => {
 
     // 2. Admin or internal management query without location: return all approved sellers
     if (isAdminOrInternal) {
+      // Admin listing: approved sellers (fee/membership managed separately in admin UI)
       let dbQuery = {
         $or: [
           { status: 'approved' },
           { accountStatus: 'approved' },
-          { isVerified: true }
         ],
         status: { $nin: ['rejected', 'suspended'] },
         accountStatus: { $nin: ['rejected', 'suspended'] }
@@ -137,13 +138,13 @@ router.get('/:id', async (req, res) => {
 
     let seller = null;
     if (mongoose.Types.ObjectId.isValid(id)) {
-      seller = await Seller.findById(id).select('businessName ownerName businessType storeLogo tagline warehouseLocation location serviceRadius categories isVerified status isOnline phone email rating reviewsCount').lean();
+      seller = await Seller.findById(id).select('businessName ownerName businessType storeLogo tagline warehouseLocation location serviceRadius categories isVerified status accountStatus isOnline phone email rating reviewsCount registrationFeeStatus membershipStatus').lean();
     }
 
     if (!seller) {
       seller = await Seller.findOne({
         businessName: { $regex: new RegExp(`^${decodeURIComponent(id).trim()}$`, 'i') }
-      }).select('businessName ownerName businessType storeLogo tagline warehouseLocation location serviceRadius categories isVerified status isOnline phone email rating reviewsCount').lean();
+      }).select('businessName ownerName businessType storeLogo tagline warehouseLocation location serviceRadius categories isVerified status accountStatus isOnline phone email rating reviewsCount registrationFeeStatus membershipStatus').lean();
     }
 
     if (!seller) {
@@ -157,14 +158,17 @@ router.get('/:id', async (req, res) => {
 
     const isAdminOrInternal = req.headers['x-admin-request'] === 'true' || req.headers['x-seller-request'] === 'true' || req.user?.role === 'admin';
 
-    // If seller is offline and this is a customer request, notify that store is offline
-    if (seller.isOnline === false && !isAdminOrInternal) {
-      return res.status(200).json({
-        success: true,
-        seller: { ...seller, isOnline: false },
-        products: [],
-        message: 'This store is currently offline and not accepting orders.',
-      });
+    // Customer storefront: fee paid + approved + active subscription + online
+    if (!isAdminOrInternal) {
+      const eligibility = await evaluateSellerStorefrontEligibility(seller);
+      if (!eligibility.eligible) {
+        return res.status(200).json({
+          success: true,
+          seller: { ...seller, isOnline: seller.isOnline !== false },
+          products: [],
+          message: eligibility.message || 'This store is not available for orders.',
+        });
+      }
     }
 
     let isLocationCovered = true;
@@ -201,6 +205,10 @@ router.get('/:id', async (req, res) => {
         { seller: seller._id.toString() }
       ]
     };
+
+    if (!isAdminOrInternal) {
+      productQuery.status = 'Published';
+    }
 
     let products = await Product.find(productQuery).sort({ createdAt: -1 }).lean();
 

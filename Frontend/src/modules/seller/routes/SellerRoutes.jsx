@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import PageSkeleton from '../../../components/PageSkeleton';
 import SellerLayout from '../components/layout/SellerLayout';
+import SellerMembershipGate from '../components/SellerMembershipGate';
 
 const Dashboard = lazy(() => import('../pages/Dashboard'));
 const SellerLogin = lazy(() => import('../pages/auth/SellerLogin'));
@@ -36,8 +37,9 @@ const SellerRoutes = () => {
         <Route path="support" element={<SellerSupport />} />
         <Route path="faqs" element={<SellerSupport />} />
         
-        {/* Protected Layout Routes */}
+        {/* Protected Layout Routes — require active membership for selling panel */}
         <Route element={<ProtectedRoute role="seller" redirectPath="/seller/login" />}>
+          <Route element={<SellerMembershipGate />}>
           <Route element={<SellerLayout />}>
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="orders" element={<Orders />} />
@@ -76,6 +78,7 @@ const SellerRoutes = () => {
             {/* Redirect root to dashboard */}
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="*" element={<Navigate to="dashboard" replace />} />
+          </Route>
           </Route>
         </Route>
 
