@@ -26,8 +26,20 @@ import {
   DollarSign,
   Gift
 } from 'lucide-react';
-import { authService, captainRegistrationFeeService } from '../../../services/authService';
+import { authService, captainRegistrationFeeService, vehicleService } from '../../../services/authService';
 import { loadRazorpaySdk } from '../../../utils/razorpay';
+
+const FALLBACK_VEHICLE_TYPES = [
+  { name: 'Motorcycle', capacity: 'Up to 20 kg', icon: 'bike' },
+  { name: '3 Wheeler', capacity: 'Up to 500 kg', icon: 'truck' },
+  { name: 'Mini Truck', capacity: 'Up to 750 kg', icon: 'truck' },
+  { name: 'Pickup 8ft', capacity: 'Up to 1200 kg', icon: 'truck' },
+];
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PINCODE_REGEX = /^[1-9][0-9]{5}$/;
+const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+const PHONE_REGEX = /^[6-9]\d{9}$/;
 import { uploadRegistrationImage } from '../../../utils/uploadRegistrationImage';
 
 const VEHICLE_FIELD_CLASS =
@@ -131,7 +143,33 @@ const CaptainRegister = () => {
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [vehicleTypes, setVehicleTypes] = useState(FALLBACK_VEHICLE_TYPES);
   const [registrationStep, setRegistrationStep] = useState('form'); // 'form' | 'payment' | 'otp' | 'under_review'
+
+  useEffect(() => {
+    // #46 — load admin-configured vehicle types
+    vehicleService.getActiveVehicles()
+      .then((res) => {
+        const list = res?.vehicles || res?.data || (Array.isArray(res) ? res : []);
+        if (!Array.isArray(list) || list.length === 0) return;
+        const mapped = list
+          .filter((v) => v && (v.isActive !== false) && (v.name || v.label || v.slug))
+          .map((v) => ({
+            name: v.name || v.label || v.slug,
+            capacity: v.capacityLabel || v.capacity || v.description || '',
+            icon: /bike|motor|scooter|2.?wheel/i.test(String(v.name || v.slug || '')) ? 'bike' : 'truck',
+            slug: v.slug || '',
+          }));
+        if (mapped.length) {
+          setVehicleTypes(mapped);
+          setFormData((prev) => {
+            if (mapped.some((m) => m.name === prev.vehicleType)) return prev;
+            return { ...prev, vehicleType: mapped[0].name };
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isResendingOtp, setIsResendingOtp] = useState(false);
@@ -387,7 +425,7 @@ const CaptainRegister = () => {
     const cleanPhone = formData.mobileNumber.replace(/\D/g, '').slice(-10);
     try {
       setIsResendingOtp(true);
-      await authService.sendCaptainOtp(cleanPhone);
+      await authService.sendCaptainOtp(cleanPhone, { purpose: 'register' });
       setOtpSuccessMsg('A new OTP has been sent to your registered mobile number.');
     } catch (err) {
       setErrorMsg(err.response?.data?.message || 'Failed to resend OTP. Please try again.');
@@ -549,14 +587,24 @@ const CaptainRegister = () => {
     setPaymentErrorMessage('');
     setPaymentFailed(false);
 
-    if (!formData.fullName || !formData.mobileNumber) {
-      setErrorMsg('Full Name and Mobile Number are required.');
+    if (!formData.fullName?.trim()) {
+      setErrorMsg('Full Name is required.');
       return;
     }
 
     const cleanPhone = formData.mobileNumber.replace(/\D/g, '').slice(-10);
-    if (cleanPhone.length < 10) {
-      setErrorMsg('Please enter a valid 10-digit mobile number.');
+    if (!PHONE_REGEX.test(cleanPhone)) {
+      setErrorMsg('Please enter a valid 10-digit mobile number starting with 6–9.');
+      return;
+    }
+
+    if (formData.email?.trim() && !EMAIL_REGEX.test(formData.email.trim())) {
+      setErrorMsg('Please enter a valid email address, or leave it blank.');
+      return;
+    }
+
+    if (formData.pinCode && !PINCODE_REGEX.test(String(formData.pinCode).trim())) {
+      setErrorMsg('Please enter a valid 6-digit PIN code.');
       return;
     }
 
@@ -573,6 +621,22 @@ const CaptainRegister = () => {
     const cleanAadhaar = String(formData.aadhaarNumber || '').replace(/\D/g, '');
     if (cleanAadhaar.length !== 12) {
       setErrorMsg('Please enter a valid 12-digit Aadhaar card number.');
+      return;
+    }
+
+    if (formData.ifscCode?.trim() && !IFSC_REGEX.test(String(formData.ifscCode).trim().toUpperCase())) {
+      setErrorMsg('Please enter a valid IFSC code (e.g. SBIN0001234), or leave it blank.');
+      return;
+    }
+
+    const emergency = String(formData.emergencyContact || '').replace(/\D/g, '').slice(-10);
+    if (formData.emergencyContact && !PHONE_REGEX.test(emergency)) {
+      setErrorMsg('Please enter a valid 10-digit emergency contact number.');
+      return;
+    }
+
+    if (!formData.vehicleType?.trim()) {
+      setErrorMsg('Please select a vehicle type.');
       return;
     }
 
@@ -658,22 +722,29 @@ const CaptainRegister = () => {
         : 'Submitting Application...';
 
   return (
-    <main className="min-h-screen bg-slate-50 py-10 px-4 md:px-8 flex items-center justify-center">
-      <div className="w-full max-w-2xl bg-white rounded-3xl p-6 sm:p-10 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-        
-        {/* Top Back Navigation */}
-        <div className="flex items-center justify-between mb-6">
+    <main className="min-h-screen bg-slate-50 flex flex-col">
+      {/* #16 sticky registration header */}
+      <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200/80 px-4 py-3">
+        <div className="w-full max-w-2xl mx-auto flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => navigate('/captain/login')}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-bold transition-all cursor-pointer border border-slate-200 shadow-xs"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer border border-slate-200 shadow-xs"
           >
             <ArrowLeft size={15} />
             <span>Back to Login</span>
           </button>
+          <div className="flex items-center gap-2 min-w-0">
+            <img src="/DeliveryLogo.png" alt="ShippNex" className="h-9 object-contain" />
+            <span className="text-sm font-bold text-[#002625] truncate hidden sm:inline">Captain Registration</span>
+          </div>
         </div>
+      </div>
 
-        {/* Header Branding & Toggle */}
+      <div className="flex-1 py-8 px-4 md:px-8 flex items-center justify-center">
+      <div className="w-full max-w-2xl bg-white rounded-3xl p-6 sm:p-10 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+        
+        {/* Header Branding */}
         <div className="flex flex-col items-center mb-8">
           <img src="/DeliveryLogo.png" alt="ShippNex Logo" className="h-16 object-contain mb-3" />
           <h1 className="text-2xl font-bold text-[#002625]">Captain Registration</h1>
@@ -1140,13 +1211,9 @@ const CaptainRegister = () => {
                 </label>
 
                 <div className="grid grid-cols-2 gap-2.5">
-                  {[
-                    { name: 'Motorcycle', capacity: 'Up to 20 kg', icon: <Bike size={18} /> },
-                    { name: '3 Wheeler', capacity: 'Up to 500 kg', icon: <Truck size={18} /> },
-                    { name: 'Mini Truck', capacity: 'Up to 750 kg', icon: <Truck size={18} /> },
-                    { name: 'Pickup 8ft', capacity: 'Up to 1200 kg', icon: <Truck size={18} /> },
-                  ].map((v) => {
+                  {vehicleTypes.map((v) => {
                     const isSelected = formData.vehicleType === v.name;
+                    const VehicleIcon = v.icon === 'bike' ? Bike : Truck;
                     return (
                       <div
                         key={v.name}
@@ -1159,7 +1226,7 @@ const CaptainRegister = () => {
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-emerald-100 text-[#15803d]' : 'bg-slate-100 text-slate-600'}`}>
-                            {v.icon}
+                            <VehicleIcon size={18} />
                           </div>
                           {isSelected && (
                             <div className="w-5 h-5 rounded-full bg-[#15803d] text-white flex items-center justify-center">
@@ -1870,6 +1937,7 @@ const CaptainRegister = () => {
             </div>
           </form>
         )}
+      </div>
       </div>
 
       {/* 📷 LIVE SELFIE CAMERA MODAL */}

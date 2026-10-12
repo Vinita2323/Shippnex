@@ -414,6 +414,24 @@ const CaptainJobs = () => {
                           <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">{req.pickupLocation?.address}</p>
                         </div>
                       </div>
+                      {Array.isArray(req.stops) &&
+                        req.stops.filter(Boolean).map((stop, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <span className="w-2 h-2 rounded-full bg-sky-500 mt-1 shrink-0"></span>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-[8px] font-bold text-sky-700 uppercase tracking-wider block">
+                                Stop {idx + 1}
+                              </span>
+                              <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">
+                                {typeof stop === 'string'
+                                  ? stop
+                                  : stop?.address ||
+                                    [stop?.addressLine1, stop?.city].filter(Boolean).join(', ') ||
+                                    `Stop ${idx + 1}`}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
                       <div className="flex items-start gap-2">
                         <span className="w-2 h-2 rounded-full bg-orange-500 mt-1 shrink-0"></span>
                         <div className="flex-1 min-w-0">
@@ -421,11 +439,20 @@ const CaptainJobs = () => {
                           <p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-1">{req.dropLocation?.address}</p>
                         </div>
                       </div>
-                      {req.distanceKm && (
+                      {(req.distanceFromCaptainKm != null || req.distanceKm) && (
                         <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-200/50">
-                          <span>📍 {req.distanceKm} km</span>
+                          <span>
+                            📍{' '}
+                            {req.distanceFromCaptainKm != null
+                              ? `${req.distanceFromCaptainKm} km away`
+                              : `${req.distanceKm} km`}
+                          </span>
                           <span>⏱ ~{req.estimatedDurationMin || 15} mins</span>
-                          <span>⚡ Ready to pickup</span>
+                          {(req.paymentMethod === 'COD' || req.paymentMethod === 'CASH') && (
+                            <span className="font-bold text-amber-700">
+                              COD ₹{Number(req.fareBreakdown?.totalFare || 0).toFixed(0)}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -714,7 +741,16 @@ const CaptainJobs = () => {
                         <div className="min-w-0 flex-1">
                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Deliver To (Seller / Store)</span>
                           <p className="font-bold text-slate-800 text-[11px] m-0 leading-tight">
-                            {ret.sellerName || 'ShippNex Warehouse'} ({ret.sellerAddress?.city || 'Store'})
+                            {ret.sellerName || 'ShippNex Warehouse'}
+                            {ret.sellerAddress
+                              ? ` — ${[
+                                  ret.sellerAddress?.storeAddress || ret.sellerAddress?.addressLine1,
+                                  ret.sellerAddress?.city,
+                                  ret.sellerAddress?.pincode,
+                                ]
+                                  .filter(Boolean)
+                                  .join(', ')}`
+                              : ' (Store)'}
                           </p>
                         </div>
                       </div>
@@ -735,8 +771,12 @@ const CaptainJobs = () => {
                       <button
                         onClick={() => setSelectedDetailJob({
                           ...ret,
+                          isReturn: true,
                           orderId: ret.returnId,
                           shippingAddress: ret.customerAddress,
+                          customerAddress: ret.customerAddress,
+                          sellerAddress: ret.sellerAddress,
+                          sellerName: ret.sellerName,
                         })}
                         className="w-1/2 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 py-2 rounded-lg text-xs font-bold text-slate-800 flex items-center justify-center gap-1 transition-colors cursor-pointer"
                       >
@@ -788,11 +828,33 @@ const CaptainJobs = () => {
                 Payout: <span className="font-bold text-[#15803d]">₹{(acceptedJob.captainEarnings || 0).toFixed(2)}</span>
               </p>
             </div>
-            <div className="bg-slate-50 p-3 rounded-lg text-xs space-y-1 border border-slate-100">
-              <p className="font-bold text-slate-900">Trip #{acceptedJob.orderId || acceptedJob.bookingId}</p>
-              <p className="text-slate-500">
-                Destination: {acceptedJob.shippingAddress?.city || acceptedJob.dropLocation?.address}
+            <div className="bg-slate-50 p-3 rounded-lg text-xs space-y-1.5 border border-slate-100">
+              <p className="font-bold text-slate-900">
+                {acceptedJob.isReturn ? 'Return' : 'Trip'} #{acceptedJob.orderId || acceptedJob.returnId || acceptedJob.bookingId}
               </p>
+              {acceptedJob.isReturn ? (
+                <>
+                  <p className="text-slate-600">
+                    <span className="font-bold text-emerald-700">Pickup:</span>{' '}
+                    {[acceptedJob.customerAddress?.addressLine1, acceptedJob.customerAddress?.city, acceptedJob.customerAddress?.pincode]
+                      .filter(Boolean)
+                      .join(', ') || 'Customer address'}
+                  </p>
+                  <p className="text-slate-600">
+                    <span className="font-bold text-orange-700">Deliver to:</span>{' '}
+                    {acceptedJob.sellerName || 'Seller'}
+                    {acceptedJob.sellerAddress
+                      ? ` — ${[acceptedJob.sellerAddress?.addressLine1 || acceptedJob.sellerAddress?.storeAddress, acceptedJob.sellerAddress?.city]
+                          .filter(Boolean)
+                          .join(', ')}`
+                      : ''}
+                  </p>
+                </>
+              ) : (
+                <p className="text-slate-500">
+                  Destination: {acceptedJob.shippingAddress?.city || acceptedJob.dropLocation?.address}
+                </p>
+              )}
             </div>
             <div className="flex gap-2 pt-1">
               <button
@@ -832,7 +894,11 @@ const CaptainJobs = () => {
                 <span className="font-mono text-xs font-black text-slate-900">
                   #{selectedDetailJob.bookingId || selectedDetailJob.orderId}
                 </span>
-                {selectedDetailJob.isTransport || selectedDetailJob.orderId?.startsWith('TRB') ? (
+                {selectedDetailJob.isReturn || selectedDetailJob.returnId ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-orange-50 text-orange-800 border border-orange-200 flex items-center gap-1">
+                    <span>↩️</span> Return
+                  </span>
+                ) : selectedDetailJob.isTransport || selectedDetailJob.orderId?.startsWith('TRB') || selectedDetailJob.bookingId ? (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
                     <span>🚚</span> Transport
                   </span>
@@ -927,21 +993,62 @@ const CaptainJobs = () => {
                 <div className="flex items-start gap-2.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 mt-1 shrink-0"></span>
                   <div className="flex-1 min-w-0">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Pickup Location</span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                      {selectedDetailJob.isReturn || selectedDetailJob.returnId ? 'Pickup From (Customer)' : 'Pickup Location'}
+                    </span>
                     <p className="font-bold text-slate-900 text-xs mt-0.5">
-                      {selectedDetailJob.pickupLocation?.address || 'Store / Warehouse'}
+                      {selectedDetailJob.isReturn || selectedDetailJob.returnId
+                        ? [
+                            selectedDetailJob.customerAddress?.addressLine1,
+                            selectedDetailJob.customerAddress?.city,
+                            selectedDetailJob.customerAddress?.pincode,
+                          ]
+                            .filter(Boolean)
+                            .join(', ') ||
+                          selectedDetailJob.shippingAddress?.addressLine1 ||
+                          'Customer address'
+                        : selectedDetailJob.pickupLocation?.address || 'Store / Warehouse'}
                     </p>
                   </div>
                 </div>
+                {Array.isArray(selectedDetailJob.stops) &&
+                  selectedDetailJob.stops.filter(Boolean).map((stop, idx) => (
+                    <div key={idx} className="flex items-start gap-2.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 mt-1 shrink-0"></span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Stop {idx + 1}
+                        </span>
+                        <p className="font-bold text-slate-900 text-xs mt-0.5">
+                          {typeof stop === 'string'
+                            ? stop
+                            : stop?.address ||
+                              [stop?.addressLine1, stop?.city, stop?.pincode].filter(Boolean).join(', ') ||
+                              `Stop ${idx + 1}`}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 <div className="flex items-start gap-2.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-orange-500 mt-1 shrink-0"></span>
                   <div className="flex-1 min-w-0">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Drop Location</span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                      {selectedDetailJob.isReturn || selectedDetailJob.returnId ? 'Deliver To (Seller)' : 'Drop Location'}
+                    </span>
                     <p className="font-bold text-slate-900 text-xs mt-0.5">
-                      {selectedDetailJob.dropLocation?.address ||
-                        selectedDetailJob.shippingAddress?.addressLine1 ||
-                        selectedDetailJob.shippingAddress?.city ||
-                        'Customer Address'}
+                      {selectedDetailJob.isReturn || selectedDetailJob.returnId
+                        ? [
+                            selectedDetailJob.sellerName,
+                            selectedDetailJob.sellerAddress?.storeAddress ||
+                              selectedDetailJob.sellerAddress?.addressLine1,
+                            selectedDetailJob.sellerAddress?.city,
+                          ]
+                            .filter(Boolean)
+                            .join(' — ') || 'Seller store / warehouse'
+                        : selectedDetailJob.dropLocation?.address ||
+                          selectedDetailJob.shippingAddress?.addressLine1 ||
+                          selectedDetailJob.shippingAddress?.city ||
+                          'Customer Address'}
                     </p>
                   </div>
                 </div>

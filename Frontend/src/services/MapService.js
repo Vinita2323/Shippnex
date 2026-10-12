@@ -411,6 +411,9 @@ export const MapService = {
     }
   },
 
+  /** Crow-flies × 1.25 so Maps fallback matches backend estimateRoadDistanceKm. */
+  ROAD_DISTANCE_FACTOR: 1.25,
+
   haversineFallback: (coord1, coord2) => {
     const R = 6371;
     const toRad = (x) => (x * Math.PI) / 180;
@@ -420,7 +423,8 @@ export const MapService = {
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(toRad(coord1.lat)) * Math.cos(toRad(coord2.lat)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return Math.round(R * c * 100) / 100;
+    const straight = R * c;
+    return Math.max(1, Math.round(straight * MapService.ROAD_DISTANCE_FACTOR * 100) / 100);
   },
 };
 

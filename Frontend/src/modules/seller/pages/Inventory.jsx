@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Plus, Search, Download, ChevronDown, FileText, FileSpreadsheet, RefreshCw, Box, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { productService, authService } from '../../../services/authService';
+import { getEffectiveStock } from '../../../utils/productStock';
 
 const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,7 +50,7 @@ const Inventory = () => {
     }
 
     const formattedApi = apiProducts.map(ap => {
-      const stockVal = Number(ap.stock !== undefined ? ap.stock : 0);
+      const stockVal = getEffectiveStock(ap);
       const minLimit = Number(ap.minStockLimit || 10);
       let st = 'In Stock';
       if (stockVal === 0) st = 'Out of Stock';

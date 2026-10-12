@@ -13,9 +13,12 @@ import SellerRegistrationFeeConfig from '../models/SellerRegistrationFeeConfig.m
 import { hasRegistrationFeeCleared, isMembershipRequiredForSeller } from '../utils/sellerEligibility.js';
 
 // Send / Resend OTP
+// purpose: 'register' (default) may create a stub seller; 'reset' requires an existing account
 export const sendOtp = async (req, res, next) => {
   try {
     const rawPhone = req.body.phone;
+    const purpose = String(req.body.purpose || req.body.for || 'register').toLowerCase();
+    const isPasswordReset = purpose === 'reset' || purpose === 'forgot' || purpose === 'forgot_password';
 
     if (!rawPhone) {
       return res.status(400).json({ success: false, message: 'Phone number is required' });
@@ -39,6 +42,12 @@ export const sendOtp = async (req, res, next) => {
     });
 
     if (!seller) {
+      if (isPasswordReset) {
+        return res.status(404).json({
+          success: false,
+          message: 'No seller account found with this mobile number. Please register first.',
+        });
+      }
       seller = await Seller.create({ 
         phone: cleanPhone, 
         otp, 
@@ -70,16 +79,14 @@ export const sendOtp = async (req, res, next) => {
         success: false,
         message: smsResult.message || 'Unable to deliver SMS OTP. Please verify phone number and try again.',
         phone: cleanPhone,
-        otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
-      });
+        });
     }
 
     res.status(200).json({
       success: true,
       message: smsResult.message || 'OTP sent successfully to your mobile number',
       phone: cleanPhone,
-      otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
-    });
+      });
   } catch (error) {
     next(error);
   }
@@ -422,7 +429,6 @@ export const registerSeller = async (req, res, next) => {
       message: 'Registration details saved. Please verify your mobile number with the OTP sent to complete registration.',
       phone: cleanPhone,
       accountStatus: 'pending_otp',
-      otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
       seller: {
         id: seller._id,
         phone: seller.phone,

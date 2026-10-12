@@ -4,7 +4,6 @@ import { haversineDistance } from './haversine.js';
 import {
   storefrontSellerBaseMatch,
   getActiveMembershipSellerIdSet,
-  isMembershipRequiredForSeller,
 } from './sellerEligibility.js';
 
 /**
@@ -173,15 +172,10 @@ export const getEligibleSellersForLocation = async (userLat, userLng, options = 
       results.sort((a, b) => a.distanceKm - b.distanceKm);
     }
 
-    // 3. Active subscription required only for NEW sellers (after membership enforcement cutoff).
-    // Already-registered / legacy sellers stay visible without a plan.
-    const legacyResults = results.filter((s) => !isMembershipRequiredForSeller(s));
-    const newResults = results.filter((s) => isMembershipRequiredForSeller(s));
-    const membershipOk = await getActiveMembershipSellerIdSet(newResults.map((s) => s._id));
-    results = [
-      ...legacyResults,
-      ...newResults.filter((s) => membershipOk.has(String(s._id))),
-    ];
+    // 3. Active subscription required for all customer-facing storefront sellers.
+    // Sellers without an active SellerMembership must not appear or list products.
+    const membershipOk = await getActiveMembershipSellerIdSet(results.map((s) => s._id));
+    results = results.filter((s) => membershipOk.has(String(s._id)));
 
     const eligibleSellers = results.map((s) => ({
       _id: s._id,

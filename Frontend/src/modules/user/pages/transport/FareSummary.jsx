@@ -20,6 +20,50 @@ import {
 import { useTransport } from '../../context/TransportContext';
 import { transportService } from '../../../../services/transportService';
 import { loadRazorpaySdk } from '../../../../utils/razorpay';
+import { MapService } from '../../../../services/MapService';
+
+const ROAD_DISTANCE_FACTOR = 1.25;
+
+const resolveCoords = (loc) => {
+  if (!loc) return null;
+  const lat = loc.lat ?? loc.latitude;
+  const lng = loc.lng ?? loc.longitude;
+  if (lat == null || lng == null) return null;
+  return { lat: Number(lat), lng: Number(lng) };
+};
+
+/** Single-leg: prefer Google driving km; else crow-flies × 1.25 (same as backend). */
+const resolveSegmentDrivingKm = async (from, to) => {
+  const origin = resolveCoords(from);
+  const dest = resolveCoords(to);
+  if (!origin || !dest) return null;
+  try {
+    const matrix = await MapService.calculateDistanceAndDuration(origin, dest);
+    if (matrix?.distanceKm > 0) return Number(matrix.distanceKm);
+  } catch (_) {}
+  const R = 6371;
+  const dLatRad = ((dest.lat - origin.lat) * Math.PI) / 180;
+  const dLonRad = ((dest.lng - origin.lng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLatRad / 2) * Math.sin(dLatRad / 2) +
+    Math.cos((origin.lat * Math.PI) / 180) * Math.cos((dest.lat * Math.PI) / 180) *
+    Math.sin(dLonRad / 2) * Math.sin(dLonRad / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.max(1, Math.round(R * c * ROAD_DISTANCE_FACTOR * 100) / 100);
+};
+
+/** Full trip: pickup → stops → drop (sums each leg). */
+const resolveDrivingDistanceKm = async (pickup, drop, stops = []) => {
+  const points = [pickup, ...(Array.isArray(stops) ? stops.filter(Boolean) : []), drop].filter(Boolean);
+  if (points.length < 2) return resolveSegmentDrivingKm(pickup, drop);
+  let total = 0;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const leg = await resolveSegmentDrivingKm(points[i], points[i + 1]);
+    if (leg == null) return null;
+    total += leg;
+  }
+  return Math.max(1, Math.round(total * 100) / 100);
+};
 
 const PAYMENT_METHODS = [
   {
@@ -93,7 +137,7 @@ const FareSummary = () => {
         Math.cos((pLat * Math.PI) / 180) * Math.cos((dLat * Math.PI) / 180) *
         Math.sin(dLonRad / 2) * Math.sin(dLonRad / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      dist = Math.max(1, Math.round(R * c * 1.25 * 100) / 100);
+      dist = Math.max(1, Math.round(R * c * ROAD_DISTANCE_FACTOR * 100) / 100);
     }
 
     const baseFare = v.baseFare || 30;
@@ -139,6 +183,11 @@ const FareSummary = () => {
 
         const pickupAddr = getCleanAddress(pickupRaw) || 'Pickup Location';
         const dropAddr = getCleanAddress(dropRaw) || 'Drop Location';
+        const drivingKm = await resolveDrivingDistanceKm(
+          pickupRaw,
+          dropRaw,
+          (activeBooking.stops || []).filter(Boolean)
+        );
 
         const payload = {
           pickupLocation: {
@@ -152,6 +201,8 @@ const FareSummary = () => {
             lng: dropRaw?.lng ?? dropRaw?.longitude ?? null,
           },
           vehicleTypeId: vehicleId,
+          distanceKm: drivingKm || undefined,
+          stops: (activeBooking.stops || []).filter(Boolean),
         };
 
         const data = await transportService.getFareEstimate(payload);
@@ -168,7 +219,7 @@ const FareSummary = () => {
     return () => {
       isMounted = false;
     };
-  }, [vehicleId]);
+  }, [vehicleId, pickupRaw, dropRaw, activeBooking.stops]);
 
   // Create booking or launch Razorpay checkout
   const handleBookVehicle = async () => {
@@ -178,6 +229,12 @@ const FareSummary = () => {
 
     const pickupAddr = getCleanAddress(activeBooking.pickup);
     const dropAddr = getCleanAddress(activeBooking.drop);
+
+    const drivingKm = await resolveDrivingDistanceKm(
+      activeBooking.pickup,
+      activeBooking.drop,
+      (activeBooking.stops || []).filter(Boolean)
+    );
 
     const basePayload = {
       pickupLocation: {
@@ -213,6 +270,7 @@ const FareSummary = () => {
       },
       vehicleTypeId: activeBooking.vehicle._id,
       paymentMethod,
+      distanceKm: drivingKm || fareEstimate?.distanceKm || undefined,
     };
 
     // ── 1. Cash On Delivery Flow ──────────────────────────────────────────

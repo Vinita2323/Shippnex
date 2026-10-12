@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Star, X, Check, HelpCircle, Loader2, Sparkles, ThumbsUp, ThumbsDown, User } from 'lucide-react';
+import { Star, X, Check, Loader2, Sparkles, ThumbsUp, ThumbsDown, User } from 'lucide-react';
 import ratingService from '../services/ratingService';
 
 const POSITIVE_TAGS = [
@@ -247,12 +247,6 @@ const RatingModal = ({
               {error}
             </p>
           )}
-
-          {/* Help Support Footer */}
-          <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500 pt-1">
-            <HelpCircle size={14} className="text-slate-400" />
-            <span>Need Help? We are just a tap away</span>
-          </div>
         </div>
 
         {/* Action Footer */}

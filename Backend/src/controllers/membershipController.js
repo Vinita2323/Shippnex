@@ -843,6 +843,34 @@ export const adminGetCaptainSubscriptions = async (req, res, next) => {
       .limit(Number(limit))
       .lean();
 
+    // Enrich missing captain names when populate fails (deleted/orphan refs) — #86
+    const missingCaptainIds = subscriptions
+      .filter((m) => !m.captainId || typeof m.captainId !== 'object' || !m.captainId.name)
+      .map((m) => (m.captainId && m.captainId._id ? m.captainId._id : m.captainId))
+      .filter(Boolean);
+    if (missingCaptainIds.length) {
+      const captains = await Captain.find({ _id: { $in: missingCaptainIds } })
+        .select('name phone email')
+        .lean();
+      const byId = Object.fromEntries(captains.map((c) => [String(c._id), c]));
+      subscriptions = subscriptions.map((m) => {
+        if (m.captainId && typeof m.captainId === 'object' && m.captainId.name) return m;
+        const rawId = m.captainId && m.captainId._id ? m.captainId._id : m.captainId;
+        const found = byId[String(rawId)];
+        if (found) {
+          return { ...m, captainId: { _id: found._id, name: found.name, phone: found.phone, email: found.email } };
+        }
+        return {
+          ...m,
+          captainId: {
+            _id: rawId,
+            name: m.captainName || 'Captain (unavailable)',
+            phone: m.captainPhone || '',
+          },
+        };
+      });
+    }
+
     if (search) {
       const s = search.toLowerCase();
       subscriptions = subscriptions.filter(m =>

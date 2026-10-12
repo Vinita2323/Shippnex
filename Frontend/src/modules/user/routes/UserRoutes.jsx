@@ -26,7 +26,7 @@ const LocationSelectionPage = lazy(() => import('../pages/LocationSelectionPage'
 const Notifications = lazy(() => import('../pages/Notifications'));
 const AccountInfo = lazy(() => import('../pages/AccountInfo'));
 const SavedAddresses = lazy(() => import('../pages/SavedAddresses'));
-const Security = lazy(() => import('../pages/Security'));
+const Wallet = lazy(() => import('../pages/Wallet'));
 const Terms = lazy(() => import('../pages/Terms'));
 const Faqs = lazy(() => import('../pages/Faqs'));
 const HelpSupport = lazy(() => import('../pages/HelpSupport'));
@@ -55,7 +55,7 @@ const UserRoutes = () => {
   const isFlashSale = location.pathname === '/flash-sale';
   const isNotifications = location.pathname === '/notifications';
   const isLocation = location.pathname === '/location';
-  const isPlaceholder = ['/account-information', '/saved-addresses', '/security', '/terms', '/privacy', '/faqs', '/support'].includes(location.pathname);
+  const isPlaceholder = ['/account-information', '/saved-addresses', '/wallet', '/terms', '/privacy', '/faqs', '/support'].includes(location.pathname);
   
   // Transport flow routes that should hide the bottom nav
   const isTransportFlow = ['/transport/register', '/transport/location', '/transport/goods', '/transport/vehicle', '/transport/summary', '/transport/success', '/transport/booking-details'].includes(location.pathname);
@@ -96,7 +96,7 @@ const UserRoutes = () => {
             <Route path="/profile" element={<Profile />} />
             <Route path="/account-information" element={<AccountInfo />} />
             <Route path="/saved-addresses" element={<SavedAddresses />} />
-            <Route path="/security" element={<Security />} />
+            <Route path="/wallet" element={<Wallet />} />
             
             {/* Transport Routes */}
             <Route path="/transport" element={<TransportHome />} />

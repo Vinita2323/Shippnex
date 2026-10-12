@@ -5,10 +5,16 @@ import {
   getAdminSettlements,
   getAdminWithdrawals,
   updateWithdrawalStatus,
+  getUserWallet,
+  getUserWalletTransactions,
 } from '../controllers/walletController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+// User Wallet Routes
+router.get('/user', protect('user'), getUserWallet);
+router.get('/user/transactions', protect('user'), getUserWalletTransactions);
 
 // Seller Wallet Routes
 router.get('/seller', protect('seller'), getSellerWallet);

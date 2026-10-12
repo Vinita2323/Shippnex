@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import SellerSidebar from './SellerSidebar';
 import SellerHeader from './SellerHeader';
 import SellerOrderNotifier from './SellerOrderNotifier';
+import SellerReturnNotifier from './SellerReturnNotifier';
 
 const SellerLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -20,6 +21,7 @@ const SellerLayout = () => {
     <div className="flex h-screen bg-[#f8fafc] font-sans text-slate-800 overflow-hidden select-none">
       {/* Global incoming order audio ringtone and popup modal across all seller pages */}
       <SellerOrderNotifier />
+      <SellerReturnNotifier />
 
       <SellerSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
       

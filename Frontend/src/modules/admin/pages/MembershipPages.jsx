@@ -250,8 +250,15 @@ const SubscriptionsTable = ({ subs, onConfirm, loading, role }) => {
           {subs.map(sub => (
             <tr key={sub._id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
               <td className="px-4 py-3">
-                <p className="font-bold text-slate-800">{sub[nameKey]?.[nameProp] || 'N/A'}</p>
-                <p className="text-xs text-slate-400">{sub[nameKey]?.phone || ''}</p>
+                <p className="font-bold text-slate-800">
+                  {sub[nameKey]?.[nameProp]
+                    || sub[nameKey]?.ownerName
+                    || sub[nameKey]?.businessName
+                    || sub.captainName
+                    || sub.sellerName
+                    || 'N/A'}
+                </p>
+                <p className="text-xs text-slate-400">{sub[nameKey]?.phone || sub.captainPhone || ''}</p>
               </td>
               <td className="px-4 py-3">
                 <p className="font-semibold text-slate-700">{sub.planName}</p>

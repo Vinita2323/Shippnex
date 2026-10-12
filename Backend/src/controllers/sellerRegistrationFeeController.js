@@ -115,17 +115,20 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
         });
       }
 
-      const feeConfigCutoff = new Date('2026-09-12T12:46:51.865Z');
-      const isLegacySeller = existingSeller.createdAt && new Date(existingSeller.createdAt) < feeConfigCutoff;
-      const isFeeExempt = existingSeller.registrationFeeStatus === 'paid' || 
-                          existingSeller.registrationFeeStatus === 'not_required' || 
-                          isLegacySeller;
+      // Only skip payment when fee was actually paid or explicitly waived — never via date cutoff
+      const isFeeExempt =
+        existingSeller.registrationFeeStatus === 'paid' ||
+        existingSeller.registrationFeeStatus === 'not_required';
 
       if (isFeeExempt) {
-        if (existingSeller.registrationFeeStatus !== 'paid') {
-          existingSeller.registrationFeeStatus = 'not_required';
+        // Persist password from this registration attempt if provided (#22)
+        if (password) {
+          existingSeller.password = password;
+          existingSeller.markModified('password');
         }
-        // Already paid or fee waived/legacy! Skip payment and proceed directly to OTP
+        if (businessName) existingSeller.businessName = businessName;
+        if (ownerName) existingSeller.ownerName = ownerName;
+
         const { otp, otpExpiry } = generateOtp();
         existingSeller.otp = otp;
         existingSeller.otpExpiry = otpExpiry;
@@ -141,10 +144,10 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
         return res.status(200).json({
           success: true,
           registrationFeeRequired: false,
-          alreadyPaid: true,
+          alreadyPaid: existingSeller.registrationFeeStatus === 'paid',
           message: 'Registration fee is not required or already paid for this account. Proceeding to verification.',
           phone: cleanPhone,
-          otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
+          sellerId: existingSeller._id,
           seller: {
             id: existingSeller._id,
             phone: existingSeller.phone,
@@ -156,6 +159,22 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
 
     // Get active fee configuration from database (NEVER TRUST CLIENT)
     const feeConfig = await SellerRegistrationFeeConfig.getOrCreateActiveConfig();
+
+    // Validate referral code BEFORE creating/updating seller (#18)
+    const cleanReferralCode = referralCode ? String(referralCode).trim().toUpperCase() : '';
+    let referrerSeller = null;
+    if (cleanReferralCode) {
+      const escaped = cleanReferralCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      referrerSeller = await Seller.findOne({
+        referralCode: { $regex: new RegExp(`^${escaped}$`, 'i') },
+      }).select('_id businessName ownerName referralCode');
+      if (!referrerSeller) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid referral code. Please check and try again, or leave it blank.',
+        });
+      }
+    }
 
     // Process image uploads if base64
     let processedLogo = storeLogo || '';
@@ -226,17 +245,20 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
 
     let seller;
     if (existingSeller) {
-      Object.assign(existingSeller, sellerData);
+      Object.keys(sellerData).forEach((key) => {
+        existingSeller[key] = sellerData[key];
+      });
+      if (sellerData.password) existingSeller.markModified('password');
       seller = await existingSeller.save();
     } else {
       seller = await Seller.create(sellerData);
     }
 
-    // Process referral code if provided
-    if (referralCode) {
+    // Apply validated referral after seller exists
+    if (cleanReferralCode && referrerSeller) {
       try {
         await applyReferralCodeAtRegistration({
-          referralCode,
+          referralCode: cleanReferralCode,
           referrerRole: 'seller',
           referredId: seller._id,
           referredRole: 'seller',
@@ -244,7 +266,7 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
           referredName: businessName || ownerName || 'Seller',
         });
       } catch (refErr) {
-        console.warn('[SellerRegFee] Referral registration error:', refErr.message);
+        console.warn('[SellerRegFee] Referral apply error:', refErr.message);
       }
     }
 
@@ -263,7 +285,7 @@ export const initiateRegistrationFeeOrder = async (req, res, next) => {
         registrationFeeRequired: false,
         message: 'Registration fee is currently waived. Please verify with OTP.',
         phone: cleanPhone,
-        otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
+        sellerId: seller._id,
         seller: {
           id: seller._id,
           phone: seller.phone,
@@ -434,8 +456,7 @@ export const verifyRegistrationFeePayment = async (req, res, next) => {
       message: 'Registration payment successful. Please verify your mobile number with the OTP.',
       phone: seller.phone,
       registrationFeeStatus: 'paid',
-      otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
-    });
+      });
   } catch (error) {
     console.error('[SellerRegFee] Error verifying payment:', error);
     next(error);

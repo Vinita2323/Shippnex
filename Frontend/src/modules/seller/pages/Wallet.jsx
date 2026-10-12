@@ -61,6 +61,16 @@ const Wallet = () => {
 
   useEffect(() => {
     fetchWallet();
+    // Refresh wallet cards when seller orders update (delivery / settlement) — #75
+    const onOrderUpdate = () => {
+      fetchWallet();
+    };
+    window.addEventListener('seller-order-update', onOrderUpdate);
+    const interval = setInterval(fetchWallet, 60000);
+    return () => {
+      window.removeEventListener('seller-order-update', onOrderUpdate);
+      clearInterval(interval);
+    };
   }, []);
 
   const showToast = (msg) => {

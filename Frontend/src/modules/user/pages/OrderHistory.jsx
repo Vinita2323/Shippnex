@@ -75,6 +75,7 @@ const OrderHistory = () => {
   const [copiedId, setCopiedId] = useState(null);
   const [reorderingId, setReorderingId] = useState(null);
   const [reorderSuccess, setReorderSuccess] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   const [expandedOrderIds, setExpandedOrderIds] = useState({});
 
   // Product Rating Modal & Reviews State
@@ -113,6 +114,7 @@ const OrderHistory = () => {
 
   const fetchOrderHistory = async (force = false) => {
     try {
+      if (force) setRefreshing(true);
       if (orders.length === 0) setLoading(true);
       const res = await orderService.getOrders(force);
       if (res && res.success && Array.isArray(res.orders)) {
@@ -122,6 +124,7 @@ const OrderHistory = () => {
       console.error('Failed to fetch order history:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -168,8 +171,30 @@ const OrderHistory = () => {
     setReorderingId(order.id);
     try {
       for (const item of order.items) {
-        const prod = item.product || item;
-        await addToCart(prod, item.quantity || 1);
+        const prod = item.product && typeof item.product === 'object' ? item.product : {};
+        const productId = prod._id || prod.id || item.productId || item.product || item.id;
+        const linePrice = Number(item.price ?? item.salePrice ?? prod.salePrice ?? prod.price ?? 0);
+        const lineMrp = Number(item.mrp ?? item.originalPrice ?? prod.mrp ?? prod.originalPrice ?? linePrice);
+        await addToCart(
+          {
+            ...prod,
+            id: productId,
+            _id: productId,
+            productId,
+            name: item.name || prod.name || 'Product',
+            image: item.image || prod.mainImage || prod.image || '',
+            salePrice: linePrice,
+            price: linePrice,
+            mrp: lineMrp,
+            originalPrice: lineMrp,
+            variantSku: item.variantSku || '',
+            variantId: item.variantId || '',
+            variantTitle: item.variantTitle || item.variation || '',
+            selectedAttributes: item.selectedAttributes || {},
+            selectedVariants: item.selectedVariants || [],
+          },
+          item.quantity || 1
+        );
       }
       setReorderSuccess(`Items added to cart!`);
       setTimeout(() => setReorderSuccess(''), 2500);
@@ -179,6 +204,11 @@ const OrderHistory = () => {
     } finally {
       setReorderingId(null);
     }
+  };
+
+  const handleBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate('/profile');
   };
 
   // Filter Counts
@@ -296,9 +326,9 @@ const OrderHistory = () => {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <button 
-              onClick={() => navigate('/profile')}
+              onClick={handleBack}
               className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center border-none cursor-pointer text-white transition-colors"
-              aria-label="Back to Profile"
+              aria-label="Back"
             >
               <ArrowLeft size={15} />
             </button>
@@ -312,12 +342,12 @@ const OrderHistory = () => {
 
           <button 
             onClick={() => fetchOrderHistory(true)} 
-            disabled={loading}
+            disabled={loading || refreshing}
             className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center border-none cursor-pointer text-white transition-colors"
             title="Refresh Orders"
             aria-label="Refresh Orders"
           >
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={12} className={refreshing || loading ? 'animate-spin' : ''} />
           </button>
         </div>
 
@@ -347,8 +377,9 @@ const OrderHistory = () => {
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
             <button 
-              onClick={() => navigate('/profile')}
+              onClick={handleBack}
               className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border-none cursor-pointer flex items-center justify-center transition-colors"
+              aria-label="Back"
             >
               <ArrowLeft size={18} />
             </button>
@@ -366,10 +397,10 @@ const OrderHistory = () => {
           <div className="flex items-center gap-3">
             <button 
               onClick={() => fetchOrderHistory(true)} 
-              disabled={loading}
+              disabled={loading || refreshing}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer transition-colors"
             >
-              <RefreshCw size={14} className={loading ? 'animate-spin text-orange-500' : ''} />
+              <RefreshCw size={14} className={refreshing || loading ? 'animate-spin text-orange-500' : ''} />
               Refresh
             </button>
             <button 

@@ -29,6 +29,7 @@ const CaptainLogin = () => {
   const [newPassword, setNewPassword] = useState(savedDraft.newPassword || '');
   const [confirmPassword, setConfirmPassword] = useState(savedDraft.confirmPassword || '');
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
 
   // Keep login details when user opens Privacy / Terms in the same tab
@@ -136,16 +137,20 @@ const CaptainLogin = () => {
 
     try {
       setLoading(true);
-      const res = await authService.sendCaptainOtp(cleanPhone);
+      const res = await authService.sendCaptainOtp(cleanPhone, { purpose: 'reset' });
       if (res.success) {
         setSuccessMsg(res.message || 'OTP sent successfully to your mobile number.');
         setForgotStep(2);
         startResendCountdown();
       } else {
-        setErrorMsg(res.message || 'Failed to send OTP. Please try again.');
+        setErrorMsg(res.message || 'This mobile number is not registered. Please register first.');
       }
     } catch (err) {
-      setErrorMsg(err.response?.data?.message || err.message || 'Failed to send OTP.');
+      setErrorMsg(
+        err.response?.data?.message
+        || err.message
+        || 'This mobile number is not registered. Please register first.'
+      );
     } finally {
       setLoading(false);
     }
@@ -465,18 +470,26 @@ const CaptainLogin = () => {
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 ml-1">Confirm Password</label>
-                      <div className="relative rounded-xl border border-slate-200 shadow-2xs overflow-hidden focus-within:border-[#15803d] transition-all flex items-center">
+                      <div className="relative rounded-xl border border-slate-200 shadow-2xs focus-within:border-[#15803d] transition-all flex items-center">
                         <div className="pl-3.5 text-slate-400">
                           <Lock size={16} />
                         </div>
                         <input
-                          type={showNewPassword ? 'text' : 'password'}
+                          type={showConfirmPassword ? 'text' : 'password'}
                           required
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           placeholder="Confirm new password"
-                          className="block w-full px-3 py-3 bg-white placeholder-slate-400 text-slate-900 outline-none text-xs sm:text-sm font-normal"
+                          className="block w-full px-3 py-3 bg-white placeholder-slate-400 text-slate-900 outline-none text-xs sm:text-sm font-normal pr-10"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 z-10 text-slate-400 hover:text-slate-600 bg-transparent border-none cursor-pointer p-1"
+                          aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                        >
+                          {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
                       </div>
                     </div>
 

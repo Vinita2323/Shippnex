@@ -8,21 +8,23 @@ import SellerMembership from '../models/SellerMembership.model.js';
  * A seller is eligible for public product visibility and new customer orders only when:
  * 1. Admin-approved (accountStatus or status === approved; not rejected/suspended)
  * 2. Registration fee is paid or explicitly not_required
- * 3. Active membership exists (membershipStatus active AND expiryDate > now)
- *    — EXCEPT legacy sellers registered before MEMBERSHIP_ENFORCEMENT_CUTOFF
+ * 3. Active membership exists (SellerMembership membershipStatus active AND expiryDate > now)
  * 4. Store is online (isOnline !== false) — for customer-facing checks only
+ *
+ * Note: MEMBERSHIP_ENFORCEMENT_CUTOFF / isMembershipRequiredForSeller are retained only for
+ * seller-panel auth UX (e.g. prompting subscription purchase). Customer storefront listing
+ * always requires an active subscription so unsubscribed sellers' products stay hidden.
  */
 
 export const REGISTRATION_FEE_OK = ['paid', 'not_required'];
 
 /**
- * Sellers created before this timestamp are grandfathered: subscription is NOT required
- * for product visibility / orders. New sellers registered on/after this date must subscribe.
- * Matches when storefront membership enforcement was introduced.
+ * Cutoff used only for seller-panel UX (prompting subscription purchase via
+ * isMembershipRequiredForSeller). Customer storefront always requires active membership.
  */
 export const MEMBERSHIP_ENFORCEMENT_CUTOFF = new Date('2026-10-09T00:00:00.000Z');
 
-/** True when this seller must have an active paid subscription to sell / be listed. */
+/** True when seller-panel should treat subscription as required (UX / auth prompts). */
 export const isMembershipRequiredForSeller = (seller) => {
   if (!seller) return true;
   if (seller.createdAt && new Date(seller.createdAt) < MEMBERSHIP_ENFORCEMENT_CUTOFF) {
@@ -206,11 +208,7 @@ export const evaluateSellerStorefrontEligibility = async (sellerOrId, options = 
     };
   }
 
-  // Legacy / already-registered sellers: skip subscription requirement
-  if (!isMembershipRequiredForSeller(seller)) {
-    return { eligible: true, reason: null, message: null, seller, membershipRequired: false };
-  }
-
+  // Customer storefront / orders: active subscription required for every seller
   const hasMembership = await sellerHasActiveMembership(seller._id);
   if (!hasMembership) {
     if (seller.membershipStatus === 'active') {
@@ -262,11 +260,8 @@ export const filterStorefrontEligibleSellers = async (sellers = [], options = {}
     return true;
   });
 
-  const legacy = basePass.filter((s) => !isMembershipRequiredForSeller(s));
-  const needsMembership = basePass.filter((s) => isMembershipRequiredForSeller(s));
-  const activeSet = await getActiveMembershipSellerIdSet(needsMembership.map((s) => s._id));
-  const subscribed = needsMembership.filter((s) => activeSet.has(String(s._id)));
-  return [...legacy, ...subscribed];
+  const activeSet = await getActiveMembershipSellerIdSet(basePass.map((s) => s._id));
+  return basePass.filter((s) => activeSet.has(String(s._id)));
 };
 
 /**

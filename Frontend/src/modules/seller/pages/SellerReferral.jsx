@@ -177,27 +177,37 @@ const SellerReferral = () => {
     }
   };
 
-  const getRewardBadge = (status) => {
-    switch (status) {
-      case 'Credited':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            ✓ Credited
-          </span>
-        );
-      case 'Failed':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-            ✕ Failed
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-50 text-slate-600 border border-slate-200">
-            ⏳ Pending
-          </span>
-        );
+  const getRewardBadge = (status, item = {}) => {
+    const normalized = String(status || '').trim().toLowerCase();
+    if (normalized === 'credited' || normalized === 'paid' || normalized === 'completed') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          ✓ Credited
+        </span>
+      );
     }
+    if (normalized === 'failed') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+          ✕ Failed
+        </span>
+      );
+    }
+    // Pending — show why (trigger) so it does not look like a stuck credit (#76)
+    const triggerHint =
+      item.rewardTrigger === 'admin_approval' || codeData.rewardTrigger === 'admin_approval'
+        ? 'Awaiting admin approval'
+        : item.rewardTrigger === 'first_order' || codeData.rewardTrigger === 'first_order'
+          ? 'Awaiting first order'
+          : 'Pending credit';
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200"
+        title={getTriggerDescription(item.rewardTrigger || codeData.rewardTrigger)}
+      >
+        ⏳ {triggerHint}
+      </span>
+    );
   };
 
   const getTriggerDescription = (trigger) => {
@@ -488,7 +498,7 @@ const SellerReferral = () => {
                       ₹{item.rewardAmount || codeData.rewardAmount || 0}
                     </td>
                     <td className="py-3 px-4">
-                      {getRewardBadge(item.rewardStatus)}
+                      {getRewardBadge(item.rewardStatus, item)}
                     </td>
                   </tr>
                 ))

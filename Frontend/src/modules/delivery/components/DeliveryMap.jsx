@@ -17,6 +17,7 @@ const DeliveryMap = ({
   currentStep = 1,
   isReturn = false,
   isTransport = false,
+  stops = [],
   onMapLoad,
 }) => {
   const mapDivRef = useRef(null);
@@ -286,6 +287,17 @@ const DeliveryMap = ({
       if (capCoords && pickCoords) {
         waypoints = [{ location: pickCoords, stopover: true }];
       }
+      const extraStops = (Array.isArray(stops) ? stops : [])
+        .map((s) => {
+          const lat = Number(s?.lat ?? s?.latitude);
+          const lng = Number(s?.lng ?? s?.longitude);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) return { location: { lat, lng }, stopover: true };
+          if (typeof s === 'string' && s.trim()) return { location: s.trim(), stopover: true };
+          if (s?.address) return { location: s.address, stopover: true };
+          return null;
+        })
+        .filter(Boolean);
+      waypoints = [...waypoints, ...extraStops];
     }
 
     if (!origin || !destination) {
@@ -379,7 +391,7 @@ const DeliveryMap = ({
         }
       }
     });
-  }, [mapReady, capCoords, pickCoords, drpCoords, pickupAddress, dropAddress, activeTarget]);
+  }, [mapReady, capCoords, pickCoords, drpCoords, pickupAddress, dropAddress, activeTarget, stops]);
 
   // Handle external navigation in Google Maps App
   const handleOpenGoogleMaps = () => {

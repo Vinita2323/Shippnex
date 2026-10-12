@@ -54,11 +54,43 @@ const hasDropPhotos = (booking) =>
 // Auth: Captain required
 // Returns all pending transport requests for the logged-in captain with matching vehicle
 // ──────────────────────────────────────────────────────────────────────────────
+const netTransportEarnings = (booking, myRequest) => {
+  if (myRequest?.earnings != null && Number.isFinite(Number(myRequest.earnings))) {
+    return Number(myRequest.earnings);
+  }
+  if (booking.captainEarnings != null && Number.isFinite(Number(booking.captainEarnings))) {
+    return Number(booking.captainEarnings);
+  }
+  const fare = Number(booking.fareBreakdown?.totalFare || 0);
+  const rate = Number(
+    booking.captainCommissionRate !== undefined ? booking.captainCommissionRate : 5
+  );
+  const comm = Number(
+    booking.captainCommissionAmount !== undefined
+      ? booking.captainCommissionAmount
+      : (fare * rate) / 100
+  );
+  return Math.round((fare - comm) * 100) / 100;
+};
+
+const haversineKmPts = (lat1, lon1, lat2, lon2) => {
+  if (![lat1, lon1, lat2, lon2].every((n) => Number.isFinite(n))) return null;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 100) / 100;
+};
+
 export const getTransportRequests = async (req, res, next) => {
   try {
     const captainId = req.user.id;
-    const captain = await Captain.findById(captainId).select('vehicleType');
+    const captain = await Captain.findById(captainId).select('vehicleType liveLocation location workingArea');
     const vehiclePattern = getVehicleMatchPattern(captain?.vehicleType);
+    const maxRangeKm = Math.max(1, Number(req.query.maxKm || req.query.rangeKm || 50));
 
     const baseQuery = {
       status: 'SEARCHING_CAPTAIN',
@@ -93,37 +125,77 @@ export const getTransportRequests = async (req, res, next) => {
       .populate('user', 'name phone')
       .populate('vehicleTypeId', 'name slug icon')
       .sort({ createdAt: -1 })
-      .limit(20);
+      .limit(40);
 
-    const formattedRequests = bookings.map((b) => {
-      const myRequest = b.captainRequests?.find(
-        (r) => r.captainId?.toString() === captainId
-      );
+    const captainLat = Number(
+      captain?.liveLocation?.coordinates?.[1] ?? captain?.location?.coordinates?.[1]
+    );
+    const captainLng = Number(
+      captain?.liveLocation?.coordinates?.[0] ?? captain?.location?.coordinates?.[0]
+    );
+    const hasCaptainLoc = Number.isFinite(captainLat) && Number.isFinite(captainLng);
 
-      return {
-        _id: b._id,
-        bookingId: b.bookingId,
-        pickupLocation: b.pickupLocation,
-        dropLocation: b.dropLocation,
-        stops: b.stops,
-        distanceKm: b.distanceKm,
-        estimatedDurationMin: b.estimatedDurationMin,
-        goods: b.goods,
-        vehicleSnapshot: b.vehicleSnapshot,
-        paymentMethod: b.paymentMethod,
-        estimatedEarnings:
-          myRequest?.earnings ||
-          b.captainEarnings ||
-          Math.round((b.fareBreakdown?.totalFare || 0) * 0.8),
-        sentAt: myRequest?.sentAt || b.createdAt,
-        customerName: b.user?.name || 'Customer',
-        customerPhone: b.user?.phone || '',
-      };
-    });
+    const formattedRequests = bookings
+      .map((b) => {
+        const myRequest = b.captainRequests?.find(
+          (r) => r.captainId?.toString() === captainId
+        );
+        const pickupLat = Number(b.pickupLocation?.lat);
+        const pickupLng = Number(b.pickupLocation?.lng);
+        const distanceFromCaptainKm = hasCaptainLoc
+          ? haversineKmPts(captainLat, captainLng, pickupLat, pickupLng)
+          : null;
+        const fare = Number(b.fareBreakdown?.totalFare || 0);
+        const commRate = Number(
+          b.captainCommissionRate !== undefined ? b.captainCommissionRate : 5
+        );
+        const commAmt = Number(
+          b.captainCommissionAmount !== undefined
+            ? b.captainCommissionAmount
+            : ((fare * commRate) / 100).toFixed(2)
+        );
+        const earnings = netTransportEarnings(b, myRequest);
+
+        return {
+          _id: b._id,
+          bookingId: b.bookingId,
+          pickupLocation: b.pickupLocation,
+          dropLocation: b.dropLocation,
+          stops: b.stops,
+          distanceKm: b.distanceKm,
+          distanceFromCaptainKm,
+          estimatedDurationMin: b.estimatedDurationMin,
+          goods: b.goods,
+          vehicleSnapshot: b.vehicleSnapshot,
+          paymentMethod: b.paymentMethod,
+          paymentStatus: b.paymentStatus,
+          fareBreakdown: b.fareBreakdown || {},
+          captainCommissionRate: commRate,
+          captainCommissionAmount: commAmt,
+          estimatedEarnings: earnings,
+          captainEarnings: earnings,
+          sentAt: myRequest?.sentAt || b.createdAt,
+          customerName: b.user?.name || 'Customer',
+          customerPhone: b.user?.phone || '',
+        };
+      })
+      .filter((r) => {
+        // #69 — when captain GPS is known, only show requests within range
+        if (!hasCaptainLoc || r.distanceFromCaptainKm == null) return true;
+        return r.distanceFromCaptainKm <= maxRangeKm;
+      })
+      .sort((a, b) => {
+        if (a.distanceFromCaptainKm == null && b.distanceFromCaptainKm == null) return 0;
+        if (a.distanceFromCaptainKm == null) return 1;
+        if (b.distanceFromCaptainKm == null) return -1;
+        return a.distanceFromCaptainKm - b.distanceFromCaptainKm;
+      })
+      .slice(0, 20);
 
     res.status(200).json({
       success: true,
       count: formattedRequests.length,
+      maxRangeKm: hasCaptainLoc ? maxRangeKm : null,
       requests: formattedRequests,
     });
   } catch (error) {
@@ -173,10 +245,7 @@ export const acceptTransportRequest = async (req, res, next) => {
     const myReq = existing.captainRequests?.find(
       (r) => r.captainId.toString() === captainId
     );
-    const finalEarnings =
-      myReq?.earnings ||
-      existing.captainEarnings ||
-      Math.round(existing.fareBreakdown.totalFare * 0.8);
+    const finalEarnings = netTransportEarnings(existing, myReq);
 
     // ── ATOMIC ACCEPTANCE QUERY ──
     const booking = await TransportBooking.findOneAndUpdate(
@@ -709,7 +778,7 @@ export const verifyDropOtp = async (req, res, next) => {
     }
 
     const now = new Date();
-    const earnings = booking.captainEarnings || Math.round((booking.fareBreakdown?.totalFare || 0) * 0.8) || 0;
+    const earnings = netTransportEarnings(booking) || 0;
     const dropPhotos = Array.isArray(booking.dropPhotos) ? [...booking.dropPhotos] : [];
     incomingDropPhotos.forEach((url) => {
       if (!dropPhotos.some((photo) => photo.url === url)) {

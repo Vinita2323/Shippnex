@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, Pencil, Camera, Package, Heart, Gift, Headphones, 
-  ChevronRight, Wallet, User, MapPin, Lock, FileText, HelpCircle, 
+  ChevronRight, Wallet, User, MapPin, FileText, HelpCircle, 
   PhoneCall, LogOut, Trash2, Sparkles, Clock, ShoppingBag, Loader2, Star, ShieldCheck,
   Share2, Check, Copy, ExternalLink, X, Send
 } from 'lucide-react';
@@ -322,7 +322,11 @@ const Profile = () => {
               <Heart size={18} className="text-[#ea580c]" />
               <span className="text-[13px] font-bold text-[#1e1b4b]">My Picks</span>
             </button>
-            <button className="flex items-center gap-2 bg-white border border-slate-100 rounded-[12px] p-3 shadow-sm cursor-pointer hover:border-orange-100 transition-colors col-span-2" onClick={() => navigate('/support')}>
+            <button className="flex items-center gap-2 bg-white border border-slate-100 rounded-[12px] p-3 shadow-sm cursor-pointer hover:border-orange-100 transition-colors" onClick={() => navigate('/wallet')}>
+              <Wallet size={18} className="text-[#ea580c]" />
+              <span className="text-[13px] font-bold text-[#1e1b4b]">Wallet</span>
+            </button>
+            <button className="flex items-center gap-2 bg-white border border-slate-100 rounded-[12px] p-3 shadow-sm cursor-pointer hover:border-orange-100 transition-colors" onClick={() => navigate('/support')}>
               <Headphones size={18} className="text-[#ea580c]" />
               <span className="text-[13px] font-bold text-[#1e1b4b]">Help Center</span>
             </button>
@@ -443,6 +447,23 @@ const Profile = () => {
                 <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
               </div>
 
+              {/* Wallet */}
+              <div 
+                className="flex items-center justify-between cursor-pointer group"
+                onClick={() => navigate('/wallet')}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-[36px] h-[36px] rounded-[12px] bg-emerald-50 flex items-center justify-center shrink-0">
+                    <Wallet size={16} className="text-emerald-600" />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[14px] font-bold text-[#1e1b4b]">My Wallet</span>
+                    <span className="text-[11px] font-medium text-slate-400">Balance, refunds & wallet payments</span>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
+              </div>
+
               {/* Account Info */}
               <div 
                 className="flex items-center justify-between cursor-pointer group"
@@ -472,23 +493,6 @@ const Profile = () => {
                   <div className="flex flex-col gap-0.5">
                     <span className="text-[14px] font-bold text-[#1e1b4b]">Saved Addresses</span>
                     <span className="text-[11px] font-medium text-slate-400">Manage your delivery addresses</span>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
-              </div>
-
-              {/* Security */}
-              <div 
-                className="flex items-center justify-between cursor-pointer group"
-                onClick={() => navigate('/security')}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-[36px] h-[36px] rounded-[12px] bg-[#fef3c7] flex items-center justify-center shrink-0">
-                    <Lock size={16} className="text-[#d97706]" />
-                  </div>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[14px] font-bold text-[#1e1b4b]">Security & Password</span>
-                    <span className="text-[11px] font-medium text-slate-400">Change password and secure account</span>
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
@@ -637,23 +641,6 @@ const Profile = () => {
                     <div>
                       <h4 className="text-sm font-bold text-[#1e1b4b] m-0 group-hover:text-[#e11d48] transition-colors">Saved Addresses</h4>
                       <p className="text-[11px] text-slate-400 m-0 font-medium">Manage delivery locations</p>
-                    </div>
-                  </div>
-                  <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
-                </div>
-
-                {/* Security & Password */}
-                <div 
-                  onClick={() => navigate('/security')}
-                  className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-amber-50 text-[#d97706] flex items-center justify-center shrink-0 group-hover:bg-amber-100 transition-colors">
-                      <Lock size={16} />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-[#1e1b4b] m-0 group-hover:text-[#d97706] transition-colors">Security & Password</h4>
-                      <p className="text-[11px] text-slate-400 m-0 font-medium">Change password & credentials</p>
                     </div>
                   </div>
                   <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
@@ -962,7 +949,7 @@ const Profile = () => {
             </div>
 
             {/* Quick Management Cards */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div 
                 onClick={() => navigate('/saved-addresses')}
                 className="bg-white rounded-2xl p-4 border border-slate-100 hover:border-orange-200 transition-all cursor-pointer flex items-center justify-between group shadow-xs"
@@ -974,22 +961,6 @@ const Profile = () => {
                   <div>
                     <h4 className="text-xs font-bold text-[#1e1b4b] m-0 group-hover:text-[#ea580c] transition-colors">Manage Delivery Addresses</h4>
                     <p className="text-[11px] text-slate-400 m-0">Add or edit home & office pins</p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
-              </div>
-
-              <div 
-                onClick={() => navigate('/security')}
-                className="bg-white rounded-2xl p-4 border border-slate-100 hover:border-orange-200 transition-all cursor-pointer flex items-center justify-between group shadow-xs"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <ShieldCheck size={18} />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-[#1e1b4b] m-0 group-hover:text-emerald-600 transition-colors">Account Protection</h4>
-                    <p className="text-[11px] text-slate-400 m-0">Verified identity & password</p>
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors" />

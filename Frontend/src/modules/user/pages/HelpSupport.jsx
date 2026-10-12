@@ -13,6 +13,7 @@ const HelpSupport = () => {
     bannerSubtitle: 'Have an issue with your order or want to share feedback? Connect with us directly.',
   });
   const [loading, setLoading] = useState(true);
+  const [actionToast, setActionToast] = useState('');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -30,6 +31,40 @@ const HelpSupport = () => {
     };
     fetchSettings();
   }, []);
+
+  const showToast = (msg) => {
+    setActionToast(msg);
+    setTimeout(() => setActionToast(''), 2500);
+  };
+
+  /** Digits-only tel URI — avoids SPA/PWA treating the link as an in-app navigation. */
+  const supportPhoneHref = () => {
+    const raw = String(settings.customerPhone || '+91 63774 60692');
+    const digits = raw.replace(/[^\d+]/g, '');
+    return digits.startsWith('+') ? digits : `+${digits.replace(/^\+/, '')}`;
+  };
+
+  const handleCallSupport = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const tel = supportPhoneHref();
+    try {
+      window.location.href = `tel:${tel}`;
+    } catch {
+      navigator.clipboard?.writeText(tel).then(() => showToast(`Number copied: ${tel}`)).catch(() => showToast(tel));
+    }
+  };
+
+  const handleEmailSupport = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const email = String(settings.customerEmail || 'shippnexin26@gmail.com').trim();
+    try {
+      window.location.href = `mailto:${email}`;
+    } catch {
+      navigator.clipboard?.writeText(email).then(() => showToast(`Email copied: ${email}`)).catch(() => showToast(email));
+    }
+  };
 
   return (
     <div className="h-[100dvh] md:h-auto md:min-h-screen bg-[#f8fafc] font-sans text-slate-800 relative max-w-[480px] md:max-w-4xl mx-auto shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col md:py-8 md:px-6 overflow-hidden md:overflow-visible">
@@ -80,9 +115,16 @@ const HelpSupport = () => {
         {/* Action Cards */}
         <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
           
+          {actionToast && (
+            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg">
+              {actionToast}
+            </div>
+          )}
+
           {/* Call Support */}
           <a 
-            href={`tel:${settings.customerPhone?.replace(/\s+/g, '') || '+916377460692'}`}
+            href={`tel:${supportPhoneHref()}`}
+            onClick={handleCallSupport}
             className="flex items-center justify-between bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs cursor-pointer hover:border-blue-300 hover:bg-blue-50/20 transition-all text-left no-underline group"
           >
             <div className="flex items-center gap-3">
@@ -103,6 +145,7 @@ const HelpSupport = () => {
           {/* Email Support */}
           <a 
             href={`mailto:${settings.customerEmail || 'shippnexin26@gmail.com'}`}
+            onClick={handleEmailSupport}
             className="flex items-center justify-between bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs cursor-pointer hover:border-rose-300 hover:bg-rose-50/20 transition-all text-left no-underline group"
           >
             <div className="flex items-center gap-3">

@@ -219,6 +219,8 @@ export const AdminLayout = () => {
       case 'faqs':
         return <FaqManagement />;
       case 'roles':
+      case 'staff':
+      case 'staff_roles':
         return <RoleManagement />;
       case 'settings':
       case 'payment_list':

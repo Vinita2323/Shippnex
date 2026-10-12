@@ -21,8 +21,11 @@ const durationLabel = (t) => ({ monthly: '1 Month', halfYearly: '6 Months', year
 const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const daysLeft = (exp) => {
   if (!exp) return null;
-  const diff = new Date(exp) - new Date();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  const end = new Date(exp);
+  const now = new Date();
+  const endDay = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
+  const nowDay = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0, Math.round((endDay - nowDay) / (1000 * 60 * 60 * 24)));
 };
 
 const SellerMembership = () => {

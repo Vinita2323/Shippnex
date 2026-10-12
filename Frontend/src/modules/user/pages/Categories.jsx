@@ -19,6 +19,7 @@ import {
   personalCareImg 
 } from '../../../utils/imageUtils';
 import { useDebounce } from '../../../hooks/useDebounce';
+import { isProductOutOfStock } from '../../../utils/productStock';
 
 const fallbackCategories = [
   { name: 'Grains & Flours', image: grainsImg },
@@ -545,7 +546,7 @@ const Categories = () => {
               {filteredProducts.map((item) => {
                 const itemDiscount = item.mrp && item.salePrice ? Math.round(((item.mrp - item.salePrice) / item.mrp) * 100) : 0;
                 const isItemInCart = isInCart(item._id || item.id);
-                const isOutOfStock = item.stock !== undefined && item.stock <= 0;
+                const isOutOfStock = isProductOutOfStock(item);
 
                 return (
                   <div 

@@ -10,6 +10,8 @@ import grainsImg from '../../../assets/user/categories/grains-removebg-preview.p
 import { orderService, returnService } from '../../../services/authService';
 import productReviewService from '../../../services/productReviewService';
 import ProductRatingModal from '../../../components/ProductRatingModal';
+import RatingModal from '../../../components/RatingModal';
+import ratingService from '../../../services/ratingService';
 import LiveDeliveryMap from '../components/LiveDeliveryMap';
 import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
 import { variantLabel } from '../../../utils/variantLabel';
@@ -38,6 +40,9 @@ const TrackOrder = () => {
   const [selectedProductToRate, setSelectedProductToRate] = useState(null);
   const [selectedReviewToEdit, setSelectedReviewToEdit] = useState(null);
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
+  const [isDeliveryRatingOpen, setIsDeliveryRatingOpen] = useState(false);
+  const [hasRatedDelivery, setHasRatedDelivery] = useState(false);
+  const [deliveryUserRating, setDeliveryUserRating] = useState(null);
 
   // Item-Level Returns State
   const [orderReturns, setOrderReturns] = useState([]);
@@ -152,6 +157,30 @@ const TrackOrder = () => {
       fetchOrderReturns(targetOrderId);
     }
   }, [order?.orderStatus, order?.captainStatus, order?.status, isDelivered]);
+
+  // Delivery (captain) rating status after grocery order is delivered
+  useEffect(() => {
+    const rideId = order?.orderId || order?._id;
+    const hasCaptain = Boolean(order?.captainId);
+    if (!isDelivered || !rideId || !hasCaptain) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await ratingService.getRideRatingStatus(rideId);
+        if (cancelled) return;
+        const rated = Boolean(res?.hasUserRated || res?.userRating || res?.rating);
+        setHasRatedDelivery(rated);
+        setDeliveryUserRating(res?.userRating || res?.rating?.rating || null);
+        if (!rated && !sessionStorage.getItem(`shippnex_delivery_rate_prompt_${rideId}`)) {
+          sessionStorage.setItem(`shippnex_delivery_rate_prompt_${rideId}`, '1');
+          setIsDeliveryRatingOpen(true);
+        }
+      } catch {
+        if (!cancelled) setHasRatedDelivery(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isDelivered, order?.orderId, order?._id, order?.captainId]);
 
   const handleOpenRateModal = (item, existingRev = null) => {
     const prodObj = {
@@ -423,6 +452,35 @@ const TrackOrder = () => {
                 </div>
               </div>
             </div>
+
+            {isDelivered && order?.captainId && (
+              <div className="bg-white rounded-2xl p-4 md:p-5 border border-emerald-100 shadow-xs space-y-3">
+                <div className="flex items-center gap-2">
+                  <Truck size={18} className="text-emerald-600" />
+                  <h3 className="text-[13px] md:text-sm font-extrabold text-slate-900 m-0">Rate Delivery</h3>
+                </div>
+                <p className="text-[11px] text-slate-500 m-0">
+                  How was your delivery experience with {order.captainId?.name || 'your captain'}?
+                </p>
+                {hasRatedDelivery ? (
+                  <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                    <span className="text-[12px] font-bold text-amber-900">
+                      You rated {deliveryUserRating || order.userRating || 5}/5
+                    </span>
+                    <Star size={14} className="fill-amber-500 text-amber-500" />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsDeliveryRatingOpen(true)}
+                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-bold border-none cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Star size={14} className="fill-white text-white" />
+                    Rate Captain
+                  </button>
+                )}
+              </div>
+            )}
 
             {isDelivered && order?.items?.length > 0 && (
               <div className="bg-white rounded-2xl p-4 md:p-5 border border-slate-100 shadow-xs space-y-3">
@@ -841,6 +899,25 @@ const TrackOrder = () => {
         orderId={order?.orderId || order?._id || order?.id}
         existingReview={selectedReviewToEdit}
         onSuccess={handleReviewSuccess}
+      />
+
+      {/* Delivery / captain rating after grocery delivery */}
+      <RatingModal
+        isOpen={isDeliveryRatingOpen}
+        onClose={() => setIsDeliveryRatingOpen(false)}
+        ride={{
+          orderId: order?.orderId || order?._id,
+          _id: order?._id,
+          captainId: order?.captainId,
+          captainName: order?.captainId?.name,
+          totalFare: order?.grandTotal || order?.total || 0,
+        }}
+        role="user"
+        onSuccess={(res) => {
+          setHasRatedDelivery(true);
+          setDeliveryUserRating(res?.rating?.rating || 5);
+          setIsDeliveryRatingOpen(false);
+        }}
       />
 
       {/* Item-Level Return Modal */}

@@ -346,7 +346,17 @@ export const updateCartItem = async (req, res, next) => {
         user.cart.splice(existingIndex, 1);
       } else {
         user.cart[existingIndex].quantity = targetQty;
-        applyVariant(user.cart[existingIndex], variant, extras);
+        // Quantity-only updates must NOT wipe existing variant selection
+        const hasVariantPayload = Boolean(
+          variant.variantSku
+          || variant.variantId
+          || Object.keys(variant.selectedAttributes || {}).length
+        );
+        if (hasVariantPayload) {
+          applyVariant(user.cart[existingIndex], variant, extras);
+        } else if (extras.price !== undefined && extras.price !== null && extras.price !== '') {
+          user.cart[existingIndex].price = Number(extras.price);
+        }
       }
     } else {
       if (quantity !== undefined) {

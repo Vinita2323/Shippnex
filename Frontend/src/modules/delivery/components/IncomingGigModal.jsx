@@ -19,21 +19,48 @@ const IncomingGigModal = ({
   const audioRef = useRef(null);
   const webAudioIntervalRef = useRef(null);
 
+  const formatShipAddr = (a) => {
+    if (!a) return '';
+    if (typeof a === 'string') return a;
+    return [a.addressLine1 || a.line1 || a.street, a.area, a.city, a.state, a.pincode || a.postalCode]
+      .filter(Boolean)
+      .join(', ');
+  };
+
   const pickupAddress =
     (typeof job.pickupLocation === 'string' ? job.pickupLocation : job.pickupLocation?.address) ||
     (typeof job.pickup === 'string' ? job.pickup : job.pickup?.address) ||
+    job.pickupAddress ||
+    (job.isReturn ? (formatShipAddr(job.customerAddress) || job.customerAddress) : '') ||
     job.items?.[0]?.seller ||
     'Pickup Location';
 
   const dropAddress =
     (typeof job.dropLocation === 'string' ? job.dropLocation : job.dropLocation?.address) ||
     (typeof job.drop === 'string' ? job.drop : job.drop?.address) ||
-    job.shippingAddress?.fullName ||
+    job.dropAddress ||
+    (job.isReturn
+      ? (formatShipAddr(job.sellerAddress) || job.sellerName || job.sellerAddress)
+      : formatShipAddr(job.shippingAddress)) ||
+    job.shippingAddress?.addressLine1 ||
     job.customerName ||
     'Drop Destination';
 
-  const earnings = job.captainEarnings || job.estimatedEarnings || job.earnings || 0;
-  const distance = job.distanceKm ? `${job.distanceKm} KM` : null;
+  const stops = Array.isArray(job.stops) ? job.stops.filter(Boolean) : [];
+
+  const earnings = job.captainEarnings || job.estimatedEarnings || job.earnings || job.fareBreakdown?.captainEarning || 0;
+  const commissionRate = Number(job.captainCommissionRate || 0);
+  const commissionAmount = Number(job.captainCommissionAmount || 0);
+  const distance =
+    job.distanceFromCaptainKm != null
+      ? `${job.distanceFromCaptainKm} KM away`
+      : job.distanceKm
+        ? `${job.distanceKm} KM trip`
+        : null;
+  const codAmount =
+    job.paymentMethod === 'COD' || job.paymentMethod === 'CASH'
+      ? Number(job.fareBreakdown?.totalFare || job.grandTotal || job.totalAmount || job.price || 0)
+      : 0;
   const tripId = job.bookingId || job.orderId || 'REQUEST';
 
   // Play Delivery App Ringtone
@@ -171,10 +198,18 @@ const IncomingGigModal = ({
         {/* Modal Body */}
         <div className="p-3.5 space-y-2.5 bg-white">
           {/* Earnings Card */}
-          <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200/70 flex items-center justify-between">
-            <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider">
-              YOUR EARNINGS
-            </span>
+          <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200/70 flex items-center justify-between gap-2">
+            <div>
+              <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider block">
+                YOUR EARNINGS
+              </span>
+              {commissionRate > 0 && (
+                <span className="text-[9px] text-amber-700 font-semibold">
+                  After {commissionRate}% fee
+                  {commissionAmount > 0 ? ` (−₹${commissionAmount.toFixed(2)})` : ''}
+                </span>
+              )}
+            </div>
             <div className="flex items-baseline gap-0.5">
               <span className="text-xs font-bold text-emerald-700">₹</span>
               <span className="text-2xl font-black text-[#15803d] leading-none font-mono">
@@ -205,6 +240,34 @@ const IncomingGigModal = ({
               <div className="w-0.5 h-2 bg-slate-300 rounded-full"></div>
             </div>
 
+            {/* Intermediate stops (#60) */}
+            {stops.map((stop, idx) => {
+              const stopLabel =
+                typeof stop === 'string'
+                  ? stop
+                  : stop?.address || stop?.formattedAddress || [stop?.city, stop?.pincode].filter(Boolean).join(', ') || `Stop ${idx + 1}`;
+              return (
+                <React.Fragment key={`stop-${idx}`}>
+                  <div className="flex items-start gap-2">
+                    <div className="w-4 h-4 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="material-symbols-outlined text-[10px] font-bold">flag</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[8px] font-black text-sky-700 uppercase tracking-wider block leading-none">
+                        STOP {idx + 1}
+                      </span>
+                      <p className="font-bold text-[11px] text-slate-900 leading-snug truncate mt-0.5">
+                        {stopLabel}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center pl-2 my-0">
+                    <div className="w-0.5 h-2 bg-slate-300 rounded-full"></div>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+
             {/* Drop */}
             <div className="flex items-start gap-2">
               <div className="w-4 h-4 rounded-full bg-orange-100 text-[#ff5500] flex items-center justify-center shrink-0 mt-0.5">
@@ -220,6 +283,13 @@ const IncomingGigModal = ({
               </div>
             </div>
           </div>
+
+          {codAmount > 0 && (
+            <div className="flex items-center justify-between text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 py-1.5 px-2.5 rounded-lg">
+              <span>COD TO COLLECT</span>
+              <span className="font-mono text-sm">₹{codAmount.toFixed(2)}</span>
+            </div>
+          )}
 
           {/* Distance Tag */}
           {distance && (

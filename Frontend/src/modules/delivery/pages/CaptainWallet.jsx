@@ -70,16 +70,20 @@ const CaptainWallet = () => {
   };
 
   const handleExport = () => {
-    const headers = ['Transaction ID', 'Date & Time', 'Amount', 'Description', 'Status'];
+    const escapeCsv = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+    const headers = ['Transaction ID', 'Date & Time', 'Type', 'Amount', 'Description', 'Status'];
     const csvRows = [headers.join(',')];
-    transactions.forEach(trx => {
-      const sign = trx.type === 'CREDIT' ? '+' : '-';
+    transactions.forEach((trx) => {
+      const amount = Number(trx.amount || 0);
+      const signed = trx.type === 'CREDIT' ? amount : -amount;
       const row = [
-        `"${trx.transactionId}"`,
-        `"${new Date(trx.createdAt).toLocaleString('en-IN')}"`,
-        `"${sign}₹${trx.amount.toFixed(2)}"`,
-        `"${trx.description}"`,
-        `"${trx.status}"`,
+        escapeCsv(trx.transactionId),
+        escapeCsv(new Date(trx.createdAt).toLocaleString('en-IN')),
+        escapeCsv(trx.type || ''),
+        // Numeric amount without currency symbol so Excel/Sheets can open & sum (#67)
+        escapeCsv(signed.toFixed(2)),
+        escapeCsv(trx.description || ''),
+        escapeCsv(trx.status || ''),
       ];
       csvRows.push(row.join(','));
     });
@@ -91,6 +95,7 @@ const CaptainWallet = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const formatDate = (dateStr) => {

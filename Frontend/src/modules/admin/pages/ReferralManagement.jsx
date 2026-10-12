@@ -50,9 +50,24 @@ export const ReferralDashboard = ({ onNavigateTab }) => {
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const res = await referralService.getStats();
-      if (res && res.success && res.stats) {
-        setStats(res.stats);
+      const [statsRes, recentRes] = await Promise.all([
+        referralService.getStats(),
+        referralService.getAllReferrals({ page: 1, limit: 10 }).catch(() => null),
+      ]);
+      if (statsRes && statsRes.success && statsRes.stats) {
+        const s = statsRes.stats;
+        // Map API field names → dashboard card keys (#89)
+        setStats({
+          total: s.total || 0,
+          sellerCount: s.sellerCount ?? s.sellerReferrals ?? 0,
+          captainCount: s.captainCount ?? s.captainReferrals ?? 0,
+          successfulCount: s.successfulCount ?? s.rewarded ?? 0,
+          pendingCount: s.pendingCount ?? s.pending ?? s.registered ?? 0,
+          rejectedCount: s.rejectedCount ?? s.rejected ?? 0,
+          totalRewardsPaid: s.totalRewardsPaid ?? s.totalRewardCredited ?? 0,
+          totalPendingRewards: s.totalPendingRewards ?? 0,
+          recentReferrals: recentRes?.referrals || s.recentReferrals || [],
+        });
       }
     } catch (err) {
       console.error('Error fetching referral stats:', err);

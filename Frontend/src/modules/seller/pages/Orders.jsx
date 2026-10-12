@@ -5,7 +5,21 @@ import {
 } from 'lucide-react';
 import { orderService } from '../../../services/authService';
 import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
-import { selectedVariantRows, orderVariantSummary } from '../../../utils/variantLabel';
+import { selectedVariantRows, variantSummary } from '../../../utils/variantLabel';
+
+const formatSellerPaymentLabel = (n) => {
+  const method = String(n?.paymentMethod || '').toUpperCase();
+  const status = String(n?.paymentStatus || '').trim();
+  const delivered = String(n?.status || '').toUpperCase() === 'DELIVERED';
+  const isCod = method === 'COD' || method.includes('CASH');
+  if (isCod) {
+    if (delivered || status === 'Paid') return { method: n.paymentMethod || 'COD', status: 'Completed' };
+    return { method: n.paymentMethod || 'COD', status: 'Collect on delivery' };
+  }
+  if (status === 'Paid' || status === 'Completed') return { method: n.paymentMethod || 'Online', status: 'Completed' };
+  if (status === 'Pending' || !status) return { method: n.paymentMethod || 'Online', status: 'Pending' };
+  return { method: n.paymentMethod || 'Online', status };
+};
 
 const OrderLine = ({ item, compact = false }) => {
   const rows = selectedVariantRows(item);
@@ -507,16 +521,30 @@ const Orders = () => {
                   <td className="px-5 py-4 font-normal text-sm">
                     <div className="flex flex-col gap-0.5 max-w-[220px]">
                       <span>{n.items?.length || 0} Products</span>
-                      {orderVariantSummary(n.items) && (
-                        <span className="text-[11px] font-semibold text-[#ff7526] leading-snug">{orderVariantSummary(n.items)}</span>
-                      )}
+                      {(Array.isArray(n.items) ? n.items : []).map((item, idx) => {
+                        const summary = variantSummary(item);
+                        if (!summary) return null;
+                        return (
+                          <span key={`${n._id}-var-${idx}`} className="text-[11px] font-semibold text-[#ff7526] leading-snug">
+                            {item?.name ? `${item.name}: ` : ''}{summary}
+                          </span>
+                        );
+                      })}
                     </div>
                   </td>
                   <td className="px-5 py-4 font-extrabold text-[#ff7526]">
                     ₹{Number(n.totalAmount || 0).toFixed(2)}
                   </td>
                   <td className="px-5 py-4 text-xs font-normal text-slate-600">
-                    <span className="font-semibold">{n.paymentMethod}</span> ({n.paymentStatus})
+                    {(() => {
+                      const pay = formatSellerPaymentLabel(n);
+                      return (
+                        <>
+                          <span className="font-semibold">{pay.method}</span>{' '}
+                          <span className={pay.status === 'Completed' ? 'text-emerald-600 font-semibold' : 'text-amber-600'}>({pay.status})</span>
+                        </>
+                      );
+                    })()}
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex flex-col gap-1 items-start">
@@ -724,7 +752,10 @@ const Orders = () => {
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold uppercase block">Payment Method</span>
                     <p className="text-xs font-bold text-slate-800 m-0">
-                      {selectedNotification.paymentMethod} (<span className="text-amber-600">{selectedNotification.paymentStatus}</span>)
+                      {(() => {
+                        const pay = formatSellerPaymentLabel(selectedNotification);
+                        return <>{pay.method} (<span className={pay.status === 'Completed' ? 'text-emerald-600' : 'text-amber-600'}>{pay.status}</span>)</>;
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -1102,7 +1133,7 @@ const Orders = () => {
                       Method: <span className="font-extrabold text-slate-900">{selectedNotification.paymentMethod}</span>
                     </p>
                     <p className="text-[11px] text-slate-500 m-0">
-                      Status: <span className={`font-bold ${selectedNotification.paymentStatus === 'Paid' ? 'text-emerald-600' : 'text-amber-600'}`}>{selectedNotification.paymentStatus}</span>
+                      Status: <span className={`font-bold ${formatSellerPaymentLabel(selectedNotification).status === 'Completed' ? 'text-emerald-600' : 'text-amber-600'}`}>{formatSellerPaymentLabel(selectedNotification).status}</span>
                     </p>
                   </div>
                 </div>

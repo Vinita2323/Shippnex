@@ -183,8 +183,14 @@ const Payment = () => {
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Estimated Delivery</span>
-                <span className="text-[14px] font-bold text-slate-800">Tomorrow, 15 May</span>
-                <span className="text-[12px] font-semibold text-slate-700">10:00 AM - 12:00 PM</span>
+                <span className="text-[14px] font-bold text-slate-800">
+                  {(() => {
+                    const d = new Date();
+                    // Express / same-day window after successful pay
+                    return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+                  })()}
+                </span>
+                <span className="text-[12px] font-semibold text-slate-700">Express (Within 30 Mins)</span>
               </div>
             </div>
             

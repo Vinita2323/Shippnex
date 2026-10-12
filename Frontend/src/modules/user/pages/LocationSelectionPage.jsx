@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, MapPin, Search, Navigation, Check, Home as HomeIcon, Briefcase, Loader2, Building2, Plus } from 'lucide-react';
 import { useLocationContext } from '../../../context/LocationContext';
 import { addressService } from '../../../services/authService';
@@ -10,7 +10,24 @@ import { locationMatchesSavedAddress, syncSavedAddressesAfterChange } from '../.
 
 const LocationSelectionPage = () => {
   const navigate = useNavigate();
+  const routeLocation = useLocation();
   const { setLocation, currentLocation } = useLocationContext();
+
+  const leaveLocationPage = () => {
+    const from = routeLocation.state?.from || routeLocation.state?.returnUrl;
+    if (
+      from &&
+      typeof from === 'string' &&
+      !from.includes('verify-otp') &&
+      from !== '/login' &&
+      !from.startsWith('/login?')
+    ) {
+      navigate(from, { replace: true });
+      return;
+    }
+    // Always leave auth screens out of the back stack after address/location selection
+    navigate('/', { replace: true });
+  };
 
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState('');
@@ -153,7 +170,7 @@ const LocationSelectionPage = () => {
         id: saved?._id || saved?.id || '',
         fromSavedAddress: true,
       });
-      navigate(-1);
+      leaveLocationPage();
     } catch (err) {
       console.error('Google Maps location detection error:', err);
       setError(err.message || 'Failed to detect GPS location. Please try again.');
@@ -210,7 +227,7 @@ const LocationSelectionPage = () => {
         addressType: 'LOCATION',
       };
       setLocation(locObj);
-      navigate(-1);
+      leaveLocationPage();
     } catch (err) {
       console.error('Place selection failed:', err);
       setError('Could not resolve selected location.');
@@ -236,7 +253,7 @@ const LocationSelectionPage = () => {
       addressType: 'LOCATION',
     };
     setLocation(locObj);
-    navigate(-1);
+    leaveLocationPage();
   };
 
   const handleSelectSavedAddress = async (addr) => {
@@ -283,14 +300,14 @@ const LocationSelectionPage = () => {
     };
     setLocation(locObj);
     localStorage.setItem('shippnex_selected_checkout_address', JSON.stringify({ ...addr, fullName: cleanFullName }));
-    navigate(-1);
+    leaveLocationPage();
   };
 
   return (
     <div className="h-[100dvh] md:h-auto md:min-h-screen bg-[#f8fafc] font-sans max-w-[480px] md:max-w-3xl mx-auto relative flex flex-col md:py-8 md:px-6 overflow-hidden md:overflow-visible">
       {/* Mobile Header */}
       <div className="flex md:hidden bg-white px-4 py-4 items-center shadow-xs z-10 shrink-0 border-b border-slate-100">
-        <button onClick={() => navigate(-1)} className="mr-3 p-1 rounded-full hover:bg-slate-100 transition-colors border-none cursor-pointer">
+        <button onClick={leaveLocationPage} className="mr-3 p-1 rounded-full hover:bg-slate-100 transition-colors border-none cursor-pointer">
           <ArrowLeft size={22} className="text-slate-800" />
         </button>
         <div>
@@ -303,7 +320,7 @@ const LocationSelectionPage = () => {
       <div className="hidden md:flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
-            <button onClick={() => navigate(-1)} className="hover:text-orange-600 font-medium cursor-pointer border-none bg-transparent flex items-center gap-1">
+            <button onClick={leaveLocationPage} className="hover:text-orange-600 font-medium cursor-pointer border-none bg-transparent flex items-center gap-1">
               <ArrowLeft size={16} /> Back
             </button>
             <span>/</span>

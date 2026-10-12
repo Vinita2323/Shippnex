@@ -56,7 +56,10 @@ export const readCustomerAttributes = (item = {}) => {
 export const freezeSelectedAttributes = (customerAttributes, matchedVariant, identifiedBySku) => {
   const chosen = normalizeAttributes(customerAttributes);
   if (Object.keys(chosen).length) return chosen;
-  if (identifiedBySku && matchedVariant) return normalizeAttributes(matchedVariant.attributes);
+  // Only copy the matched variant's own attributes (selected combination), never product-wide options
+  if (identifiedBySku && matchedVariant) {
+    return normalizeAttributes(matchedVariant.attributes || matchedVariant.selectedAttributes);
+  }
   return {};
 };
 

@@ -1,6 +1,7 @@
 import express from 'express';
 import { protect } from '../middleware/authMiddleware.js';
 import {
+  validateReferralCode,
   getSellerReferralCode,
   getSellerReferrals,
   getCaptainReferralCode,
@@ -14,6 +15,9 @@ import {
 } from '../controllers/referralController.js';
 
 const router = express.Router();
+
+// ── Public ────────────────────────────────────────────────────────────────────
+router.get('/validate', validateReferralCode);
 
 // ── Seller Routes ─────────────────────────────────────────────────────────────
 router.get('/seller/code', protect('seller'), getSellerReferralCode);

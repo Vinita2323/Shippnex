@@ -9,6 +9,10 @@
  * @param {number} lng2 - Longitude of point 2 (degrees)
  * @returns {number} Distance in kilometers (2 decimal places)
  */
+
+/** Typical city road distance ≈ crow-flies × this factor (matches FareSummary UI). */
+export const ROAD_DISTANCE_FACTOR = 1.25;
+
 export const haversineDistance = (lat1, lng1, lat2, lng2) => {
   const R = 6371; // Earth radius in km
 
@@ -28,6 +32,27 @@ export const haversineDistance = (lat1, lng1, lat2, lng2) => {
   const distance = R * c;
 
   return Math.round(distance * 100) / 100; // 2 decimal places
+};
+
+/**
+ * Estimate billable road distance from coordinates.
+ * Prefer a client/Google driving distance when provided and within a sane range;
+ * otherwise use crow-flies × ROAD_DISTANCE_FACTOR (min 1 km).
+ */
+export const estimateRoadDistanceKm = (lat1, lng1, lat2, lng2, clientDistanceKm = null) => {
+  const straight = haversineDistance(lat1, lng1, lat2, lng2);
+  const fallback = Math.max(1, Math.round(straight * ROAD_DISTANCE_FACTOR * 100) / 100);
+
+  const client = Number(clientDistanceKm);
+  if (Number.isFinite(client) && client > 0) {
+    const minAllowed = Math.max(0.5, straight * 0.85);
+    const maxAllowed = Math.max(fallback * 2.5, straight * 3);
+    if (client >= minAllowed && client <= maxAllowed) {
+      return Math.round(client * 100) / 100;
+    }
+  }
+
+  return fallback;
 };
 
 /**

@@ -37,8 +37,8 @@ const Login = () => {
       setLoading(true);
       await authService.sendUserOtp(phoneNumber);
       writeLoginDraft(USER_LOGIN_DRAFT_KEY, { phoneNumber });
-      // Navigate to OTP verification page passing phone number in route state
-      navigate('/verify-otp', { state: { phone: phoneNumber } });
+      // Replace login in history so post-OTP back/address flows cannot return here → OTP loop
+      navigate('/verify-otp', { state: { phone: phoneNumber }, replace: true });
     } catch (err) {
       setErrorMsg(err.response?.data?.message || 'Failed to send OTP. Please try again.');
     } finally {

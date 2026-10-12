@@ -226,6 +226,8 @@ export const registerCaptain = async (req, res, next) => {
 export const sendOtp = async (req, res, next) => {
   try {
     const rawPhone = req.body.phone;
+    const purpose = String(req.body.purpose || req.body.for || 'register').toLowerCase();
+    const isPasswordReset = purpose === 'reset' || purpose === 'forgot' || purpose === 'forgot_password';
 
     if (!rawPhone) {
       return res.status(400).json({ success: false, message: 'Phone number is required' });
@@ -249,6 +251,12 @@ export const sendOtp = async (req, res, next) => {
     });
 
     if (!captain) {
+      if (isPasswordReset) {
+        return res.status(404).json({
+          success: false,
+          message: 'No captain account found with this mobile number. Please register first.',
+        });
+      }
       captain = await Captain.create({
         phone: cleanPhone,
         otp,

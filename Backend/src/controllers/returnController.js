@@ -12,6 +12,7 @@ import WalletTransaction from '../models/WalletTransaction.model.js';
 import PlatformLedger from '../models/PlatformLedger.model.js';
 import RefundRequest from '../models/RefundRequest.model.js';
 import { invalidateUserOrdersCache } from './orderController.js';
+import { creditUserWallet } from '../utils/userWalletHelper.js';
 
 // Helper: Generate OTP & Return ID
 const generateReturnOtp = () => Math.floor(1000 + Math.random() * 9000).toString();
@@ -1029,11 +1030,17 @@ export const verifyReturnedProduct = async (req, res, next) => {
     if (refundAmt > 0 && returnDoc.refundStatus !== 'COMPLETED') {
       returnDoc.status = 'REFUND_INITIATED';
 
-      // Credit User Wallet if user exists
-      const user = await User.findById(returnDoc.user);
-      if (user) {
-        user.walletBalance = Number(((user.walletBalance || 0) + refundAmt).toFixed(2));
-        await user.save();
+      // Credit User Wallet + ledger if user exists
+      if (returnDoc.user) {
+        await creditUserWallet({
+          userId: returnDoc.user,
+          amount: refundAmt,
+          category: 'REFUND',
+          orderId: returnDoc.orderId || '',
+          order: returnDoc.order || null,
+          returnId: returnDoc.returnId || '',
+          description: `Refund for return #${returnDoc.returnId}: ${returnDoc.productName || 'item'}`,
+        });
       }
 
       // Record Refund Request Entity for SuperAdmin / Financial Reports

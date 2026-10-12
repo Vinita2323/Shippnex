@@ -366,7 +366,12 @@ const Orders = () => {
                 const bPickup = booking.pickupLocation?.address || '—';
                 const bDrop = booking.dropLocation?.address || '—';
                 const bVehicle = booking.vehicleSnapshot?.name || '—';
-                const bFare = booking.fareBreakdown?.totalFare ?? 0;
+                const bFare = Number(
+                  booking.fareBreakdown?.totalFare
+                  ?? booking.totalFare
+                  ?? booking.fare
+                  ?? 0
+                );
                 const bStatus = booking.status || 'SEARCHING_CAPTAIN';
                 const statusLabel = {
                   SEARCHING_CAPTAIN: 'Searching', CAPTAIN_ASSIGNED: 'Assigned',
@@ -396,6 +401,14 @@ const Orders = () => {
                         <div className="w-2 h-2 rounded-full bg-[#047857]"></div>
                         <span className="text-[12px] font-medium text-slate-700 truncate">{bPickup}</span>
                       </div>
+                      {(Array.isArray(booking.stops) ? booking.stops : []).filter(Boolean).map((stop, sIdx) => (
+                        <div key={`ord-stop-${sIdx}`} className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                          <span className="text-[12px] font-medium text-slate-700 truncate">
+                            Stop {sIdx + 1}: {typeof stop === 'string' ? stop : (stop.address || stop.city || 'Stop')}
+                          </span>
+                        </div>
+                      ))}
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-sm bg-[#ff5500]"></div>
                         <span className="text-[12px] font-medium text-slate-700 truncate">{bDrop}</span>
@@ -407,7 +420,9 @@ const Orders = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-[13px] md:text-sm font-bold text-slate-500">{bVehicle}</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-[14px] md:text-base font-extrabold text-slate-900">₹{bFare}</span>
+                        <span className="text-[14px] md:text-base font-extrabold text-slate-900">
+                          ₹{bFare.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
                         {bStatus === 'RIDE_COMPLETED' && (
                           booking.hasUserRated ? (
                             <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200/80 px-2.5 py-1 rounded-lg text-[11px] font-extrabold">

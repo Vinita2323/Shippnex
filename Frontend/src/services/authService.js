@@ -93,8 +93,10 @@ export const authService = {
     return response.data;
   },
 
-  sendSellerOtp: async (phone) => {
-    const response = await API.post('/auth/seller/send-otp', { phone });
+  sendSellerOtp: async (phone, options = {}) => {
+    const payload = { phone };
+    if (options.purpose) payload.purpose = options.purpose;
+    const response = await API.post('/auth/seller/send-otp', payload);
     return response.data;
   },
 
@@ -175,8 +177,10 @@ export const authService = {
     return response.data;
   },
 
-  sendCaptainOtp: async (phone) => {
-    const response = await API.post('/auth/captain/send-otp', { phone });
+  sendCaptainOtp: async (phone, options = {}) => {
+    const payload = { phone };
+    if (options.purpose) payload.purpose = options.purpose;
+    const response = await API.post('/auth/captain/send-otp', payload);
     return response.data;
   },
 
@@ -476,7 +480,11 @@ export const cartService = {
       variantSku: productData?.variantSku || '',
       variantId: productData?.variantId || productData?.selectedVariant?._id || '',
       variantTitle: productData?.variantTitle || productData?.variation || '',
-      selectedAttributes: productData?.selectedAttributes || productData?.selectedVariant?.attributes || undefined,
+      // Never fall back to selectedVariant.attributes — that inflates unselected options into the cart
+      selectedAttributes:
+        productData?.selectedAttributes && Object.keys(productData.selectedAttributes).length
+          ? productData.selectedAttributes
+          : undefined,
       selectedVariants: productData?.selectedVariants,
       price: productData?.price,
       originalPrice: productData?.originalPrice,
@@ -585,7 +593,10 @@ export const orderService = {
     if (!forceRefresh && userOrdersClientCache.data && (now - userOrdersClientCache.timestamp < 30000)) {
       return userOrdersClientCache.data;
     }
-    const response = await API.get('/orders');
+    if (forceRefresh) {
+      clearUserOrdersCache();
+    }
+    const response = await API.get(forceRefresh ? '/orders?fresh=1' : '/orders');
     if (response.data && response.data.success) {
       userOrdersClientCache = { data: response.data, timestamp: now };
       try {
@@ -714,6 +725,14 @@ export const returnService = {
 
 
 export const walletService = {
+  getUserWallet: async () => {
+    const response = await API.get('/wallet/user');
+    return response.data;
+  },
+  getUserWalletTransactions: async (type = 'All') => {
+    const response = await API.get(`/wallet/user/transactions?type=${encodeURIComponent(type)}`);
+    return response.data;
+  },
   getSellerWallet: async () => {
     const response = await API.get('/wallet/seller');
     return response.data;
@@ -1441,6 +1460,14 @@ export { default as commissionService } from './commissionService';
 
 // Referral & Earn Service
 export const referralService = {
+  // Public — validate referral code and get referrer display name
+  validate: async (code, role = 'seller') => {
+    const res = await API.get('/referral/validate', {
+      params: { code: String(code || '').trim(), role },
+    });
+    return res.data;
+  },
+
   // Seller
   getSellerCode: async () => {
     const res = await API.get('/referral/seller/code');

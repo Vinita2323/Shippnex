@@ -183,7 +183,7 @@ const TransportBookingDetails = () => {
   const bStatus = booking.status || 'SEARCHING_CAPTAIN';
   const bPickup = booking.pickupLocation?.address || booking.pickup || '—';
   const bDrop = booking.dropLocation?.address || booking.drop || '—';
-  const bFare = booking.fareBreakdown?.totalFare ?? booking.fare ?? 0;
+  const bFare = Number(booking.fareBreakdown?.totalFare ?? booking.totalFare ?? booking.fare ?? 0);
   const bVehicle = booking.vehicleSnapshot?.name || booking.vehicle?.name || 'Vehicle';
   const bCategory = booking.goods?.category || '—';
   const bWeight = booking.goods?.weightKg || booking.goods?.weight || '—';
@@ -346,7 +346,7 @@ const TransportBookingDetails = () => {
               </div>
             </div>
             <span className="text-[16px] font-extrabold text-slate-900 flex items-center">
-              <IndianRupee size={14} strokeWidth={3} /> {bFare}
+              <IndianRupee size={14} strokeWidth={3} /> {bFare.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
 
@@ -479,11 +479,17 @@ const TransportBookingDetails = () => {
           </div>
         </div>
 
-        {/* Locations Card */}
+        {/* Locations Card (pickup → stops → drop) */}
         <div className="md:col-span-5 md:col-start-8 bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-sm border border-slate-100 flex gap-4">
           <div className="flex flex-col items-center mt-1.5 mb-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-[#047857]"></div>
             <div className="w-0.5 flex-1 bg-slate-200 my-1"></div>
+            {(Array.isArray(booking.stops) ? booking.stops : []).map((_, si) => (
+              <React.Fragment key={`stop-dot-${si}`}>
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-500 border-2 border-amber-200"></div>
+                <div className="w-0.5 flex-1 bg-slate-200 my-1"></div>
+              </React.Fragment>
+            ))}
             <div className="w-2.5 h-2.5 rounded-sm bg-[#ff5500]"></div>
           </div>
           <div className="flex-1 flex flex-col justify-between gap-4 py-0.5">
@@ -491,6 +497,16 @@ const TransportBookingDetails = () => {
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pickup Address</span>
               <span className="text-[13px] md:text-[14px] font-medium text-slate-800 leading-snug">{bPickup}</span>
             </div>
+            {(Array.isArray(booking.stops) ? booking.stops : []).map((stop, si) => (
+              <div key={`stop-${si}`} className="flex flex-col">
+                <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider mb-0.5">
+                  Stop {si + 1}
+                </span>
+                <span className="text-[13px] md:text-[14px] font-medium text-slate-800 leading-snug">
+                  {stop?.address || stop?.city || 'Intermediate stop'}
+                </span>
+              </div>
+            ))}
             <div className="flex flex-col">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Drop Address</span>
               <span className="text-[13px] md:text-[14px] font-medium text-slate-800 leading-snug">{bDrop}</span>

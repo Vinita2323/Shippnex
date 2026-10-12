@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Store, MapPin, FileText, CheckCircle, Check, Loader2, Search, Navigation, AlertCircle, Crown, Zap, Star, CreditCard, Banknote, Wallet, Building2, Smartphone, UploadCloud, Image, X, FileCheck, Layers, Eye, EyeOff, Lock, ShieldCheck, RotateCcw, DollarSign, Sparkles, Gift } from 'lucide-react';
-import { authService, membershipService, categoryService, sellerRegistrationFeeService } from '../../../../services/authService';
+import { authService, categoryService, sellerRegistrationFeeService, referralService } from '../../../../services/authService';
 import { MapService } from '../../../../services/MapService';
 import LocationSearchModal from '../../../../components/LocationSearchModal';
 import { loadRazorpaySdk } from '../../../../utils/razorpay';
 import { uploadRegistrationImage } from '../../../../utils/uploadRegistrationImage';
+
+const GST_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+const FSSAI_REGEX = /^[0-9]{14}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^[6-9]\d{9}$/;
+const PINCODE_REGEX = /^[1-9][0-9]{5}$/;
 
 const FALLBACK_CATEGORIES = [
   'Grocery Essentials',
@@ -77,6 +84,9 @@ const SellerRegister = () => {
 
   const [availableCategories, setAvailableCategories] = useState(FALLBACK_CATEGORIES);
   const [selectedCategories, setSelectedCategories] = useState([]);
+  const [referrerName, setReferrerName] = useState('');
+  const [referralValidating, setReferralValidating] = useState(false);
+  const [referralError, setReferralError] = useState('');
 
   // Password Visibility States
   const [showPassword, setShowPassword] = useState(false);
@@ -117,7 +127,8 @@ const SellerRegister = () => {
   useEffect(() => {
     const loadCategories = async () => {
       try {
-        const res = await categoryService.getCategories();
+        // forceRefresh so admin-created categories appear immediately (#24)
+        const res = await categoryService.getCategories(true);
         if (res?.categories && Array.isArray(res.categories) && res.categories.length > 0) {
           const names = res.categories.map(c => c.name || c.label || c).filter(Boolean);
           if (names.length > 0) {
@@ -156,6 +167,34 @@ const SellerRegister = () => {
     referralCode: (refCodeFromUrl || (typeof window !== 'undefined' ? sessionStorage.getItem('seller_referral_code') : '') || '').trim().toUpperCase(),
   });
 
+  const validateReferralCode = async (code) => {
+    const trimmed = String(code || '').trim().toUpperCase();
+    if (!trimmed) {
+      setReferrerName('');
+      setReferralError('');
+      return true;
+    }
+    setReferralValidating(true);
+    setReferralError('');
+    try {
+      const res = await referralService.validate(trimmed, 'seller');
+      if (res?.valid && res?.referrerName) {
+        setReferrerName(res.referrerName);
+        setReferralError('');
+        return true;
+      }
+      setReferrerName('');
+      setReferralError('Invalid referral code. Please check and try again, or leave it blank.');
+      return false;
+    } catch (err) {
+      setReferrerName('');
+      setReferralError(err.response?.data?.message || 'Could not validate referral code.');
+      return false;
+    } finally {
+      setReferralValidating(false);
+    }
+  };
+
   useEffect(() => {
     if (refCodeFromUrl) {
       sessionStorage.setItem('seller_referral_code', refCodeFromUrl.trim().toUpperCase());
@@ -167,6 +206,20 @@ const SellerRegister = () => {
       }
     }
   }, [refCodeFromUrl]);
+
+  useEffect(() => {
+    const code = formData.referralCode || refCodeFromUrl;
+    if (!code) {
+      setReferrerName('');
+      setReferralError('');
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      validateReferralCode(code);
+    }, 450);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.referralCode, refCodeFromUrl]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -321,71 +374,89 @@ const SellerRegister = () => {
   };
 
   const handleLaunchRazorpayCheckout = async (orderData) => {
-    const isLoaded = await loadRazorpaySdk();
-    if (!isLoaded || !window.Razorpay) {
-      setPaymentFailed(true);
-      setPaymentErrorMessage('Razorpay SDK failed to load. Please check your internet connection. / रेज़रपे एसडीके लोड करने में विफल रहा। कृपया अपना इंटरनेट कनेक्शन जांचें।');
-      return;
-    }
+    try {
+      const isLoaded = await loadRazorpaySdk();
+      if (!isLoaded || !window.Razorpay) {
+        setPaymentFailed(true);
+        setPaymentErrorMessage('Razorpay SDK failed to load. Please check your internet connection. / रेज़रपे एसडीके लोड करने में विफल रहा। कृपया अपना इंटरनेट कनेक्शन जांचें।');
+        return;
+      }
 
-    const options = {
-      key: orderData.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_TgHKKogdCDai1c',
-      amount: Math.round(orderData.amount * 100),
-      currency: orderData.currency || 'INR',
-      name: 'ShippNex Marketplace / शिपनेक्स मार्केटप्लेस',
-      description: `One-Time Seller Registration Fee (₹${orderData.amount}) / एकमुश्त विक्रेता पंजीकरण शुल्क (₹${orderData.amount})`,
-      order_id: orderData.orderId,
-      handler: async function (response) {
-        try {
-          setIsSubmitting(true);
-          setPaymentErrorMessage('');
-          const verifyPayload = {
-            sellerId: orderData.sellerId,
-            razorpayPaymentId: response.razorpay_payment_id,
-            razorpayOrderId: response.razorpay_order_id,
-            razorpaySignature: response.razorpay_signature,
-          };
-          const verifyRes = await sellerRegistrationFeeService.verifyPayment(verifyPayload);
-          if (verifyRes && verifyRes.success) {
-            setPaymentSuccessMsg('Registration payment successful. / पंजीकरण भुगतान सफल रहा।');
-            setPaymentFailed(false);
-            setStep(5); // Advance to OTP verification
-          } else {
+      const amountRupees = Number(orderData.amount);
+      if (!orderData.orderId || !Number.isFinite(amountRupees) || amountRupees <= 0) {
+        setPaymentFailed(true);
+        setPaymentErrorMessage('Invalid payment order. Please retry. / अमान्य भुगतान ऑर्डर। कृपया पुनः प्रयास करें।');
+        return;
+      }
+
+      // Razorpay checkout amount must be in paise and match the server order
+      const amountPaise = Math.round(amountRupees * 100);
+
+      const options = {
+        key: orderData.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_TgHKKogdCDai1c',
+        amount: amountPaise,
+        currency: orderData.currency || 'INR',
+        name: 'ShippNex Marketplace / शिपनेक्स मार्केटप्लेस',
+        description: `One-Time Seller Registration Fee (₹${amountRupees}) / एकमुश्त विक्रेता पंजीकरण शुल्क (₹${amountRupees})`,
+        order_id: orderData.orderId,
+        handler: async function (response) {
+          try {
+            setIsSubmitting(true);
+            setPaymentErrorMessage('');
+            const verifyPayload = {
+              sellerId: orderData.sellerId || pendingSellerId,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpaySignature: response.razorpay_signature,
+            };
+            const verifyRes = await sellerRegistrationFeeService.verifyPayment(verifyPayload);
+            if (verifyRes && verifyRes.success) {
+              setPaymentSuccessMsg('Registration payment successful. / पंजीकरण भुगतान सफल रहा।');
+              setPaymentFailed(false);
+              setStep(5); // Advance to OTP verification only after successful payment
+            } else {
+              setPaymentFailed(true);
+              setPaymentErrorMessage(verifyRes?.message || 'Payment verification failed. Please retry. / भुगतान सत्यापन विफल रहा। कृपया पुनः प्रयास करें।');
+            }
+          } catch (err) {
             setPaymentFailed(true);
-            setPaymentErrorMessage(verifyRes?.message || 'Payment verification failed. Please retry. / भुगतान सत्यापन विफल रहा। कृपया पुनः प्रयास करें।');
+            setPaymentErrorMessage(err.response?.data?.message || err.message || 'Payment verification error. / भुगतान सत्यापन में त्रुटि।');
+          } finally {
+            setIsSubmitting(false);
           }
-        } catch (err) {
-          setPaymentFailed(true);
-          setPaymentErrorMessage(err.response?.data?.message || err.message || 'Payment verification error. / भुगतान सत्यापन में त्रुटि।');
-        } finally {
-          setIsSubmitting(false);
-        }
-      },
-      modal: {
-        ondismiss: function () {
-          setIsSubmitting(false);
-          setPaymentFailed(true);
-          setPaymentErrorMessage('Payment cancelled or closed. Your registration has not been completed. Please retry. / भुगतान रद्द या बंद कर दिया गया। आपका पंजीकरण पूरा नहीं हुआ है। कृपया पुनः प्रयास करें।');
         },
-      },
-      prefill: {
-        name: formData.ownerName || formData.businessName,
-        email: formData.email,
-        contact: formData.phone,
-        method: 'netbanking',
-      },
-      theme: {
-        color: '#ff5500',
-      },
-    };
+        modal: {
+          ondismiss: function () {
+            // #29 — cancel must NOT complete registration / advance to OTP
+            setIsSubmitting(false);
+            setPaymentFailed(true);
+            setPaymentErrorMessage('Payment cancelled or closed. Your registration has not been completed. Please retry. / भुगतान रद्द या बंद कर दिया गया। आपका पंजीकरण पूरा नहीं हुआ है। कृपया पुनः प्रयास करें।');
+          },
+          escape: true,
+          confirm_close: true,
+        },
+        prefill: {
+          name: formData.ownerName || formData.businessName,
+          email: formData.email,
+          contact: formData.phone,
+        },
+        theme: {
+          color: '#ff5500',
+        },
+      };
 
-    const rzp = new window.Razorpay(options);
-    rzp.on('payment.failed', function (response) {
-      setIsSubmitting(false);
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response) {
+        setIsSubmitting(false);
+        setPaymentFailed(true);
+        setPaymentErrorMessage(response.error?.description || 'Payment failed. Your registration has not been completed. Please retry. / भुगतान विफल रहा। आपका पंजीकरण पूरा नहीं हुआ है। कृपया पुनः प्रयास करें।');
+      });
+      rzp.open();
+    } catch (err) {
+      console.error('Razorpay launch error:', err);
       setPaymentFailed(true);
-      setPaymentErrorMessage(response.error?.description || 'Payment failed. Your registration has not been completed. Please retry. / भुगतान विफल रहा। आपका पंजीकरण पूरा नहीं हुआ है। कृपया पुनः प्रयास करें।');
-    });
-    rzp.open();
+      setPaymentErrorMessage(err.message || 'Unable to open payment gateway. Please retry.');
+    }
   };
 
   const handleRetryPayment = async () => {
@@ -419,6 +490,22 @@ const SellerRegister = () => {
     setErrorMessage('');
 
     if (step === 1) {
+      if (!formData.businessName?.trim()) {
+        setErrorMessage('Business / Store name is required. / व्यवसाय या दुकान का नाम आवश्यक है।');
+        return;
+      }
+      if (!formData.ownerName?.trim()) {
+        setErrorMessage('Owner full name is required. / मालिक का पूरा नाम आवश्यक है।');
+        return;
+      }
+      if (!PHONE_REGEX.test(String(formData.phone || '').trim())) {
+        setErrorMessage('Enter a valid 10-digit mobile number starting with 6–9. / 6–9 से शुरू होने वाला वैध 10 अंकों का मोबाइल नंबर दर्ज करें।');
+        return;
+      }
+      if (!EMAIL_REGEX.test(String(formData.email || '').trim())) {
+        setErrorMessage('Enter a valid email address. / वैध ईमेल पता दर्ज करें।');
+        return;
+      }
       if (!formData.password || formData.password.length < 6) {
         setErrorMessage('Password is required and must be at least 6 characters long. / पासवर्ड आवश्यक है और कम से कम 6 वर्णों का होना चाहिए।');
         return;
@@ -431,6 +518,66 @@ const SellerRegister = () => {
         setErrorMessage('Please select at least one store category for your business. / कृपया अपने व्यवसाय के लिए कम से कम एक स्टोर श्रेणी चुनें।');
         return;
       }
+      if (formData.referralCode?.trim()) {
+        const ok = await validateReferralCode(formData.referralCode);
+        if (!ok) {
+          setErrorMessage(referralError || 'Invalid referral code. Please check and try again, or leave it blank.');
+          return;
+        }
+      }
+    }
+
+    if (step === 2) {
+      if (!formData.completeAddress?.trim()) {
+        setErrorMessage('Complete warehouse address is required. / पूरा वेयरहाउस पता आवश्यक है।');
+        return;
+      }
+      if (!formData.city?.trim() || !formData.state?.trim()) {
+        setErrorMessage('City and state are required. / शहर और राज्य आवश्यक हैं।');
+        return;
+      }
+      if (!PINCODE_REGEX.test(String(formData.pincode || '').trim())) {
+        setErrorMessage('Enter a valid 6-digit PIN code. / वैध 6 अंकों का पिन कोड दर्ज करें।');
+        return;
+      }
+      if (!formData.lat || !formData.lng) {
+        setErrorMessage('Please set warehouse location via GPS or map search. / कृपया जीपीएस या मानचित्र से वेयरहाउस स्थान सेट करें।');
+        return;
+      }
+      const radius = Number(formData.serviceRadius);
+      if (!Number.isFinite(radius) || radius < 1) {
+        setErrorMessage('Service radius must be at least 1 km. / सेवा दायरा कम से कम 1 किमी होना चाहिए।');
+        return;
+      }
+    }
+
+    if (step === 3) {
+      const pan = String(formData.panNumber || '').trim().toUpperCase();
+      if (!PAN_REGEX.test(pan)) {
+        setErrorMessage('Enter a valid PAN (e.g. ABCDE1234F). / वैध पैन दर्ज करें (जैसे: ABCDE1234F)।');
+        return;
+      }
+      const gst = String(formData.gstNumber || '').trim().toUpperCase();
+      if (gst && !GST_REGEX.test(gst)) {
+        setErrorMessage('Enter a valid 15-character GSTIN, or leave GST blank. / वैध 15 अक्षर का जीएसटीआईएन दर्ज करें, या खाली छोड़ें।');
+        return;
+      }
+      const fssai = String(formData.fssaiLicense || '').trim();
+      if (fssai && !FSSAI_REGEX.test(fssai)) {
+        setErrorMessage('FSSAI license must be exactly 14 digits, or leave blank. / एफएसएसएआई लाइसेंस ठीक 14 अंकों का होना चाहिए।');
+        return;
+      }
+      if (!formData.bankPassbookPhoto) {
+        setErrorMessage('Bank passbook or cancelled cheque photo is required. / बैंक पासबुक या रद्द चेक का फोटो आवश्यक है।');
+        return;
+      }
+      // Normalize uppercase formats into form state
+      setFormData((prev) => ({
+        ...prev,
+        panNumber: pan,
+        gstNumber: gst,
+        fssaiLicense: fssai,
+      }));
     }
 
     if (step < 4) {
@@ -485,8 +632,9 @@ const SellerRegister = () => {
 
         const res = await sellerRegistrationFeeService.initiateOrder(basePayload);
 
-        if (res && res.sellerId) {
-          setPendingSellerId(res.sellerId);
+        const resolvedSellerId = res?.sellerId || res?.seller?.id || res?.seller?._id || null;
+        if (resolvedSellerId) {
+          setPendingSellerId(resolvedSellerId);
         }
 
         if (res && res.alreadyPaid) {
@@ -495,15 +643,18 @@ const SellerRegister = () => {
           return;
         }
 
-        if (res && !res.registrationFeeRequired) {
-          // Fee waived by admin
+        if (res && res.registrationFeeRequired === false) {
+          // Fee waived by admin / not required
           setPaymentSuccessMsg('Registration fee is currently waived. / पंजीकरण शुल्क वर्तमान में माफ है।');
           setStep(5); // Move to OTP verification
           return;
         }
 
         if (res && res.registrationFeeRequired && res.orderId) {
-          handleLaunchRazorpayCheckout(res);
+          await handleLaunchRazorpayCheckout({
+            ...res,
+            sellerId: resolvedSellerId || res.sellerId,
+          });
           return;
         }
 
@@ -534,19 +685,23 @@ const SellerRegister = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="sm:mx-auto sm:w-full sm:max-w-xl text-center mb-5">
-        <Link to="/" className="inline-flex items-center gap-2 mb-1.5">
-          <img src="/Logo.png" alt="ShippNex" className="h-9 object-contain mx-auto" />
-        </Link>
-        <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
-          Seller Registration <span className="font-bold text-slate-500 text-lg">/ विक्रेता पंजीकरण</span>
-        </h2>
-        <p className="text-xs text-slate-500 mt-1 font-medium">
-          Start selling on ShippNex Marketplace <span className="text-slate-400">/ शिपनेक्स मार्केटप्लेस पर बेचना शुरू करें</span>
-        </p>
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      {/* #16 — sticky registration header */}
+      <div className="sticky top-0 z-40 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3">
+        <div className="sm:mx-auto sm:w-full sm:max-w-xl text-center">
+          <Link to="/" className="inline-flex items-center gap-2 mb-1">
+            <img src="/Logo.png" alt="ShippNex" className="h-9 object-contain mx-auto" />
+          </Link>
+          <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
+            Seller Registration <span className="font-bold text-slate-500 text-lg">/ विक्रेता पंजीकरण</span>
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5 font-medium">
+            Start selling on ShippNex Marketplace <span className="text-slate-400">/ शिपनेक्स मार्केटप्लेस पर बेचना शुरू करें</span>
+          </p>
+        </div>
       </div>
 
+      <div className="flex-1 flex flex-col justify-center py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-xl">
         <div className="bg-white py-6 px-5 shadow-xl sm:rounded-2xl sm:px-8 border border-slate-100">
           {isSubmitted ? (
@@ -632,13 +787,16 @@ const SellerRegister = () => {
                   <h3 className="text-base font-bold text-slate-800 m-0">Store Information & Password <span className="font-semibold text-slate-500 text-sm">/ दुकान की जानकारी और पासवर्ड</span></h3>
                 </div>
 
-                {(refCodeFromUrl || formData.referralCode) && (
+                {(refCodeFromUrl || formData.referralCode) && referrerName && !referralError && (
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center justify-between gap-2 shadow-2xs">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <Gift size={16} className="text-emerald-600 shrink-0" />
-                      <span>Referred by: <span className="font-mono font-bold tracking-wider text-emerald-900 bg-emerald-100/80 px-2 py-0.5 rounded">{formData.referralCode || refCodeFromUrl}</span></span>
+                      <span className="truncate">
+                        Referred by: <span className="font-bold text-emerald-900">{referrerName}</span>
+                        <span className="font-mono font-bold tracking-wider text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded ml-1.5 text-[10px]">{formData.referralCode || refCodeFromUrl}</span>
+                      </span>
                     </div>
-                    <span className="text-[11px] text-emerald-600 font-normal">Referral Applied ✓</span>
+                    <span className="text-[11px] text-emerald-600 font-normal shrink-0">Referral Applied ✓</span>
                   </div>
                 )}
 
@@ -753,12 +911,32 @@ const SellerRegister = () => {
                         type="text" 
                         name="referralCode" 
                         value={formData.referralCode} 
-                        onChange={(e) => setFormData(prev => ({ ...prev, referralCode: e.target.value.toUpperCase() }))} 
-                        className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-[#ff5500] font-mono text-xs uppercase tracking-wider transition-all placeholder:text-slate-400 placeholder:normal-case placeholder:tracking-normal placeholder:text-xs" 
+                        onChange={(e) => {
+                          setReferrerName('');
+                          setReferralError('');
+                          setFormData(prev => ({ ...prev, referralCode: e.target.value.toUpperCase() }));
+                        }}
+                        onBlur={() => validateReferralCode(formData.referralCode)}
+                        className={`w-full pl-9 pr-9 py-2 border rounded-lg outline-none font-mono text-xs uppercase tracking-wider transition-all placeholder:text-slate-400 placeholder:normal-case placeholder:tracking-normal placeholder:text-xs ${
+                          referralError
+                            ? 'border-rose-300 focus:border-rose-500'
+                            : referrerName
+                              ? 'border-emerald-300 focus:border-emerald-500'
+                              : 'border-slate-200 focus:border-[#ff5500]'
+                        }`}
                         placeholder="e.g. SELL12345" 
                       />
                       <Gift size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      {referralValidating && (
+                        <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />
+                      )}
                     </div>
+                    {referrerName && !referralError && (
+                      <p className="text-[11px] text-emerald-600 font-medium mt-1">Referred by {referrerName}</p>
+                    )}
+                    {referralError && (
+                      <p className="text-[11px] text-rose-600 font-medium mt-1">{referralError}</p>
+                    )}
                   </div>
 
                   {/* Store Categories Selection */}
@@ -1236,6 +1414,7 @@ const SellerRegister = () => {
         placeholder="Search warehouse building, industrial area, street, city... / वेयरहाउस भवन, औद्योगिक क्षेत्र, सड़क, शहर खोजें..."
         accentColor="#ff5500"
       />
+      </div>
     </div>
   );
 };

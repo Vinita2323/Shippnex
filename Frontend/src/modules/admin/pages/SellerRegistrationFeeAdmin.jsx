@@ -450,12 +450,24 @@ export const SellerRegistrationFeeAdmin = () => {
                       </td>
 
                       <td className="py-3.5 px-4 font-mono text-[11px] text-slate-600">
-                        <div className="truncate max-w-[180px]" title={p.razorpayOrderId}>
-                          Ord: {p.razorpayOrderId || '—'}
+                        <div
+                          className="truncate max-w-[180px] font-bold text-slate-800"
+                          title={p.transactionReference || p.gatewayOrderId || p.razorpayOrderId}
+                        >
+                          Txn: {p.transactionReference || p.gatewayOrderId || p.razorpayOrderId || '—'}
                         </div>
-                        {p.razorpayPaymentId && (
-                          <div className="text-[10px] text-slate-400 truncate max-w-[180px]" title={p.razorpayPaymentId}>
-                            Pay: {p.razorpayPaymentId}
+                        <div
+                          className="truncate max-w-[180px] text-[10px] text-slate-500"
+                          title={p.gatewayOrderId || p.razorpayOrderId}
+                        >
+                          Ord: {p.gatewayOrderId || p.razorpayOrderId || '—'}
+                        </div>
+                        {(p.gatewayPaymentId || p.razorpayPaymentId) && (
+                          <div
+                            className="text-[10px] text-slate-400 truncate max-w-[180px]"
+                            title={p.gatewayPaymentId || p.razorpayPaymentId}
+                          >
+                            Pay: {p.gatewayPaymentId || p.razorpayPaymentId}
                           </div>
                         )}
                       </td>
@@ -716,12 +728,16 @@ export const SellerRegistrationFeeAdmin = () => {
                   <span className="text-orange-700 font-bold">{selectedPayment.paymentType}</span>
                 </div>
                 <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-sans font-bold">Transaction ID:</span>
+                  <span className="text-slate-800">{selectedPayment.transactionReference || '—'}</span>
+                </div>
+                <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-sans font-bold">Razorpay Order ID:</span>
-                  <span className="text-slate-800">{selectedPayment.razorpayOrderId || '—'}</span>
+                  <span className="text-slate-800">{selectedPayment.gatewayOrderId || selectedPayment.razorpayOrderId || '—'}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-sans font-bold">Razorpay Payment ID:</span>
-                  <span className="text-slate-800">{selectedPayment.razorpayPaymentId || '—'}</span>
+                  <span className="text-slate-800">{selectedPayment.gatewayPaymentId || selectedPayment.razorpayPaymentId || '—'}</span>
                 </div>
                 {selectedPayment.failureReason && (
                   <div>

@@ -95,10 +95,10 @@ const RevenueBarChart = ({ data }) => {
                 </div>
                 <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-[#002625]" />
               </div>
-              {/* Bar */}
+              {/* Bar — use px height (parent has no sized height for % to resolve) */}
               <div
                 className="w-full rounded-t-lg transition-all duration-500 bg-[#002625] group-hover:bg-[#ff5500]"
-                style={{ height: `${pct}%` }}
+                style={{ height: `${Math.max(8, Math.round((pct / 100) * 112))}px` }}
               />
             </div>
             <span className="text-[10px] text-slate-400 font-medium truncate w-full text-center">

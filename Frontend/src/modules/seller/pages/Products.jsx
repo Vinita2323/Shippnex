@@ -7,6 +7,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { productService, authService, categoryService } from '../../../services/authService';
 import { getImageUrl, handleImageError, getInitialSvgDataUrl, compressAndResizeImage, uploadFileViaApi } from '../../../utils/imageUtils';
+import { getEffectiveStock } from '../../../utils/productStock';
 
 const Products = () => {
   const navigate = useNavigate();
@@ -128,7 +129,6 @@ const Products = () => {
       sku: ap.sku || ap.id || 'SKU-001',
       category: ap.category || 'General',
       subCategory: ap.subCategory || '',
-      stock: Number(ap.stock !== undefined ? ap.stock : 0),
       price: Number(ap.salePrice || ap.mrp || ap.price || 0),
       salePrice: Number(ap.salePrice || ap.mrp || ap.price || 0),
       mrp: Number(ap.mrp || ap.salePrice || ap.price || 0),
@@ -143,7 +143,9 @@ const Products = () => {
       returnPolicy: ap.returnPolicy || '7 Days Returnable / Replacement',
       hasVariants: Boolean(ap.hasVariants || (Array.isArray(ap.variants) && ap.variants.length > 0)),
       variantOptions: ap.variantOptions || [],
-      variants: ap.variants || []
+      variants: ap.variants || [],
+      // Variant products: show sum of active variant stocks (not a stale root field)
+      stock: getEffectiveStock(ap),
     }));
 
     // Populate category dropdown from loaded products
@@ -206,7 +208,7 @@ const Products = () => {
       sku: product.sku || product.id || '',
       salePrice: product.salePrice !== undefined ? String(product.salePrice) : (product.price !== undefined ? String(product.price) : ''),
       mrp: product.mrp !== undefined ? String(product.mrp) : '',
-      stock: product.stock !== undefined ? String(product.stock) : '0',
+      stock: String(getEffectiveStock(product)),
       status: product.status || 'Published',
       image: product.image || product.mainImage || '',
       description: product.description || '',
@@ -564,8 +566,13 @@ const Products = () => {
                     )}
                   </td>
                   <td className="px-5 py-4 text-sm">
-                    <span className={`font-semibold ${product.stock === 0 ? 'text-red-600' : product.stock < 100 ? 'text-orange-600' : 'text-slate-900'}`}>
+                    <span className={`font-semibold ${product.stock === 0 ? 'text-red-600' : product.stock < (product.minStockLimit || 10) ? 'text-orange-600' : 'text-slate-900'}`}>
                       {product.stock} units
+                      {product.hasVariants ? (
+                        <span className="block text-[10px] font-medium text-slate-400 mt-0.5">
+                          Across {(product.variants || []).filter((v) => v && v.active !== false).length} variants
+                        </span>
+                      ) : null}
                     </span>
                   </td>
                   <td className="px-5 py-4">
@@ -958,7 +965,14 @@ const Products = () => {
               <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                 <div>
                   <span className="text-slate-400">Available Stock:</span>
-                  <div className="font-bold text-slate-800 mt-0.5">{viewingProduct.stock} units</div>
+                  <div className="font-bold text-slate-800 mt-0.5">
+                    {getEffectiveStock(viewingProduct)} units
+                    {viewingProduct.hasVariants ? (
+                      <span className="block text-[10px] font-medium text-slate-400 mt-0.5">
+                        Sum of active variants
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
                 <div>
                   <span className="text-slate-400">Unit Type:</span>

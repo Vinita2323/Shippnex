@@ -184,9 +184,19 @@ export const getAllUsers = async (req, res, next) => {
               $sum: {
                 $cond: [
                   {
-                    $in: [
-                      '$orderStatus',
-                      ['Returned', 'Return Requested', 'Return Approved', 'Return Rejected', 'Return']
+                    $or: [
+                      {
+                        $in: [
+                          '$orderStatus',
+                          ['Returned', 'Return Requested', 'Return Approved', 'Return Rejected', 'Return']
+                        ]
+                      },
+                      {
+                        $in: [
+                          { $ifNull: ['$returnStatus', ''] },
+                          ['Requested', 'Pending', 'Approved', 'Completed', 'Refunded', 'PickedUp', 'Received', 'Rejected']
+                        ]
+                      }
                     ]
                   },
                   1,

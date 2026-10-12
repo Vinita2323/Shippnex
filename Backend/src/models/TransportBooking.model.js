@@ -33,6 +33,9 @@ const fareBreakdownSchema = new mongoose.Schema(
     platformFee: { type: Number, required: true, default: 0 },
     discount: { type: Number, default: 0 },
     totalFare: { type: Number, required: true },
+    waitingCharge: { type: Number, default: 0 },
+    stopsCharge: { type: Number, default: 0 },
+    nightSurge: { type: Number, default: 0 },
   },
   { _id: false }
 );

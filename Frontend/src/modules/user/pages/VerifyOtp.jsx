@@ -62,14 +62,14 @@ const VerifyOtp = () => {
 
           if (pending.type === 'ADD_TO_CART' && pending.product) {
             await addToCart(pending.product, pending.quantity || 1);
-            navigate(pending.returnUrl || '/cart');
+            navigate(pending.returnUrl || '/cart', { replace: true });
             return;
           } else if (pending.type === 'BUY_NOW' && pending.product) {
             await addToCart(pending.product, pending.quantity || 1);
-            navigate('/checkout');
+            navigate('/checkout', { replace: true });
             return;
           } else if (pending.type === 'CHECKOUT') {
-            navigate('/checkout');
+            navigate('/checkout', { replace: true });
             return;
           }
         } catch (pErr) {
@@ -81,11 +81,12 @@ const VerifyOtp = () => {
       const expRedir = sessionStorage.getItem('shippnex_auth_expired_redirect');
       if (expRedir) {
         sessionStorage.removeItem('shippnex_auth_expired_redirect');
-        navigate(expRedir);
+        navigate(expRedir, { replace: true });
         return;
       }
 
-      navigate('/');
+      // replace: true removes /verify-otp from history so add-address back cannot reopen OTP
+      navigate('/', { replace: true });
     } catch (err) {
       setErrorMsg(err.response?.data?.message || 'Invalid OTP code. Please try again.');
     } finally {

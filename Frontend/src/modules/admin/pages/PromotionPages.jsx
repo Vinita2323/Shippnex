@@ -30,7 +30,7 @@ import {
   Zap,
   Tag
 } from 'lucide-react';
-import { bannerService, productService } from '../../../services/authService';
+import { bannerService, productService, adminService } from '../../../services/authService';
 import { getImageUrl, handleImageError } from '../../../utils/imageUtils';
 import { 
   initialPromotionStats, 
@@ -1345,7 +1345,7 @@ export const PromoFlashSale = () => {
   useEffect(() => {
     const fetchLiveFlashProducts = async () => {
       try {
-        const res = await productService.getProducts({ section: 'flash_sale' });
+        const res = await productService.getProducts({ section: 'flash_sale', admin: 'true' });
         if (res && res.products && Array.isArray(res.products) && res.products.length > 0) {
           const formatted = res.products.map((p, idx) => ({
             _id: p._id,
@@ -1447,6 +1447,22 @@ export const PromoFlashSale = () => {
 
     let res = null;
     try {
+      // Attach an approved seller so storefront eligibility can show the product (#88)
+      if (!editingId) {
+        try {
+          const sellersRes = await adminService.getSellers(true);
+          const sellers = sellersRes?.sellers || [];
+          const approved = sellers.find(
+            (s) => String(s.accountStatus || s.status || '').toLowerCase() === 'approved'
+          );
+          if (approved) {
+            payload.sellerId = approved._id || approved.id;
+            payload.seller = approved.businessName || approved.ownerName || 'ShippNex Seller';
+          }
+        } catch (_) {
+          /* non-blocking */
+        }
+      }
       if (editingId) {
         res = await productService.updateProduct(editingId, payload);
       } else {

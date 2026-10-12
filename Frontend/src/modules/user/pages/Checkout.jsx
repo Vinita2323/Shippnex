@@ -6,16 +6,37 @@ import {
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useLocationContext } from '../../../context/LocationContext';
-import { addressService, orderService } from '../../../services/authService';
+import { addressService, orderService, walletService } from '../../../services/authService';
 import commissionService from '../../../services/commissionService';
 import { variantLabel, toSelectedVariants, missingVariantOptions } from '../../../utils/variantLabel';
 
-const availableSlots = [
-  { id: 's1', date: 'Today', time: 'Express (Within 30 Mins)', badge: 'Fastest' },
-  { id: 's2', date: 'Today', time: '05:00 PM - 07:00 PM' },
-  { id: 's3', date: 'Tomorrow', time: '10:00 AM - 12:00 PM', isDefault: true },
-  { id: 's4', date: 'Tomorrow', time: '04:00 PM - 06:00 PM' },
-];
+/** Build delivery slots from the current clock — no hard-coded "Tomorrow" default. */
+const buildAvailableSlots = (now = new Date()) => {
+  const hour = now.getHours();
+  const slots = [
+    { id: 's1', date: 'Today', time: 'Express (Within 30 Mins)', badge: 'Fastest' },
+  ];
+
+  // Afternoon window still bookable before 4 PM
+  if (hour < 16) {
+    slots.push({ id: 's2', date: 'Today', time: '05:00 PM - 07:00 PM' });
+  }
+  // Evening window still bookable before 6 PM
+  if (hour < 18) {
+    slots.push({ id: 's3', date: 'Today', time: '07:00 PM - 09:00 PM' });
+  }
+
+  slots.push(
+    { id: 's4', date: 'Tomorrow', time: '10:00 AM - 12:00 PM' },
+    { id: 's5', date: 'Tomorrow', time: '04:00 PM - 06:00 PM' },
+  );
+
+  // Prefer first Today slot (Express / next available), not a static Tomorrow row
+  slots[0] = { ...slots[0], isDefault: true };
+  return slots;
+};
+
+const availableSlots = buildAvailableSlots();
 
 // Available Payment Options
 const paymentMethods = [
@@ -23,7 +44,7 @@ const paymentMethods = [
   { id: 'UPI', name: 'UPI (GPay / PhonePe / Paytm)', icon: Smartphone, description: 'Instant UPI payment' },
   { id: 'CARD', name: 'Credit / Debit Card', icon: CreditCard, description: 'Visa, Mastercard, RuPay' },
   { id: 'NETBANKING', name: 'Net Banking', icon: Building2, description: 'All major banks supported' },
-  { id: 'WALLET', name: 'Mobile Wallets', icon: Wallet, description: 'Paytm Wallet, Mobikwik, etc.' },
+  { id: 'WALLET', name: 'ShippNex Wallet', icon: Wallet, description: 'Pay instantly from your wallet balance' },
 ];
 
 const Checkout = () => {
@@ -36,7 +57,9 @@ const Checkout = () => {
   const [userPhone, setUserPhone] = useState('');
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
-  const [selectedSlot, setSelectedSlot] = useState(availableSlots[2]);
+  const [selectedSlot, setSelectedSlot] = useState(
+    () => availableSlots.find((s) => s.isDefault) || availableSlots[0]
+  );
   const [selectedPayment, setSelectedPayment] = useState('COD');
   const [deliveryInstructions, setDeliveryInstructions] = useState('');
 
@@ -48,6 +71,7 @@ const Checkout = () => {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [placedOrder, setPlacedOrder] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [walletBalance, setWalletBalance] = useState(null);
 
   // Profile Form State for incomplete profiles
   const [profileForm, setProfileForm] = useState({
@@ -175,6 +199,14 @@ const Checkout = () => {
     }
 
     loadAddresses();
+
+    walletService.getUserWallet()
+      .then((res) => {
+        if (res?.success) {
+          setWalletBalance(Number(res.wallet?.balance || 0));
+        }
+      })
+      .catch(() => setWalletBalance(0));
   }, []);
 
   const handleSaveProfile = (e) => {
@@ -521,29 +553,41 @@ const Checkout = () => {
         paymentMethod: selectedPayment,
       };
 
-      // If online payment method, handle via Razorpay
-      if (['UPI', 'CARD', 'NETBANKING', 'WALLET'].includes(selectedPayment)) {
+      // Razorpay for UPI / Card / Net Banking
+      if (['UPI', 'CARD', 'NETBANKING'].includes(selectedPayment)) {
         onlineCheckoutOpen = Boolean(await handleRazorpayPayment(orderPayload));
         return;
-      } else {
-        // COD - place order directly
-        const res = await orderService.placeOrder(orderPayload);
-        if (res && res.success && res.order) {
-          // Sync returned updated user document to localStorage
-          if (res.user) {
-            if (res.user.name) localStorage.setItem('shippnex_user_name', res.user.name);
-            if (res.user.email) localStorage.setItem('shippnex_user_email', res.user.email);
-            if (res.user.phone) localStorage.setItem('shippnex_user_phone', res.user.phone);
-            localStorage.setItem('shippnex_user_data', JSON.stringify(res.user));
-            if (res.user.addresses && Array.isArray(res.user.addresses)) {
-              localStorage.setItem('shippnex_saved_addresses', JSON.stringify(res.user.addresses));
-            }
+      }
+
+      // COD or ShippNex Wallet — place order directly (wallet debited on server)
+      if (selectedPayment === 'WALLET' && walletBalance !== null && walletBalance < finalGrandTotal) {
+        setErrorMsg(`Insufficient wallet balance (₹${walletBalance.toFixed(2)}). Add funds via refunds or choose another payment method.`);
+        return;
+      }
+
+      const res = await orderService.placeOrder(orderPayload);
+      if (res && res.success && res.order) {
+        if (res.user) {
+          if (res.user.name) localStorage.setItem('shippnex_user_name', res.user.name);
+          if (res.user.email) localStorage.setItem('shippnex_user_email', res.user.email);
+          if (res.user.phone) localStorage.setItem('shippnex_user_phone', res.user.phone);
+          localStorage.setItem('shippnex_user_data', JSON.stringify(res.user));
+          if (res.user.addresses && Array.isArray(res.user.addresses)) {
+            localStorage.setItem('shippnex_saved_addresses', JSON.stringify(res.user.addresses));
           }
-          setPlacedOrder(res.order);
-          await clearCart();
-        } else {
-          setErrorMsg(res.message || 'Failed to place order.');
         }
+        if (selectedPayment === 'WALLET' && typeof res.walletBalance === 'number') {
+          setWalletBalance(res.walletBalance);
+        } else if (selectedPayment === 'WALLET') {
+          try {
+            const w = await walletService.getUserWallet();
+            if (w?.success) setWalletBalance(Number(w.wallet?.balance || 0));
+          } catch (_) {}
+        }
+        setPlacedOrder(res.order);
+        await clearCart();
+      } else {
+        setErrorMsg(res.message || 'Failed to place order.');
       }
     } catch (err) {
       console.error('Order placement failed:', err);
@@ -583,11 +627,13 @@ const Checkout = () => {
   const isFreeDelivery = safeTotal === 0 || (deliverySettings.isFreeDeliveryEnabled && safeTotal >= deliverySettings.freeDeliveryMinOrder);
   const deliveryCharge = isFreeDelivery ? 0 : deliverySettings.deliveryCharge;
   const isCod = selectedPayment === 'COD';
-  const isOnlinePay = ['UPI', 'CARD', 'NETBANKING', 'WALLET'].includes(selectedPayment);
+  const isOnlinePay = ['UPI', 'CARD', 'NETBANKING'].includes(selectedPayment);
+  const isWalletPay = selectedPayment === 'WALLET';
   const paymentNotFinished = errorMsg.startsWith('Payment was not completed');
   const codCharge = (isCod && deliverySettings.isCodChargeEnabled) ? Number(deliverySettings.codCharge ?? 9) : 0;
   const savings = originalTotal > safeTotal ? originalTotal - safeTotal : 0;
   const finalGrandTotal = safeTotal + deliveryCharge + codCharge;
+  const walletInsufficient = isWalletPay && walletBalance !== null && walletBalance < finalGrandTotal;
 
   return (
     <div className="w-full max-w-[480px] md:max-w-7xl mx-auto h-[100dvh] md:h-auto md:min-h-screen bg-slate-50 font-sans text-slate-800 relative shadow-[0_0_20px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col overflow-hidden md:overflow-visible md:px-6 md:py-8">
@@ -732,7 +778,11 @@ const Checkout = () => {
                         )}
                       </div>
                       <p className="text-[11px] text-slate-500 m-0">
-                        {codExtra > 0 ? `Pay cash upon delivery (+₹${codExtra} handling fee)` : pm.description}
+                        {codExtra > 0
+                          ? `Pay cash upon delivery (+₹${codExtra} handling fee)`
+                          : pm.id === 'WALLET' && walletBalance !== null
+                            ? `Balance ₹${walletBalance.toFixed(2)} · ${pm.description}`
+                            : pm.description}
                       </p>
                     </div>
                   </div>
@@ -797,21 +847,29 @@ const Checkout = () => {
             </div>
           </div>
 
+          {walletInsufficient && (
+            <p className="text-[11px] font-semibold text-rose-600 m-0 pt-1">
+              Insufficient wallet balance. Available ₹{Number(walletBalance || 0).toFixed(2)}.
+            </p>
+          )}
+
           {/* Desktop Place Order Button */}
           <div className="hidden md:block pt-3">
             <button
-              disabled={placingOrder}
+              disabled={placingOrder || walletInsufficient}
               className="w-full bg-[#ff5500] hover:bg-[#e04b00] disabled:opacity-60 text-white border-none rounded-xl py-3.5 px-6 text-sm font-black cursor-pointer shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
               onClick={handlePlaceOrder}
             >
               {placingOrder ? (
                 <>
-                  <Loader2 size={18} className="animate-spin" /> {isOnlinePay ? 'Processing...' : 'Placing Order...'}
+                  <Loader2 size={18} className="animate-spin" /> {isOnlinePay || isWalletPay ? 'Processing...' : 'Placing Order...'}
                 </>
               ) : (
                 <>
                   <span>
-                    {isOnlinePay ? (paymentNotFinished ? 'Retry Payment' : 'Pay') : 'Place Order'} • ₹{finalGrandTotal.toFixed(2)}
+                    {isOnlinePay || isWalletPay
+                      ? (paymentNotFinished ? 'Retry Payment' : 'Pay')
+                      : 'Place Order'} • ₹{finalGrandTotal.toFixed(2)}
                   </span>
                   <ChevronRight size={18} />
                 </>
@@ -830,24 +888,24 @@ const Checkout = () => {
         <div className="h-[140px] shrink-0 md:hidden"></div>
       </div>
 
-      {/* Sticky Place Order Footer (Mobile Only) */}
-      <div className="md:hidden absolute bottom-0 left-0 w-full py-4 px-5 pb-6 bg-white border-t border-slate-200/80 z-[80] flex items-center justify-between">
+      {/* Sticky Place Order Footer (Mobile Only) — fixed so it stays above system UI / nav chrome */}
+      <div className="md:hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] py-4 px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] bg-white border-t border-slate-200/80 z-[80] flex items-center justify-between shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
         <div>
           <span className="text-[11px] font-medium text-slate-500 block">Total Payable</span>
           <span className="text-[18px] font-extrabold text-slate-900">₹{finalGrandTotal.toFixed(2)}</span>
         </div>
         <button
-          disabled={placingOrder}
+          disabled={placingOrder || walletInsufficient}
           className="bg-[#ff5500] hover:bg-[#e04b00] disabled:opacity-60 text-white border-none rounded-xl py-3.5 px-7 text-[15px] font-bold cursor-pointer shadow-[0_4px_12px_rgba(255,85,0,0.25)] transition-transform duration-200 active:scale-[0.98] flex items-center gap-2"
           onClick={handlePlaceOrder}
         >
           {placingOrder ? (
             <>
-              <Loader2 size={18} className="animate-spin" /> {isOnlinePay ? 'Processing...' : 'Placing...'}
+              <Loader2 size={18} className="animate-spin" /> {isOnlinePay || isWalletPay ? 'Processing...' : 'Placing...'}
             </>
           ) : (
             <>
-              <span>{isOnlinePay ? (paymentNotFinished ? 'Retry Payment' : 'Pay') : 'Place Order'}</span>
+              <span>{isOnlinePay || isWalletPay ? (paymentNotFinished ? 'Retry Payment' : 'Pay') : 'Place Order'}</span>
               <ChevronRight size={18} />
             </>
           )}

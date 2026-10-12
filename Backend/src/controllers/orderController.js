@@ -27,6 +27,7 @@ import {
   rowsFromAttributes,
 } from '../utils/selectedVariants.js';
 import { evaluateProductSellerEligibility } from '../utils/sellerEligibility.js';
+import { debitUserWallet } from '../utils/userWalletHelper.js';
 
 // Helper: Clean base64 image strings or invalid dummy links
 const cleanImage = (img) => {
@@ -337,7 +338,9 @@ const pickOrderedVariant = (product, item = {}) => {
   };
 };
 
-const ONLINE_PAYMENT_METHODS = ['UPI', 'CARD', 'NETBANKING', 'WALLET', 'ONLINE'];
+// WALLET = ShippNex in-app balance (instant debit). UPI/CARD/NETBANKING go through Razorpay.
+const ONLINE_PAYMENT_METHODS = ['UPI', 'CARD', 'NETBANKING', 'ONLINE'];
+const isWalletPaymentMethod = (method) => String(method || '').toUpperCase() === 'WALLET';
 
 const isOnlinePaymentMethod = (method) => ONLINE_PAYMENT_METHODS.includes(String(method || '').toUpperCase());
 
@@ -765,7 +768,23 @@ export const placeOrder = async (req, res, next) => {
     const gst = 0; // GST included in prices
     const grandTotal = Number((itemsTotal + shippingFee + codCharge).toFixed(2));
 
+    const walletPayment = isWalletPaymentMethod(paymentMethod);
     const onlinePayment = isOnlinePaymentMethod(paymentMethod);
+
+    if (walletPayment) {
+      if (!userDoc) {
+        userDoc = await User.findById(userId).select('walletBalance name phone email cart');
+      }
+      const available = Number(userDoc?.walletBalance || 0);
+      if (available < grandTotal) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient ShippNex Wallet balance. Available ₹${available.toFixed(2)}, required ₹${grandTotal.toFixed(2)}.`,
+          walletBalance: available,
+        });
+      }
+    }
+
     const pendingCutoff = new Date(Date.now() - 30 * 60 * 1000);
     if (onlinePayment) {
       const openPending = await Order.find({
@@ -816,7 +835,7 @@ export const placeOrder = async (req, res, next) => {
       deliverySlot,
       deliveryInstructions,
       paymentMethod,
-      paymentStatus: 'Pending',
+      paymentStatus: walletPayment ? 'Paid' : 'Pending',
       orderStatus: isOnlinePaymentMethod(paymentMethod) ? 'Payment Pending' : 'Placed',
       sellerStatus: 'Pending',
       stockHold: 'none',
@@ -838,6 +857,31 @@ export const placeOrder = async (req, res, next) => {
     });
 
     console.log(`[OrderController] Successfully created Order in MongoDB: OrderID=${order.orderId}, UserID=${userId}, ItemsTotal=₹${itemsTotal}, Shipping=₹${shippingFee}, COD=₹${codCharge}, GrandTotal=₹${grandTotal}`);
+
+    let walletBalanceAfter = null;
+    if (walletPayment) {
+      const debit = await debitUserWallet({
+        userId,
+        amount: grandTotal,
+        category: 'ORDER_PAYMENT',
+        orderId: order.orderId,
+        order: order._id,
+        description: `Payment for order #${order.orderId}`,
+      });
+      if (!debit.success) {
+        await Order.deleteOne({ _id: order._id });
+        return res.status(400).json({
+          success: false,
+          message: debit.message || 'Wallet payment failed.',
+          walletBalance: debit.balance,
+        });
+      }
+      walletBalanceAfter = debit.balance;
+      // Keep in-memory userDoc in sync so later userDoc.save() does not overwrite balance
+      if (userDoc) {
+        userDoc.walletBalance = debit.balance;
+      }
+    }
 
     if (onlinePayment) {
       const reserved = await adjustOrderStock(orderItems, -1);
@@ -1081,8 +1125,9 @@ export const placeOrder = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Order placed successfully!',
+      message: walletPayment ? 'Order placed successfully using ShippNex Wallet!' : 'Order placed successfully!',
       order,
+      walletBalance: walletBalanceAfter,
       user: userDoc
         ? {
             id: userDoc._id,
@@ -1092,6 +1137,7 @@ export const placeOrder = async (req, res, next) => {
             phone: userDoc.phone,
             role: userDoc.role,
             addresses: userDoc.addresses,
+            walletBalance: Number(userDoc.walletBalance || walletBalanceAfter || 0),
           }
         : null,
     });

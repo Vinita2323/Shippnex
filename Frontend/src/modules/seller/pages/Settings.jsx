@@ -13,8 +13,12 @@ const durationLabel = (t) => ({ monthly: '1 Month', halfYearly: '6 Months', year
 const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const daysLeft = (exp) => {
   if (!exp) return null;
-  const diff = new Date(exp) - new Date();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  const end = new Date(exp);
+  const now = new Date();
+  // Calendar-day difference in local time (avoids month-end / timezone skew)
+  const endDay = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
+  const nowDay = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0, Math.round((endDay - nowDay) / (1000 * 60 * 60 * 24)));
 };
 
 const defaultStoreCategories = [
@@ -138,12 +142,41 @@ const Settings = () => {
     });
 
     if (Array.isArray(s.categories)) {
-      setSelectedCategories(s.categories);
+      // Keep raw values; normalize against available category labels after they load (#77)
+      setSelectedCategories(s.categories.map((c) => (typeof c === 'string' ? c : (c?.name || c?.label || String(c)))).filter(Boolean));
     } else {
       setSelectedCategories([]);
     }
     return true;
   };
+
+  // Normalize selected categories to match available category labels (#77)
+  useEffect(() => {
+    if (!availableCategories.length || !selectedCategories.length) return;
+    const labels = availableCategories.map((c) => c.label);
+    const labelSet = new Set(labels.map((l) => l.toLowerCase()));
+    const normalized = selectedCategories
+      .map((stored) => {
+        const s = String(stored || '').trim();
+        if (!s) return null;
+        if (labelSet.has(s.toLowerCase())) {
+          return labels.find((l) => l.toLowerCase() === s.toLowerCase()) || s;
+        }
+        // Partial / alias match (e.g. "Bakery & Cakes" vs "Cake & Bakery")
+        const fuzzy = labels.find(
+          (l) => l.toLowerCase().includes(s.toLowerCase()) || s.toLowerCase().includes(l.toLowerCase())
+        );
+        return fuzzy || null;
+      })
+      .filter(Boolean);
+    const unique = [...new Set(normalized)];
+    const same =
+      unique.length === selectedCategories.length &&
+      unique.every((v, i) => v === selectedCategories[i]);
+    if (!same && unique.length) {
+      setSelectedCategories(unique);
+    }
+  }, [availableCategories]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const applyCachedSellerFallback = () => {
     try {
@@ -157,7 +190,7 @@ const Settings = () => {
 
   const fetchCategories = async () => {
     try {
-      const res = await categoryService.getCategories();
+      const res = await categoryService.getCategories(true);
       if (res?.categories && Array.isArray(res.categories) && res.categories.length > 0) {
         const mapped = res.categories.map((c, idx) => ({
           id: c._id || `cat-dyn-${idx}`,
@@ -336,17 +369,24 @@ const Settings = () => {
       return;
     }
 
+    if (pendingRequest) {
+      setErrorMsg('You already have a profile edit request pending admin review.');
+      return;
+    }
+
     setSaving(true);
 
     try {
-      // Direct update for the logged-in seller (JWT → req.user.id on backend)
+      // Submit for admin verification (same flow as captain/user) — #31
       const payload = {
+        role: 'seller',
         ownerName: formData.fullName.trim(),
         email: formData.email?.trim() || '',
         phone: cleanPhone,
         businessType: formData.businessType,
         businessName: formData.storeName.trim(),
         storeAddress: formData.storeLocation.trim(),
+        storeLocation: formData.storeLocation.trim(),
         city: formData.city?.trim() || '',
         state: formData.state?.trim() || '',
         pincode: formData.pincode?.trim() || '',
@@ -367,35 +407,18 @@ const Settings = () => {
         storeLogo: formData.storeLogo || '',
       };
 
-      const res = await authService.updateSellerProfile(payload);
+      const res = await profileEditRequestService.submitEditRequest(payload);
       if (res && res.success) {
-        if (res.seller) {
-          applySellerToForm(res.seller);
-        } else {
-          applySellerToForm({ ...payload, phone: cleanPhone, ownerName: payload.ownerName, businessName: payload.businessName, warehouseLocation: {
-            storeAddress: payload.storeAddress,
-            city: payload.city,
-            state: payload.state,
-            pincode: payload.pincode,
-            area: payload.area,
-            location: {
-              type: 'Point',
-              coordinates: [
-                formData.lng != null ? Number(formData.lng) : 0,
-                formData.lat != null ? Number(formData.lat) : 0,
-              ],
-            },
-          }, gstNumber: payload.gstNumber, fssaiLicense: payload.fssaiLicense });
-        }
-        setSuccessMsg(res.message || 'Profile updated successfully.');
+        if (res.request) setPendingRequest(res.request);
+        setSuccessMsg(res.message || 'Profile changes submitted for admin verification.');
         setIsEditing(false);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
-        setErrorMsg(res?.message || 'Failed to update profile.');
+        setErrorMsg(res?.message || 'Failed to submit profile changes.');
       }
     } catch (err) {
-      console.error('Error updating seller profile:', err);
-      setErrorMsg(err.response?.data?.message || 'Server error while saving profile. Please try again.');
+      console.error('Error submitting seller profile edit:', err);
+      setErrorMsg(err.response?.data?.message || 'Server error while submitting profile. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -429,7 +452,18 @@ const Settings = () => {
           <p className="text-xs font-normal text-slate-400 mt-0.5">Home / Settings</p>
           <p className="text-sm font-normal text-slate-500 mt-1">Manage your store preferences and verification details</p>
         </div>
-        <div>
+        <div className="flex items-center gap-2">
+          {isEditing && (
+            <button
+              type="submit"
+              form="seller-settings-form"
+              disabled={saving || Boolean(pendingRequest)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition-colors cursor-pointer border-none flex items-center gap-2 text-sm disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          )}
           <button 
             type="button"
             onClick={() => setIsEditing(!isEditing)}
@@ -593,7 +627,7 @@ const Settings = () => {
         {/* Right Content Area */}
         <div className="lg:col-span-9">
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sm:p-8">
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form id="seller-settings-form" onSubmit={handleSubmit} className="space-y-6">
               
               {/* TAB 1: PROFILE INFO */}
               {activeTab === 'profile' && (
@@ -1414,7 +1448,7 @@ const Settings = () => {
               {isEditing && (
                 <div className="sticky bottom-0 z-20 -mx-4 sm:-mx-6 mt-6 px-4 sm:px-6 py-4 bg-white/95 backdrop-blur-sm border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
                   <p className="text-xs text-slate-500 m-0">
-                    Changes are saved to your live seller profile immediately.
+                    Changes are submitted for admin verification before going live.
                   </p>
                   <div className="flex justify-end gap-3">
                     <button

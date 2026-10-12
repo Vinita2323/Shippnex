@@ -225,7 +225,10 @@ export const getDashboardStats = async (req, res, next) => {
       return res.json(cached.data);
     }
 
-    const captain = await Captain.findById(captainId).select('name walletBalance isOnline vehicleType').lean().exec();
+    const captain = await Captain.findById(captainId)
+      .select('name walletBalance isOnline vehicleType liveLocation location')
+      .lean()
+      .exec();
     if (!captain) return res.status(404).json({ success: false, message: 'Captain not found' });
 
     const isMongoId = mongoose.Types.ObjectId.isValid(captainId);
@@ -283,17 +286,24 @@ export const getDashboardStats = async (req, res, next) => {
         createdAt: { $gte: startOfDay, $lte: endOfDay },
       }).select('amount').lean(),
 
-      // 2. Today's assigned orders
+      // 2. Orders delivered/completed today (by completion time, not assign time) — #66
       Order.find({
         captainId: captainQuery,
-        captainAssignedAt: { $gte: startOfDay, $lte: endOfDay },
-      }).select('captainStatus orderId').lean(),
+        $or: [
+          { deliveredAt: { $gte: startOfDay, $lte: endOfDay } },
+          { captainDeliveredAt: { $gte: startOfDay, $lte: endOfDay } },
+        ],
+      }).select('captainStatus orderId deliveredAt captainDeliveredAt').lean(),
 
-      // 3. Today's completed transport count
+      // 3. Today's completed transport count (completion timestamp)
       TransportBooking.countDocuments({
         captainId: captainQuery,
         status: 'RIDE_COMPLETED',
-        updatedAt: { $gte: startOfDay, $lte: endOfDay },
+        $or: [
+          { rideCompletedAt: { $gte: startOfDay, $lte: endOfDay } },
+          { completedAt: { $gte: startOfDay, $lte: endOfDay } },
+          { updatedAt: { $gte: startOfDay, $lte: endOfDay } },
+        ],
       }),
 
       // 4. Pending & Active Orders
@@ -359,7 +369,8 @@ export const getDashboardStats = async (req, res, next) => {
     ]);
 
     const todayEarnings = (todayTransactions || []).reduce((sum, t) => sum + (t.amount || 0), 0);
-    const deliveredToday = (todayOrders || []).filter((o) => o.captainStatus === 'Delivered').length + (todayCompletedTransport || 0);
+    // Orders already filtered by deliveredAt today; count all matches + completed transport
+    const deliveredToday = (todayOrders || []).length + (todayCompletedTransport || 0);
     const totalBookings = (totalOrderBookings || 0) + (totalTransportBookings || 0);
 
     // Build weekly earnings array from aggregation results
@@ -385,34 +396,96 @@ export const getDashboardStats = async (req, res, next) => {
       });
     }
 
-    const formattedTransportRequests = (transportRequests || []).map((b) => {
-      const myReq = b.captainRequests?.find((r) => String(r.captainId) === String(captainId));
-      return {
-        _id: b._id,
-        bookingId: b.bookingId,
-        pickupLocation: b.pickupLocation,
-        dropLocation: b.dropLocation,
-        goods: b.goods,
-        vehicleSnapshot: b.vehicleSnapshot,
-        distanceKm: b.distanceKm,
-        estimatedDurationMin: b.estimatedDurationMin,
-        paymentMethod: b.paymentMethod,
-        paymentStatus: b.paymentStatus,
-        captainEarnings: myReq?.earnings || b.captainEarnings || Math.round((b.fareBreakdown?.totalFare || 0) * 0.8),
-        customerName: b.user?.name || 'Customer',
-        customerPhone: b.user?.phone || '',
-        customerEmail: b.user?.email || '',
-        createdAt: b.createdAt,
-        isTransport: true,
-      };
-    });
+    const dashCapLat = Number(captain?.liveLocation?.coordinates?.[1] ?? captain?.location?.coordinates?.[1]);
+    const dashCapLng = Number(captain?.liveLocation?.coordinates?.[0] ?? captain?.location?.coordinates?.[0]);
+    const dashHasLoc = Number.isFinite(dashCapLat) && Number.isFinite(dashCapLng);
+    const dashMaxKm = 50;
+    const dashHaversine = (lat1, lon1, lat2, lon2) => {
+      if (![lat1, lon1, lat2, lon2].every((n) => Number.isFinite(n))) return null;
+      const toRad = (d) => (d * Math.PI) / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+      return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 100) / 100;
+    };
+
+    const formattedTransportRequests = (transportRequests || [])
+      .map((b) => {
+        const myReq = b.captainRequests?.find((r) => String(r.captainId) === String(captainId));
+        const totalFare = Number(b.fareBreakdown?.totalFare || 0);
+        const commRate = Number(b.captainCommissionRate !== undefined ? b.captainCommissionRate : 5);
+        const commAmt = Number(
+          b.captainCommissionAmount !== undefined
+            ? b.captainCommissionAmount
+            : ((totalFare * commRate) / 100).toFixed(2)
+        );
+        const netEarnings =
+          myReq?.earnings ||
+          b.captainEarnings ||
+          Math.round((totalFare - commAmt) * 100) / 100;
+        const distanceFromCaptainKm = dashHasLoc
+          ? dashHaversine(dashCapLat, dashCapLng, Number(b.pickupLocation?.lat), Number(b.pickupLocation?.lng))
+          : null;
+        return {
+          _id: b._id,
+          bookingId: b.bookingId,
+          pickupLocation: b.pickupLocation,
+          dropLocation: b.dropLocation,
+          stops: Array.isArray(b.stops) ? b.stops : [],
+          goods: b.goods,
+          vehicleSnapshot: b.vehicleSnapshot,
+          distanceKm: b.distanceKm,
+          distanceFromCaptainKm,
+          estimatedDurationMin: b.estimatedDurationMin,
+          paymentMethod: b.paymentMethod,
+          paymentStatus: b.paymentStatus,
+          fareBreakdown: b.fareBreakdown || {},
+          captainCommissionRate: commRate,
+          captainCommissionAmount: commAmt,
+          captainEarnings: netEarnings,
+          customerName: b.user?.name || 'Customer',
+          customerPhone: b.user?.phone || '',
+          customerEmail: b.user?.email || '',
+          createdAt: b.createdAt,
+          isTransport: true,
+        };
+      })
+      .filter((r) => {
+        if (!dashHasLoc || r.distanceFromCaptainKm == null) return true;
+        return r.distanceFromCaptainKm <= dashMaxKm;
+      })
+      .sort((a, b) => {
+        if (a.distanceFromCaptainKm == null) return 1;
+        if (b.distanceFromCaptainKm == null) return -1;
+        return a.distanceFromCaptainKm - b.distanceFromCaptainKm;
+      });
 
     let formattedActiveTransport = null;
     if (activeTransport) {
       const myReq = activeTransport.captainRequests?.find((r) => String(r.captainId) === String(captainId));
+      const atFare = Number(activeTransport.fareBreakdown?.totalFare || 0);
+      const atRate = Number(
+        activeTransport.captainCommissionRate !== undefined ? activeTransport.captainCommissionRate : 5
+      );
+      const atComm = Number(
+        activeTransport.captainCommissionAmount !== undefined
+          ? activeTransport.captainCommissionAmount
+          : ((atFare * atRate) / 100).toFixed(2)
+      );
+      const atEarnings =
+        myReq?.earnings ||
+        activeTransport.captainEarnings ||
+        Math.round((atFare - atComm) * 100) / 100;
       formattedActiveTransport = {
-        ...activeTransport,
-        captainEarnings: myReq?.earnings || activeTransport.captainEarnings || Math.round((activeTransport.fareBreakdown?.totalFare || 0) * 0.8),
+        ...activeTransport.toObject?.() || activeTransport,
+        stops: Array.isArray(activeTransport.stops) ? activeTransport.stops : [],
+        fareBreakdown: activeTransport.fareBreakdown || {},
+        captainCommissionRate: atRate,
+        captainCommissionAmount: atComm,
+        captainEarnings: atEarnings,
         customerName: activeTransport.user?.name || 'Customer',
         customerPhone: activeTransport.user?.phone || '',
         customerEmail: activeTransport.user?.email || '',
@@ -515,7 +588,17 @@ export const getJobs = async (req, res, next) => {
           _id: b._id,
           orderId: b.bookingId,
           bookingId: b.bookingId,
-          captainEarnings: b.captainEarnings || Math.round((b.fareBreakdown?.totalFare || 0) * 0.8),
+          captainEarnings: (() => {
+            if (b.captainEarnings != null) return b.captainEarnings;
+            const fare = Number(b.fareBreakdown?.totalFare || 0);
+            const rate = Number(b.captainCommissionRate !== undefined ? b.captainCommissionRate : 5);
+            const comm = Number(
+              b.captainCommissionAmount !== undefined
+                ? b.captainCommissionAmount
+                : (fare * rate) / 100
+            );
+            return Math.round((fare - comm) * 100) / 100;
+          })(),
           captainStatus: 'Delivered',
           isTransport: true,
           user: b.user,
@@ -738,6 +821,8 @@ export const updateDeliveryStatus = async (req, res, next) => {
       updates.deliveredAt = new Date();
       updates.proofOfDeliveryUrl = proofUrl;
 
+      // Mark seller notifications delivered + payment completed (#72 / #75)
+      updates.paymentStatus = 'Paid';
       try {
         await SellerNotification.updateMany(
           { order: order._id },
@@ -745,11 +830,23 @@ export const updateDeliveryStatus = async (req, res, next) => {
             $set: {
               status: 'DELIVERED',
               proofOfDeliveryUrl: proofUrl,
+              paymentStatus: 'Paid',
             },
           }
         );
       } catch (err) {
         console.warn('[updateDeliveryStatus] Notification update error:', err.message);
+      }
+
+      // Credit seller wallets on captain-completed delivery (#75)
+      try {
+        const { processSellerSettlement } = await import('./orderController.js');
+        const sellerNotifs = await SellerNotification.find({ order: order._id }).select('_id');
+        for (const sn of sellerNotifs) {
+          await processSellerSettlement(sn._id);
+        }
+      } catch (settleErr) {
+        console.warn('[updateDeliveryStatus] Seller settlement error:', settleErr.message);
       }
 
       // If order is COD and not yet recorded, register COD cash collection safely
@@ -776,7 +873,6 @@ export const updateDeliveryStatus = async (req, res, next) => {
               cashCollected: codAmount,
             },
           });
-          updates.paymentStatus = 'Paid';
         }
       }
 
@@ -1355,31 +1451,66 @@ export const getServiceAreas = async (req, res, next) => {
 
     if (cityFilter) {
       sellers = await Seller.find({
-        $or: [
-          { 'address.city': { $regex: cityFilter, $options: 'i' } },
-          { city: { $regex: cityFilter, $options: 'i' } },
+        $and: [
+          {
+            $or: [
+              { 'warehouseLocation.city': { $regex: cityFilter, $options: 'i' } },
+              { 'address.city': { $regex: cityFilter, $options: 'i' } },
+              { city: { $regex: cityFilter, $options: 'i' } },
+            ],
+          },
+          { $or: [{ accountStatus: 'approved' }, { status: 'approved' }] },
         ],
-        status: 'approved',
-      }).select('businessName fullName address serviceRadius city').limit(20);
+      }).select('businessName ownerName warehouseLocation address serviceRadius city location').limit(20);
     }
 
     // If no city matched or captain has no city yet, return all approved sellers (limited)
     if (sellers.length === 0) {
-      sellers = await Seller.find({ status: 'approved' })
-        .select('businessName fullName address serviceRadius city')
+      sellers = await Seller.find({
+        $or: [{ accountStatus: 'approved' }, { status: 'approved' }],
+      })
+        .select('businessName ownerName warehouseLocation address serviceRadius city location')
         .limit(20);
     }
 
-    const sellersWithStatus = sellers.map((s, idx) => ({
-      _id: s._id,
-      name: s.businessName || s.fullName || 'Seller',
-      address: s.address?.line1 || s.address?.city || 'N/A',
-      city: s.address?.city || s.city || 'N/A',
-      serviceRadius: s.serviceRadius || '10 km',
-      // In a real geo system, we'd calculate actual distance from captain coords
-      distance: ((idx + 1) * 0.8).toFixed(1) + ' km',
-      status: idx < 7 ? 'IN RANGE' : 'OUT OF RANGE',
-    }));
+    const captainLat = Number(captain?.liveLocation?.coordinates?.[1] ?? captain?.location?.coordinates?.[1]);
+    const captainLng = Number(captain?.liveLocation?.coordinates?.[0] ?? captain?.location?.coordinates?.[0]);
+    const haversineKm = (lat1, lon1, lat2, lon2) => {
+      if (![lat1, lon1, lat2, lon2].every((n) => Number.isFinite(n))) return null;
+      const toRad = (d) => (d * Math.PI) / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
+    const sellersWithStatus = sellers.map((s) => {
+      const wl = s.warehouseLocation || {};
+      const address =
+        wl.storeAddress ||
+        s.address?.line1 ||
+        [wl.area, wl.city, wl.state, wl.pincode].filter(Boolean).join(', ') ||
+        'Address not available';
+      const city = wl.city || s.address?.city || s.city || 'N/A';
+      const coords = wl.location?.coordinates || s.location?.coordinates || [];
+      const sellerLng = Number(coords[0]);
+      const sellerLat = Number(coords[1]);
+      const distKm = haversineKm(captainLat, captainLng, sellerLat, sellerLng);
+      const radiusKm = Number(s.serviceRadius) || 10;
+      const inRange = distKm == null ? true : distKm <= radiusKm;
+      return {
+        _id: s._id,
+        name: s.businessName || s.ownerName || s.fullName || 'Seller',
+        address,
+        city,
+        serviceRadius: `${radiusKm} km`,
+        distance: distKm != null ? `${distKm.toFixed(1)} km` : '—',
+        status: inRange ? 'IN RANGE' : 'OUT OF RANGE',
+      };
+    });
 
     res.json({ success: true, sellers: sellersWithStatus, captainCity: cityFilter });
   } catch (error) {

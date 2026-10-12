@@ -233,7 +233,7 @@ const Cart = () => {
 
       {/* Mobile Checkout Button */}
       {cartItems.length > 0 && (
-        <div className="md:hidden absolute bottom-0 left-0 w-full pt-4 pb-6 px-5 bg-gradient-to-t from-white via-white/90 to-transparent z-[90]">
+        <div className="md:hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] px-5 bg-gradient-to-t from-white via-white/90 to-transparent z-[90]">
           <button 
             className="w-full bg-[#ff5500] text-white border-none rounded-xl p-4 text-[15px] font-bold cursor-pointer shadow-[0_4px_12px_rgba(255,85,0,0.2)] transition-transform duration-200 active:scale-[0.98]" 
             onClick={() => {

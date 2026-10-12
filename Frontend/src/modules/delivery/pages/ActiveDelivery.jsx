@@ -210,11 +210,16 @@ const ActiveDelivery = () => {
         // Derive pickup address from activeItem
         let pickupAddr = '';
         if (isReturn) {
-          pickupAddr = typeof activeItem.pickupAddress === 'string'
-            ? activeItem.pickupAddress
-            : activeItem.pickupAddress
-            ? `${activeItem.pickupAddress.addressLine1 || activeItem.pickupAddress.street || ''}, ${activeItem.pickupAddress.city || ''} ${activeItem.pickupAddress.pincode || ''}`
-            : 'Customer Pickup Address';
+          const cust = activeItem.customerAddress || activeItem.pickupAddress;
+          const custCoords = cust?.location?.coordinates;
+          if (Array.isArray(custCoords) && custCoords.length === 2 && Number(custCoords[1]) && Number(custCoords[0])) {
+            setPickupCoords({ lat: Number(custCoords[1]), lng: Number(custCoords[0]) });
+          }
+          pickupAddr = typeof cust === 'string'
+            ? cust
+            : cust
+            ? [cust.addressLine1 || cust.street || cust.line1, cust.area, cust.city, cust.pincode || cust.postalCode].filter(Boolean).join(', ')
+            : '';
         } else if (isTransport) {
           pickupAddr = activeItem.pickupLocation?.address || '';
           if (activeItem.pickupLocation?.lat != null && activeItem.pickupLocation?.lng != null && !pickupCoords) {
@@ -236,7 +241,14 @@ const ActiveDelivery = () => {
         // Derive drop address from activeItem
         let dropAddr = '';
         if (isReturn) {
-          dropAddr = activeItem.seller?.storeAddress || activeItem.seller?.address || `${activeItem.seller?.storeName || 'Seller'} Store / Warehouse`;
+          const sell = activeItem.sellerAddress || activeItem.seller;
+          dropAddr = typeof sell === 'string'
+            ? sell
+            : sell
+            ? (sell.storeAddress || sell.warehouseLocation?.storeAddress || sell.address ||
+              [sell.storeName || sell.businessName || sell.name, sell.city].filter(Boolean).join(' — ') ||
+              'Seller Store / Warehouse')
+            : (activeItem.sellerName || 'Seller Store / Warehouse');
         } else if (isTransport) {
           dropAddr = activeItem.dropLocation?.address || '';
           if (activeItem.dropLocation?.lat != null && activeItem.dropLocation?.lng != null && !dropCoords) {
@@ -750,33 +762,55 @@ const ActiveDelivery = () => {
     : activeItem.orderId;
 
   const recipientName = isReturn
-    ? (activeItem.seller?.storeName || activeItem.seller?.name || 'Seller Warehouse')
+    ? (activeItem.sellerName ||
+        activeItem.sellerAddress?.storeName ||
+        activeItem.seller?.storeName ||
+        activeItem.seller?.name ||
+        'Seller Warehouse')
     : isTransport
     ? activeItem.user?.name || 'Transport Customer'
     : activeItem.shippingAddress?.fullName || activeItem.user?.name || 'Customer';
 
   const recipientPhone = isReturn
-    ? (activeItem.seller?.phone || activeItem.customer?.phone || '')
+    ? (activeItem.sellerAddress?.phone || activeItem.seller?.phone || activeItem.customer?.phone || '')
     : isTransport
     ? activeItem.user?.phone || ''
     : activeItem.shippingAddress?.phone || activeItem.user?.phone || '';
 
   const customerName = isReturn
-    ? (activeItem.customer?.name || activeItem.user?.name || activeItem.pickupAddress?.fullName || 'Customer')
+    ? (activeItem.customerAddress?.fullName ||
+        activeItem.customer?.name ||
+        activeItem.user?.name ||
+        activeItem.pickupAddress?.fullName ||
+        'Customer')
     : null;
 
   const customerPhone = isReturn
-    ? (activeItem.customer?.phone || activeItem.user?.phone || activeItem.pickupAddress?.phone || '')
+    ? (activeItem.customerAddress?.phone ||
+        activeItem.customer?.phone ||
+        activeItem.user?.phone ||
+        activeItem.pickupAddress?.phone ||
+        '')
     : null;
 
   const sellerStoreName = activeItem.sellerDetails?.storeName || activeItem.items?.[0]?.seller || 'Seller Warehouse';
 
+  const formatAddrObj = (a) => {
+    if (!a) return '';
+    if (typeof a === 'string') return a;
+    return [
+      a.addressLine1 || a.street || a.line1 || a.storeAddress || a.warehouseLocation?.storeAddress,
+      a.area,
+      a.city,
+      a.state,
+      a.pincode || a.postalCode,
+    ]
+      .filter(Boolean)
+      .join(', ');
+  };
+
   const pickupAddress = isReturn
-    ? (typeof activeItem.pickupAddress === 'string'
-        ? activeItem.pickupAddress
-        : activeItem.pickupAddress
-        ? `${activeItem.pickupAddress.addressLine1 || activeItem.pickupAddress.street || ''}, ${activeItem.pickupAddress.city || ''} ${activeItem.pickupAddress.pincode || ''}`
-        : 'Customer Pickup Address')
+    ? (formatAddrObj(activeItem.customerAddress || activeItem.pickupAddress) || 'Customer Pickup Address')
     : isTransport
     ? activeItem.pickupLocation?.address
     : (activeItem.sellerDetails?.address
@@ -784,14 +818,30 @@ const ActiveDelivery = () => {
         : `${sellerStoreName} (Store Pickup)`);
 
   const dropAddress = isReturn
-    ? (activeItem.seller?.storeAddress || activeItem.seller?.address || `${activeItem.seller?.storeName || 'Seller'} Store / Warehouse`)
+    ? (formatAddrObj(activeItem.sellerAddress) ||
+        activeItem.seller?.storeAddress ||
+        activeItem.seller?.address ||
+        formatAddrObj(activeItem.seller) ||
+        `${activeItem.sellerName || activeItem.seller?.storeName || 'Seller'} Store / Warehouse`)
     : isTransport
     ? activeItem.dropLocation?.address
     : `${activeItem.shippingAddress?.addressLine1}, ${activeItem.shippingAddress?.city}`;
 
+  const transportStops = isTransport && Array.isArray(activeItem.stops)
+    ? activeItem.stops.filter(Boolean)
+    : [];
+
   const payout = isReturn
-    ? (activeItem.captainFee || 60)
+    ? (activeItem.captainFee || activeItem.captainEarnings || 60)
     : (activeItem.captainEarnings || 0);
+  const commissionRate = Number(activeItem.captainCommissionRate || 0);
+  const commissionAmount = Number(
+    activeItem.captainCommissionAmount != null
+      ? activeItem.captainCommissionAmount
+      : commissionRate && activeItem.fareBreakdown?.totalFare
+        ? (Number(activeItem.fareBreakdown.totalFare) * commissionRate) / 100
+        : 0
+  );
 
   const returnPending = isTransport
     && activeItem.status === 'RIDE_COMPLETED'
@@ -903,7 +953,11 @@ const ActiveDelivery = () => {
               </div>
               <div>
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#97fc43] block">
-                  {currentStep <= 2 ? 'DISTANCE TO SELLER / STORE' : 'DISTANCE TO CUSTOMER DROP'}
+                  {isReturn
+                    ? (currentStep <= 2 ? 'DISTANCE TO CUSTOMER PICKUP' : 'DISTANCE TO SELLER')
+                    : currentStep <= 2
+                      ? 'DISTANCE TO SELLER / STORE'
+                      : 'DISTANCE TO CUSTOMER DROP'}
                 </span>
                 <p className="text-xs font-bold text-white m-0 flex items-center gap-1.5 mt-0.5">
                   <span className="text-base md:text-lg font-black text-white">
@@ -964,6 +1018,7 @@ const ActiveDelivery = () => {
             currentStep={returnPending ? 3 : currentStep}
             isReturn={isReturn}
             isTransport={isTransport}
+            stops={transportStops}
           />
         </div>
 
@@ -1065,6 +1120,32 @@ const ActiveDelivery = () => {
               <span className="font-black text-[9px] text-slate-400 uppercase tracking-widest block">VEHICLE</span>
               <p className="font-bold text-primary">{activeItem.vehicleSnapshot?.name || 'Truck'}</p>
             </div>
+          </div>
+        )}
+
+        {/* Intermediate stops (#60) */}
+        {transportStops.length > 0 && (
+          <div className="glass-panel p-3.5 rounded-2xl border border-white/60 shadow-xs space-y-2">
+            <span className="font-black text-[9px] text-slate-400 uppercase tracking-widest block">
+              STOP LOCATIONS ({transportStops.length})
+            </span>
+            {transportStops.map((stop, idx) => {
+              const stopAddr =
+                typeof stop === 'string'
+                  ? stop
+                  : stop?.address ||
+                    stop?.formattedAddress ||
+                    [stop?.addressLine1, stop?.city, stop?.pincode].filter(Boolean).join(', ') ||
+                    `Stop ${idx + 1}`;
+              return (
+                <div key={idx} className="flex items-start gap-2 text-xs">
+                  <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-black text-[10px] shrink-0">
+                    {idx + 1}
+                  </span>
+                  <p className="font-bold text-slate-800 leading-snug m-0">{stopAddr}</p>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -1476,7 +1557,7 @@ const ActiveDelivery = () => {
                       COLLECT FROM CUSTOMER
                     </span>
                     <span className="text-lg md:text-xl font-black text-amber-900 font-mono">
-                      ₹{Number(activeItem.grandTotal || activeItem.totalAmount || activeItem.price || 0).toFixed(2)}
+                      ₹{Number(activeItem.fareBreakdown?.totalFare || activeItem.grandTotal || activeItem.totalAmount || activeItem.price || 0).toFixed(2)}
                     </span>
                   </div>
                 ) : (
@@ -1491,7 +1572,7 @@ const ActiveDelivery = () => {
             {(activeItem.paymentMethod === 'COD' || activeItem.paymentMethod === 'CASH' || activeItem.paymentStatus === 'Pending') && (
               <p className="text-[11px] text-amber-800 font-semibold mt-2 pt-2 border-t border-amber-200/80 flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-sm shrink-0">info</span>
-                Please collect exact cash amount of ₹{Number(activeItem.grandTotal || activeItem.totalAmount || activeItem.price || 0).toFixed(2)} before handing over the parcel.
+                Please collect exact cash amount of ₹{Number(activeItem.fareBreakdown?.totalFare || activeItem.grandTotal || activeItem.totalAmount || activeItem.price || 0).toFixed(2)} before handing over the parcel.
               </p>
             )}
           </div>
@@ -1501,7 +1582,12 @@ const ActiveDelivery = () => {
         <div className="glass-panel p-4 rounded-2xl border border-white/60 flex justify-between items-center">
           <div>
             <p className="text-xs font-black text-on-surface-variant uppercase tracking-wider">Your Captain Earnings</p>
-            <p className="text-2xl font-extrabold text-[#15803d] mt-1">₹{payout.toFixed(2)}</p>
+            <p className="text-2xl font-extrabold text-[#15803d] mt-1">₹{Number(payout || 0).toFixed(2)}</p>
+            {isTransport && commissionRate > 0 && (
+              <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                Platform fee {commissionRate}%{commissionAmount > 0 ? ` (−₹${commissionAmount.toFixed(2)})` : ''}
+              </p>
+            )}
           </div>
           <div className="text-right text-xs text-on-surface-variant">
             <p className="font-bold text-primary">
@@ -1514,8 +1600,8 @@ const ActiveDelivery = () => {
 
       {/* ── MODAL: PRODUCT QUALITY INSPECTION & RETURN OTP VERIFICATION (Return Pickup Only) ── */}
       {showReturnOtpModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white p-5 sm:p-6 rounded-3xl max-w-lg w-full shadow-2xl space-y-4 my-auto border border-slate-100">
+        <div className="fixed inset-0 z-[110] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto pb-24">
+          <div className="bg-white p-5 sm:p-6 rounded-3xl max-w-lg w-full shadow-2xl space-y-4 my-auto border border-slate-100 mb-8">
             {/* Header matching screenshot */}
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -1709,8 +1795,8 @@ const ActiveDelivery = () => {
 
       {/* ── MODAL: FAIL INSPECTION REASON ── */}
       {showFailReasonModal && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-100">
+        <div className="fixed inset-0 z-[130] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-100 mb-16">
             <div className="flex justify-between items-center border-b border-slate-100 pb-2">
               <h3 className="font-bold text-base text-rose-700 flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-rose-600">report_problem</span>
@@ -2282,9 +2368,9 @@ const ActiveDelivery = () => {
         </div>
       )}
 
-      {/* Chat Support Modal */}
+      {/* Chat Support Modal (#55 — fullscreen above bottom nav) */}
       {showChatModal && (
-        <div className="fixed inset-0 z-[100] bg-surface flex flex-col w-full h-[100dvh] overflow-hidden">
+        <div className="fixed inset-0 z-[120] bg-surface flex flex-col w-full h-[100dvh] overflow-hidden">
           <div className="bg-primary text-white px-4 py-3 flex justify-between items-center shrink-0 shadow-md">
             <div className="flex items-center gap-3">
               <button
@@ -2294,10 +2380,12 @@ const ActiveDelivery = () => {
                 <span className="material-symbols-outlined text-xl">arrow_back</span>
               </button>
               <div className="w-9 h-9 rounded-full bg-secondary-container text-secondary flex items-center justify-center font-bold text-xs shrink-0">
-                DP
+                {isReturn ? 'RS' : 'DP'}
               </div>
               <div className="leading-tight">
-                <h3 className="font-bold text-sm text-white">Dispatcher Support</h3>
+                <h3 className="font-bold text-sm text-white">
+                  {isReturn ? 'Return Support' : 'Dispatcher Support'}
+                </h3>
                 <p className="text-[10px] text-secondary-fixed font-medium">#{tripId}</p>
               </div>
             </div>
@@ -2342,7 +2430,14 @@ const ActiveDelivery = () => {
         </div>
       )}
 
-      {!showChatModal && <CaptainBottomNav />}
+      {!showChatModal &&
+        !showReturnOtpModal &&
+        !showPickupOtpModal &&
+        !showDropOtpModal &&
+        !showSellerPickupOtpModal &&
+        !showCustomerDeliveryOtpModal &&
+        !showFailReasonModal &&
+        !showProductDeliveryModal && <CaptainBottomNav />}
     </div>
   );
 };

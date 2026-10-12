@@ -1321,6 +1321,37 @@ export const SellerManagement = () => {
 
   // Open seller modal: Eye → view (read-only), Pencil → edit
   const openSellerModal = (seller, mode = 'view') => {
+    // Prefer freshest seller doc so registration fields are not blank (#23)
+    adminService.getSellers(true).then((data) => {
+      const raw = data?.sellers || [];
+      const fresh = raw.find((s) => String(s._id || s.id) === String(seller.id || seller._id));
+      if (fresh) {
+        setEditingSellerModal((prev) => {
+          if (!prev || String(prev.id) !== String(seller.id || seller._id)) return prev;
+          return {
+            ...prev,
+            ...fresh,
+            id: String(fresh._id || fresh.id),
+            name: fresh.ownerName || fresh.businessName || prev.name,
+            storeName: fresh.businessName || fresh.ownerName || prev.storeName,
+            contactPhone: fresh.phone || prev.contactPhone,
+            contactEmail: fresh.email || prev.contactEmail,
+            warehouseLocation: fresh.warehouseLocation || prev.warehouseLocation,
+            gstNumber: fresh.gstNumber || prev.gstNumber,
+            panNumber: fresh.panNumber || prev.panNumber,
+            fssaiLicense: fresh.fssaiLicense || prev.fssaiLicense,
+            gstPhoto: fresh.gstPhoto || prev.gstPhoto,
+            bankPassbookPhoto: fresh.bankPassbookPhoto || prev.bankPassbookPhoto,
+            bankName: fresh.bankName || prev.bankName,
+            accountNumber: fresh.accountNumber || prev.accountNumber,
+            ifscCode: fresh.ifscCode || prev.ifscCode,
+            storeLogo: fresh.storeLogo || prev.storeLogo,
+            categories: fresh.categories || prev.categories,
+            assignedCategories: fresh.categories || prev.assignedCategories,
+          };
+        });
+      }
+    }).catch(() => {});
     setSellerModalMode(mode);
     setEditingSellerModal(seller);
     setEditFormData({
@@ -1505,8 +1536,10 @@ export const SellerManagement = () => {
                       <td className="py-3.5 px-4 font-mono font-semibold text-slate-800">{seller.commission}</td>
                       <td className="py-3.5 px-4">
                         <button 
-                          onClick={() => setSelectedSellerCategoryDrawer(seller)}
-                          className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 border-none cursor-pointer transition-colors"
+                          type="button"
+                          onClick={() => openViewModal(seller)}
+                          className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                          title="View full seller registration details"
                         >
                           <span className="w-4 h-4 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center">
                             {seller.categoriesCount}
@@ -4584,7 +4617,8 @@ export const ProductManagement = () => {
     setLoading(true);
     let apiProducts = [];
     try {
-      const res = await productService.getProducts();
+      // admin=true bypasses storefront location filter so catalog is visible (#84)
+      const res = await productService.getProducts({ admin: 'true' });
       if (res && res.products && Array.isArray(res.products)) {
         apiProducts = res.products;
       }
@@ -5078,6 +5112,7 @@ export const OrderManagement = () => {
             itemsTotal: Number(o.itemsTotal || 0),
             shippingFee: Number(o.shippingFee || 0),
             discount: Number(o.discount || 0),
+            codCharge: Number(o.codCharge || 0),
             paymentMethod: o.paymentMethod || 'COD',
             paymentStatus: o.paymentStatus || (o.paymentMethod === 'COD' ? 'Pending' : 'Paid'),
             status: o.orderStatus || 'Placed',
@@ -5787,12 +5822,18 @@ export const OrderManagement = () => {
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>Delivery Charge:</span>
-                    <span className="font-semibold text-slate-900">{selectedOrder.shippingFee === 0 ? 'FREE' : `₹${selectedOrder.shippingFee.toFixed(2)}`}</span>
+                    <span className="font-semibold text-slate-900">{selectedOrder.shippingFee === 0 ? 'FREE' : `₹${Number(selectedOrder.shippingFee || 0).toFixed(2)}`}</span>
                   </div>
+                  {(Number(selectedOrder.codCharge) > 0 || String(selectedOrder.paymentMethod || '').toUpperCase() === 'COD') && (
+                    <div className="flex justify-between text-slate-600">
+                      <span>COD Handling Fee:</span>
+                      <span className="font-semibold text-slate-900">₹{Number(selectedOrder.codCharge || 0).toFixed(2)}</span>
+                    </div>
+                  )}
                   {selectedOrder.discount > 0 && (
                     <div className="flex justify-between text-emerald-600 font-medium">
                       <span>Discount:</span>
-                      <span>- ₹{selectedOrder.discount.toFixed(2)}</span>
+                      <span>- ₹{Number(selectedOrder.discount || 0).toFixed(2)}</span>
                     </div>
                   )}
                   <div className="pt-2 border-t border-dashed border-slate-300 flex justify-between items-center text-sm font-black text-slate-900">
@@ -9746,10 +9787,46 @@ export const SellersOverview = () => {
   const [filterTab, setFilterTab] = React.useState('All');
   const [selectedSeller, setSelectedSeller] = React.useState(null);
   const [inventoryActiveTab, setInventoryActiveTab] = React.useState('All');
+  const [productsLoading, setProductsLoading] = React.useState(false);
   const [isAddProductModalOpen, setIsAddProductModalOpen] = React.useState(false);
   const [newProduct, setNewProduct] = React.useState({ name: '', price: '', stock: '', category: '', description: '' });
   const [productImagePreview, setProductImagePreview] = React.useState(null);
   const fileInputRef = React.useRef(null);
+
+  // Load this seller's catalog when opening detail view (#84)
+  React.useEffect(() => {
+    if (!selectedSeller?.id) return undefined;
+    let cancelled = false;
+    const loadProducts = async () => {
+      setProductsLoading(true);
+      try {
+        const res = await productService.getProducts({
+          sellerId: selectedSeller.id,
+          admin: 'true',
+        });
+        if (cancelled) return;
+        const list = Array.isArray(res?.products) ? res.products : [];
+        const mapped = list.map((p) => ({
+          id: p._id || p.id,
+          _id: p._id || p.id,
+          name: p.name || 'Product',
+          price: Number(p.salePrice ?? p.price ?? 0),
+          stock: Number(p.stock ?? 0),
+          category: p.category?.name || p.category || p.categories?.[0] || '—',
+          description: p.description || '',
+          image: p.mainImage || p.image || '',
+          status: p.status || 'Published',
+        }));
+        setSelectedSeller((prev) => (prev && prev.id === selectedSeller.id ? { ...prev, products: mapped } : prev));
+      } catch (err) {
+        console.warn('Seller products load failed:', err.message);
+      } finally {
+        if (!cancelled) setProductsLoading(false);
+      }
+    };
+    loadProducts();
+    return () => { cancelled = true; };
+  }, [selectedSeller?.id]);
 
   const loadLiveSellers = React.useCallback(async (force = false) => {
     setLoading(true);
@@ -10539,7 +10616,7 @@ export const SellersOverview = () => {
           {/* Header Bar with + Add Product Button */}
           <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <h3 className="text-sm font-bold text-slate-900 m-0 flex items-center gap-2">
-              <Package size={18} className="text-[#ff5500]" /> Store Products & Inventory ({selectedSeller.products?.length || 0})
+              <Package size={18} className="text-[#ff5500]" /> Store Products & Inventory ({productsLoading ? '…' : (selectedSeller.products?.length || 0)})
             </h3>
 
             <button 

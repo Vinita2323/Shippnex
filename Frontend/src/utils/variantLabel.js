@@ -25,7 +25,8 @@ export const selectedVariantRows = (item) => {
     }))
     .filter((row) => row.name && isSelectedValue(row.value));
   if (rows.length) return rows;
-  const attrs = normalizeAttributes(item.selectedAttributes || item.selectedVariant?.attributes);
+  // Prefer explicit selectedAttributes only — do not inflate from selectedVariant.attributes
+  const attrs = normalizeAttributes(item.selectedAttributes);
   return Object.entries(attrs).map(([name, value]) => ({ name, value }));
 };
 

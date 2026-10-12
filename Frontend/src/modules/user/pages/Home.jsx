@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
@@ -61,6 +61,25 @@ const Home = () => {
   const deliveryType = (deliveryLocation?.addressType || deliveryLocation?.type || '').toUpperCase();
   const [toastMessage, setToastMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [apiSearchResults, setApiSearchResults] = useState([]);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+  const bannerTouchRef = useRef({ startX: 0, startY: 0, swiping: false, didSwipe: false });
+  const bannerTimerRef = useRef(null);
+
+  const calcFlashTimeLeft = () => {
+    const now = new Date();
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+    const diff = Math.max(0, end.getTime() - now.getTime());
+    return {
+      hours: Math.floor(diff / 3600000),
+      minutes: Math.floor((diff % 3600000) / 60000),
+      seconds: Math.floor((diff % 60000) / 1000),
+    };
+  };
+  const [flashTimeLeft, setFlashTimeLeft] = useState(calcFlashTimeLeft);
 
   const userLat = locationContext?.currentLocation?.lat || locationContext?.currentLocation?.latitude;
   const userLng = locationContext?.currentLocation?.lng || locationContext?.currentLocation?.longitude;
@@ -110,17 +129,19 @@ const Home = () => {
         const pct = Math.round(((mrp - salePrice) / mrp) * 100);
         discountStr = `${pct}% OFF`;
       }
-      return {
-        id: p.id || p.sku || p._id || `p_${Math.random()}`,
-        name: p.name,
-        seller: p.seller || 'Verified Seller',
-        price: salePrice,
-        originalPrice: mrp,
-        discount: discountStr || '',
-        image: p.image || p.mainImage || grainsImg,
-        unit: p.unit || `${p.unitValue || 1} ${p.unitType || 'kg'}`
+        return {
+          // Prefer Mongo _id so cart add/remove keys match (sku-only ids break REMOVE)
+          id: p._id || p.id || p.sku || `p_${Math.random()}`,
+          _id: p._id || p.id,
+          name: p.name,
+          seller: p.seller || 'Verified Seller',
+          price: salePrice,
+          originalPrice: mrp,
+          discount: discountStr || '',
+          image: p.image || p.mainImage || grainsImg,
+          unit: p.unit || `${p.unitValue || 1} ${p.unitType || 'kg'}`
+        };
       };
-    };
 
     const loadAllHomeData = async () => {
       try {
@@ -210,63 +231,217 @@ const Home = () => {
     };
   }, [userLat, userLng]);
 
+  // Live flash-deal countdown (end of local day — same as FlashSale page)
+  useEffect(() => {
+    const timer = setInterval(() => setFlashTimeLeft(calcFlashTimeLeft()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Auto-scroll banners every 3.5 seconds with fade transition
   useEffect(() => {
     if (banners.length <= 1) return;
-    const interval = setInterval(() => {
-      setBannerVisible(false);
-      setTimeout(() => {
-        setCurrentBannerIndex(prev => (prev + 1) % banners.length);
-        setBannerVisible(true);
-      }, 300);
-    }, 3500);
-    return () => clearInterval(interval);
+    const start = () => {
+      if (bannerTimerRef.current) clearInterval(bannerTimerRef.current);
+      bannerTimerRef.current = setInterval(() => {
+        setBannerVisible(false);
+        setTimeout(() => {
+          setCurrentBannerIndex(prev => (prev + 1) % banners.length);
+          setBannerVisible(true);
+        }, 300);
+      }, 3500);
+    };
+    start();
+    return () => {
+      if (bannerTimerRef.current) clearInterval(bannerTimerRef.current);
+    };
   }, [banners]);
+
+  // Hide bottom nav while searching so the mobile keyboard does not cover footer actions
+  useEffect(() => {
+    const active = searchFocused || Boolean(String(searchQuery || '').trim());
+    window.dispatchEvent(new CustomEvent('shippnex_search_ui', { detail: { active } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('shippnex_search_ui', { detail: { active: false } }));
+    };
+  }, [searchFocused, searchQuery]);
+
+  const goBanner = (dir) => {
+    if (banners.length <= 1) return;
+    if (bannerTimerRef.current) {
+      clearInterval(bannerTimerRef.current);
+      bannerTimerRef.current = setInterval(() => {
+        setBannerVisible(false);
+        setTimeout(() => {
+          setCurrentBannerIndex(prev => (prev + 1) % banners.length);
+          setBannerVisible(true);
+        }, 300);
+      }, 3500);
+    }
+    setBannerVisible(false);
+    setTimeout(() => {
+      setCurrentBannerIndex((prev) => {
+        const next = (prev + dir + banners.length) % banners.length;
+        return next;
+      });
+      setBannerVisible(true);
+    }, 200);
+  };
+
+  const onBannerTouchStart = (e) => {
+    const t = e.changedTouches?.[0] || e.touches?.[0];
+    if (!t) return;
+    bannerTouchRef.current = { startX: t.clientX, startY: t.clientY, swiping: true, didSwipe: false };
+  };
+
+  const onBannerTouchEnd = (e) => {
+    if (!bannerTouchRef.current.swiping) return;
+    bannerTouchRef.current.swiping = false;
+    const t = e.changedTouches?.[0];
+    if (!t) return;
+    const dx = t.clientX - bannerTouchRef.current.startX;
+    const dy = t.clientY - bannerTouchRef.current.startY;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+    bannerTouchRef.current.didSwipe = true;
+    goBanner(dx < 0 ? 1 : -1);
+  };
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+
+  const formatSearchProduct = (p) => {
+    const salePrice = Number(p.salePrice || p.price || 0);
+    const mrp = Number(p.mrp || p.originalPrice || salePrice);
+    let discountStr = p.discount;
+    if (!discountStr && mrp > salePrice) {
+      const pct = Math.round(((mrp - salePrice) / mrp) * 100);
+      discountStr = `${pct}% OFF`;
+    }
+    return {
+      id: p._id || p.id || p.sku || `p_${Math.random()}`,
+      _id: p._id || p.id,
+      name: p.name,
+      seller: p.seller || 'Verified Seller',
+      price: salePrice,
+      originalPrice: mrp,
+      discount: discountStr || '',
+      image: p.image || p.mainImage || grainsImg,
+      unit: p.unit || `${p.unitValue || 1} ${p.unitType || 'kg'}`,
+    };
+  };
+
+  const runCatalogSearch = async (query) => {
+    const q = String(query || '').trim();
+    if (!q) {
+      setApiSearchResults([]);
+      return;
+    }
+    try {
+      const locationParams = (userLat != null && userLng != null) ? { lat: userLat, lng: userLng } : {};
+      const res = await productService.getProducts({ search: q, limit: 40, ...locationParams });
+      if (res?.success && Array.isArray(res.products)) {
+        setApiSearchResults(res.products.map(formatSearchProduct));
+      } else {
+        setApiSearchResults([]);
+      }
+    } catch (err) {
+      console.error('Catalog search failed:', err);
+      setApiSearchResults([]);
+    }
+  };
 
   const handleMicClick = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
+    if (!SpeechRecognition) {
+      setToastMessage('Voice search is not supported in this browser. Try Chrome.');
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
 
-      recognition.onstart = () => {
-        setToastMessage('Listening...');
-      };
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      setToastMessage('Microphone needs HTTPS (or localhost).');
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
 
-      recognition.onresult = (e) => {
-        const transcript = e.results[0][0].transcript;
-        setSearchQuery(transcript);
-        setToastMessage(''); // Clear toast on success
-      };
-
-      recognition.onerror = (e) => {
-        console.error("Speech recognition error:", e.error);
-        setToastMessage(`Mic error: ${e.error}`);
-        setTimeout(() => setToastMessage(''), 3000);
-      };
-
-      recognition.onend = () => {
-        // Only clear if it's still 'Listening...' (in case it finished without result or error)
-        setToastMessage(prev => prev === 'Listening...' ? '' : prev);
-      };
-
-      try {
-        recognition.start();
-      } catch (err) {
-        console.error("Error starting speech recognition:", err);
+    try {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
       }
-    } else {
-      setToastMessage('Mic not supported in your browser.');
+    } catch {
+      // prior recognition may already be stopped
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-IN';
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setToastMessage('Listening… Speak now');
+    };
+
+    recognition.onresult = (e) => {
+      const transcript = String(e.results?.[0]?.[0]?.transcript || '').trim();
+      if (transcript) {
+        setSearchQuery(transcript);
+        setToastMessage(`Searching “${transcript}”…`);
+        runCatalogSearch(transcript).finally(() => {
+          setToastMessage('');
+        });
+      } else {
+        setToastMessage('Could not catch that. Try again.');
+        setTimeout(() => setToastMessage(''), 2500);
+      }
+    };
+
+    recognition.onerror = (e) => {
+      setIsListening(false);
+      const code = e?.error || 'unknown';
+      const messages = {
+        'not-allowed': 'Microphone permission blocked. Allow mic in browser settings.',
+        'no-speech': 'No speech detected. Tap mic and try again.',
+        'audio-capture': 'No microphone found on this device.',
+        'network': 'Speech service network error. Check internet.',
+        'aborted': '',
+      };
+      const msg = messages[code] !== undefined ? messages[code] : `Mic error: ${code}`;
+      if (msg) {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(''), 3500);
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+      setToastMessage((prev) => (prev === 'Listening… Speak now' ? '' : prev));
+    };
+
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error('Error starting speech recognition:', err);
+      setIsListening(false);
+      setToastMessage('Could not start microphone. Try again.');
       setTimeout(() => setToastMessage(''), 3000);
     }
   };
 
   const allLoadedProducts = [...flashDeals, ...bestsellerProducts];
-  const searchResults = searchQuery 
-    ? allLoadedProducts.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const localSearchResults = searchQuery
+    ? allLoadedProducts.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
+  const searchResults = (() => {
+    if (!searchQuery) return [];
+    const byId = new Map();
+    [...apiSearchResults, ...localSearchResults].forEach((p) => {
+      byId.set(String(p.id), p);
+    });
+    return Array.from(byId.values());
+  })();
 
   const handleAddToCart = async (product) => {
     const res = await addToCart(product, 1, { navigate, returnUrl: window.location.pathname });
@@ -361,10 +536,22 @@ const Home = () => {
               type="text" 
               placeholder="Search products..." 
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchQuery(val);
+                if (!val.trim()) setApiSearchResults([]);
+              }}
               className="flex-1 border-none outline-none text-[14px] bg-transparent text-slate-700 placeholder:text-slate-400 font-medium"
             />
-            <Mic size={18} className="text-slate-400 cursor-pointer ml-1" strokeWidth={2} onClick={handleMicClick} />
+            <Mic
+              size={18}
+              className={`cursor-pointer ml-1 shrink-0 ${isListening ? 'text-red-500 animate-pulse' : 'text-slate-400'}`}
+              strokeWidth={2}
+              onClick={handleMicClick}
+              aria-label={isListening ? 'Listening' : 'Search by voice'}
+            />
           </div>
         </div>
       </div>
@@ -429,9 +616,17 @@ const Home = () => {
         {banners.length > 0 ? (
           <div className="mb-5 md:mb-8">
             <div
-              className="rounded-2xl md:rounded-3xl relative overflow-hidden shadow-md cursor-pointer w-full h-[140px] md:h-[300px] lg:h-[360px] bg-slate-100"
+              className="rounded-2xl md:rounded-3xl relative overflow-hidden shadow-md cursor-pointer w-full h-[140px] md:h-[300px] lg:h-[360px] bg-slate-100 touch-pan-y"
               style={{ transition: 'opacity 0.3s ease, transform 0.3s ease', opacity: bannerVisible ? 1 : 0, transform: bannerVisible ? 'translateY(0)' : 'translateY(6px)' }}
-              onClick={() => navigate(banners[currentBannerIndex]?.redirectUrl || '/categories')}
+              onClick={() => {
+                if (bannerTouchRef.current.didSwipe) {
+                  bannerTouchRef.current.didSwipe = false;
+                  return;
+                }
+                navigate(banners[currentBannerIndex]?.redirectUrl || '/categories');
+              }}
+              onTouchStart={onBannerTouchStart}
+              onTouchEnd={onBannerTouchEnd}
             >
               <img
                 src={getImageUrl(banners[currentBannerIndex]?.imageUrl, "/promo_banner_bg.png")}
@@ -532,10 +727,10 @@ const Home = () => {
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2">
             <h3 className="text-[16px] md:text-xl font-bold m-0 text-[#ff5500]">Flash Deals</h3>
-            <div className="flex items-center gap-1 font-bold text-blue-900">
-              <span className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-[12px]">02</span>:
-              <span className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-[12px]">45</span>:
-              <span className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-[12px]">30</span>
+            <div className="flex items-center gap-1 font-bold text-blue-900" aria-label="Flash deal ends in">
+              <span className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-[12px]">{pad2(flashTimeLeft.hours)}</span>:
+              <span className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-[12px]">{pad2(flashTimeLeft.minutes)}</span>:
+              <span className="bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded text-[12px]">{pad2(flashTimeLeft.seconds)}</span>
             </div>
           </div>
           <button onClick={() => navigate('/flash-sale')} className="bg-transparent border-none text-blue-600 text-[12px] md:text-sm font-semibold cursor-pointer hover:underline">See All</button>
@@ -767,9 +962,9 @@ const Home = () => {
         
         {/* Toast Notification */}
         {toastMessage && (
-          <div className="fixed bottom-[90px] left-1/2 -translate-x-1/2 bg-slate-800 text-white px-5 py-2.5 rounded-full text-[13px] font-medium shadow-xl z-50 whitespace-nowrap flex items-center gap-2 transition-all duration-300">
-            <ShoppingCart size={14} />
-            {toastMessage}
+          <div className="fixed bottom-[90px] left-1/2 -translate-x-1/2 bg-slate-800 text-white px-5 py-2.5 rounded-full text-[13px] font-medium shadow-xl z-50 max-w-[90%] text-center flex items-center gap-2 transition-all duration-300">
+            {toastMessage.toLowerCase().includes('cart') ? <ShoppingCart size={14} className="shrink-0" /> : <Mic size={14} className="shrink-0" />}
+            <span className="truncate">{toastMessage}</span>
           </div>
         )}
       </div>

@@ -737,6 +737,50 @@ export const processPayout = async (req, res, next) => {
     payout.processedAt = new Date();
     await payout.save();
 
+    // Sync captain/seller wallet withdrawal txn so app no longer shows Pending (#68)
+    try {
+      if (payout.recipientType === 'CAPTAIN') {
+        await CaptainTransaction.updateMany(
+          {
+            $or: [
+              { orderId: payout.payoutId },
+              { orderId: String(payout._id) },
+              { description: { $regex: payout.payoutId || '', $options: 'i' } },
+            ],
+            type: { $in: ['WITHDRAWAL', 'DEBIT'] },
+            status: { $in: ['PENDING', 'Pending', 'pending'] },
+            captainId: payout.recipientId,
+          },
+          { $set: { status: 'COMPLETED' } }
+        );
+      } else if (payout.recipientType === 'SELLER') {
+        await WalletTransaction.updateMany(
+          {
+            $or: [
+              { orderId: payout.payoutId },
+              { orderId: String(payout._id) },
+            ],
+            type: { $in: ['WITHDRAWAL', 'DEBIT'] },
+            status: { $in: ['PENDING', 'Pending', 'pending'] },
+            sellerId: String(payout.recipientId),
+          },
+          { $set: { status: 'COMPLETED' } }
+        );
+        if (payout.withdrawalRequestId || payout.payoutId) {
+          const wrFilter = {
+            status: { $in: ['PENDING', 'APPROVED', 'PROCESSING'] },
+          };
+          if (payout.withdrawalRequestId) wrFilter._id = payout.withdrawalRequestId;
+          else wrFilter.payoutId = payout.payoutId;
+          await WithdrawalRequest.updateMany(wrFilter, {
+            $set: { status: 'PAID', paidAt: new Date() },
+          }).catch(() => null);
+        }
+      }
+    } catch (syncErr) {
+      console.warn('[processPayout] Wallet txn status sync warning:', syncErr.message);
+    }
+
     // Create Central Platform Ledger Payout Entry
     const ledgerTxnId = `TXN-LED-OUT-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
     await PlatformLedger.create({

@@ -53,11 +53,29 @@ export const CartProvider = ({ children }) => {
         const prodId = String(prod._id || prod.id || prod.productId || '');
         if (!prodId) return;
 
-        const selectedAttributes = normalizeAttributes(item.selectedAttributes);
+        // Prefer cart-line attributes; fall back to selectedVariants rows if attrs were dropped
+        let selectedAttributes = normalizeAttributes(item.selectedAttributes);
+        if (!Object.keys(selectedAttributes).length && Array.isArray(item.selectedVariants)) {
+          selectedAttributes = normalizeAttributes(
+            Object.fromEntries(
+              item.selectedVariants
+                .filter((row) => row?.name && row?.value != null)
+                .map((row) => [row.name, row.value])
+            )
+          );
+        }
         const variantSku = String(item.variantSku || '').trim();
         const variantId = String(item.variantId || '').trim();
-        const variantTitle = String(item.variantTitle || '').trim();
-        const selectedVariants = toSelectedVariants({ ...item, variantId, selectedAttributes });
+        const selectedVariants = toSelectedVariants({
+          selectedAttributes,
+          selectedVariants: item.selectedVariants,
+          variantId,
+        });
+        const variantTitle = String(
+          item.variantTitle
+          || Object.entries(selectedAttributes).map(([k, v]) => `${k}: ${v}`).join(' · ')
+          || ''
+        ).trim();
         const price = Number(item.price ?? prod.salePrice ?? prod.price ?? 0);
         const originalPrice = Number(item.originalPrice ?? prod.mrp ?? prod.originalPrice ?? price);
         const name = prod.name || '';
@@ -76,8 +94,8 @@ export const CartProvider = ({ children }) => {
           const existing = itemMap.get(key);
           existing.quantity = (existing.quantity || 0) + qty;
         } else {
+          // Do not spread full product doc — it can overwrite cart-line variant fields
           itemMap.set(key, {
-            ...prod,
             id: prodId,
             _id: prodId,
             productId: prodId,
@@ -87,6 +105,11 @@ export const CartProvider = ({ children }) => {
             price,
             originalPrice,
             quantity: qty,
+            sku: prod.sku || '',
+            unit: prod.unit || '',
+            mainImage: prod.mainImage || image,
+            hasVariants: Boolean(prod.hasVariants),
+            variantOptions: Array.isArray(prod.variantOptions) ? prod.variantOptions : [],
             variantSku,
             variantId,
             variantTitle,
@@ -179,7 +202,30 @@ export const CartProvider = ({ children }) => {
       if (!item || (item.quantity || 0) <= 0) {
         res = await cartService.removeFromCart(serverProductId, item);
       } else {
-        res = await cartService.updateCartItem(serverProductId, undefined, item.quantity, item);
+        // Ensure variant attrs survive quantity sync (never send a bare product wipe)
+        let attrs = normalizeAttributes(item.selectedAttributes);
+        if (!Object.keys(attrs).length && Array.isArray(item.selectedVariants)) {
+          attrs = normalizeAttributes(
+            Object.fromEntries(
+              item.selectedVariants
+                .filter((row) => row?.name)
+                .map((row) => [row.name, row.value])
+            )
+          );
+        }
+        const syncPayload = {
+          ...item,
+          selectedAttributes: attrs,
+          selectedVariants: toSelectedVariants({
+            ...item,
+            selectedAttributes: attrs,
+          }),
+          variantTitle:
+            item.variantTitle
+            || Object.entries(attrs).map(([k, v]) => `${k}: ${v}`).join(' · ')
+            || '',
+        };
+        res = await cartService.updateCartItem(serverProductId, undefined, item.quantity, syncPayload);
       }
       pendingSyncIds.current.delete(key);
       if (res && res.success && res.cart) {
@@ -245,10 +291,20 @@ export const CartProvider = ({ children }) => {
     // Update local cart instantly so the UI reflects the change on click
     const price = Number(product.salePrice ?? product.price ?? 0);
     const originalPrice = Number(product.mrp ?? product.originalPrice ?? price);
-    const selectedAttributes = normalizeAttributes(product.selectedAttributes || product.selectedVariant?.attributes);
+    // Prefer explicit user selections only — never inflate from full selectedVariant.attributes
+    const selectedAttributes = normalizeAttributes(
+      product.selectedAttributes && Object.keys(product.selectedAttributes).length
+        ? product.selectedAttributes
+        : {}
+    );
     const variantSku = String(product.variantSku || product.selectedVariant?.sku || '').trim();
     const variantId = String(product.variantId || product.selectedVariant?._id || '').trim();
-    const variantTitle = String(product.variantTitle || product.variation || product.selectedVariant?.title || '').trim();
+    const variantTitleFromAttrs = Object.entries(selectedAttributes)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(' · ');
+    const variantTitle = String(
+      variantTitleFromAttrs || product.variantTitle || product.variation || product.selectedVariant?.title || ''
+    ).trim();
     const selectedVariants = toSelectedVariants({ selectedAttributes, selectedVariants: product.selectedVariants, variantId });
     const lineId = cartLineId({ productId, variantSku, selectedAttributes });
 
@@ -268,13 +324,17 @@ export const CartProvider = ({ children }) => {
           variation: variantTitle,
           selectedAttributes,
           selectedVariants,
+          selectedVariant: product.selectedVariant
+            ? { ...product.selectedVariant, attributes: selectedAttributes, title: variantTitle }
+            : undefined,
           image: product.image || next[idx].image,
         };
       } else {
+        const { variants: _variants, variantOptions: _opts, ...productRest } = product;
         next = [
           ...prev,
           {
-            ...product,
+            ...productRest,
             id: productId,
             _id: productId,
             productId,
@@ -290,6 +350,9 @@ export const CartProvider = ({ children }) => {
             variation: variantTitle,
             selectedAttributes,
             selectedVariants,
+            selectedVariant: product.selectedVariant
+              ? { ...product.selectedVariant, attributes: selectedAttributes, title: variantTitle }
+              : undefined,
           },
         ];
       }
@@ -317,10 +380,19 @@ export const CartProvider = ({ children }) => {
     if (!source || !product) return { success: false };
 
     const productId = String(source.productId || source.id || source._id || '');
-    const selectedAttributes = normalizeAttributes(product.selectedAttributes || product.selectedVariant?.attributes);
+    const selectedAttributes = normalizeAttributes(
+      product.selectedAttributes && Object.keys(product.selectedAttributes).length
+        ? product.selectedAttributes
+        : {}
+    );
     const variantSku = String(product.variantSku || product.selectedVariant?.sku || '').trim();
     const variantId = String(product.variantId || product.selectedVariant?._id || '').trim();
-    const variantTitle = String(product.variantTitle || product.variation || product.selectedVariant?.title || '').trim();
+    const variantTitleFromAttrs = Object.entries(selectedAttributes)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(' · ');
+    const variantTitle = String(
+      variantTitleFromAttrs || product.variantTitle || product.variation || product.selectedVariant?.title || ''
+    ).trim();
     const selectedVariants = toSelectedVariants({ selectedAttributes, selectedVariants: product.selectedVariants, variantId });
     const price = Number(product.salePrice ?? product.price ?? source.price ?? 0);
     const originalPrice = Number(product.mrp ?? product.originalPrice ?? source.originalPrice ?? price);
@@ -436,7 +508,13 @@ export const CartProvider = ({ children }) => {
     const exact = cartItemsRef.current.filter((i) => cartLineId(i) === key);
     const targets = exact.length
       ? exact
-      : cartItemsRef.current.filter((i) => String(i.productId || i.id || i._id || '') === key);
+      : cartItemsRef.current.filter((i) => {
+          const id1 = String(i.productId || '');
+          const id2 = String(i.id || '');
+          const id3 = String(i._id || '');
+          const sku = String(i.sku || '');
+          return id1 === key || id2 === key || id3 === key || sku === key;
+        });
     if (!targets.length) return;
 
     const lineIds = new Set(targets.map((item) => cartLineId(item)));

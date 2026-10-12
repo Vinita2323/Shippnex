@@ -89,20 +89,12 @@ export const TransportManagement = ({ initialTab = 'ALL' }) => {
       }
     } catch (err) {
       console.error('Error loading admin transport bookings:', err);
-      if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
-        setBookings([]);
-        setStats({
-          totalBookings: 0,
-          searchingCount: 0,
-          inProgressCount: 0,
-          completedCount: 0,
-          cancelledCount: 0,
-          totalRevenue: 0,
-          totalCaptainEarnings: 0,
-        });
-      } else {
-        setError(err?.response?.data?.message || err.message || 'Error communicating with backend server.');
-      }
+      // Keep existing rows on timeout — clearing looked like “no data” (#63)
+      setError(
+        err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')
+          ? 'Request timed out. Showing last loaded bookings — tap Refresh to retry.'
+          : (err?.response?.data?.message || err.message || 'Error communicating with backend server.')
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -637,7 +629,7 @@ export const TransportManagement = ({ initialTab = 'ALL' }) => {
                       {/* Fare & Payment */}
                       <td className="py-3.5 px-4 align-top">
                         <span className="font-black text-slate-900 block text-xs">
-                          ₹{booking.fareBreakdown?.totalFare ?? 0}
+                          ₹{Number(booking.fareBreakdown?.totalFare ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                         <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md uppercase block w-max mt-0.5 ${
                           booking.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
@@ -1000,9 +992,27 @@ export const TransportManagement = ({ initialTab = 'ALL' }) => {
                     <span className="font-semibold">₹{selectedBooking.fareBreakdown?.baseFare ?? 0}</span>
                   </div>
                   <div className="flex justify-between text-slate-600">
-                    <span>Distance Charge:</span>
+                    <span>Distance Charge{selectedBooking.distanceKm != null ? ` (${selectedBooking.distanceKm} km)` : ''}:</span>
                     <span className="font-semibold">₹{selectedBooking.fareBreakdown?.distanceCharge ?? 0}</span>
                   </div>
+                  {selectedBooking.fareBreakdown?.waitingCharge > 0 && (
+                    <div className="flex justify-between text-slate-600">
+                      <span>Waiting Charge:</span>
+                      <span className="font-semibold">₹{selectedBooking.fareBreakdown.waitingCharge}</span>
+                    </div>
+                  )}
+                  {selectedBooking.fareBreakdown?.stopsCharge > 0 && (
+                    <div className="flex justify-between text-slate-600">
+                      <span>Stops Charge:</span>
+                      <span className="font-semibold">₹{selectedBooking.fareBreakdown.stopsCharge}</span>
+                    </div>
+                  )}
+                  {selectedBooking.fareBreakdown?.nightSurge > 0 && (
+                    <div className="flex justify-between text-slate-600">
+                      <span>Night / Peak Surge:</span>
+                      <span className="font-semibold">₹{selectedBooking.fareBreakdown.nightSurge}</span>
+                    </div>
+                  )}
                   {selectedBooking.fareBreakdown?.platformFee > 0 && (
                     <div className="flex justify-between text-slate-600">
                       <span>Platform Fee:</span>
@@ -1017,7 +1027,9 @@ export const TransportManagement = ({ initialTab = 'ALL' }) => {
                   )}
                   <div className="flex justify-between text-slate-900 font-black text-sm pt-2 border-t border-slate-100">
                     <span>Total Freight Fare:</span>
-                    <span className="text-[#ff5500]">₹{selectedBooking.fareBreakdown?.totalFare ?? 0}</span>
+                    <span className="text-[#ff5500]">
+                      ₹{Number(selectedBooking.fareBreakdown?.totalFare ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
                   </div>
                 </div>
               </div>

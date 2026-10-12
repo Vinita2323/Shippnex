@@ -241,6 +241,48 @@ export const applyReferralCodeAtRegistration = async ({
   }
 };
 
+// @desc   Public validate referral code (seller or captain) — returns referrer display name only
+// @route  GET /api/referral/validate?code=XXX&role=seller
+// @access Public
+export const validateReferralCode = async (req, res, next) => {
+  try {
+    const code = String(req.query.code || '').trim().toUpperCase();
+    const role = String(req.query.role || 'seller').toLowerCase() === 'captain' ? 'captain' : 'seller';
+
+    if (!code) {
+      return res.status(400).json({ success: false, valid: false, message: 'Referral code is required' });
+    }
+
+    const ReferrerModel = role === 'seller' ? Seller : Captain;
+    const referrer = await ReferrerModel.findOne({
+      referralCode: { $regex: new RegExp(`^${code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+    }).select('businessName ownerName name referralCode');
+
+    if (!referrer) {
+      return res.status(200).json({
+        success: true,
+        valid: false,
+        message: 'Invalid referral code',
+      });
+    }
+
+    const referrerName =
+      role === 'seller'
+        ? (referrer.businessName || referrer.ownerName || 'Seller Partner')
+        : (referrer.name || 'Captain Partner');
+
+    return res.status(200).json({
+      success: true,
+      valid: true,
+      referralCode: referrer.referralCode || code,
+      referrerName,
+      role,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ─── SELLER ENDPOINTS ────────────────────────────────────────────────────────
 
 // @desc   Get or generate seller's referral code
@@ -513,19 +555,33 @@ export const getAllReferrals = async (req, res, next) => {
       rewardStatus,
       dateFrom,
       dateTo,
+      startDate,
+      endDate,
       page = 1,
       limit = 50,
       search,
     } = req.query;
 
+    // Accept both dateFrom/dateTo and startDate/endDate (#90)
+    const from = dateFrom || startDate;
+    const to = dateTo || endDate;
+
     const filter = {};
     if (role) filter.referrerRole = role;
     if (status) filter.status = status;
     if (rewardStatus) filter.rewardStatus = rewardStatus;
-    if (dateFrom || dateTo) {
+    if (from || to) {
       filter.createdAt = {};
-      if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
-      if (dateTo) filter.createdAt.$lte = new Date(dateTo);
+      if (from) {
+        const d = new Date(from);
+        d.setHours(0, 0, 0, 0);
+        filter.createdAt.$gte = d;
+      }
+      if (to) {
+        const d = new Date(to);
+        d.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = d;
+      }
     }
     if (search) {
       filter.$or = [

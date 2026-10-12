@@ -12,7 +12,47 @@ import oilGheeImg from '../../../assets/user/categories/OilGhee-removebg-preview
 import masalaImg from '../../../assets/user/categories/masala-removebg-preview.png';
 import sugarImg from '../../../assets/user/categories/Sugar-removebg-preview.png';
 import { getImageUrl, handleImageError, getInitialSvgDataUrl } from '../../../utils/imageUtils';
-import { cartLineId } from '../../../utils/variantLabel';
+import { cartLineId, normalizeAttributes } from '../../../utils/variantLabel';
+import { getDisplayStock, getEffectiveStock } from '../../../utils/productStock';
+
+/** Build default option selections so chips are highlighted on first paint. */
+const buildDefaultSelectedAttributes = (productDoc) => {
+  if (!productDoc?.hasVariants || !Array.isArray(productDoc.variantOptions)) return {};
+
+  const options = productDoc.variantOptions.filter(
+    (opt) => opt?.name && Array.isArray(opt.values) && opt.values.length > 0
+  );
+  if (!options.length) return {};
+
+  // Prefer attributes from the first active SKU so the combo is a real match
+  const firstActive = (Array.isArray(productDoc.variants) ? productDoc.variants : []).find(
+    (v) => v && v.active !== false && v.attributes && typeof v.attributes === 'object'
+  );
+  if (firstActive?.attributes) {
+    const fromSku = {};
+    for (const opt of options) {
+      const optKey = String(opt.name).trim();
+      const attrKey = Object.keys(firstActive.attributes).find(
+        (k) => String(k).trim().toLowerCase() === optKey.toLowerCase()
+      );
+      const raw = attrKey != null ? firstActive.attributes[attrKey] : undefined;
+      const value = raw !== undefined && raw !== null ? String(raw).trim() : '';
+      if (value && opt.values.some((v) => String(v).trim() === value)) {
+        fromSku[optKey] = value;
+      }
+    }
+    if (options.every((opt) => fromSku[String(opt.name).trim()])) {
+      return fromSku;
+    }
+  }
+
+  // Fallback: first listed value per option
+  const initial = {};
+  for (const opt of options) {
+    initial[String(opt.name).trim()] = String(opt.values[0]).trim();
+  }
+  return initial;
+};
 
 const DESCRIPTION_PREVIEW_LENGTH = 160;
 
@@ -80,17 +120,35 @@ const ProductDetails = () => {
         if (res && res.success && res.product) {
           setProduct(res.product);
 
-          // Initialize default selected attributes if product has variants
-          if (res.product.hasVariants && Array.isArray(res.product.variantOptions)) {
-            const initialAttrs = {};
-            res.product.variantOptions.forEach(opt => {
-              if (opt.name && opt.values && opt.values.length > 0) {
-                initialAttrs[opt.name.trim()] = opt.values[0];
-              }
-            });
-            setSelectedAttributes(initialAttrs);
+          // Restore selection from cart when returning from checkout/cart (don't wipe user choices)
+          const productId = String(res.product._id || res.product.id || id);
+          const fromLineId = location.state?.cartLineId;
+          const cartLine =
+            (fromLineId
+              ? cartItems.find((item) => item.lineId === fromLineId || cartLineId(item) === fromLineId)
+              : null)
+            || cartItems.find((item) => String(item.productId || item.id || item._id) === productId);
+
+          if (cartLine) {
+            const attrs = normalizeAttributes(
+              cartLine.selectedAttributes && Object.keys(cartLine.selectedAttributes).length
+                ? cartLine.selectedAttributes
+                : Object.fromEntries(
+                    (Array.isArray(cartLine.selectedVariants) ? cartLine.selectedVariants : [])
+                      .filter((row) => row?.name)
+                      .map((row) => [String(row.name).trim(), row.value])
+                  )
+            );
+            setSelectedAttributes(
+              Object.keys(attrs).length ? attrs : buildDefaultSelectedAttributes(res.product)
+            );
+            setQuantity(Math.max(1, Number(cartLine.quantity) || 1));
+          } else {
+            // Default-select a real variant combo so option chips are highlighted on load
+            setSelectedAttributes(buildDefaultSelectedAttributes(res.product));
+            setQuantity(1);
           }
-          // Fetch reviews using resolved product _id
+
           fetchReviews(res.product._id || id);
         } else {
           setError('Product not found');
@@ -119,32 +177,51 @@ const ProductDetails = () => {
     };
 
     fetchProductDetails();
-  }, [id]);
+    // Restore from cartItems/location when re-entering this product (e.g. back from checkout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, location.state?.cartLineId]);
 
-  // Find currently matched variant from selected attributes
+  // All option groups must be chosen before a variant is considered matched
+  const requiredOptionNames = React.useMemo(() => {
+    if (!product?.hasVariants || !Array.isArray(product.variantOptions)) return [];
+    return product.variantOptions
+      .filter((opt) => opt?.name && Array.isArray(opt.values) && opt.values.length > 0)
+      .map((opt) => String(opt.name).trim())
+      .filter(Boolean);
+  }, [product]);
+
+  const allOptionsSelected = React.useMemo(() => {
+    if (!requiredOptionNames.length) return Object.keys(selectedAttributes || {}).length > 0;
+    return requiredOptionNames.every((name) => {
+      const selected = selectedAttributes[name];
+      return selected !== undefined && selected !== null && String(selected).trim() !== '';
+    });
+  }, [requiredOptionNames, selectedAttributes]);
+
+  // Find currently matched variant — only when every option is selected (no partial match)
   const matchedVariant = React.useMemo(() => {
     if (!product || !product.hasVariants || !Array.isArray(product.variants) || product.variants.length === 0) {
       return null;
     }
+    if (!allOptionsSelected) return null;
 
     const found = product.variants.find((variant) => {
       if (!variant?.attributes || variant.active === false) return false;
       const attrs = variant.attributes;
-      return Object.keys(selectedAttributes).length > 0 && Object.entries(selectedAttributes).every(([attrName, attrVal]) => {
+      return Object.entries(selectedAttributes).every(([attrName, attrVal]) => {
         const key = Object.keys(attrs).find((name) => String(name).trim().toLowerCase() === attrName.toLowerCase());
         return key && String(attrs[key]).trim() === String(attrVal).trim();
       });
     });
 
     return found || null;
-  }, [product, selectedAttributes]);
+  }, [product, selectedAttributes, allOptionsSelected]);
 
   const lineSelection = matchedVariant
     ? {
         variantSku: matchedVariant.sku || '',
-        selectedAttributes: Object.keys(selectedAttributes || {}).length
-          ? selectedAttributes
-          : (matchedVariant.attributes || {}),
+        // Always persist only what the user selected — never inflate from full variant attributes
+        selectedAttributes: { ...selectedAttributes },
       }
     : null;
   const selectedLineId = lineSelection
@@ -164,9 +241,12 @@ const ProductDetails = () => {
   }, [matchedVariant, product]);
 
   const handleSelectAttribute = (attrName, val) => {
-    setSelectedAttributes(prev => ({
+    const name = String(attrName || '').trim();
+    const value = String(val ?? '').trim();
+    if (!name || !value) return;
+    setSelectedAttributes((prev) => ({
       ...prev,
-      [attrName.trim()]: val
+      [name]: value,
     }));
   };
 
@@ -198,6 +278,10 @@ const ProductDetails = () => {
   const getProductToAdd = () => {
     if (!product) return null;
     if (matchedVariant) {
+      // Build a display title from the user's selections only (not the full SKU title)
+      const selectionTitle = Object.entries(selectedAttributes)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(' · ');
       return {
         ...product,
         id: product._id || product.id,
@@ -207,22 +291,46 @@ const ProductDetails = () => {
         mrp: matchedVariant.originalPrice || matchedVariant.price,
         originalPrice: matchedVariant.originalPrice || matchedVariant.price,
         stock: matchedVariant.stock,
-        variation: matchedVariant.title,
-        variantTitle: matchedVariant.title,
+        variation: selectionTitle || matchedVariant.title,
+        variantTitle: selectionTitle || matchedVariant.title,
         variantSku: matchedVariant.sku,
         variantId: matchedVariant._id || '',
         sku: matchedVariant.sku || product.sku,
         image: matchedVariant.image || product.mainImage || product.image,
-        selectedAttributes: Object.keys(selectedAttributes || {}).length
-          ? selectedAttributes
-          : (matchedVariant.attributes || {}),
-        selectedVariant: matchedVariant
+        // Only user-selected options — do not copy full matchedVariant.attributes
+        selectedAttributes: { ...selectedAttributes },
+        selectedVariants: Object.entries(selectedAttributes).map(([name, value]) => ({
+          variantId: matchedVariant._id || '',
+          name,
+          value,
+        })),
+        // Strip nested attributes so cart sync cannot fall back to the full SKU attrs
+        selectedVariant: {
+          _id: matchedVariant._id,
+          sku: matchedVariant.sku,
+          title: selectionTitle || matchedVariant.title,
+          price: matchedVariant.price,
+          originalPrice: matchedVariant.originalPrice,
+          stock: matchedVariant.stock,
+          image: matchedVariant.image,
+          attributes: { ...selectedAttributes },
+        },
       };
     }
     return product;
   };
 
   const handleAddToCart = async () => {
+    if (product?.hasVariants && !allOptionsSelected) {
+      const missing = requiredOptionNames.filter((name) => !selectedAttributes[name]);
+      setToastMessage(
+        missing.length
+          ? `Please select: ${missing.join(', ')}`
+          : 'Please select an available option'
+      );
+      setTimeout(() => setToastMessage(''), 2500);
+      return;
+    }
     if (product?.hasVariants && !matchedVariant) {
       setToastMessage('Please select an available option');
       setTimeout(() => setToastMessage(''), 2500);
@@ -239,6 +347,16 @@ const ProductDetails = () => {
 
   const handleBuyNow = async () => {
     if (buyNowLock.current) return;
+    if (product?.hasVariants && !allOptionsSelected) {
+      const missing = requiredOptionNames.filter((name) => !selectedAttributes[name]);
+      setToastMessage(
+        missing.length
+          ? `Please select: ${missing.join(', ')}`
+          : 'Please select an available option'
+      );
+      setTimeout(() => setToastMessage(''), 2500);
+      return;
+    }
     if (product?.hasVariants && !matchedVariant) {
       setToastMessage('Please select an available option');
       setTimeout(() => setToastMessage(''), 2500);
@@ -254,8 +372,16 @@ const ProductDetails = () => {
         variantSku: itemToAdd.variantSku,
         selectedAttributes: itemToAdd.selectedAttributes,
       };
+      const desiredQty = Math.max(1, Number(quantity) || 1);
+      const targetLineId = cartLineId({
+        productId,
+        variantSku: selection.variantSku,
+        selectedAttributes: selection.selectedAttributes,
+      });
 
+      // Already in cart: apply the quantity shown on this page, then checkout
       if (isInCart(productId, selection)) {
+        await updateQuantity(targetLineId, 0, desiredQty);
         navigate('/checkout');
         return;
       }
@@ -268,14 +394,42 @@ const ProductDetails = () => {
 
       if (sourceLine) {
         const res = await replaceCartLineVariant(sourceLine.lineId || cartLineId(sourceLine), itemToAdd);
-        if (res?.success) navigate('/checkout');
+        if (res?.success) {
+          const newLineId = cartLineId({
+            productId,
+            variantSku: itemToAdd.variantSku,
+            selectedAttributes: itemToAdd.selectedAttributes,
+          });
+          await updateQuantity(newLineId, 0, desiredQty);
+          navigate('/checkout');
+        }
         return;
       }
 
-      const res = await addToCart(itemToAdd, quantity, { isBuyNow: true, navigate, returnUrl: window.location.pathname });
+      const res = await addToCart(itemToAdd, desiredQty, { isBuyNow: true, navigate, returnUrl: window.location.pathname });
       if (res && res.success) navigate('/checkout');
     } finally {
       buyNowLock.current = false;
+    }
+  };
+
+  // When this exact variant is already in cart, seed the stepper from cart quantity
+  React.useEffect(() => {
+    if (!product) return;
+    const productId = product.id || product._id;
+    if (!productId || !lineSelection || !isInCart(productId, lineSelection)) return;
+    const cartQty = getItemQuantity(productId, lineSelection);
+    if (cartQty > 0) setQuantity(cartQty);
+    // Re-seed only when product / selected line changes (not on every cart tick)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?._id, product?.id, selectedLineId]);
+
+  const changeQuantity = (nextQty) => {
+    const desired = Math.max(1, Number(nextQty) || 1);
+    setQuantity(desired);
+    // If this line is already in cart, update cart immediately so checkout matches the UI
+    if (product && isInCart(product.id || product._id, lineSelection)) {
+      updateQuantity(selectedLineId, 0, desired);
     }
   };
 
@@ -309,9 +463,11 @@ const ProductDetails = () => {
   const hasDiscount = originalPrice > currentPrice;
   const discountCalc = hasDiscount ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0;
   const savingsAmount = hasDiscount ? (originalPrice - currentPrice) : 0;
-  const isOutOfStock = matchedVariant 
-    ? (matchedVariant.stock <= 0 || matchedVariant.active === false) 
-    : (product.stock !== undefined && product.stock <= 0);
+  const displayStock = getDisplayStock(product, matchedVariant);
+  const totalProductStock = getEffectiveStock(product);
+  const isOutOfStock = matchedVariant
+    ? (matchedVariant.active === false || displayStock <= 0)
+    : displayStock <= 0;
 
   return (
     <div className="min-h-[100dvh] md:min-h-screen bg-white font-sans text-slate-800 relative w-full max-w-[480px] md:max-w-7xl mx-auto shadow-[0_0_25px_rgba(0,0,0,0.05)] md:shadow-none flex flex-col pb-24 md:pb-12 md:px-6 md:pt-4 overflow-x-hidden">
@@ -458,36 +614,46 @@ const ProductDetails = () => {
               )}
             </div>
 
-            {product.variantOptions.map((opt, oIdx) => (
-              <div key={oIdx} className="space-y-1.5">
+            {product.variantOptions.map((opt, oIdx) => {
+              const optKey = String(opt.name || '').trim();
+              const currentVal = String(selectedAttributes[optKey] ?? '').trim();
+              return (
+              <div key={`${optKey || 'opt'}-${oIdx}`} className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-slate-700">{opt.name}:</span>
-                  <span className="font-bold text-[#ff5500] font-mono text-[11px]">
-                    {selectedAttributes[opt.name.trim()] || opt.values?.[0] || ''}
+                  <span
+                    className={`font-mono text-[11px] font-bold ${
+                      currentVal ? 'text-[#ff5500]' : 'text-slate-400'
+                    }`}
+                  >
+                    {currentVal || 'Select'}
                   </span>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
                   {opt.values && opt.values.map((val, vIdx) => {
-                    const isSelected = (selectedAttributes[opt.name.trim()] || opt.values[0]) === val;
+                    const optionVal = String(val ?? '').trim();
+                    const isSelected = currentVal !== '' && currentVal === optionVal;
                     return (
                       <button
-                        key={vIdx}
+                        key={`${optKey}-${optionVal}-${vIdx}`}
                         type="button"
+                        aria-pressed={isSelected}
                         onClick={() => handleSelectAttribute(opt.name, val)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer active:scale-95 ${
                           isSelected
-                            ? 'bg-[#ff5500] text-white border-[#ff5500] shadow-xs scale-102 ring-2 ring-[#ff5500]/20'
+                            ? 'bg-[#ff5500] text-white border-[#ff5500] shadow-sm ring-2 ring-[#ff5500]/25'
                             : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100/70'
                         }`}
                       >
-                        {val}
+                        {optionVal}
                       </button>
                     );
                   })}
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             {/* Stock Availability indicator for selected variant */}
             <div className="pt-1.5 border-t border-slate-200/60 flex items-center justify-between text-xs">
@@ -499,7 +665,7 @@ const ProductDetails = () => {
               ) : (
                 <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                  In Stock {matchedVariant?.stock !== undefined ? `(${matchedVariant.stock} left)` : ''}
+                  In Stock ({displayStock} left)
                 </span>
               )}
             </div>
@@ -511,14 +677,14 @@ const ProductDetails = () => {
           <div className="flex items-center gap-4">
             <div className="flex items-center bg-white rounded-xl border border-slate-200 p-1">
               <button 
-                onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+                onClick={() => changeQuantity(quantity - 1)}
                 className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium flex items-center justify-center cursor-pointer border-none active:scale-95 transition-transform"
               >
                 <Minus size={15} />
               </button>
               <span className="w-10 text-center text-sm font-bold text-slate-900">{quantity}</span>
               <button 
-                onClick={() => setQuantity(prev => prev + 1)}
+                onClick={() => changeQuantity(quantity + 1)}
                 className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium flex items-center justify-center cursor-pointer border-none active:scale-95 transition-transform"
               >
                 <Plus size={15} />
@@ -614,7 +780,12 @@ const ProductDetails = () => {
                 <div><span className="text-slate-400">Brand:</span> <strong>{product.brand || product.seller || 'ShippNex'}</strong></div>
                 <div><span className="text-slate-400">Category:</span> <strong>{product.category || 'Grocery'}</strong></div>
                 <div><span className="text-slate-400">Sub-Category:</span> <strong>{product.subCategory || 'Staples'}</strong></div>
-                <div><span className="text-slate-400">Stock:</span> <strong className="text-emerald-600">Available ({product.stock || 50})</strong></div>
+                <div>
+                  <span className="text-slate-400">Stock:</span>{' '}
+                  <strong className={totalProductStock > 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                    {totalProductStock > 0 ? `Available (${totalProductStock})` : 'Out of Stock'}
+                  </strong>
+                </div>
               </div>
             )}
           </div>
@@ -892,14 +1063,14 @@ const ProductDetails = () => {
         {/* Quantity Stepper */}
         <div className="flex items-center bg-slate-100 rounded-xl border border-slate-200/80 p-0.5 shrink-0 h-11">
           <button 
-            onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+            onClick={() => changeQuantity(quantity - 1)}
             className="w-8 h-full rounded-lg bg-white hover:bg-slate-50 text-slate-700 font-medium flex items-center justify-center cursor-pointer border-none active:scale-95 transition-transform shadow-2xs"
           >
             <Minus size={14} />
           </button>
           <span className="w-8 text-center text-xs font-bold text-slate-800">{quantity}</span>
           <button 
-            onClick={() => setQuantity(prev => prev + 1)}
+            onClick={() => changeQuantity(quantity + 1)}
             className="w-8 h-full rounded-lg bg-white hover:bg-slate-50 text-slate-700 font-medium flex items-center justify-center cursor-pointer border-none active:scale-95 transition-transform shadow-2xs"
           >
             <Plus size={14} />

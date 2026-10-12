@@ -33,17 +33,22 @@ const FlashSale = () => {
   const userLat = locationContext?.currentLocation?.lat || locationContext?.currentLocation?.latitude;
   const userLng = locationContext?.currentLocation?.lng || locationContext?.currentLocation?.longitude;
 
-  const [timeLeft, setTimeLeft] = useState({ hours: 2, minutes: 45, seconds: 30 });
+  // Countdown to end of local day so remount/refresh does not reset to a static 02:45:30
+  const calcTimeLeft = () => {
+    const now = new Date();
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+    const diff = Math.max(0, end.getTime() - now.getTime());
+    const hours = Math.floor(diff / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    return { hours, minutes, seconds };
+  };
+
+  const [timeLeft, setTimeLeft] = useState(calcTimeLeft);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev.seconds > 0) return { ...prev, seconds: prev.seconds - 1 };
-        if (prev.minutes > 0) return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
-        if (prev.hours > 0) return { hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        return prev;
-      });
-    }, 1000);
+    const timer = setInterval(() => setTimeLeft(calcTimeLeft()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -75,7 +80,8 @@ const FlashSale = () => {
           discountStr = `${pct}% OFF`;
         }
         return {
-          id: p.id || p.sku || p._id || `p_${Math.random()}`,
+          id: p._id || p.id || p.sku || `p_${Math.random()}`,
+          _id: p._id || p.id,
           name: p.name,
           price: salePrice,
           originalPrice: mrp,

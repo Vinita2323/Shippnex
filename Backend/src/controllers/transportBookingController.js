@@ -9,9 +9,113 @@ import CaptainTransaction from '../models/CaptainTransaction.model.js';
 import CommissionSettings from '../models/CommissionSettings.model.js';
 import TransportPricing from '../models/TransportPricing.model.js';
 import { razorpayInstance } from '../config/razorpay.js';
-import { haversineDistance, estimateDuration } from '../utils/haversine.js';
-import { calculateFare } from '../utils/fareCalculator.js';
+import { haversineDistance, estimateRoadDistanceKm, estimateDuration } from '../utils/haversine.js';
+import { calculateFare, isNightPeakNow, toStoredFareBreakdown } from '../utils/fareCalculator.js';
 import { generateBookingId } from '../utils/generateBookingId.js';
+
+/**
+ * Billable trip distance using Admin Vehicle Details rates later.
+ * Sums pickup → stops → drop road km, plus return-to-pickup when enabled.
+ */
+const resolveBillableDistanceKm = ({
+  pickupLocation,
+  dropLocation,
+  stops = [],
+  clientDistanceKm = null,
+  includeReturn = false,
+}) => {
+  const points = [];
+  if (pickupLocation?.lat != null && pickupLocation?.lng != null) {
+    points.push({ lat: parseFloat(pickupLocation.lat), lng: parseFloat(pickupLocation.lng) });
+  }
+  (stops || []).forEach((s) => {
+    const lat = s?.lat ?? s?.latitude;
+    const lng = s?.lng ?? s?.longitude;
+    if (lat != null && lng != null) points.push({ lat: parseFloat(lat), lng: parseFloat(lng) });
+  });
+  if (dropLocation?.lat != null && dropLocation?.lng != null) {
+    points.push({ lat: parseFloat(dropLocation.lat), lng: parseFloat(dropLocation.lng) });
+  }
+
+  if (points.length < 2) {
+    const fallback = Number(clientDistanceKm);
+    return Number.isFinite(fallback) && fallback > 0 ? Math.round(fallback * 100) / 100 : 5.0;
+  }
+
+  let total = 0;
+  // When client sent a full-trip driving km (pickup→stops→drop), use it for the
+  // whole route when segment count matches a simple 2-point trip; for multi-stop,
+  // prefer per-segment road estimates (client total still validated when 2 pts).
+  if (points.length === 2) {
+    total = estimateRoadDistanceKm(
+      points[0].lat,
+      points[0].lng,
+      points[1].lat,
+      points[1].lng,
+      clientDistanceKm
+    );
+  } else {
+    for (let i = 0; i < points.length - 1; i += 1) {
+      total += estimateRoadDistanceKm(
+        points[i].lat,
+        points[i].lng,
+        points[i + 1].lat,
+        points[i + 1].lng,
+        null
+      );
+    }
+    // If client provided a full-route driving total, prefer it when sane vs sum
+    const client = Number(clientDistanceKm);
+    if (Number.isFinite(client) && client > 0) {
+      const minAllowed = Math.max(0.5, total * 0.75);
+      const maxAllowed = Math.max(total * 2.5, total + 50);
+      if (client >= minAllowed && client <= maxAllowed) {
+        total = client;
+      }
+    }
+  }
+
+  if (includeReturn) {
+    const last = points[points.length - 1];
+    const first = points[0];
+    total += estimateRoadDistanceKm(last.lat, last.lng, first.lat, first.lng);
+  }
+
+  return Math.max(1, Math.round(total * 100) / 100);
+};
+
+const buildFareForTrip = ({
+  vehicle,
+  transportPricing,
+  pickupLocation,
+  dropLocation,
+  stops = [],
+  clientDistanceKm = null,
+  waitingMinutes = 0,
+  discount = 0,
+}) => {
+  const includeReturn = Boolean(transportPricing?.returnToPickup);
+  const distanceKm = resolveBillableDistanceKm({
+    pickupLocation,
+    dropLocation,
+    stops,
+    clientDistanceKm,
+    includeReturn,
+  });
+  const fare = calculateFare(vehicle, distanceKm, {
+    transportPricing,
+    stopsCount: (stops || []).length,
+    waitingMinutes,
+    discount,
+    isNightPeak: isNightPeakNow(transportPricing),
+  });
+  return {
+    distanceKm,
+    estimatedDurationMin: estimateDuration(distanceKm),
+    fareBreakdown: toStoredFareBreakdown(fare),
+    fare,
+  };
+};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -304,30 +408,19 @@ export const getFareEstimate = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Selected vehicle type is not available' });
     }
 
-    // ── Calculate distance ────────────────────────────────────────────
-    let distanceKm = null;
-    let estimatedDurationMin = null;
-
     const hasPickupCoords = pickupLat != null && pickupLng != null;
     const hasDropCoords = dropLat != null && dropLng != null;
 
-    if (hasPickupCoords && hasDropCoords) {
-      distanceKm = haversineDistance(
-        parseFloat(pickupLat),
-        parseFloat(pickupLng),
-        parseFloat(dropLat),
-        parseFloat(dropLng)
-      );
-      estimatedDurationMin = estimateDuration(distanceKm);
-    } else {
-      // Fallback: no coordinates provided — use 5 km default estimate
-      distanceKm = 5.0;
-      estimatedDurationMin = estimateDuration(distanceKm);
-    }
-
-    // ── Calculate fare dynamically via Centralized Transport Pricing ─
+    // ── Fare uses Admin Vehicle Details rates + road distance ─────────
     const transportPricing = await TransportPricing.getActiveConfig();
-    const fareBreakdown = calculateFare(vehicle, distanceKm, { transportPricing });
+    const { distanceKm, estimatedDurationMin, fareBreakdown } = buildFareForTrip({
+      vehicle,
+      transportPricing,
+      pickupLocation: { lat: pickupLat, lng: pickupLng },
+      dropLocation: { lat: dropLat, lng: dropLng },
+      stops: Array.isArray(req.body.stops) ? req.body.stops : [],
+      clientDistanceKm: req.body.distanceKm,
+    });
 
     res.status(200).json({
       success: true,
@@ -425,25 +518,16 @@ export const createTransportPaymentOrder = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Selected vehicle type is not available' });
     }
 
-    // ── Recalculate distance & fare server-side ───────────────────────
-    const hasPickupCoords = pickupLat != null && pickupLng != null;
-    const hasDropCoords = dropLat != null && dropLng != null;
-
-    let distanceKm = 5.0;
-    let estimatedDurationMin = estimateDuration(5.0);
-
-    if (hasPickupCoords && hasDropCoords) {
-      distanceKm = haversineDistance(
-        parseFloat(pickupLat),
-        parseFloat(pickupLng),
-        parseFloat(dropLat),
-        parseFloat(dropLng)
-      );
-      estimatedDurationMin = estimateDuration(distanceKm);
-    }
-
+    // ── Recalculate distance & fare (Vehicle Details + road km) ───────
     const transportPricing = await TransportPricing.getActiveConfig();
-    const fareBreakdown = calculateFare(vehicle, distanceKm, { transportPricing });
+    const { distanceKm, estimatedDurationMin, fareBreakdown } = buildFareForTrip({
+      vehicle,
+      transportPricing,
+      pickupLocation: { lat: pickupLat, lng: pickupLng },
+      dropLocation: { lat: dropLat, lng: dropLng },
+      stops: Array.isArray(req.body.stops) ? req.body.stops : [],
+      clientDistanceKm: req.body.distanceKm,
+    });
     const amountInPaise = Math.round(fareBreakdown.totalFare * 100);
 
     if (amountInPaise <= 0) {
@@ -582,27 +666,18 @@ export const verifyTransportPayment = async (req, res, next) => {
     const dropLat = dropLocation?.lat ?? dropLocation?.latitude ?? null;
     const dropLng = dropLocation?.lng ?? dropLocation?.longitude ?? null;
 
-    // ── Recalculate distance & fare ───────────────────────────────────
+    // ── Recalculate distance & fare (Vehicle Details + road km) ───────
     const hasPickupCoords = pickupLat != null && pickupLng != null;
     const hasDropCoords = dropLat != null && dropLng != null;
 
-    let distanceKm = 5.0;
-    let estimatedDurationMin = estimateDuration(5.0);
-
-    if (hasPickupCoords && hasDropCoords) {
-      distanceKm = haversineDistance(
-        parseFloat(pickupLat),
-        parseFloat(pickupLng),
-        parseFloat(dropLat),
-        parseFloat(dropLng)
-      );
-      estimatedDurationMin = estimateDuration(distanceKm);
-    }
-
     const transportPricing = await TransportPricing.getActiveConfig();
-    const fareBreakdown = calculateFare(vehicle, distanceKm, { 
-      stopsCount: (stops || []).length, 
-      transportPricing 
+    const { distanceKm, estimatedDurationMin, fareBreakdown } = buildFareForTrip({
+      vehicle,
+      transportPricing,
+      pickupLocation: { lat: pickupLat, lng: pickupLng },
+      dropLocation: { lat: dropLat, lng: dropLng },
+      stops,
+      clientDistanceKm: req.body.distanceKm,
     });
 
     const vehicleSnapshot = {
@@ -847,28 +922,24 @@ export const createBooking = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Selected vehicle type is not available' });
     }
 
-    // ── Recalculate distance (server-side, never trust frontend) ──────
+    // ── Recalculate distance & fare (Vehicle Details + road km) ───────
     const hasPickupCoords = pickupLocation.lat != null && pickupLocation.lng != null;
     const hasDropCoords = dropLocation.lat != null && dropLocation.lng != null;
 
-    let distanceKm = 5.0; // default fallback
-    let estimatedDurationMin = estimateDuration(5.0);
-
-    if (hasPickupCoords && hasDropCoords) {
-      distanceKm = haversineDistance(
-        parseFloat(pickupLocation.lat),
-        parseFloat(pickupLocation.lng),
-        parseFloat(dropLocation.lat),
-        parseFloat(dropLocation.lng)
-      );
-      estimatedDurationMin = estimateDuration(distanceKm);
-    }
-
-    // ── Recalculate fare (server-side, dynamic centralized pricing) ──
     const transportPricing = await TransportPricing.getActiveConfig();
-    const fareBreakdown = calculateFare(vehicle, distanceKm, { 
-      stopsCount: (stops || []).length, 
-      transportPricing 
+    const { distanceKm, estimatedDurationMin, fareBreakdown } = buildFareForTrip({
+      vehicle,
+      transportPricing,
+      pickupLocation: {
+        lat: hasPickupCoords ? pickupLocation.lat : pickupLat,
+        lng: hasPickupCoords ? pickupLocation.lng : pickupLng,
+      },
+      dropLocation: {
+        lat: hasDropCoords ? dropLocation.lat : dropLat,
+        lng: hasDropCoords ? dropLocation.lng : dropLng,
+      },
+      stops,
+      clientDistanceKm: req.body.distanceKm,
     });
 
     // ── Build vehicle snapshot (freeze pricing at booking time) ───────
@@ -1273,9 +1344,17 @@ export const getAdminTransportBookings = async (req, res, next) => {
       }
     }
 
-    // Vehicle Type Filter
+    // Vehicle Type Filter — match slug or name loosely (#63); use $and so it does not clash with search $or
     if (vehicleType && vehicleType !== 'ALL' && vehicleType !== 'all') {
-      query['vehicleSnapshot.slug'] = vehicleType;
+      const escaped = String(vehicleType).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const vehicleMatch = {
+        $or: [
+          { 'vehicleSnapshot.slug': { $regex: new RegExp(`^${escaped}$`, 'i') } },
+          { 'vehicleSnapshot.name': { $regex: new RegExp(escaped.replace(/-/g, '[-\\s]?'), 'i') } },
+          { 'vehicleType.slug': { $regex: new RegExp(`^${escaped}$`, 'i') } },
+        ],
+      };
+      query.$and = [...(query.$and || []), vehicleMatch];
     }
 
     // Captain Filter
@@ -1376,8 +1455,10 @@ export const getAdminTransportBookings = async (req, res, next) => {
     });
   } catch (error) {
     console.error('[getAdminTransportBookings ERROR]', error);
-    return res.status(200).json({
-      success: true,
+    // Do not pretend success with empty data — that hides logistics bookings (#63)
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to load transport bookings',
       bookings: [],
       stats: {
         totalBookings: 0,
@@ -1389,7 +1470,6 @@ export const getAdminTransportBookings = async (req, res, next) => {
         totalCaptainEarnings: 0,
       },
       pagination: { total: 0, page: 1, limit: 50, pages: 1 },
-      notice: 'Fallback mode active',
     });
   }
 };

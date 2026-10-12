@@ -117,6 +117,11 @@ const userSchema = new mongoose.Schema(
         ref: 'Product',
       },
     ],
+    walletBalance: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     // Rating fields (Calculated from Captain reviews)
     ratingAverage: {
       type: Number,

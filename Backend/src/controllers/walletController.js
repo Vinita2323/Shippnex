@@ -4,6 +4,8 @@ import SellerNotification from '../models/SellerNotification.model.js';
 import WalletTransaction from '../models/WalletTransaction.model.js';
 import WithdrawalRequest from '../models/WithdrawalRequest.model.js';
 import PayoutRequest from '../models/PayoutRequest.model.js';
+import User from '../models/User.model.js';
+import UserWalletTransaction from '../models/UserWalletTransaction.model.js';
 
 // @desc    Get Seller Wallet Data (Metrics, Transactions, Withdrawals)
 // @route   GET /api/wallet/seller
@@ -288,6 +290,74 @@ export const updateWithdrawalStatus = async (req, res, next) => {
       success: true,
       message: `Withdrawal request #${withdrawal.withdrawalId} updated to ${status}`,
       withdrawal,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get User Wallet balance + recent transactions
+// @route   GET /api/wallet/user
+// @access  Private/User
+export const getUserWallet = async (req, res, next) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    const user = await User.findById(userId).select('name phone walletBalance');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const transactions = await UserWalletTransaction.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    const [creditAgg, debitAgg] = await Promise.all([
+      UserWalletTransaction.aggregate([
+        { $match: { userId: user._id, type: 'CREDIT', status: 'COMPLETED' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+      UserWalletTransaction.aggregate([
+        { $match: { userId: user._id, type: 'DEBIT', status: 'COMPLETED' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      wallet: {
+        balance: Number(Number(user.walletBalance || 0).toFixed(2)),
+        availableBalance: Number(Number(user.walletBalance || 0).toFixed(2)),
+        totalCredited: Number(Number(creditAgg[0]?.total || 0).toFixed(2)),
+        totalDebited: Number(Number(debitAgg[0]?.total || 0).toFixed(2)),
+      },
+      transactions,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get User Wallet transactions (filterable)
+// @route   GET /api/wallet/user/transactions
+// @access  Private/User
+export const getUserWalletTransactions = async (req, res, next) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    const type = String(req.query.type || 'All').toUpperCase();
+    const query = { userId };
+    if (type === 'CREDIT' || type === 'DEBIT') {
+      query.type = type;
+    }
+
+    const transactions = await UserWalletTransaction.find(query)
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      transactions,
     });
   } catch (error) {
     next(error);

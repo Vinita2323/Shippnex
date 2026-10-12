@@ -62,6 +62,7 @@ const CaptainDashboard = () => {
   const [savedLocation, setSavedLocation] = useState(() => {
     return localStorage.getItem('shippnex_captain_location') || null;
   });
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const manualInputRef = useRef(null);
   const manualDebounceRef = useRef(null);
   const watchIdRef = useRef(null);
@@ -125,6 +126,28 @@ const CaptainDashboard = () => {
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         setActiveDay(days[today.getDay()]);
 
+        // Auto-popup return requests first (#52)
+        const newReturn = retList.find(
+          (r) =>
+            !isJobDismissed(r) &&
+            ['CAPTAIN_ASSIGNMENT_PENDING', 'PENDING', 'REQUESTED', 'ASSIGNED'].includes(
+              String(r.status || r.captainStatus || '').toUpperCase()
+            )
+        );
+        if (newReturn && !incomingJob) {
+          setIncomingJob({
+            ...newReturn,
+            isReturn: true,
+            isTransport: false,
+            orderId: newReturn.returnId || newReturn._id,
+            pickupAddress: newReturn.customerAddress,
+            dropAddress: newReturn.sellerAddress || newReturn.sellerName,
+            customerAddress: newReturn.customerAddress,
+            sellerAddress: newReturn.sellerAddress,
+          });
+          return;
+        }
+
         // Auto-popup white modal for incoming transport requests matching this captain (never repeats if dismissed)
         const newTransport = tRequests.find((t) => !isJobDismissed(t));
         if (newTransport && !incomingJob) {
@@ -151,6 +174,27 @@ const CaptainDashboard = () => {
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
+
+  // #48 — notification bell uses unread notifications, not pending jobs
+  useEffect(() => {
+    const loadUnread = async () => {
+      try {
+        const res = await captainService.getNotifications();
+        if (res?.success) {
+          setUnreadNotifCount(
+            Number(res.unreadCount ?? (Array.isArray(res.notifications)
+              ? res.notifications.filter((n) => !n.isRead && !n.read).length
+              : 0))
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    loadUnread();
+    const t = setInterval(loadUnread, 30000);
+    return () => clearInterval(t);
+  }, []);
 
   // Polling every 5 seconds when online
   useEffect(() => {
@@ -209,6 +253,14 @@ const CaptainDashboard = () => {
     setActionLoading(true);
     try {
       markJobAsDismissed(job);
+      if (job.isReturn) {
+        const returnId = job._id || job.returnId;
+        await returnService.captainAcceptReturnJob(returnId);
+        setIncomingJob(null);
+        await fetchDashboard(true);
+        navigate(`/captain/active-delivery?type=return&returnId=${returnId}`);
+        return;
+      }
       if (job.isTransport) {
         const bookingId = job.bookingId || job._id;
         await transportService.captainAcceptRequest(bookingId);
@@ -238,6 +290,11 @@ const CaptainDashboard = () => {
     setIncomingJob(null); // Modal closes immediately
     setActionLoading(true);
     try {
+      if (job.isReturn) {
+        // Returns: dismiss only (no dedicated reject API on popup path)
+        await fetchDashboard(true);
+        return;
+      }
       const id = job.bookingId || job.orderId || job._id;
       if (job.isTransport) {
         await transportService.captainRejectRequest(id);
@@ -523,10 +580,10 @@ const CaptainDashboard = () => {
               className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-100 flex items-center justify-center text-slate-600 transition-all cursor-pointer relative"
             >
               <span className="material-symbols-outlined text-lg">notifications</span>
-              {stats.pendingCount > 0 && (
+              {unreadNotifCount > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white animate-ping"></span>
               )}
-              {stats.pendingCount > 0 && (
+              {unreadNotifCount > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
               )}
             </button>
@@ -760,7 +817,7 @@ const CaptainDashboard = () => {
               <div className="pt-3 border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100 text-center">
                 <div className="px-2">
                   <p className="text-base md:text-lg font-black text-slate-800 leading-none">{stats.totalBookings}</p>
-                  <p className="text-[10px] font-semibold text-slate-400 mt-1">Total Bookings</p>
+                  <p className="text-[10px] font-semibold text-slate-400 mt-1">Lifetime Bookings</p>
                 </div>
                 <div className="px-2">
                   <p className="text-base md:text-lg font-black text-slate-800 leading-none">{stats.deliveredToday}</p>
@@ -875,7 +932,25 @@ const CaptainDashboard = () => {
             {/* ────────────────────────────────────────────────────────── */}
             {/* TODAY'S PENDING & IN-PROCESS ORDERS / TASKS SECTION       */}
             {/* ────────────────────────────────────────────────────────── */}
-            {(() => {
+            {!savedLocation && (
+              <section className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+                <span className="material-symbols-outlined text-amber-600 text-xl">location_off</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-amber-900 m-0">Set your location to see nearby requests</p>
+                  <p className="text-[11px] text-amber-800/80 mt-0.5 m-0">
+                    Pending jobs are hidden until you enable GPS or pick a service area.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowLocationModal(true)}
+                    className="mt-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold rounded-lg border-none cursor-pointer"
+                  >
+                    Set Location
+                  </button>
+                </div>
+              </section>
+            )}
+            {savedLocation && (() => {
               const inProgressOrders = pendingOrders.filter((o) =>
                 ['Accepted', 'At Pickup', 'Picked Up', 'In Transit'].includes(o.captainStatus)
               );

@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { getEligibleSellersForLocation, isValidCoordinate } from '../utils/sellerLocationHelper.js';
 import { evaluateSellerStorefrontEligibility, evaluateProductSellerEligibility } from '../utils/sellerEligibility.js';
+import { getEffectiveStock, syncRootStockFromVariants } from '../utils/productStock.js';
 
 // High-speed In-memory Cache for Products listing
 const productsCache = new Map();
@@ -179,8 +180,10 @@ export const createProduct = async (req, res) => {
 
     const parsedMrp = Number(mrp || (firstActiveVariant ? firstActiveVariant.originalPrice : (salePrice || 0)));
     const parsedSalePrice = Number(salePrice || (firstActiveVariant ? firstActiveVariant.price : (mrp || 0)));
-    const totalVariantStock = processedVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
-    const parsedStock = Number(stock !== undefined && stock !== '' ? stock : (isMultiVariant ? totalVariantStock : 0));
+    // Variant products: root stock must always equal sum of active variant stocks
+    const parsedStock = isMultiVariant
+      ? syncRootStockFromVariants({ hasVariants: true, variants: processedVariants })
+      : Math.max(0, Number(stock !== undefined && stock !== '' ? stock : 0));
 
     const formattedUnit = `${unitValue || '1'} ${unitType || 'kg'}`;
     const finalIsReturnable = isReturnable !== undefined ? Boolean(isReturnable) : true;
@@ -316,10 +319,17 @@ export const getProducts = async (req, res) => {
         return res.status(200).json(emptyResponse);
       }
 
+      // Prefer sellerId match so name collisions cannot surface ineligible stores' products
+      const eligibleIdStrings = eligibleSellerIds.map((id) => String(id));
       query.$or = [
         { sellerId: { $in: eligibleSellerIds } },
-        { seller: { $in: eligibleSellerNames } },
-        { seller: { $in: eligibleSellerIds.map(id => id.toString()) } }
+        { seller: { $in: eligibleIdStrings } },
+        {
+          $and: [
+            { $or: [{ sellerId: null }, { sellerId: { $exists: false } }] },
+            { seller: { $in: eligibleSellerNames } },
+          ],
+        },
       ];
     } else {
       // Customer Storefront without valid location coordinates:
@@ -386,13 +396,30 @@ export const getProducts = async (req, res) => {
       Product.countDocuments(query),
     ]);
 
+    let visibleProducts = products || [];
+
+    // Defense-in-depth: drop any product whose seller is not storefront-eligible
+    // (covers name collisions / stale seller fields on customer listings)
+    if (!isAdminOrInternal && !req.headers['x-seller-request'] && visibleProducts.length > 0) {
+      const checks = await Promise.all(
+        visibleProducts.map((p) => evaluateProductSellerEligibility(p))
+      );
+      visibleProducts = visibleProducts.filter((_, idx) => checks[idx]?.eligible);
+    }
+
+    // Expose effective stock (variant sum) so seller/user panels never show a stale root count
+    const normalizedProducts = visibleProducts.map((p) => ({
+      ...p,
+      stock: getEffectiveStock(p),
+    }));
+
     const responsePayload = {
       success: true,
-      count: products.length,
+      count: normalizedProducts.length,
       total,
       page,
       limit: limit || total,
-      products
+      products: normalizedProducts,
     };
 
     productsCache.set(cacheKey, { data: responsePayload, timestamp: now });
@@ -462,7 +489,10 @@ export const getProductById = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      product
+      product: {
+        ...product,
+        stock: getEffectiveStock(product),
+      },
     });
   } catch (error) {
     res.status(500).json({
@@ -518,9 +548,19 @@ export const updateProduct = async (req, res) => {
           if (!updateData.salePrice) updateData.salePrice = firstActiveVariant.price;
           if (!updateData.mrp) updateData.mrp = firstActiveVariant.originalPrice;
         }
-        if (updateData.stock === undefined || updateData.stock === null) {
-          updateData.stock = updateData.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
-        }
+        // Always keep root stock = sum of active variant stocks
+        updateData.stock = syncRootStockFromVariants({
+          hasVariants: true,
+          variants: updateData.variants,
+        });
+      }
+    } else if (updateData.hasVariants && Array.isArray(product.variants) && product.variants.length > 0) {
+      // Variants not in payload but product already has them — keep root stock consistent if stock omitted
+      if (updateData.stock === undefined || updateData.stock === null) {
+        updateData.stock = syncRootStockFromVariants({
+          hasVariants: true,
+          variants: product.variants,
+        });
       }
     }
 
